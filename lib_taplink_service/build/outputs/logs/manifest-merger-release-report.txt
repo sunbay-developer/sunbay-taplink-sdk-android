@@ -1,0 +1,48 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:2:1-20:12
+INJECTED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:2:1-20:12
+	package
+		INJECTED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml
+	xmlns:tools
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:3:5-51
+	xmlns:android
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:2:11-69
+uses-feature#android.hardware.usb.host
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:6:5-62
+	android:name
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:6:19-59
+uses-feature#android.hardware.usb.accessory
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:7:5-67
+	android:name
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:7:19-64
+uses-permission#android.permission.USB_PERMISSION
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:8:5-73
+	android:name
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:8:22-70
+uses-permission#android.permission.INTERNET
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:11:5-67
+	android:name
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:11:22-64
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:12:5-79
+	android:name
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:12:22-76
+uses-permission#android.permission.ACCESS_WIFI_STATE
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:13:5-76
+	android:name
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:13:22-73
+uses-permission#android.permission.QUERY_ALL_PACKAGES
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:14:5-77
+	android:name
+		ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:14:22-74
+application
+ADDED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml:16:5-18:19
+uses-sdk
+INJECTED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml
+INJECTED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/sm2735/Documents/workspace/Taplink_SDK/lib_taplink_service/src/main/AndroidManifest.xml

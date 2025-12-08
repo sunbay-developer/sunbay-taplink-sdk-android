@@ -1,0 +1,153 @@
+apply plugin: 'maven-publish'
+apply plugin: 'signing'
+
+//每个项目自定义
+def sdkProjectName = "taplink-sdk"
+def sdkArtifactId = "${sdkProjectName}"
+def sdkName = "${sdkProjectName}"
+def sdkDescription = "${sdkProjectName}"
+// 这里使用main分支
+def sdkUrl = "http://code.sunmi.com/sunbay/App/tapro.git/-/tree/main"
+def sdkConnection = "scm:git@code.sunmi.com:sunbay/App/tapro.git"
+def sdkDeveloperConnection = "scm:git@code.sunmi.com:sunbay/App/tapro.git"
+
+
+static def getReleaseRepositoryUrl() {
+//    return "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+    return "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
+//    return "/Users/sm2735/snapshots/"
+}
+
+static def getSnapshotRepositoryUrl() {
+//    return "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+//    return "https://ossrh-staging-api.central.sonatype.com/content/repositories/snapshots/"
+    return "https://central.sonatype.com/repository/maven-snapshots/"
+
+}
+
+static def getRepositoryUsername() {
+//    return "Sunmi"
+    return "PDUNa6"
+}
+
+static def getRepositoryPassword() {
+//    return "OJ7R0CZC0ev\$X\$He"
+    return "ikAlguiWOhfrTQM6nkE9MzHeGFsV89pGC"
+}
+
+task sourcesJar(type: Jar) {
+    archiveClassifier.convention('sources')
+    archiveClassifier.set("sources")
+    from android.sourceSets.main.java.srcDirs
+}
+
+
+// Because the components are created only during the afterEvaluate phase, you must
+// configure your publications using the afterEvaluate() lifecycle method.
+afterEvaluate {
+    publishing {
+        publications {
+            // 从ext属性获取版本号（由build.gradle.kts设置）
+            def versionName = project.ext.has('versionName') ? project.ext.versionName : '1.0.0'
+            def artifactName = file("../build/taplink-sdk-${versionName}").absolutePath
+            // Creates a Maven publication called "release".
+            release(MavenPublication) {
+                // Applies the component for the release build variant.
+//                from components.findByName('release')
+                artifact artifactName + "-release.aar"
+                // You can then customize attributes of the publication as shown below.
+                groupId 'com.sunmi'
+                artifactId sdkArtifactId
+                version = versionName
+                //   println(a.get('transforms').getProperties())
+                //    println(android.properties('transforms'))
+                // version=android.properties(versionName)
+                pom {
+                    name = sdkName
+                    description = sdkDescription
+                    // If your project has a dedicated site, use its URL here
+                    url = sdkUrl
+                    developers {
+                        developer {
+                            name = 'ricardo'
+                            email = 'liucheng@sunmi.com'
+                        }
+                    }
+                    licenses {
+                        license {
+                            //协议类型，一般默认Apache License2.0的话不用改：
+                            name = 'The Apache License, Version 2.0'
+                            url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        }
+                    }
+                    // Version control info, if you're using GitHub, follow the format as seen here
+                    scm {
+                        //修改成你的Git地址：
+                        connection = sdkConnection
+                        developerConnection = sdkDeveloperConnection
+                        //分支地址：
+                        url = sdkUrl
+                    }
+                }
+                ext.repo = 'releaseUrl'
+            }
+            debug(MavenPublication) {
+                // Applies the component for the release build variant.
+//                from components.debug
+                System.out.println("<<<<<" + artifactName + ".aar")
+                artifact artifactName + "-debug.aar"
+                // You can then customize attributes of the publication as shown below.
+                groupId 'com.sunmi'
+                artifactId sdkArtifactId
+                version = versionName + '-SNAPSHOT'
+                ext.repo = 'snapshotUrl'
+            }
+        }
+        repositories {
+            maven {
+                name("releaseUrl")
+                url = getReleaseRepositoryUrl()
+                credentials {
+                    username = getRepositoryUsername()
+                    password = getRepositoryPassword()
+                }
+            }
+            maven {
+                name("snapshotUrl")
+                url = getSnapshotRepositoryUrl()
+                credentials {
+                    username = getRepositoryUsername()
+                    password = getRepositoryPassword()
+                }
+            }
+        }
+
+        signing {
+            // 只对release版本进行签名，跳过debug版本
+            required { gradle.taskGraph.hasTask("publish") && !version.endsWith('-SNAPSHOT') }
+            sign publishing.publications.release
+        }
+    }
+    tasks.withType(PublishToMavenRepository) { task ->
+        if (task.publication.hasProperty('repo') && task.publication.repo != task.repository.name) {
+            task.enabled = false
+            task.group = null
+        }
+        task.doLast {
+            def username = getRepositoryUsername()
+            def password = getRepositoryPassword()
+            def url = new URL('https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/com.sunmi')
+            def connection = (HttpURLConnection) url.openConnection()
+            connection.requestMethod = 'POST'
+            connection.setRequestProperty('Content-Type', 'application/json')
+            connection.setRequestProperty('Authorization', 'Basic ' + "$username:$password".bytes.encodeBase64().toString())
+
+            def responseCode = connection.responseCode
+            println "--->HTTP Response Code: $responseCode<---"
+            connection.disconnect()
+        }
+    }
+}
+
+
+
