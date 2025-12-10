@@ -364,7 +364,7 @@ class LocalServiceKernel constructor(
                 isServiceBound = false
 
                 // 服务返回null绑定
-                handleConnectionError("Service returned null binding", connectionCallback,InnerErrorCode.C36.code)
+                handleConnectionError("Service returned null binding", connectionCallback, InnerErrorCode.C36.code)
             }
         }
     }

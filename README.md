@@ -1,92 +1,326 @@
-# TaplinkSdk
+# Taplink SDK for Android
 
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/sunmi/taplink-sdk)
+[![Min SDK](https://img.shields.io/badge/minSdk-25-green.svg)](https://developer.android.com/about/versions/android-7.1)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.0.21-purple.svg)](https://kotlinlang.org/)
+[![Maven Central](https://img.shields.io/badge/Maven%20Central-com.sunmi%3Ataplink--sdk-blue.svg)](https://search.maven.org/artifact/com.sunmi/taplink-sdk)
 
+Taplink SDK 是 SUNBAY 提供的 Android 支付集成 SDK，帮助 POS 应用开发者快速集成支付功能。支持多种连接模式，提供完整的支付交易 API。
 
-## Getting started
+## 📦 快速集成
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+在 `build.gradle.kts` 中添加依赖：
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin http://code.sunmi.com/sunbay/App/taplinksdk.git
-git branch -M master
-git push -uf origin master
+```kotlin
+dependencies {
+    implementation("com.sunmi:taplink-sdk:1.0.1")
+}
 ```
 
-## Integrate with your tools
+## 📋 目录
 
-- [ ] [Set up project integrations](http://code.sunmi.com/sunbay/App/taplinksdk/-/settings/integrations)
+- [功能特性](#功能特性)
+- [技术栈](#技术栈)
+- [项目结构](#项目结构)
+- [快速开始](#快速开始)
+- [构建说明](#构建说明)
+- [版本信息](#版本信息)
+- [开发指南](#开发指南)
+- [相关文档](#相关文档)
 
-## Collaborate with your team
+## ✨ 功能特性
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+- 🔌 **多种连接模式**
+  - 应用间模式：同设备应用间通信
+  - 线缆模式：USB/串口线缆连接
+  - 局域网模式：网络连接
 
-## Test and Deploy
+- 💳 **完整支付功能**
+  - 支持多种交易类型（消费、撤销、退款等）
+  - 同步和异步两种调用方式
+  - 完整的交易查询功能
 
-Use the built-in continuous integration in GitLab.
+- 🛠️ **开发友好**
+  - 简洁的 API 设计
+  - 完善的错误处理
+  - 详细的集成文档
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## 🛠️ 技术栈
 
-***
+- **语言**: Kotlin 2.0.21
+- **构建工具**: Gradle with Kotlin DSL
+- **Android Gradle Plugin**: 8.13.1
+- **最低支持**: Android 7.1 (API 25)
+- **编译目标**: Android API 35
+- **Java 版本**: Java 11
 
-# Editing this README
+## 📁 项目结构
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!).  Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```
+Taplink_SDK/
+├── lib_taplink_sdk/          # SDK 主模块
+│   ├── build.gradle.kts      # SDK 构建配置
+│   ├── sdk_publish.gradle    # 发布配置
+│   └── src/                  # 源代码
+├── lib_taplink_service/       # 服务层模块
+├── lib_log/                  # 日志模块
+├── app/                      # 示例应用
+├── docs/                     # 文档目录
+│   └── Taplink SDK for Android - 集成指南.md
+├── build.gradle.kts          # 根构建配置
+├── settings.gradle.kts       # 项目设置
+└── README.md                 # 本文件
+```
 
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## 🚀 快速开始
 
-## Name
-Choose a self-explaining name for your project.
+### 环境要求
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+- Android Studio Hedgehog 或更高版本
+- JDK 11 或更高版本
+- Android SDK (API 25+)
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 使用 SDK（推荐方式）
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+**使用 Maven 远程依赖（推荐）：**
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+在项目的 `build.gradle.kts` 中添加：
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```kotlin
+dependencies {
+    implementation("com.sunmi:taplink-sdk:1.0.1")
+}
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### 从源码构建
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+如果需要从源码构建 SDK：
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+**克隆项目：**
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```bash
+git clone http://code.sunmi.com/sunbay/App/taplinksdk.git
+cd taplinksdk
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+**构建项目：**
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```bash
+# 构建 Debug 版本
+./gradlew :lib_taplink_sdk:assembleDebug
 
-## License
-For open source projects, say how it is licensed.
+# 构建 Release 版本
+./gradlew :lib_taplink_sdk:assembleRelease
+```
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+构建完成后，AAR 文件会自动复制到 `build/` 目录：
+- Debug: `build/taplink-sdk-1.0.1-debug.aar`
+- Release: `build/taplink-sdk-1.0.1-release.aar`
+
+## 🔨 构建说明
+
+### 构建任务
+
+SDK 模块提供了以下 Gradle 任务：
+
+| 任务 | 说明 |
+|------|------|
+| `assembleDebug` | 构建 Debug 版本 AAR |
+| `assembleRelease` | 构建 Release 版本 AAR |
+| `copyDebugAar` | 拷贝并重命名 Debug AAR 到 build 目录 |
+| `copyReleaseAar` | 拷贝并重命名 Release AAR 到 build 目录 |
+
+### 自动构建流程
+
+执行 `assembleDebug` 或 `assembleRelease` 时，会自动执行对应的拷贝任务，将生成的 AAR 文件重命名并复制到 `../build/` 目录。
+
+### 构建配置
+
+SDK 版本信息在 `lib_taplink_sdk/build.gradle.kts` 中配置：
+
+```kotlin
+object SdkVersion {
+    const val CODE = 2
+    const val NAME = "1.0.1"
+}
+```
+
+修改版本号后，重新构建即可生成对应版本的 AAR 文件。
+
+### 发布配置
+
+SDK 支持发布到 Maven Central 仓库，配置在 `lib_taplink_sdk/sdk_publish.gradle` 中。
+
+**Maven 坐标：**
+- Group ID: `com.sunmi`
+- Artifact ID: `taplink-sdk`
+- 版本: `1.0.1` (Release) 或 `1.0.1-SNAPSHOT` (Snapshot)
+
+**仓库地址：**
+- Release: Maven Central (https://repo1.maven.org/maven2/)
+- Snapshot: Sonatype Snapshots (https://central.sonatype.com/repository/maven-snapshots/)
+
+发布命令：
+```bash
+# 发布 Release 版本
+./gradlew :lib_taplink_sdk:publishReleasePublicationToReleaseUrlRepository
+
+# 发布 Snapshot 版本
+./gradlew :lib_taplink_sdk:publishDebugPublicationToSnapshotUrlRepository
+```
+
+## 📦 版本信息
+
+### 当前版本
+
+- **版本号**: 1.0.1
+- **版本代码**: 2
+- **发布日期**: 2025-01
+
+### 版本历史
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 1.0.1 | 2025-01 | 当前版本 |
+
+## 💻 开发指南
+
+### 集成 SDK
+
+#### 方式一：使用 Maven 远程依赖（推荐）
+
+1. 在项目根目录的 `build.gradle` 或 `settings.gradle.kts` 中添加 Maven 仓库：
+
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        // 如果需要使用 Snapshot 版本，添加以下仓库
+        maven {
+            url = uri("https://central.sonatype.com/repository/maven-snapshots/")
+        }
+    }
+}
+```
+
+2. 在模块的 `build.gradle` 或 `build.gradle.kts` 中添加依赖：
+
+**使用 Release 版本（稳定版）：**
+
+```kotlin
+dependencies {
+    implementation("com.sunmi:taplink-sdk:1.0.1")
+}
+```
+
+**使用 Snapshot 版本（开发版）：**
+
+```kotlin
+dependencies {
+    implementation("com.sunmi:taplink-sdk:1.0.1-SNAPSHOT")
+}
+```
+
+#### 方式二：使用本地 AAR 文件
+
+1. 将 AAR 文件添加到项目的 `libs` 目录
+2. 在 `build.gradle` 中添加依赖：
+
+```gradle
+dependencies {
+    implementation files('libs/taplink-sdk-1.0.1-release.aar')
+}
+```
+
+### 初始化 SDK
+
+```kotlin
+import com.sunmi.tapro.taplink.sdk.TaplinkSDK
+import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
+
+// 创建配置
+val config = TaplinkConfig.Builder()
+    .setAppId("your_app_id")
+    .setAppName("Your App Name")
+    .build()
+
+// 初始化 SDK
+TaplinkSDK.init(context, config)
+```
+
+### 建立连接
+
+```kotlin
+import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
+import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
+
+// 连接配置（可选，使用 null 表示自动检测）
+val connectionConfig = ConnectionConfig.Builder()
+    .setConnectionMode(ConnectionMode.APP_TO_APP)
+    .build()
+
+// 建立连接
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
+    override fun onConnected() {
+        // 连接成功
+    }
+    
+    override fun onDisconnected() {
+        // 连接断开
+    }
+    
+    override fun onError(error: TaplinkException) {
+        // 连接错误
+    }
+})
+```
+
+### 执行交易
+
+```kotlin
+import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
+import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
+
+val request = PaymentRequest.Builder()
+    .setAction("SALE")  // 交易类型
+    .setAmount(100)     // 金额（分）
+    .setOrderNo("ORDER123")
+    .build()
+
+TaplinkSDK.executePayment(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResult) {
+        // 交易成功
+    }
+    
+    override fun onError(error: TaplinkException) {
+        // 交易失败
+    }
+})
+```
+
+更多使用示例和 API 文档，请参考 [集成指南](./docs/Taplink%20SDK%20for%20Android%20-%20集成指南.md)。
+
+## 📚 相关文档
+
+- [集成指南](./docs/Taplink%20SDK%20for%20Android%20-%20集成指南.md) - 详细的集成和使用文档
+- [API 文档](./docs/) - API 参考文档
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request。
+
+## 📄 许可证
+
+Copyright © SUNBAY. All rights reserved.
+
+## 📞 支持
+
+如有问题或建议，请联系：
+- 项目地址: http://code.sunmi.com/sunbay/App/taplinksdk
+- 技术支持: 请联系 SUNBAY 技术支持团队
+
+---
+
+**注意**: 本 SDK 仅限本地模式集成。如需服务端云端模式集成，请使用 Nexus SDK。

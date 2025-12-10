@@ -12,8 +12,7 @@ import com.sunmi.tapro.taplink.service.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.service.usb.UsbServiceKernel
 import com.sunmi.tapro.taplink.service.util.ProtocolParser
 import com.sunmi.tapro.taplink.service.util.ProtocolParseResult
-import com.sunmi.tapro.taplink.service.lan.LanServiceKernel
-import com.sunmi.tapro.taplink.service.websocket.WebSocketServiceKernel
+//import com.sunmi.tapro.taplink.service.websocket.WebSocketServiceKernel
 
 /**
  * Taplink服务内核类
@@ -158,8 +157,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
      */
     private fun isServiceKernelOfType(kernel: IServiceKernel, serviceKey: String): Boolean {
         return when (serviceKey) {
-            SERVICE_KEY_WEBSOCKET -> kernel is WebSocketServiceKernel
-            SERVICE_KEY_LAN -> kernel is LanServiceKernel
+//            SERVICE_KEY_WEBSOCKET -> kernel is WebSocketServiceKernel
+//            SERVICE_KEY_LAN -> kernel is WebSocketServiceKernel
             SERVICE_KEY_USB -> kernel is UsbServiceKernel
             SERVICE_KEY_SERIAL -> kernel is SerialServiceKernel
             SERVICE_KEY_LOCAL -> kernel is LocalServiceKernel
@@ -178,15 +177,15 @@ class TaplinkServiceKernel private constructor(context: Context) {
         appSecretKey: String
     ): IServiceKernel {
         return when (serviceKey) {
-            SERVICE_KEY_WEBSOCKET -> {
-                CLog.d(TAG, "Creating WebSocket service")
-                WebSocketServiceKernel(appId, appSecretKey)
-            }
-
-            SERVICE_KEY_LAN -> {
-                CLog.d(TAG, "Creating LAN service")
-                LanServiceKernel()
-            }
+//            SERVICE_KEY_WEBSOCKET -> {
+//                CLog.d(TAG, "Creating WebSocket service")
+//                WebSocketServiceKernel(appId, appSecretKey)
+//            }
+//
+//            SERVICE_KEY_LAN -> {
+//                CLog.d(TAG, "Creating LAN service")
+//                WebSocketServiceKernel(appId, appSecretKey)
+//            }
 
             SERVICE_KEY_USB -> {
                 CLog.d(TAG, "Creating USB service")

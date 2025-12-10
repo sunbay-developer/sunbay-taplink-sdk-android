@@ -7,7 +7,7 @@ plugins {
 // ==================== 常量配置 ====================
 object SdkVersion {
     const val CODE = 2
-    const val NAME = "1.0.1"
+    const val NAME = "0.0.2"
 }
 
 object BuildConfig {
@@ -71,7 +71,7 @@ dependencies {
     compileOnly(project(":lib_log"))
 
     // 第三方库
-    embed(libs.gson)
+    implementation(libs.gson)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
 

@@ -155,18 +155,31 @@ class TaplinkApiImpl : TaplinkApi {
                 object : ServiceConnectionCallback {
                     override fun onConnected(extraInfoMap: Map<String, String?>?) {
                         CLog.d(TAG, "onConnected, extraInfoMap=${extraInfoMap.toString()}")
-                        updateConnectionStatus(ConnectionStatus.CONNECTED)
-
-                        // 生成设备ID（实际应该从连接结果中获取）
-                        connectedDeviceId = extraInfoMap?.getOrDefault("deviceId", "unknown")
-                        taproVersion = extraInfoMap?.getOrDefault("taproVersion", "unknown")
-
                         // 注册数据接收器，用于接收响应
                         registerDataReceiver()
-
-                        // 通知监听器
-                        listener.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
-                        connectionListener?.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
+                        // 发送 INIT 指令初始化 tapro 应用，等待结果后再通知连接成功
+                        sendInitCommand { success, errorCode, errorMsg ->
+                            if (success) {
+                                CLog.d(TAG, "INIT command completed successfully, notifying connection listeners")
+                                updateConnectionStatus(ConnectionStatus.CONNECTED)
+                                // 生成设备ID（实际应该从连接结果中获取）
+                                connectedDeviceId = extraInfoMap?.getOrDefault("deviceId", "unknown")
+                                taproVersion = extraInfoMap?.getOrDefault("taproVersion", "unknown")
+                                // INIT 成功，通知监听器连接成功
+                                listener.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
+                                connectionListener?.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
+                            } else {
+                                CLog.e(TAG, "INIT command failed: code=$errorCode, msg=$errorMsg")
+                                // INIT 失败，断开连接并通知错误
+                                updateConnectionStatus(ConnectionStatus.DISCONNECTED)
+                                val error = ConnectionError(
+                                    errorCode ?: "INIT_FAILED",
+                                    errorMsg ?: "Failed to initialize tapro application"
+                                )
+                                listener.onError(error)
+                                connectionListener?.onError(error)
+                            }
+                        }
                     }
 
                     override fun onWaitingConnect() {
@@ -421,6 +434,103 @@ class TaplinkApiImpl : TaplinkApi {
         } catch (e: Exception) {
             CLog.e(TAG, "Error processing request: action=${request.action}, error=${e.message}")
             callback.onFailure(PaymentError("REQUEST_ERROR", e.message ?: "Unknown error"))
+        }
+    }
+
+    /**
+     * 发送 INIT 指令初始化 tapro 应用
+     *
+     * @param onComplete 完成回调，参数为 (success: Boolean, errorCode: String?, errorMsg: String?)
+     */
+    private fun sendInitCommand(onComplete: (Boolean, String?, String?) -> Unit) {
+        try {
+            CLog.d(TAG, "Sending INIT command to initialize tapro application")
+
+            val currentConfig = config
+            if (currentConfig == null) {
+                CLog.e(TAG, "Cannot send INIT command: SDK not initialized")
+                onComplete(false, "SDK_NOT_INITIALIZED", "SDK not initialized")
+                return
+            }
+
+            // 构建 INIT 请求
+            val initRequest = PaymentRequest(
+                action = "INIT"
+            )
+
+            // 将 PaymentRequest 转换为 BasicRequest
+            val basicRequest = RequestConverter.convertToBasicRequest(
+                request = initRequest,
+                version = currentConfig.version,
+                secretKey = currentConfig.secretKey
+            )
+
+            // 将 BasicRequest 转换为 JSON 字符串
+            val requestJson = gson.toJson(basicRequest)
+            CLog.d(TAG, "INIT command prepared: traceId=${basicRequest.traceId}")
+
+            // 创建内部回调，用于接收 INIT 响应
+            val initCallback = object : InnerCallback {
+                override fun onError(code: String, msg: String) {
+                    CLog.e(TAG, "INIT command failed: code=$code, msg=$msg")
+                    onComplete(false, code, msg)
+                }
+
+                override fun onResponse(responseData: String) {
+                    CLog.d(TAG, "INIT command response received: $responseData")
+                    try {
+                        // 解析响应，判断是否成功
+                        val basicResponse = gson.fromJson(responseData, BasicResponse::class.java)
+
+                        // 从 bizData 解析 PaymentResult
+                        val paymentResult = if (basicResponse.bizData != null) {
+                            gson.fromJson(basicResponse.bizData, PaymentResult::class.java)
+                        } else {
+                            PaymentResult(code = "ERROR", message = basicResponse.event.eventMsg)
+                        }
+
+                        // 判断是否成功
+                        if (paymentResult.code == SUCCESS_CODE && basicResponse.event is PaymentEvent.Completed) {
+                            CLog.d(TAG, "INIT command completed successfully")
+                            onComplete(true, null, null)
+                        } else {
+                            CLog.e(TAG, "INIT command failed: code=${paymentResult.code}, message=${paymentResult.message}")
+                            onComplete(false, paymentResult.code, paymentResult.message)
+                        }
+                    } catch (e: Exception) {
+                        CLog.e(TAG, "Failed to parse INIT response: ${e.message}")
+                        onComplete(false, "PARSE_ERROR", "Failed to parse INIT response: ${e.message}")
+                    }
+                }
+            }
+
+            // 注册回调
+            callbackManager.addCallbackByTraceId(basicRequest.traceId, initCallback)
+
+            // 发送 INIT 指令
+            val serviceKernel = TaplinkServiceKernel.getInstance()
+            if (serviceKernel == null) {
+                CLog.e(TAG, "Service kernel not available")
+                callbackManager.removeCallbackByTraceId(basicRequest.traceId)
+                onComplete(false, "SERVICE_UNAVAILABLE", "Service kernel not available")
+                return
+            }
+
+            try {
+                serviceKernel.sendData(
+                    basicRequest.traceId,
+                    requestJson.toByteArray(Charsets.UTF_8),
+                    initCallback
+                )
+                CLog.d(TAG, "INIT command sent successfully")
+            } catch (e: Exception) {
+                CLog.e(TAG, "Failed to send INIT command: ${e.message}")
+                callbackManager.removeCallbackByTraceId(basicRequest.traceId)
+                onComplete(false, "SEND_ERROR", "Failed to send INIT command: ${e.message}")
+            }
+        } catch (e: Exception) {
+            CLog.e(TAG, "Failed to prepare INIT command: ${e.message}")
+            onComplete(false, "PREPARE_ERROR", "Failed to prepare INIT command: ${e.message}")
         }
     }
 
