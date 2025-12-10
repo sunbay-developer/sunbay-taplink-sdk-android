@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.service.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.service.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.service.interfaces.BaseServiceKernel
@@ -15,6 +14,7 @@ import com.sunmi.tapro.taplink.service.local.ITransaction
 import com.sunmi.tapro.taplink.service.local.ITransactionCallback
 import com.google.gson.Gson
 import com.sunmi.tapro.taplink.service.enums.InnerErrorCode
+import com.sunmi.tapro.taplink.service.util.LogUtil
 import com.sunmi.tapro.taplink.service.util.ProtocolParser
 import com.sunmi.tapro.taplink.service.util.ProtocolParseResult
 import kotlinx.coroutines.CoroutineScope
@@ -123,7 +123,7 @@ class LocalServiceKernel constructor(
             val action = parseResult.action
 
             // 本地服务连接逻辑
-            CLog.d(TAG, "Connecting to local service: packageName=$packageName, action=$action")
+            LogUtil.d(TAG, "Connecting to local service: packageName=$packageName, action=$action")
 
             val context = TaplinkServiceKernel.getInstance()?.getContext()
             if (context == null) {
@@ -141,7 +141,7 @@ class LocalServiceKernel constructor(
             intent.putExtra("secret_key", appSecretKey)
             // 检查服务是否存在
             val resolveInfoList = context.packageManager.queryIntentServices(intent, 0)
-            CLog.d(TAG, "Query intent services result: ${resolveInfoList.size}")
+            LogUtil.d(TAG, "Query intent services result: ${resolveInfoList.size}")
 
             val matchService = resolveInfoList.find {
                 it.serviceInfo.packageName == packageName
@@ -169,7 +169,7 @@ class LocalServiceKernel constructor(
                     serviceConnection!!,
                     Context.BIND_AUTO_CREATE // 移除 BIND_NOT_FOREGROUND，因为我们不手动启动前台服务，且不需要限制后台绑定
                 )
-                CLog.d(TAG, "Bind service result: $bindResult")
+                LogUtil.d(TAG, "Bind service result: $bindResult")
 
                 if (!bindResult) {
                     handleConnectionError(
@@ -179,12 +179,12 @@ class LocalServiceKernel constructor(
                 }
                 // 绑定成功会在ServiceConnection的onServiceConnected中处理
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to bind service: ${e.message}")
+                LogUtil.e(TAG, "Failed to bind service: ${e.message}")
                 handleConnectionError("Failed to bind service: ${e.message}", connectionCallback, InnerErrorCode.C25.code)
             }
 
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to connect local service\n${e.stackTraceToString()}")
+            LogUtil.e(TAG, "Failed to connect local service\n${e.stackTraceToString()}")
             handleConnectionError(e.message ?: "Unknown error", connectionCallback, InnerErrorCode.C25.code)
         }
     }
@@ -199,13 +199,13 @@ class LocalServiceKernel constructor(
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            CLog.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
             callback?.onError("NOT_CONNECTED", "Service not connected")
             return
         }
 
         if (iTransaction == null) {
-            CLog.e(TAG, "ITransaction is null, cannot send data")
+            LogUtil.e(TAG, "ITransaction is null, cannot send data")
             callback?.onError("ITRANSACTION_NULL", "ITransaction interface is null")
             return
         }
@@ -217,7 +217,7 @@ class LocalServiceKernel constructor(
                 val requestData = String(data, Charsets.UTF_8)
 
                 try {
-                    CLog.d(TAG, "Sending data via ITransaction: traceId=$traceId, dataSize=${data.size} bytes")
+                    LogUtil.d(TAG, "Sending data via ITransaction: traceId=$traceId, dataSize=${data.size} bytes")
 
                     // 创建回调对象
                     // 注意：不直接调用传入的 callback，而是通过 dataReceiver 传递响应
@@ -248,9 +248,9 @@ class LocalServiceKernel constructor(
 
                     // 调用ITransaction的onTransaction方法（异步）
                     iTransaction?.onTransaction(requestData, transactionCallback)
-                    CLog.d(TAG, "Data sent via ITransaction successfully: traceId=$traceId")
+                    LogUtil.d(TAG, "Data sent via ITransaction successfully: traceId=$traceId")
                 } catch (e: Exception) {
-                    CLog.e(TAG, "Failed to send data via ITransaction: traceId=$traceId, error=${e.stackTraceToString()}")
+                    LogUtil.e(TAG, "Failed to send data via ITransaction: traceId=$traceId, error=${e.stackTraceToString()}")
                     updateStatus(ConnectionStatus.ERROR)
                     callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
                 }
@@ -276,9 +276,9 @@ class LocalServiceKernel constructor(
             if (isServiceBound && serviceConnection != null && context != null && intent != null) {
                 try {
                     context.unbindService(serviceConnection!!)
-                    CLog.d(TAG, "Service unbound successfully")
+                    LogUtil.d(TAG, "Service unbound successfully")
                 } catch (e: Exception) {
-                    CLog.e(TAG, "Failed to unbind service: ${e.message}")
+                    LogUtil.e(TAG, "Failed to unbind service: ${e.message}")
                 }
                 isServiceBound = false
             }
@@ -291,9 +291,9 @@ class LocalServiceKernel constructor(
             dataReceiver = null
 
             updateStatus(ConnectionStatus.DISCONNECTED)
-            CLog.d(TAG, "Local service disconnected")
+            LogUtil.d(TAG, "Local service disconnected")
         } catch (e: Exception) {
-            CLog.e(TAG, "Error during disconnect: ${e.stackTraceToString()}")
+            LogUtil.e(TAG, "Error during disconnect: ${e.stackTraceToString()}")
             updateStatus(ConnectionStatus.ERROR)
         }
     }
@@ -307,7 +307,7 @@ class LocalServiceKernel constructor(
     private fun createServiceConnection(connectionCallback: ConnectionCallback): ServiceConnection {
         return object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-                CLog.d(TAG, "Service connected: $name")
+                LogUtil.d(TAG, "Service connected: $name")
                 isServiceBound = true
 
                 if (binder != null) {
@@ -315,18 +315,18 @@ class LocalServiceKernel constructor(
                         // 将binder转换为ITransaction接口
                         iTransaction = ITransaction.Stub.asInterface(binder)
                         if (iTransaction != null) {
-                            CLog.d(TAG, "ITransaction interface obtained successfully")
+                            LogUtil.d(TAG, "ITransaction interface obtained successfully")
                             // 服务绑定成功
                             handleConnectionSuccess(connectionCallback, iTransaction!!.getExtraInfos())
                         } else {
-                            CLog.e(TAG, "Failed to convert binder to ITransaction")
+                            LogUtil.e(TAG, "Failed to convert binder to ITransaction")
                             handleConnectionError(
                                 "Failed to convert binder to ITransaction", connectionCallback,
                                 InnerErrorCode.C25.code
                             )
                         }
                     } catch (e: Exception) {
-                        CLog.e(TAG, "Exception while converting binder to ITransaction: ${e.message}")
+                        LogUtil.e(TAG, "Exception while converting binder to ITransaction: ${e.message}")
                         handleConnectionError(
                             "Exception while converting binder: ${e.message}",
                             connectionCallback,
@@ -340,7 +340,7 @@ class LocalServiceKernel constructor(
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
-                CLog.d(TAG, "Service disconnected: $name")
+                LogUtil.d(TAG, "Service disconnected: $name")
                 isServiceBound = false
                 iTransaction = null
 
@@ -350,7 +350,7 @@ class LocalServiceKernel constructor(
             }
 
             override fun onBindingDied(name: ComponentName?) {
-                CLog.d(TAG, "Service binding died: $name")
+                LogUtil.d(TAG, "Service binding died: $name")
                 isServiceBound = false
                 iTransaction = null
 
@@ -360,7 +360,7 @@ class LocalServiceKernel constructor(
             }
 
             override fun onNullBinding(name: ComponentName?) {
-                CLog.d(TAG, "Service null binding: $name")
+                LogUtil.d(TAG, "Service null binding: $name")
                 isServiceBound = false
 
                 // 服务返回null绑定

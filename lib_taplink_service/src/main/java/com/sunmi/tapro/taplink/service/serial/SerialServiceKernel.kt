@@ -1,11 +1,11 @@
 package com.sunmi.tapro.taplink.service.serial
 
 import android.content.Context
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.service.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.service.interfaces.BaseServiceKernel
 import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback
+import com.sunmi.tapro.taplink.service.util.LogUtil
 import com.sunmi.tapro.taplink.service.util.ProtocolParser
 import com.sunmi.tapro.taplink.service.util.ProtocolParseResult
 import kotlinx.coroutines.CoroutineScope
@@ -87,7 +87,7 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
                 }
             }
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to connect serial port:${e.message}")
+            LogUtil.e(TAG, "Failed to connect serial port:${e.message}")
             handleConnectionError(e.message ?: "Unknown error", connectionCallback)
         }
     }
@@ -101,7 +101,7 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            CLog.e(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.e(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
             callback?.onError("NOT_CONNECTED", "Service not connected")
             return
         }
@@ -155,14 +155,14 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
             // VSP虚拟串口连接逻辑
             // 注意：实际串口操作需要使用JNI或第三方库（如usb-serial-for-android）
             // 这里只是示例框架，实际实现需要根据具体需求使用相应的库
-            CLog.d(TAG, "Opening VSP port: baudRate=$baudRate, dataBits=$dataBits, parity=$parity, stopBits=$stopBits")
+            LogUtil.d(TAG, "Opening VSP port: baudRate=$baudRate, dataBits=$dataBits, parity=$parity, stopBits=$stopBits")
             
             // 启动数据读取
             startReading()
             
             true
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to open VSP port:${e.message}")
+            LogUtil.e(TAG, "Failed to open VSP port:${e.message}")
             false
         }
     }
@@ -178,7 +178,7 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
         return try {
             val device = File(devicePath)
             if (!device.exists()) {
-                CLog.e(TAG, "Serial device not found: $devicePath")
+                LogUtil.e(TAG, "Serial device not found: $devicePath")
                 return false
             }
             
@@ -186,14 +186,14 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
             // 这里只是示例框架，实际实现需要根据具体需求使用相应的库
             
             serialPort = device
-            CLog.d(TAG, "Serial port opened: $devicePath, baudRate: $baudRate")
+            LogUtil.d(TAG, "Serial port opened: $devicePath, baudRate: $baudRate")
             
             // 启动数据读取
             startReading()
             
             true
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to open serial port:${e.message}")
+            LogUtil.e(TAG, "Failed to open serial port:${e.message}")
             false
         }
     }
@@ -209,9 +209,9 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
             inputStream = null
             outputStream = null
             serialPort = null
-            CLog.d(TAG, "Serial port closed")
+            LogUtil.d(TAG, "Serial port closed")
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to close serial port:${e.message}")
+            LogUtil.e(TAG, "Failed to close serial port:${e.message}")
         }
     }
     
@@ -225,10 +225,10 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
         return try {
             outputStream?.write(data)
             outputStream?.flush()
-            CLog.d(TAG, "Data sent: ${data.size} bytes")
+            LogUtil.d(TAG, "Data sent: ${data.size} bytes")
             true
         } catch (e: IOException) {
-            CLog.e(TAG, "Failed to send data:${e.message}")
+            LogUtil.e(TAG, "Failed to send data:${e.message}")
             false
         }
     }
@@ -257,13 +257,13 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
                     val bytesRead = inputStream?.read(buffer) ?: -1
                     if (bytesRead > 0) {
                         val data = buffer.copyOf(bytesRead)
-                        CLog.d(TAG, "Data received: $bytesRead bytes")
+                        LogUtil.d(TAG, "Data received: $bytesRead bytes")
                         onDataReceivedListener?.invoke(data)
                         dataReceiver?.invoke(data)
                     }
                 } catch (e: IOException) {
                     if (isReading) {
-                        CLog.e(TAG, "Error reading serial data:${e.message}")
+                        LogUtil.e(TAG, "Error reading serial data:${e.message}")
                         updateStatus(ConnectionStatus.ERROR)
                     }
                     break

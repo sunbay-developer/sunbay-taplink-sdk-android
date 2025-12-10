@@ -23,7 +23,7 @@ enum class ConnectionMode {
     RS232,
     
     /** WebSocket（LAN/WLAN） */
-    WEBSOCKET
+    LAN
 }
 
 

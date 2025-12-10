@@ -1,7 +1,6 @@
 package com.sunmi.tapro.taplink.service
 
 import android.content.Context
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.service.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.service.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback
@@ -10,8 +9,10 @@ import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.service.local.kernel.LocalServiceKernel
 import com.sunmi.tapro.taplink.service.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.service.usb.UsbServiceKernel
+import com.sunmi.tapro.taplink.service.util.LogUtil
 import com.sunmi.tapro.taplink.service.util.ProtocolParser
 import com.sunmi.tapro.taplink.service.util.ProtocolParseResult
+
 //import com.sunmi.tapro.taplink.service.websocket.WebSocketServiceKernel
 
 /**
@@ -38,7 +39,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
     private var currentServiceKernel: IServiceKernel? = null
 
     init {
-        CLog.d(TAG, "TaplinkServiceKernel initialized")
+        LogUtil.d(TAG, "TaplinkServiceKernel initialized")
     }
 
     /**
@@ -69,7 +70,10 @@ class TaplinkServiceKernel private constructor(context: Context) {
         // 根据协议类型动态获取对应的服务内核
         val serviceKernel = getServiceKernelByProtocol(parseResult, appid, appSecretKey)
         if (serviceKernel == null) {
-            connectionCallback.onDisconnected(InnerErrorCode.C41.code, "Unsupported protocol type: ${parseResult::class.simpleName}")
+            connectionCallback.onDisconnected(
+                InnerErrorCode.C41.code,
+                "Unsupported protocol type: ${parseResult::class.simpleName}"
+            )
             return
         }
 
@@ -79,11 +83,11 @@ class TaplinkServiceKernel private constructor(context: Context) {
             // 如果当前连接的服务内核和要连接的不是同一个，且当前服务处于连接状态，先断开旧的
             val oldStatus = oldServiceKernel.getConnectionStatus()
             if (oldStatus != ConnectionStatus.DISCONNECTED) {
-                CLog.d(TAG, "Disconnecting old service kernel before connecting new one. Old status: $oldStatus")
+                LogUtil.d(TAG, "Disconnecting old service kernel before connecting new one. Old status: $oldStatus")
                 try {
                     oldServiceKernel.disconnect()
                 } catch (e: Exception) {
-                    CLog.e(TAG, "Error disconnecting old service kernel: ${e.message}")
+                    LogUtil.e(TAG, "Error disconnecting old service kernel: ${e.message}")
                 }
             }
             // 清空旧的serviceKernel引用（因为要切换到新的类型）
@@ -92,11 +96,11 @@ class TaplinkServiceKernel private constructor(context: Context) {
             // 如果是同一个实例，检查是否需要先断开
             val oldStatus = oldServiceKernel.getConnectionStatus()
             if (oldStatus != ConnectionStatus.DISCONNECTED) {
-                CLog.d(TAG, "Disconnecting current service kernel before reconnecting. Status: $oldStatus")
+                LogUtil.d(TAG, "Disconnecting current service kernel before reconnecting. Status: $oldStatus")
                 try {
                     oldServiceKernel.disconnect()
                 } catch (e: Exception) {
-                    CLog.e(TAG, "Error disconnecting current service kernel: ${e.message}")
+                    LogUtil.e(TAG, "Error disconnecting current service kernel: ${e.message}")
                 }
             }
         }
@@ -139,7 +143,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
             // 如果是同一类型且已断开，可以复用
             val status = current.getConnectionStatus()
             if (status == ConnectionStatus.DISCONNECTED) {
-                CLog.d(TAG, "Reusing existing service kernel of type: $serviceKey")
+                LogUtil.d(TAG, "Reusing existing service kernel of type: $serviceKey")
                 return current
             }
         }
@@ -188,17 +192,17 @@ class TaplinkServiceKernel private constructor(context: Context) {
 //            }
 
             SERVICE_KEY_USB -> {
-                CLog.d(TAG, "Creating USB service")
+                LogUtil.d(TAG, "Creating USB service")
                 UsbServiceKernel(mContext)
             }
 
             SERVICE_KEY_SERIAL -> {
-                CLog.d(TAG, "Creating Serial service")
+                LogUtil.d(TAG, "Creating Serial service")
                 SerialServiceKernel(mContext)
             }
 
             SERVICE_KEY_LOCAL -> {
-                CLog.d(TAG, "Creating Local service")
+                LogUtil.d(TAG, "Creating Local service")
                 LocalServiceKernel(appId, appSecretKey)
             }
 
@@ -229,7 +233,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
     fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         val kernel = currentServiceKernel
         if (kernel == null) {
-            CLog.e(TAG, "No service kernel available, cannot send data")
+            LogUtil.e(TAG, "No service kernel available, cannot send data")
             callback?.onError("NO_SERVICE_KERNEL", "No service kernel available")
             return
         }
@@ -237,7 +241,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         try {
             kernel.sendData(traceId, data, callback)
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to send data: traceId=$traceId, error=${e.message}")
+            LogUtil.e(TAG, "Failed to send data: traceId=$traceId, error=${e.message}")
             callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
         }
     }
@@ -269,14 +273,14 @@ class TaplinkServiceKernel private constructor(context: Context) {
             try {
                 kernel.disconnect()
             } catch (e: Exception) {
-                CLog.e(TAG, "Error disconnecting service: ${e.message}")
+                LogUtil.e(TAG, "Error disconnecting service: ${e.message}")
             }
         }
 
         // 清空当前服务内核
         currentServiceKernel = null
 
-        CLog.d(TAG, "TaplinkServiceKernel released")
+        LogUtil.d(TAG, "TaplinkServiceKernel released")
     }
 
     companion object {

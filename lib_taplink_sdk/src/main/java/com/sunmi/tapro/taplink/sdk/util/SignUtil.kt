@@ -1,7 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.util
 
-import com.sunmi.tapro.log.CLog
-import java.security.MessageDigest
+import com.sunmi.tapro.taplink.service.util.LogUtil
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -33,7 +32,7 @@ object SignUtil {
             val hash = mac.doFinal(data.toByteArray(Charsets.UTF_8))
             bytesToHex(hash)
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to generate HMAC-SHA256 signature: ${e.message}")
+            LogUtil.e(TAG, "Failed to generate HMAC-SHA256 signature: ${e.message}")
             ""
         }
     }

@@ -6,8 +6,8 @@ plugins {
 
 // ==================== 常量配置 ====================
 object SdkVersion {
-    const val CODE = 2
-    const val NAME = "0.0.2"
+    const val CODE = 5
+    const val NAME = "0.0.5"
 }
 
 object BuildConfig {
@@ -68,7 +68,6 @@ dependencies {
 
     // 内部模块依赖
     embed(project(":lib_taplink_service"))
-    compileOnly(project(":lib_log"))
 
     // 第三方库
     implementation(libs.gson)

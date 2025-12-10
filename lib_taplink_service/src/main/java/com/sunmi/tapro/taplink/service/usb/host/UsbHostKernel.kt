@@ -11,11 +11,11 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.service.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.service.interfaces.BaseServiceKernel
 import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback
+import com.sunmi.tapro.taplink.service.util.LogUtil
 import com.sunmi.tapro.taplink.service.util.ProtocolParser
 import com.sunmi.tapro.taplink.service.util.ProtocolParseResult
 import kotlinx.coroutines.CoroutineScope
@@ -72,7 +72,7 @@ class UsbHostKernel(
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                         // 权限授予
                         if (device != null && device == pendingDevice) {
-                            CLog.d(TAG, "USB device permission granted: ${device.deviceName}")
+                            LogUtil.d(TAG, "USB device permission granted: ${device.deviceName}")
                             pendingDevice = null
                             val callback = pendingConnectionCallback
                             pendingConnectionCallback = null
@@ -90,7 +90,7 @@ class UsbHostKernel(
                         }
                     } else {
                         // 权限拒绝
-                        CLog.d(TAG, "USB permission denied")
+                        LogUtil.d(TAG, "USB permission denied")
                         val callback = pendingConnectionCallback
                         pendingConnectionCallback = null
                         pendingDevice = null
@@ -111,13 +111,13 @@ class UsbHostKernel(
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
                     val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     device?.let {
-                        CLog.d(TAG, "USB device attached: ${it.deviceName}")
+                        LogUtil.d(TAG, "USB device attached: ${it.deviceName}")
                     }
                 }
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                     val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     device?.let {
-                        CLog.d(TAG, "USB device detached: ${it.deviceName}")
+                        LogUtil.d(TAG, "USB device detached: ${it.deviceName}")
                         if (it == connectedDevice) {
                             disconnectInternal()
                             updateStatus(ConnectionStatus.DISCONNECTED)
@@ -141,9 +141,9 @@ class UsbHostKernel(
         val permissionFilter = IntentFilter(permissionAction)
         try {
             context.registerReceiver(permissionReceiver, permissionFilter)
-            CLog.d(TAG, "USB permission receiver registered")
+            LogUtil.d(TAG, "USB permission receiver registered")
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to register USB permission receiver: ${e.message}")
+            LogUtil.e(TAG, "Failed to register USB permission receiver: ${e.message}")
         }
         
         // 注册USB设备插拔广播接收器
@@ -153,9 +153,9 @@ class UsbHostKernel(
         }
         try {
             context.registerReceiver(usbReceiver, filter)
-            CLog.d(TAG, "USB broadcast receiver registered")
+            LogUtil.d(TAG, "USB broadcast receiver registered")
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to register USB receiver: ${e.message}")
+            LogUtil.e(TAG, "Failed to register USB receiver: ${e.message}")
         }
     }
     
@@ -221,11 +221,11 @@ class UsbHostKernel(
                     }
                 } else {
                     // 没有权限，请求权限
-                    CLog.d(TAG, "Requesting permission for USB device: ${device.deviceName}")
+                    LogUtil.d(TAG, "Requesting permission for USB device: ${device.deviceName}")
                     requestPermission(device, connectionCallback)
                 }
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to connect USB host device: ${e.message}")
+                LogUtil.e(TAG, "Failed to connect USB host device: ${e.message}")
                 handleConnectionError(e.message ?: "Unknown error", connectionCallback)
             }
         }
@@ -241,9 +241,9 @@ class UsbHostKernel(
             
             try {
                 usbManager.requestPermission(device, permissionPendingIntent)
-                CLog.d(TAG, "USB permission request sent for device: ${device.deviceName}")
+                LogUtil.d(TAG, "USB permission request sent for device: ${device.deviceName}")
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to request USB permission: ${e.message}")
+                LogUtil.e(TAG, "Failed to request USB permission: ${e.message}")
                 pendingDevice = null
                 pendingConnectionCallback = null
                 handleConnectionError("Failed to request USB permission: ${e.message}", connectionCallback)
@@ -257,13 +257,13 @@ class UsbHostKernel(
     private fun connectDevice(device: UsbDevice): Boolean {
         return try {
             if (!usbManager.hasPermission(device)) {
-                CLog.e(TAG, "No permission for USB device: ${device.deviceName}")
+                LogUtil.e(TAG, "No permission for USB device: ${device.deviceName}")
                 return false
             }
             
             // 打开设备连接
             val connection = usbManager.openDevice(device) ?: run {
-                CLog.e(TAG, "Failed to open USB device")
+                LogUtil.e(TAG, "Failed to open USB device")
                 return false
             }
             
@@ -300,8 +300,8 @@ class UsbHostKernel(
                         
                         // 启动数据接收
                         startDataReceive()
-                        
-                        CLog.d(TAG, "USB host device connected: ${device.deviceName}")
+
+                        LogUtil.d(TAG, "USB host device connected: ${device.deviceName}")
                         break
                     }
                 }
@@ -309,13 +309,13 @@ class UsbHostKernel(
             
             if (!interfaceFound) {
                 connection.close()
-                CLog.e(TAG, "No suitable USB interface found")
+                LogUtil.e(TAG, "No suitable USB interface found")
                 return false
             }
             
             true
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to connect USB host device: ${e.message}")
+            LogUtil.e(TAG, "Failed to connect USB host device: ${e.message}")
             false
         }
     }
@@ -341,13 +341,13 @@ class UsbHostKernel(
                     
                     if (bytesRead > 0) {
                         val data = buffer.copyOf(bytesRead)
-                        CLog.d(TAG, "Host data received: $bytesRead bytes")
+                        LogUtil.d(TAG, "Host data received: $bytesRead bytes")
                         dataReceiver?.invoke(data)
                     } else if (bytesRead == -1) {
                         // 超时或错误，继续循环
                     }
                 } catch (e: Exception) {
-                    CLog.e(TAG, "Error receiving host data: ${e.message}")
+                    LogUtil.e(TAG, "Error receiving host data: ${e.message}")
                     if (currentConnectionStatus == ConnectionStatus.CONNECTED) {
                         updateStatus(ConnectionStatus.ERROR)
                     }
@@ -363,7 +363,7 @@ class UsbHostKernel(
     private fun sendHostData(data: ByteArray): Boolean {
         return try {
             if (usbDeviceConnection == null || usbEndpointOut == null) {
-                CLog.e(TAG, "USB host connection not established")
+                LogUtil.e(TAG, "USB host connection not established")
                 return false
             }
             
@@ -375,14 +375,14 @@ class UsbHostKernel(
             ) ?: -1
             
             if (bytesWritten == data.size) {
-                CLog.d(TAG, "Host data sent: ${data.size} bytes")
+                LogUtil.d(TAG, "Host data sent: ${data.size} bytes")
                 true
             } else {
-                CLog.e(TAG, "Failed to send host data: bytesWritten=$bytesWritten, expected=${data.size}")
+                LogUtil.e(TAG, "Failed to send host data: bytesWritten=$bytesWritten, expected=${data.size}")
                 false
             }
         } catch (e: Exception) {
-            CLog.e(TAG, "Error sending host data: ${e.message}")
+            LogUtil.e(TAG, "Error sending host data: ${e.message}")
             false
         }
     }
@@ -406,10 +406,10 @@ class UsbHostKernel(
             usbEndpointIn = null
             usbEndpointOut = null
             connectedDevice = null
-            
-            CLog.d(TAG, "USB host disconnected")
+
+            LogUtil.d(TAG, "USB host disconnected")
         } catch (e: Exception) {
-            CLog.e(TAG, "Error during disconnect: ${e.message}")
+            LogUtil.e(TAG, "Error during disconnect: ${e.message}")
         }
     }
     
@@ -427,16 +427,16 @@ class UsbHostKernel(
         
         try {
             context.unregisterReceiver(permissionReceiver)
-            CLog.d(TAG, "USB permission receiver unregistered")
+            LogUtil.d(TAG, "USB permission receiver unregistered")
         } catch (e: Exception) {
-            CLog.e(TAG, "Error unregistering USB permission receiver: ${e.message}")
+            LogUtil.e(TAG, "Error unregistering USB permission receiver: ${e.message}")
         }
         
         try {
             context.unregisterReceiver(usbReceiver)
-            CLog.d(TAG, "USB broadcast receiver unregistered")
+            LogUtil.d(TAG, "USB broadcast receiver unregistered")
         } catch (e: Exception) {
-            CLog.e(TAG, "Error unregistering USB receiver: ${e.message}")
+            LogUtil.e(TAG, "Error unregistering USB receiver: ${e.message}")
         }
         
         scope.cancel()
@@ -470,7 +470,7 @@ class UsbHostKernel(
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            CLog.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
             callback?.onError("NOT_CONNECTED", "Service not connected")
             return
         }
@@ -485,7 +485,7 @@ class UsbHostKernel(
                     callback?.onError("SEND_FAILED", "Failed to send data via USB Host")
                 }
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to send data: ${e.message}")
+                LogUtil.e(TAG, "Failed to send data: ${e.message}")
                 updateStatus(ConnectionStatus.ERROR)
                 callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
             }

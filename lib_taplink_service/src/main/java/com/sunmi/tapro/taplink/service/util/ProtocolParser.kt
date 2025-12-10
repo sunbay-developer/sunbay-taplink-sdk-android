@@ -1,6 +1,5 @@
 package com.sunmi.tapro.taplink.service.util
 
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.service.enums.UsbMode
 import com.sunmi.tapro.taplink.service.local.constant.LocalServiceConstant
 
@@ -134,7 +133,7 @@ object ProtocolParser {
 
             return ProtocolParseResult.LocalProtocol(packageName, action)
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to parse local protocol: $protocol\n${e.stackTraceToString()}")
+            LogUtil.e(TAG, "Failed to parse local protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse local protocol: ${e.message}")
         }
     }
@@ -170,7 +169,7 @@ object ProtocolParser {
 
             return ProtocolParseResult.LanProtocol(ip, port)
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to parse lan protocol: $protocol\n${e.stackTraceToString()}")
+            LogUtil.e(TAG, "Failed to parse lan protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse lan protocol: ${e.message}")
         }
     }
@@ -216,7 +215,7 @@ object ProtocolParser {
 
             return ProtocolParseResult.VspProtocol(baudRate, dataBits, parity, stopBits)
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to parse vsp protocol: $protocol\n${e.stackTraceToString()}")
+            LogUtil.e(TAG, "Failed to parse vsp protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse vsp protocol: ${e.message}")
         }
     }
@@ -279,7 +278,7 @@ object ProtocolParser {
                 ProtocolParseResult.UsbProtocol(mode = UsbMode.HOST, deviceName = deviceIdentifier)
             }
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to parse usb protocol: $protocol\n${e.stackTraceToString()}")
+            LogUtil.e(TAG, "Failed to parse usb protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse usb protocol: ${e.message}")
         }
     }
@@ -315,7 +314,7 @@ object ProtocolParser {
 
             return ProtocolParseResult.SerialProtocol(devicePath, baudRate)
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to parse serial protocol: $protocol\n${e.stackTraceToString()}")
+            LogUtil.e(TAG, "Failed to parse serial protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse serial protocol: ${e.message}")
         }
     }
@@ -339,7 +338,7 @@ object ProtocolParser {
 
             return ProtocolParseResult.WebSocketProtocol(protocol)
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to parse websocket protocol: $protocol\n${e.stackTraceToString()}")
+            LogUtil.e(TAG, "Failed to parse websocket protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse websocket protocol: ${e.message}")
         }
     }

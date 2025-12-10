@@ -2,8 +2,6 @@ package com.sunmi.tapro.log
 
 import android.util.Log
 import com.sunmi.tapro.log.interceptor.LogInterceptor
-import java.io.IOException
-import java.io.OutputStream
 
 /**
  * 打印系统崩溃日志

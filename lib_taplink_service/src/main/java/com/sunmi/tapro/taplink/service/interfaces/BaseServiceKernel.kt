@@ -1,7 +1,7 @@
 package com.sunmi.tapro.taplink.service.interfaces
 
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.service.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.service.util.LogUtil
 
 /**
  * 服务内核抽象基类
@@ -68,7 +68,7 @@ abstract class BaseServiceKernel : IServiceKernel {
      * @param newStatus 新状态
      */
     protected open fun logStatusChange(oldStatus: ConnectionStatus, newStatus: ConnectionStatus) {
-        CLog.d(getTag(), "Status changed: $oldStatus -> $newStatus")
+        LogUtil.d(getTag(), "Status changed: $oldStatus -> $newStatus")
     }
 
     /**
@@ -136,7 +136,7 @@ abstract class BaseServiceKernel : IServiceKernel {
      */
     override fun registerDataReceiver(receiver: (dataArray: ByteArray?) -> Unit) {
         dataReceiver = receiver
-        CLog.d(getTag(), "Data receiver registered")
+        LogUtil.d(getTag(), "Data receiver registered")
     }
 
     /**
@@ -148,10 +148,10 @@ abstract class BaseServiceKernel : IServiceKernel {
      */
     override fun receiveData(data: ByteArray) {
         if (dataReceiver != null) {
-            CLog.d(getTag(), "Receiving data: ${data.size} bytes")
+            LogUtil.d(getTag(), "Receiving data: ${data.size} bytes")
             dataReceiver?.invoke(data)
         } else {
-            CLog.d(getTag(), "Data receiver not registered, ignoring received data: ${data.size} bytes")
+            LogUtil.d(getTag(), "Data receiver not registered, ignoring received data: ${data.size} bytes")
         }
     }
 }

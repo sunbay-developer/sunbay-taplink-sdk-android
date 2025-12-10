@@ -2,10 +2,9 @@ package com.sunmi.tapro.taplink.sdk.util
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.sdk.model.base.BasicRequest
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
-import com.sunmi.tapro.taplink.sdk.util.SignUtil
+import com.sunmi.tapro.taplink.service.util.LogUtil
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -69,7 +68,7 @@ object RequestConverter {
                 traceId = traceId
             )
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to convert request to BasicRequest: ${e.message}")
+            LogUtil.e(TAG, "Failed to convert request to BasicRequest: ${e.message}")
             throw RequestConvertException("Failed to convert request", e)
         }
     }
@@ -87,7 +86,7 @@ object RequestConverter {
                 request.action.uppercase()
             }
             else -> {
-                CLog.i(TAG, "Unknown request type: ${request.javaClass.simpleName}, using class name as action")
+                LogUtil.i(TAG, "Unknown request type: ${request.javaClass.simpleName}, using class name as action")
                 request.javaClass.simpleName.replace("Request", "").lowercase()
             }
         }

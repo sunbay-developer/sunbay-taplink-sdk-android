@@ -8,11 +8,11 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
 import android.os.ParcelFileDescriptor
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.service.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.service.interfaces.BaseServiceKernel
 import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback
+import com.sunmi.tapro.taplink.service.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -69,7 +69,7 @@ class UsbAccessoryKernel(
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                         // 权限授予
                         if (accessory != null && accessory == pendingAccessory) {
-                            CLog.d(TAG, "USB accessory permission granted: ${accessory.manufacturer} ${accessory.model}")
+                            LogUtil.d(TAG, "USB accessory permission granted: ${accessory.manufacturer} ${accessory.model}")
                             pendingAccessory = null
                             val callback = pendingConnectionCallback
                             pendingConnectionCallback = null
@@ -87,7 +87,7 @@ class UsbAccessoryKernel(
                         }
                     } else {
                         // 权限拒绝
-                        CLog.d(TAG, "USB accessory permission denied")
+                        LogUtil.d(TAG, "USB accessory permission denied")
                         val callback = pendingConnectionCallback
                         pendingConnectionCallback = null
                         pendingAccessory = null
@@ -108,14 +108,14 @@ class UsbAccessoryKernel(
                 UsbManager.ACTION_USB_ACCESSORY_ATTACHED -> {
                     val accessory: UsbAccessory? = intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY)
                     accessory?.let {
-                        CLog.d(TAG, "USB accessory attached: ${it.manufacturer} ${it.model}")
+                        LogUtil.d(TAG, "USB accessory attached: ${it.manufacturer} ${it.model}")
                     }
                 }
 
                 UsbManager.ACTION_USB_ACCESSORY_DETACHED -> {
                     val accessory: UsbAccessory? = intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY)
                     accessory?.let {
-                        CLog.d(TAG, "USB accessory detached: ${it.manufacturer} ${it.model}")
+                        LogUtil.d(TAG, "USB accessory detached: ${it.manufacturer} ${it.model}")
                         if (it == connectedAccessory) {
                             disconnectInternal()
                             updateStatus(ConnectionStatus.DISCONNECTED)
@@ -139,9 +139,9 @@ class UsbAccessoryKernel(
         val permissionFilter = IntentFilter(permissionAction)
         try {
             context.registerReceiver(permissionReceiver, permissionFilter)
-            CLog.d(TAG, "USB permission receiver registered")
+            LogUtil.d(TAG, "USB permission receiver registered")
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to register USB permission receiver: ${e.message}")
+            LogUtil.e(TAG, "Failed to register USB permission receiver: ${e.message}")
         }
 
         // 注册USB Accessory插拔广播接收器
@@ -151,9 +151,9 @@ class UsbAccessoryKernel(
         }
         try {
             context.registerReceiver(usbReceiver, filter)
-            CLog.d(TAG, "USB broadcast receiver registered")
+            LogUtil.d(TAG, "USB broadcast receiver registered")
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to register USB receiver: ${e.message}")
+            LogUtil.e(TAG, "Failed to register USB receiver: ${e.message}")
         }
     }
 
@@ -196,11 +196,11 @@ class UsbAccessoryKernel(
                     }
                 } else {
                     // 没有权限，请求权限（虽然Accessory通常自动授权，但为了完整性也支持手动请求）
-                    CLog.d(TAG, "Requesting permission for USB accessory: ${accessory.manufacturer} ${accessory.model}")
+                    LogUtil.d(TAG, "Requesting permission for USB accessory: ${accessory.manufacturer} ${accessory.model}")
                     requestPermission(accessory, connectionCallback)
                 }
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to connect USB accessory: ${e.message}")
+                LogUtil.e(TAG, "Failed to connect USB accessory: ${e.message}")
                 handleConnectionError(e.message ?: "Unknown error", connectionCallback)
             }
         }
@@ -216,9 +216,9 @@ class UsbAccessoryKernel(
 
             try {
                 usbManager.requestPermission(accessory, permissionPendingIntent)
-                CLog.d(TAG, "USB permission request sent for accessory: ${accessory.manufacturer} ${accessory.model}")
+                LogUtil.d(TAG, "USB permission request sent for accessory: ${accessory.manufacturer} ${accessory.model}")
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to request USB accessory permission: ${e.message}")
+                LogUtil.e(TAG, "Failed to request USB accessory permission: ${e.message}")
                 pendingAccessory = null
                 pendingConnectionCallback = null
                 handleConnectionError("Failed to request USB accessory permission: ${e.message}", connectionCallback)
@@ -233,7 +233,7 @@ class UsbAccessoryKernel(
         return try {
             // 打开Accessory连接
             val fileDescriptor = usbManager.openAccessory(accessory) ?: run {
-                CLog.e(TAG, "Failed to open USB accessory")
+                LogUtil.e(TAG, "Failed to open USB accessory")
                 return false
             }
 
@@ -248,10 +248,10 @@ class UsbAccessoryKernel(
             // 启动数据接收
             startDataReceive()
 
-            CLog.d(TAG, "USB accessory connected: ${accessory.manufacturer} ${accessory.model}")
+            LogUtil.d(TAG, "USB accessory connected: ${accessory.manufacturer} ${accessory.model}")
             true
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to connect USB accessory: ${e.message}")
+            LogUtil.e(TAG, "Failed to connect USB accessory: ${e.message}")
             false
         }
     }
@@ -272,15 +272,15 @@ class UsbAccessoryKernel(
 
                     if (bytesRead > 0) {
                         val data = buffer.copyOf(bytesRead)
-                        CLog.d(TAG, "Accessory data received: $bytesRead bytes")
+                        LogUtil.d(TAG, "Accessory data received: $bytesRead bytes")
                         dataReceiver?.invoke(data)
                     } else if (bytesRead == -1) {
                         // 流结束
-                        CLog.d(TAG, "Accessory input stream closed")
+                        LogUtil.d(TAG, "Accessory input stream closed")
                         break
                     }
                 } catch (e: IOException) {
-                    CLog.e(TAG, "Error receiving accessory data: ${e.message}")
+                    LogUtil.e(TAG, "Error receiving accessory data: ${e.message}")
                     if (currentConnectionStatus == ConnectionStatus.CONNECTED) {
                         updateStatus(ConnectionStatus.ERROR)
                     }
@@ -296,16 +296,16 @@ class UsbAccessoryKernel(
     private fun sendAccessoryData(data: ByteArray): Boolean {
         return try {
             if (accessoryOutputStream == null) {
-                CLog.e(TAG, "USB accessory output stream not available")
+                LogUtil.e(TAG, "USB accessory output stream not available")
                 return false
             }
 
             accessoryOutputStream?.write(data)
             accessoryOutputStream?.flush()
-            CLog.d(TAG, "Accessory data sent: ${data.size} bytes")
+            LogUtil.d(TAG, "Accessory data sent: ${data.size} bytes")
             true
         } catch (e: IOException) {
-            CLog.e(TAG, "Error sending accessory data: ${e.message}")
+            LogUtil.e(TAG, "Error sending accessory data: ${e.message}")
             false
         }
     }
@@ -328,9 +328,9 @@ class UsbAccessoryKernel(
             accessoryFileDescriptor = null
             connectedAccessory = null
 
-            CLog.d(TAG, "USB accessory disconnected")
+            LogUtil.d(TAG, "USB accessory disconnected")
         } catch (e: Exception) {
-            CLog.e(TAG, "Error during disconnect: ${e.message}")
+            LogUtil.e(TAG, "Error during disconnect: ${e.message}")
         }
     }
 
@@ -348,16 +348,16 @@ class UsbAccessoryKernel(
 
         try {
             context.unregisterReceiver(permissionReceiver)
-            CLog.d(TAG, "USB permission receiver unregistered")
+            LogUtil.d(TAG, "USB permission receiver unregistered")
         } catch (e: Exception) {
-            CLog.e(TAG, "Error unregistering USB permission receiver: ${e.message}")
+            LogUtil.e(TAG, "Error unregistering USB permission receiver: ${e.message}")
         }
 
         try {
             context.unregisterReceiver(usbReceiver)
-            CLog.d(TAG, "USB broadcast receiver unregistered")
+            LogUtil.d(TAG, "USB broadcast receiver unregistered")
         } catch (e: Exception) {
-            CLog.e(TAG, "Error unregistering USB receiver: ${e.message}")
+            LogUtil.e(TAG, "Error unregistering USB receiver: ${e.message}")
         }
 
         scope.cancel()
@@ -384,7 +384,7 @@ class UsbAccessoryKernel(
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            CLog.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
             callback?.onError("NOT_CONNECTED", "Service not connected")
             return
         }
@@ -399,7 +399,7 @@ class UsbAccessoryKernel(
                     callback?.onError("SEND_FAILED", "Failed to send data via USB Accessory")
                 }
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to send data: ${e.message}")
+                LogUtil.e(TAG, "Failed to send data: ${e.message}")
                 updateStatus(ConnectionStatus.ERROR)
                 callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
             }

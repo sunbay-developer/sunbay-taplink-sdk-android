@@ -48,7 +48,6 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.java.websocket)
 //    embed(libs.sunmiprotocolsdk)
-    embed(project(":lib_log"))
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)

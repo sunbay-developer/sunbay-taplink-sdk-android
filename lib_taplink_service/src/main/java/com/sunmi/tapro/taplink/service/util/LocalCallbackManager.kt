@@ -1,6 +1,5 @@
 package com.sunmi.tapro.taplink.service.util
 
-import com.sunmi.tapro.log.CLog
 import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -51,7 +50,7 @@ class LocalCallbackManager<T>(
      */
     fun addCallbackByTraceId(traceId: String, callback: T): Boolean {
         if (traceId.isBlank()) {
-            CLog.i(tag, "TraceId is blank, skip adding callback")
+            LogUtil.i(tag, "TraceId is blank, skip adding callback")
             return false
         }
         
@@ -59,12 +58,12 @@ class LocalCallbackManager<T>(
         val existing = traceIdCallbackMap.putIfAbsent(traceId, wrapper)
         
         if (existing != null) {
-            CLog.i(tag, "Callback with traceId=$traceId already exists, overwriting")
+            LogUtil.i(tag, "Callback with traceId=$traceId already exists, overwriting")
             traceIdCallbackMap[traceId] = wrapper
             return false
         }
-        
-        CLog.d(tag, "Callback added by traceId: $traceId")
+
+        LogUtil.d(tag, "Callback added by traceId: $traceId")
         
         // 启动超时清理任务
         startTimeoutTaskForTraceId(traceId)
@@ -87,7 +86,7 @@ class LocalCallbackManager<T>(
         if (wrapper != null) {
             // 检查是否超时
             if (System.currentTimeMillis() - wrapper.timestamp > timeoutMillis) {
-                CLog.i(tag, "Callback expired by traceId: $traceId")
+                LogUtil.i(tag, "Callback expired by traceId: $traceId")
                 traceIdCallbackMap.remove(traceId)
                 return null
             }
@@ -109,10 +108,10 @@ class LocalCallbackManager<T>(
         
         val wrapper = traceIdCallbackMap.remove(traceId)
         if (wrapper != null) {
-            CLog.d(tag, "Callback retrieved and removed by traceId: $traceId")
+            LogUtil.d(tag, "Callback retrieved and removed by traceId: $traceId")
             return wrapper.callback
         }
-        CLog.d(tag, "Callback not found by traceId: $traceId")
+        LogUtil.d(tag, "Callback not found by traceId: $traceId")
         return null
     }
     
@@ -129,7 +128,7 @@ class LocalCallbackManager<T>(
         
         val removed = traceIdCallbackMap.remove(traceId) != null
         if (removed) {
-            CLog.d(tag, "Callback removed by traceId: $traceId")
+            LogUtil.d(tag, "Callback removed by traceId: $traceId")
         }
         return removed
     }
@@ -142,7 +141,7 @@ class LocalCallbackManager<T>(
         val traceIdCount = traceIdCallbackMap.size
         callbackMap.clear()
         traceIdCallbackMap.clear()
-        CLog.d(tag, "All callbacks cleared, requestId count=$count, traceId count=$traceIdCount")
+        LogUtil.d(tag, "All callbacks cleared, requestId count=$count, traceId count=$traceIdCount")
     }
 
     /**
@@ -159,7 +158,7 @@ class LocalCallbackManager<T>(
         expiredIds.forEach { callbackMap.remove(it) }
         
         if (expiredIds.isNotEmpty()) {
-            CLog.d(tag, "Cleared ${expiredIds.size} expired callbacks")
+            LogUtil.d(tag, "Cleared ${expiredIds.size} expired callbacks")
         }
         
         return expiredIds.size
@@ -188,7 +187,7 @@ class LocalCallbackManager<T>(
                 val elapsed = System.currentTimeMillis() - wrapper.timestamp
                 if (elapsed >= timeoutMillis) {
                     callbackMap.remove(requestId)
-                    CLog.i(tag, "Callback timeout and removed: requestId=$requestId, elapsed=${elapsed}ms")
+                    LogUtil.i(tag, "Callback timeout and removed: requestId=$requestId, elapsed=${elapsed}ms")
                 }
             }
         }
@@ -208,7 +207,7 @@ class LocalCallbackManager<T>(
                 val elapsed = System.currentTimeMillis() - wrapper.timestamp
                 if (elapsed >= timeoutMillis) {
                     traceIdCallbackMap.remove(traceId)
-                    CLog.i(tag, "Callback timeout and removed by traceId: $traceId, elapsed=${elapsed}ms")
+                    LogUtil.i(tag, "Callback timeout and removed by traceId: $traceId, elapsed=${elapsed}ms")
                 }
             }
         }
@@ -220,7 +219,7 @@ class LocalCallbackManager<T>(
     fun release() {
         clearAll()
         scope.cancel()
-        CLog.d(tag, "LocalCallbackManager released")
+        LogUtil.d(tag, "LocalCallbackManager released")
     }
 
     /**

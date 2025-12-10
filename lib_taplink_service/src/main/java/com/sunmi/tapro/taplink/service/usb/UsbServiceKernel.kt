@@ -4,7 +4,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import com.sunmi.tapro.log.CLog
 import com.sunmi.tapro.taplink.service.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.service.enums.UsbMode
 import com.sunmi.tapro.taplink.service.interfaces.BaseServiceKernel
@@ -12,6 +11,7 @@ import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.service.usb.accessory.UsbAccessoryKernel
 import com.sunmi.tapro.taplink.service.usb.host.UsbHostKernel
+import com.sunmi.tapro.taplink.service.util.LogUtil
 import com.sunmi.tapro.taplink.service.util.ProtocolParser
 import com.sunmi.tapro.taplink.service.util.ProtocolParseResult
 import kotlinx.coroutines.CoroutineScope
@@ -134,7 +134,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
                 }
             }
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to connect USB: ${e.message}")
+            LogUtil.e(TAG, "Failed to connect USB: ${e.message}")
             handleConnectionError(e.message ?: "Unknown error", connectionCallback)
         }
     }
@@ -145,7 +145,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         val kernel = currentKernel
         if (kernel == null) {
-            CLog.d(TAG, "No active kernel, cannot send data")
+            LogUtil.d(TAG, "No active kernel, cannot send data")
             callback?.onError("NO_ACTIVE_KERNEL", "No active USB kernel")
             return
         }
@@ -154,7 +154,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
             is UsbHostKernel -> kernel.sendData(traceId, data, callback)
             is UsbAccessoryKernel -> kernel.sendData(traceId, data, callback)
             else -> {
-                CLog.e(TAG, "Unknown kernel type")
+                LogUtil.e(TAG, "Unknown kernel type")
                 callback?.onError("UNKNOWN_KERNEL_TYPE", "Unknown USB kernel type")
             }
         }

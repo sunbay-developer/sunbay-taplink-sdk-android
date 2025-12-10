@@ -1,7 +1,9 @@
 package com.sunmi.tapro.taplink.sdk.impl
 
 import android.content.Context
-import com.sunmi.tapro.log.CLog
+import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.sunmi.tapro.taplink.sdk.BuildConfig
 import com.sunmi.tapro.taplink.sdk.api.TaplinkApi
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
@@ -10,10 +12,9 @@ import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.sdk.enums.LogLevel
+import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
-import com.sunmi.tapro.taplink.sdk.error.TaplinkException
-import com.google.gson.Gson
-import com.sunmi.tapro.taplink.sdk.model.base.BasicRequest
 import com.sunmi.tapro.taplink.sdk.model.base.BasicResponse
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
@@ -21,22 +22,10 @@ import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 import com.sunmi.tapro.taplink.sdk.util.RequestConverter
 import com.sunmi.tapro.taplink.service.TaplinkServiceKernel
-import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback as ServiceConnectionCallback
 import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.service.util.LocalCallbackManager
-import com.google.gson.JsonParser
-import com.sunmi.tapro.log.GLog
-import com.sunmi.tapro.log.SLog
-import com.sunmi.tapro.log.TLog
-import com.sunmi.tapro.log.interceptor.SunmiLogInterceptor
-import com.sunmi.tapro.taplink.sdk.error.ConnectionError
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import java.util.UUID
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
+import com.sunmi.tapro.taplink.service.util.LogUtil
+import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback as ServiceConnectionCallback
 
 /**
  * Taplink API 实现类
@@ -100,36 +89,46 @@ class TaplinkApiImpl : TaplinkApi {
     )
 
     init {
-        CLog.d(TAG, "TaplinkApiImpl initialized")
+        LogUtil.d(TAG, "TaplinkApiImpl initialized")
     }
 
     // ==================== 初始化 ====================
 
     override fun init(context: Context, config: TaplinkConfig) {
-        CLog.d(TAG, "Initializing SDK with appId: ${config.appId}")
+        LogUtil.d(TAG, "Initializing SDK with appId: ${config.appId}")
         this.config = config
         // 初始化 ServiceKernel
         TaplinkServiceKernel.getInstance(context)
-        initSunmiLog(context)
-    }
+        if (config.logEnabled) {
+            when (config.logLevel) {
+                LogLevel.INFO -> {
+                    LogUtil.setLevel(Log.INFO)
+                }
 
-    private fun initSunmiLog(context: Context) {
-        CoroutineScope(Dispatchers.IO).launch {
-            // 创建日志拦截器实例
-            val logInterceptor = SunmiLogInterceptor(context.applicationContext)
+                LogLevel.WARN -> {
+                    LogUtil.setLevel(Log.WARN)
+                }
 
-            // 为各类日志添加拦截器
-            CLog.addInterceptor(logInterceptor)
-            GLog.addInterceptor(logInterceptor)
-            TLog.addInterceptor(logInterceptor)
-            SLog.addInterceptor(logInterceptor)
+                LogLevel.DEBUG -> {
+                    LogUtil.setLevel(Log.DEBUG)
+                }
+
+                LogLevel.ERROR -> {
+                    LogUtil.setLevel(Log.ERROR)
+                }
+            }
+        } else {
+            LogUtil.setLevel(9999)
         }
     }
 
     // ==================== 连接管理 ====================
 
     override fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
-        CLog.d(TAG, "Connecting with config: cableProtocol=${config?.cableProtocol}, host=${config?.host}, port=${config?.port}")
+        LogUtil.d(
+            TAG,
+            "Connecting with config: cableProtocol=${config?.cableProtocol}, host=${config?.host}, port=${config?.port}"
+        )
         if (this.config?.appId.isNullOrBlank() ||
             this.config?.secretKey.isNullOrBlank()
         ) {
@@ -144,7 +143,7 @@ class TaplinkApiImpl : TaplinkApi {
 
         // 根据 ConnectionConfig 构建协议字符串
         val protocol = buildProtocolString(config)
-        CLog.d(TAG, "Built protocol string: $protocol")
+        LogUtil.d(TAG, "Built protocol string: $protocol")
 
         // 通过 ServiceKernel 连接
         TaplinkServiceKernel.getInstance()
@@ -154,13 +153,13 @@ class TaplinkApiImpl : TaplinkApi {
                 this.config!!.secretKey,
                 object : ServiceConnectionCallback {
                     override fun onConnected(extraInfoMap: Map<String, String?>?) {
-                        CLog.d(TAG, "onConnected, extraInfoMap=${extraInfoMap.toString()}")
+                        LogUtil.d(TAG, "onConnected, extraInfoMap=${extraInfoMap.toString()}")
                         // 注册数据接收器，用于接收响应
                         registerDataReceiver()
                         // 发送 INIT 指令初始化 tapro 应用，等待结果后再通知连接成功
                         sendInitCommand { success, errorCode, errorMsg ->
                             if (success) {
-                                CLog.d(TAG, "INIT command completed successfully, notifying connection listeners")
+                                LogUtil.d(TAG, "INIT command completed successfully, notifying connection listeners")
                                 updateConnectionStatus(ConnectionStatus.CONNECTED)
                                 // 生成设备ID（实际应该从连接结果中获取）
                                 connectedDeviceId = extraInfoMap?.getOrDefault("deviceId", "unknown")
@@ -169,7 +168,7 @@ class TaplinkApiImpl : TaplinkApi {
                                 listener.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
                                 connectionListener?.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
                             } else {
-                                CLog.e(TAG, "INIT command failed: code=$errorCode, msg=$errorMsg")
+                                LogUtil.e(TAG, "INIT command failed: code=$errorCode, msg=$errorMsg")
                                 // INIT 失败，断开连接并通知错误
                                 updateConnectionStatus(ConnectionStatus.DISCONNECTED)
                                 val error = ConnectionError(
@@ -202,7 +201,7 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     override fun disconnect() {
-        CLog.d(TAG, "Disconnecting")
+        LogUtil.d(TAG, "Disconnecting")
         updateConnectionStatus(ConnectionStatus.DISCONNECTED)
         TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
         connectedDeviceId = null
@@ -232,7 +231,7 @@ class TaplinkApiImpl : TaplinkApi {
     // ==================== 交易执行 ====================
 
     override fun execute(request: PaymentRequest, callback: PaymentCallback) {
-        CLog.d(TAG, "Executing payment request: action=${request.action}, referenceOrderId=${request.referenceOrderId}")
+        LogUtil.d(TAG, "Executing payment request: action=${request.action}, referenceOrderId=${request.referenceOrderId}")
         sendPaymentRequest(request, callback)
     }
 
@@ -248,7 +247,7 @@ class TaplinkApiImpl : TaplinkApi {
      * @param callback 支付回调接口
      */
     override fun query(request: QueryRequest, callback: PaymentCallback) {
-        CLog.d(
+        LogUtil.d(
             TAG,
             "Querying transaction: transactionId=${request.transactionId}, transactionRequestId=${request.transactionRequestId}"
         )
@@ -260,7 +259,7 @@ class TaplinkApiImpl : TaplinkApi {
             // 调用 sendPaymentRequest 发送请求
             sendPaymentRequest(paymentRequest, callback)
         } catch (e: Exception) {
-            CLog.e(TAG, "Error converting QueryRequest to PaymentRequest: ${e.message}")
+            LogUtil.e(TAG, "Error converting QueryRequest to PaymentRequest: ${e.message}")
             callback.onFailure(PaymentError("REQUEST_ERROR", e.message ?: "Failed to convert query request"))
         }
     }
@@ -268,12 +267,12 @@ class TaplinkApiImpl : TaplinkApi {
     // ==================== 监听器管理 ====================
 
     override fun setConnectionListener(listener: ConnectionListener?) {
-        CLog.d(TAG, "Setting connection listener")
+        LogUtil.d(TAG, "Setting connection listener")
         this.connectionListener = listener
     }
 
     override fun removeConnectionListener() {
-        CLog.d(TAG, "Removing connection listener")
+        LogUtil.d(TAG, "Removing connection listener")
         this.connectionListener = null
     }
 
@@ -284,7 +283,7 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     override fun clearDeviceCache() {
-        CLog.d(TAG, "Clearing device cache")
+        LogUtil.d(TAG, "Clearing device cache")
         connectedDeviceId = null
         taproVersion = null
         currentConnectionMode = null
@@ -297,14 +296,52 @@ class TaplinkApiImpl : TaplinkApi {
      * 构建协议字符串
      *
      * 根据 ConnectionConfig 构建协议字符串
+     * 如果 config 为空或空对象，则根据 init 时的 connectionMode 来判断
+     * 如果 connectionMode 也为空，则默认为 APP_TO_APP
      *
      * @param config 连接配置
      * @return String 协议字符串
      */
     private fun buildProtocolString(config: ConnectionConfig?): String {
-        if (config == null) {
-            // 空配置，使用自动检测
-            return "auto://"
+        // 检查 config 是否为空或空对象
+        if (config == null || isEmptyConnectionConfig(config)) {
+            LogUtil.d(TAG, "ConnectionConfig is null or empty, using TaplinkConfig.connectionMode")
+
+            // 根据 init 时的 connectionMode 来判断
+            val initConnectionMode = this.config?.connectionMode
+            return when (initConnectionMode) {
+                ConnectionMode.USB_AOA -> {
+                    currentConnectionMode = ConnectionMode.USB_AOA
+                    "usb_aoa://"
+                }
+
+                ConnectionMode.USB_VSP -> {
+                    currentConnectionMode = ConnectionMode.USB_VSP
+                    "usb_vsp://"
+                }
+
+                ConnectionMode.RS232 -> {
+                    currentConnectionMode = ConnectionMode.RS232
+                    "rs232://"
+                }
+
+                ConnectionMode.LAN -> {
+                    currentConnectionMode = ConnectionMode.LAN
+                    "wss://"
+                }
+
+                ConnectionMode.APP_TO_APP -> {
+                    currentConnectionMode = ConnectionMode.APP_TO_APP
+                    "local://"
+                }
+
+                else -> {
+                    // connectionMode 也为空，默认为 APP_TO_APP
+                    LogUtil.d(TAG, "Both ConnectionConfig and connectionMode are null, using default APP_TO_APP")
+                    currentConnectionMode = ConnectionMode.APP_TO_APP
+                    "local://"
+                }
+            }
         }
 
         // 线缆模式
@@ -326,13 +363,25 @@ class TaplinkApiImpl : TaplinkApi {
         // 局域网模式
         config.host?.let { host ->
             val port = config.port ?: 8443
-            currentConnectionMode = ConnectionMode.WEBSOCKET
+            currentConnectionMode = ConnectionMode.LAN
             return "ws://$host:$port"
         }
 
         // 默认：应用间模式
         currentConnectionMode = ConnectionMode.APP_TO_APP
         return "local://"
+    }
+
+    /**
+     * 判断 ConnectionConfig 是否为空对象
+     *
+     * @param config 连接配置
+     * @return Boolean 是否为空对象
+     */
+    private fun isEmptyConnectionConfig(config: ConnectionConfig): Boolean {
+        return config.cableProtocol == null &&
+                config.host.isNullOrBlank() &&
+                config.port == null
     }
 
     /**
@@ -400,19 +449,19 @@ class TaplinkApiImpl : TaplinkApi {
 
             // 将 BasicRequest 转换为 JSON 字符串
             val requestJson = gson.toJson(basicRequest)
-            CLog.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
+            LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
 
             // 创建内部回调，用于接收原始响应
             val internalCallback = createInternalCallback(callback, request, basicRequest.traceId)
 
             // 在发送前添加回调到 LocalCallbackManager
             callbackManager.addCallbackByTraceId(basicRequest.traceId, internalCallback)
-            CLog.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}")
+            LogUtil.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}")
 
             // 通过 TaplinkServiceKernel 发送数据
             val serviceKernel = TaplinkServiceKernel.getInstance()
             if (serviceKernel == null) {
-                CLog.e(TAG, "Service kernel not available")
+                LogUtil.e(TAG, "Service kernel not available")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
                 callback.onFailure(PaymentError("NOT_CONNECTED", "Service kernel not available"))
                 return
@@ -427,12 +476,12 @@ class TaplinkApiImpl : TaplinkApi {
                 )
             } catch (e: Exception) {
                 // 发送失败时，移除回调并通知错误
-                CLog.e(TAG, "Failed to send data: traceId=${basicRequest.traceId}, error=${e.message}")
+                LogUtil.e(TAG, "Failed to send data: traceId=${basicRequest.traceId}, error=${e.message}")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
                 callback.onFailure(PaymentError("SEND_ERROR", "Failed to send data: ${e.message}"))
             }
         } catch (e: Exception) {
-            CLog.e(TAG, "Error processing request: action=${request.action}, error=${e.message}")
+            LogUtil.e(TAG, "Error processing request: action=${request.action}, error=${e.message}")
             callback.onFailure(PaymentError("REQUEST_ERROR", e.message ?: "Unknown error"))
         }
     }
@@ -444,11 +493,11 @@ class TaplinkApiImpl : TaplinkApi {
      */
     private fun sendInitCommand(onComplete: (Boolean, String?, String?) -> Unit) {
         try {
-            CLog.d(TAG, "Sending INIT command to initialize tapro application")
+            LogUtil.d(TAG, "Sending INIT command to initialize tapro application")
 
             val currentConfig = config
             if (currentConfig == null) {
-                CLog.e(TAG, "Cannot send INIT command: SDK not initialized")
+                LogUtil.e(TAG, "Cannot send INIT command: SDK not initialized")
                 onComplete(false, "SDK_NOT_INITIALIZED", "SDK not initialized")
                 return
             }
@@ -467,17 +516,17 @@ class TaplinkApiImpl : TaplinkApi {
 
             // 将 BasicRequest 转换为 JSON 字符串
             val requestJson = gson.toJson(basicRequest)
-            CLog.d(TAG, "INIT command prepared: traceId=${basicRequest.traceId}")
+            LogUtil.d(TAG, "INIT command prepared: traceId=${basicRequest.traceId}")
 
             // 创建内部回调，用于接收 INIT 响应
             val initCallback = object : InnerCallback {
                 override fun onError(code: String, msg: String) {
-                    CLog.e(TAG, "INIT command failed: code=$code, msg=$msg")
+                    LogUtil.e(TAG, "INIT command failed: code=$code, msg=$msg")
                     onComplete(false, code, msg)
                 }
 
                 override fun onResponse(responseData: String) {
-                    CLog.d(TAG, "INIT command response received: $responseData")
+                    LogUtil.d(TAG, "INIT command response received: $responseData")
                     try {
                         // 解析响应，判断是否成功
                         val basicResponse = gson.fromJson(responseData, BasicResponse::class.java)
@@ -491,14 +540,14 @@ class TaplinkApiImpl : TaplinkApi {
 
                         // 判断是否成功
                         if (paymentResult.code == SUCCESS_CODE && basicResponse.event is PaymentEvent.Completed) {
-                            CLog.d(TAG, "INIT command completed successfully")
+                            LogUtil.d(TAG, "INIT command completed successfully")
                             onComplete(true, null, null)
                         } else {
-                            CLog.e(TAG, "INIT command failed: code=${paymentResult.code}, message=${paymentResult.message}")
+                            LogUtil.e(TAG, "INIT command failed: code=${paymentResult.code}, message=${paymentResult.message}")
                             onComplete(false, paymentResult.code, paymentResult.message)
                         }
                     } catch (e: Exception) {
-                        CLog.e(TAG, "Failed to parse INIT response: ${e.message}")
+                        LogUtil.e(TAG, "Failed to parse INIT response: ${e.message}")
                         onComplete(false, "PARSE_ERROR", "Failed to parse INIT response: ${e.message}")
                     }
                 }
@@ -510,7 +559,7 @@ class TaplinkApiImpl : TaplinkApi {
             // 发送 INIT 指令
             val serviceKernel = TaplinkServiceKernel.getInstance()
             if (serviceKernel == null) {
-                CLog.e(TAG, "Service kernel not available")
+                LogUtil.e(TAG, "Service kernel not available")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
                 onComplete(false, "SERVICE_UNAVAILABLE", "Service kernel not available")
                 return
@@ -522,14 +571,14 @@ class TaplinkApiImpl : TaplinkApi {
                     requestJson.toByteArray(Charsets.UTF_8),
                     initCallback
                 )
-                CLog.d(TAG, "INIT command sent successfully")
+                LogUtil.d(TAG, "INIT command sent successfully")
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to send INIT command: ${e.message}")
+                LogUtil.e(TAG, "Failed to send INIT command: ${e.message}")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
                 onComplete(false, "SEND_ERROR", "Failed to send INIT command: ${e.message}")
             }
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to prepare INIT command: ${e.message}")
+            LogUtil.e(TAG, "Failed to prepare INIT command: ${e.message}")
             onComplete(false, "PREPARE_ERROR", "Failed to prepare INIT command: ${e.message}")
         }
     }
@@ -547,7 +596,7 @@ class TaplinkApiImpl : TaplinkApi {
                 val responseJson = String(data, Charsets.UTF_8)
                 processReceivedResponse(responseJson)
             } catch (e: Exception) {
-                CLog.e(TAG, "Failed to process received data: ${e.message}")
+                LogUtil.e(TAG, "Failed to process received data: ${e.message}")
             }
         }
     }
@@ -564,7 +613,7 @@ class TaplinkApiImpl : TaplinkApi {
             val eventCode = jsonObject.get("eventCode")?.asString?.uppercase()
 
             if (traceId.isNullOrBlank()) {
-                CLog.e(TAG, "Received data without traceId, ignoring: $responseJson")
+                LogUtil.e(TAG, "Received data without traceId, ignoring: $responseJson")
                 return
             }
 
@@ -590,7 +639,7 @@ class TaplinkApiImpl : TaplinkApi {
             }
         } catch (e: Exception) {
             // 如果无法解析为 JSON，可能是旧格式的错误响应
-            CLog.e(TAG, "Failed to parse response as JSON: $responseJson, error=${e.message}")
+            LogUtil.e(TAG, "Failed to parse response as JSON: $responseJson, error=${e.message}")
         }
     }
 
@@ -609,7 +658,7 @@ class TaplinkApiImpl : TaplinkApi {
     ): InnerCallback {
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
-                CLog.e(TAG, "Received error: code=$code, msg=$msg, traceId=$traceId")
+                LogUtil.e(TAG, "Received error: code=$code, msg=$msg, traceId=$traceId")
                 callback.onFailure(PaymentError(code, msg))
             }
 
@@ -640,7 +689,7 @@ class TaplinkApiImpl : TaplinkApi {
                 else -> false
             }
         } catch (e: Exception) {
-            CLog.e(TAG, "Failed to parse responseJson for shouldRemoveCallback: ${e.message}")
+            LogUtil.e(TAG, "Failed to parse responseJson for shouldRemoveCallback: ${e.message}")
             true // 解析失败时默认移除
         }
     }
@@ -682,7 +731,7 @@ class TaplinkApiImpl : TaplinkApi {
     private fun handleResponse(result: String, callback: PaymentCallback, request: PaymentRequest) {
         try {
             val basicResponse = gson.fromJson(result, BasicResponse::class.java)
-            CLog.d(
+            LogUtil.d(
                 TAG,
                 "Received BasicResponse: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}"
             )
@@ -701,7 +750,7 @@ class TaplinkApiImpl : TaplinkApi {
             // 先判断 code 码
             if (paymentResult.code != SUCCESS_CODE) {
                 // code 不为 0，调用 onFailure
-                CLog.e(TAG, "Payment failed: code=${paymentResult.code}, message=${paymentResult.message}")
+                LogUtil.e(TAG, "Payment failed: code=${paymentResult.code}, message=${paymentResult.message}")
                 callback.onFailure(
                     PaymentError(
                         paymentResult.code,
@@ -713,7 +762,7 @@ class TaplinkApiImpl : TaplinkApi {
                 when (basicResponse.event) {
                     is PaymentEvent.Completed -> {
                         // 事件是 Completed，调用 onSuccess
-                        CLog.d(
+                        LogUtil.d(
                             TAG,
                             "Payment completed successfully: eventCode=${basicResponse.event.eventCode}"
                         )
@@ -722,7 +771,7 @@ class TaplinkApiImpl : TaplinkApi {
 
                     is PaymentEvent.Cancel -> {
                         // 事件是 Cancel，调用 onFailure
-                        CLog.e(
+                        LogUtil.e(
                             TAG,
                             "Payment cancelled: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}"
                         )
@@ -736,7 +785,7 @@ class TaplinkApiImpl : TaplinkApi {
 
                     else -> {
                         // 其他事件类型，调用 onProgress
-                        CLog.d(
+                        LogUtil.d(
                             TAG,
                             "Payment in progress: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}, progress=${basicResponse.event.progress}"
                         )
@@ -746,7 +795,7 @@ class TaplinkApiImpl : TaplinkApi {
             }
         } catch (e: Exception) {
             // 解析失败，作为发送失败处理
-            CLog.e(TAG, "Failed to parse response: action=${request.action}, result=$result, error=${e.message}")
+            LogUtil.e(TAG, "Failed to parse response: action=${request.action}, result=$result, error=${e.message}")
             callback.onFailure(PaymentError("PARSE_ERROR", "Failed to parse response: ${e.message}"))
         }
     }
@@ -760,7 +809,7 @@ class TaplinkApiImpl : TaplinkApi {
     private fun validateAndGetConfig(callback: PaymentCallback): TaplinkConfig? {
         val currentConfig = config
         if (currentConfig == null) {
-            CLog.e(TAG, "SDK not initialized, please call init() first")
+            LogUtil.e(TAG, "SDK not initialized, please call init() first")
             callback.onFailure(PaymentError("SDK_NOT_INITIALIZED", "SDK not initialized, please call init() first"))
             return null
         }
@@ -775,7 +824,7 @@ class TaplinkApiImpl : TaplinkApi {
      */
     private fun validateConnection(callback: PaymentCallback): Boolean {
         if (!isConnected()) {
-            CLog.e(TAG, "Not connected, please call connect() first")
+            LogUtil.e(TAG, "Not connected, please call connect() first")
             callback.onFailure(PaymentError("NOT_CONNECTED", "Not connected, please call connect() first"))
             return false
         }
@@ -791,7 +840,7 @@ class TaplinkApiImpl : TaplinkApi {
         if (connectionStatus != newStatus) {
             val oldStatus = connectionStatus
             connectionStatus = newStatus
-            CLog.d(TAG, "Connection status changed: $oldStatus -> $newStatus")
+            LogUtil.d(TAG, "Connection status changed: $oldStatus -> $newStatus")
             // 通知监听器
             connectionListener?.let { listener ->
                 when (newStatus) {
