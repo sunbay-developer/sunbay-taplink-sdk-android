@@ -39,7 +39,12 @@ data class AmountInfo(
     /**
      * 现金返还金额（可选，单位：基本货币单位）
      */
-    val cashbackAmount: BigDecimal? = null
+    val cashbackAmount: BigDecimal? = null,
+    
+    /**
+     * 服务费（可选，单位：基本货币单位）
+     */
+    val serviceFee: BigDecimal? = null
 ) {
     /**
      * 链式调用：设置订单金额
@@ -70,5 +75,10 @@ data class AmountInfo(
      * 链式调用：设置现金返还金额
      */
     fun setCashbackAmount(cashbackAmount: BigDecimal): AmountInfo = copy(cashbackAmount = cashbackAmount)
+    
+    /**
+     * 链式调用：设置服务费
+     */
+    fun setServiceFee(serviceFee: BigDecimal): AmountInfo = copy(serviceFee = serviceFee)
 }
 

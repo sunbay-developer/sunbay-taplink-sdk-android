@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Success Response -->
+    <string name="error_0_description">Interface response successful</string>
+
+    <!-- Security Restriction Errors (S Series) -->
+    <string name="error_s01_description">Invalid IP address</string>
+    
+    <string name="error_s02_description">Request timestamp differs too much from server time</string>
+    
+    <string name="error_s03_description">Signature verification failed</string>
+    
+    <string name="error_s04_description">API call frequency exceeded limit</string>
+    
+    <string name="error_s05_description">Data decryption failed</string>
+    
+    <string name="error_s06_description">Insufficient permissions</string>
+    
+    <string name="error_s07_description">TMK key does not exist or has expired</string>
+    
+    <string name="error_s08_description">Working key does not exist or has expired</string>
+    
+    <string name="error_s09_description">Login session expired or not logged in</string>
+
+    <!-- Client Errors (C Series) -->
+    <string name="error_c01_description">Missing request parameters</string>
+    
+    <string name="error_c02_description">Request JSON format error</string>
+    
+    <string name="error_c03_description">Merchant (merchantId) does not exist or is disabled</string>
+    
+    <string name="error_c04_description">Store (storeId) does not exist or is disabled</string>
+    
+    <string name="error_c05_description">Device (sn) does not exist</string>
+    
+    <string name="error_c06_description">Duplicate request sequence number</string>
+    
+    <string name="error_c07_description">Duplicate merchant order number</string>
+    
+    <string name="error_c08_description">Transaction locked (anti-concurrent operation)</string>
+    
+    <string name="error_c09_description">Order not paid</string>
+    
+    <string name="error_c10_description">Order already paid</string>
+    
+    <string name="error_c11_description">Order closed</string>
+    
+    <string name="error_c12_description">Order does not exist</string>
+    
+    <string name="error_c13_description">Unsupported pricing currency</string>
+    
+    <string name="error_c14_description">Transaction amount exceeds allowed range</string>
+    
+    <string name="error_c15_description">Refund amount exceeds original order amount</string>
+    
+    <string name="error_c16_description">Request parameter is empty</string>
+    
+    <string name="error_c17_description">Request parameter format error</string>
+    
+    <string name="error_c18_description">Request interface does not exist</string>
+    
+    <string name="error_c19_description">Unsupported HTTP method</string>
+    
+    <string name="error_c20_description">SDK not initialized</string>
+    
+    <string name="error_c21_description">Device does not exist</string>
+    
+    <string name="error_c22_description">Tapro application not installed (inter-app mode)</string>
+    
+    <string name="error_c23_description">Cable not physically connected (cable mode)</string>
+    
+    <string name="error_c24_description">Unsupported cable protocol (cable mode)</string>
+    
+    <string name="error_c25_description">IPC service binding failed (inter-app mode)</string>
+    
+    <string name="error_c26_description">IPC service connection timeout (inter-app mode)</string>
+    
+    <string name="error_c27_description">Cable connection timeout (cable mode)</string>
+    
+    <string name="error_c28_description">Cable communication error (cable mode)</string>
+    
+    <string name="error_c29_description">Device not paired (LAN mode)</string>
+    
+    <string name="error_c30_description">Network connection failed (LAN mode)</string>
+    
+    <string name="error_c31_description">Network connection timeout (LAN mode)</string>
+    
+    <string name="error_c32_description">TLS handshake failed (LAN mode)</string>
+    
+    <string name="error_c33_description">WebSocket connection failed (LAN mode)</string>
+    
+    <string name="error_c34_description">Device offline (LAN mode)</string>
+    
+    <string name="error_c35_description">mDNS discovery failed (LAN mode)</string>
+    
+    <string name="error_c36_description">Connection disconnected</string>
+    
+    <string name="error_c37_description">No connection established</string>
+    
+    <string name="error_c38_description">Unsupported transaction type (Action)</string>
+    
+    <string name="error_c39_description">Transaction cancelled</string>
+    
+    <string name="error_c40_description">Application initialization failed</string>
+    
+    <string name="error_c41_description">Protocol data is invalid or parsing failed</string>
+
+    <!-- Merchant Configuration Errors (M Series) -->
+    <string name="error_m01_description">Insufficient interface call permissions or not activated</string>
+    
+    <string name="error_m02_description">Application (appId) does not exist or is disabled</string>
+    
+    <string name="error_m03_description">Application and merchant binding relationship mismatch</string>
+    
+    <string name="error_m04_description">Merchant has not activated this payment product</string>
+
+    <!-- Payment Channel Errors (P Series) -->
+    <string name="error_p01_description">Bank channel exception</string>
+
+    <!-- System Errors (E Series) -->
+    <string name="error_e01_description">System busy, please try again later</string>
+    
+    <string name="error_e02_description">Network error</string>
+    
+    <string name="error_e03_description">Unknown exception</string>
+    
+    <string name="error_e04_description">System exception</string>
+
+    <!-- Risk Control Interception (R Series) -->
+    <string name="error_r01_description">Risk control system rejected transaction</string>
+
+    <!-- Other Error Codes -->
+    <string name="error_996_description">System timeout</string>
+
+    <!-- Unknown Error -->
+    <string name="error_unknown_description">Unknown error code</string>
+    <string name="error_empty_description">Error code is empty</string>
+</resources>

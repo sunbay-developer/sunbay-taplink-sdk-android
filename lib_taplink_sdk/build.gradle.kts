@@ -6,8 +6,8 @@ plugins {
 
 // ==================== 常量配置 ====================
 object SdkVersion {
-    const val CODE = 5
-    const val NAME = "0.0.5"
+    const val CODE = 1
+    const val NAME = "1.0.1"
 }
 
 object BuildConfig {
@@ -81,7 +81,7 @@ dependencies {
 }
 
 // ==================== 自定义任务配置 ====================
-
+C
 /**
  * 创建AAR拷贝任务
  *
@@ -94,7 +94,7 @@ fun createCopyAarTask(buildType: String, taskName: String) {
         group = "build"
 
         val sourceAar = "${BuildConfig.MODULE_NAME}-${buildType}.aar"
-        val targetAar = "${BuildConfig.SDK_NAME}-${SdkVersion.NAME}-${buildType}.aar"
+        val targetAar = "sunbay-taplink-sdk-android-${SdkVersion.NAME}-${buildType}.aar"
 
         from(layout.buildDirectory.dir("outputs/aar")) {
             include(sourceAar)

@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request
 
+import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
 import com.sunmi.tapro.taplink.sdk.model.common.GoodsDetail
@@ -12,15 +13,26 @@ import java.math.BigDecimal
  *
  * 具有全面的字段支持，用于各种交易类型
  *
+ * **推荐使用枚举：**
+ * ```kotlin
+ * val request = PaymentRequest(
+ *     action = TransactionAction.SALE,
+ *     referenceOrderId = "ORDER001",
+ *     transactionRequestId = "TXN001",
+ *     amount = amountInfo,
+ *     description = "商品购买"
+ * )
+ * ```
+ *
  * **Java 调用说明：**
- * Kotlin data class 提供链式调用方法，Java 代码可以使用 Builder 模式：
  * ```java
- * PaymentRequest request = new PaymentRequest(...)
- *     .setAction("SALE")
+ * PaymentRequest request = PaymentRequest.builder()
+ *     .setAction(TransactionAction.SALE)
  *     .setReferenceOrderId("ORDER001")
  *     .setTransactionRequestId("TXN001")
  *     .setAmount(amountInfo)
- *     .setDescription("商品购买");
+ *     .setDescription("商品购买")
+ *     .build();
  * ```
  *
  * **重要说明：**
@@ -37,8 +49,19 @@ data class PaymentRequest(
 
     /**
      * 交易类型（必需）
-     * 值：SALE, REFUND, VOID, AUTH, POST_AUTH, INCREMENT_AUTH,
-     *     FORCED_AUTH, TIP_ADJUST, BATCH_CLOSE
+     * 推荐使用 TransactionAction 枚举，也支持字符串（向后兼容）
+     * 
+     * 支持的类型：
+     * - SALE: 销售交易
+     * - REFUND: 退款交易
+     * - VOID: 撤销交易
+     * - AUTH: 预授权
+     * - POST_AUTH: 预授权完成
+     * - INCREMENT_AUTH: 预授权追加
+     * - FORCED_AUTH: 强制授权
+     * - TIP_ADJUST: 小费调整
+     * - BATCH_CLOSE: 批次结算
+     * - QUERY: 查询交易
      */
     val action: String,
 
@@ -173,7 +196,14 @@ data class PaymentRequest(
     // ========== 基本交易字段的链式调用方法 ==========
 
     /**
-     * 链式调用：设置交易类型
+     * 链式调用：设置交易类型（使用枚举）
+     * 推荐使用此方法，类型安全
+     */
+    fun setAction(action: TransactionAction): PaymentRequest = copy(action = action.value)
+
+    /**
+     * 链式调用：设置交易类型（使用字符串）
+     * 为了向后兼容保留，推荐使用 TransactionAction 枚举
      */
     fun setAction(action: String): PaymentRequest = copy(action = action)
 
@@ -284,14 +314,21 @@ data class PaymentRequest(
      */
     fun setTimeExpire(timeExpire: String): PaymentRequest = copy(timeExpire = timeExpire)
 
+    /**
+     * 获取交易类型枚举
+     * 
+     * @return TransactionAction? 对应的枚举，如果无法识别则返回 null
+     */
+    fun getActionEnum(): TransactionAction? = TransactionAction.fromValue(action)
+
     companion object {
         /**
          * 创建一个新的 PaymentRequest 构建器
          *
-         * 使用示例：
+         * 使用示例（推荐使用枚举）：
          * ```kotlin
          * val request = PaymentRequest.builder()
-         *     .setAction("SALE")
+         *     .setAction(TransactionAction.SALE)
          *     .setReferenceOrderId("ORDER001")
          *     .setTransactionRequestId("TXN001")
          *     .setAmount(amountInfo)
@@ -327,6 +364,14 @@ data class PaymentRequest(
         private var notifyUrl: String? = null
         private var timeExpire: String? = null
 
+        /**
+         * 设置交易类型（使用枚举，推荐）
+         */
+        fun setAction(action: TransactionAction) = apply { this.action = action.value }
+
+        /**
+         * 设置交易类型（使用字符串，向后兼容）
+         */
         fun setAction(action: String) = apply { this.action = action }
         fun setReferenceOrderId(referenceOrderId: String) = apply { this.referenceOrderId = referenceOrderId }
         fun setTransactionRequestId(transactionRequestId: String) = apply { this.transactionRequestId = transactionRequestId }

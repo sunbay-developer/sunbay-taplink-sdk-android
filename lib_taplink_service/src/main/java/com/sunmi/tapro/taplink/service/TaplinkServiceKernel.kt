@@ -6,14 +6,13 @@ import com.sunmi.tapro.taplink.service.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.service.interfaces.IServiceKernel
 import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
+import com.sunmi.tapro.taplink.service.lan.WebSocketClientKernel
 import com.sunmi.tapro.taplink.service.local.kernel.LocalServiceKernel
 import com.sunmi.tapro.taplink.service.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.service.usb.UsbServiceKernel
 import com.sunmi.tapro.taplink.service.util.LogUtil
 import com.sunmi.tapro.taplink.service.util.ProtocolParser
 import com.sunmi.tapro.taplink.service.util.ProtocolParseResult
-
-//import com.sunmi.tapro.taplink.service.websocket.WebSocketServiceKernel
 
 /**
  * Taplink服务内核类
@@ -126,7 +125,6 @@ class TaplinkServiceKernel private constructor(context: Context) {
         appSecretKey: String
     ): IServiceKernel? {
         val serviceKey = when (parseResult) {
-            is ProtocolParseResult.WebSocketProtocol -> SERVICE_KEY_WEBSOCKET
             is ProtocolParseResult.LanProtocol -> SERVICE_KEY_LAN
 
             is ProtocolParseResult.UsbProtocol -> SERVICE_KEY_USB
@@ -134,7 +132,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
             is ProtocolParseResult.VspProtocol -> SERVICE_KEY_SERIAL
 
             is ProtocolParseResult.LocalProtocol -> SERVICE_KEY_LOCAL
-            is ProtocolParseResult.Error -> return null
+            else -> return null
         }
 
         // 检查当前serviceKernel是否是同一类型
@@ -161,8 +159,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
      */
     private fun isServiceKernelOfType(kernel: IServiceKernel, serviceKey: String): Boolean {
         return when (serviceKey) {
-//            SERVICE_KEY_WEBSOCKET -> kernel is WebSocketServiceKernel
-//            SERVICE_KEY_LAN -> kernel is WebSocketServiceKernel
+            SERVICE_KEY_LAN -> kernel is WebSocketClientKernel
             SERVICE_KEY_USB -> kernel is UsbServiceKernel
             SERVICE_KEY_SERIAL -> kernel is SerialServiceKernel
             SERVICE_KEY_LOCAL -> kernel is LocalServiceKernel
@@ -181,15 +178,10 @@ class TaplinkServiceKernel private constructor(context: Context) {
         appSecretKey: String
     ): IServiceKernel {
         return when (serviceKey) {
-//            SERVICE_KEY_WEBSOCKET -> {
-//                CLog.d(TAG, "Creating WebSocket service")
-//                WebSocketServiceKernel(appId, appSecretKey)
-//            }
-//
-//            SERVICE_KEY_LAN -> {
-//                CLog.d(TAG, "Creating LAN service")
-//                WebSocketServiceKernel(appId, appSecretKey)
-//            }
+            SERVICE_KEY_LAN -> {
+                LogUtil.d(TAG, "Creating LAN service")
+                WebSocketClientKernel(appId, appSecretKey, mContext)
+            }
 
             SERVICE_KEY_USB -> {
                 LogUtil.d(TAG, "Creating USB service")
@@ -285,7 +277,6 @@ class TaplinkServiceKernel private constructor(context: Context) {
 
     companion object {
         // 服务类型标识常量
-        private const val SERVICE_KEY_WEBSOCKET = "websocket"
         private const val SERVICE_KEY_LAN = "lan"
         private const val SERVICE_KEY_USB = "usb"
         private const val SERVICE_KEY_SERIAL = "serial"

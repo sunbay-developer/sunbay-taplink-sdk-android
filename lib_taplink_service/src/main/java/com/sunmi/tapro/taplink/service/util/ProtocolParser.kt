@@ -54,13 +54,6 @@ sealed class ProtocolParseResult {
     ) : ProtocolParseResult()
 
     /**
-     * WebSocket协议解析结果
-     */
-    data class WebSocketProtocol(
-        val url: String
-    ) : ProtocolParseResult()
-
-    /**
      * 解析失败
      */
     data class Error(val message: String) : ProtocolParseResult()
@@ -102,7 +95,6 @@ object ProtocolParser {
             protocol.startsWith("vsp://") -> parseVspProtocol(protocol)
             protocol.startsWith("usb://") -> parseUsbProtocol(protocol)
             protocol.startsWith("serial://") -> parseSerialProtocol(protocol)
-            protocol.startsWith("ws://") || protocol.startsWith("wss://") -> parseWebSocketProtocol(protocol)
             else -> ProtocolParseResult.Error("Unsupported protocol format: $protocol")
         }
     }
@@ -316,30 +308,6 @@ object ProtocolParser {
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to parse serial protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse serial protocol: ${e.message}")
-        }
-    }
-
-    /**
-     * 解析WebSocket协议：ws:// 或 wss://
-     *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult.WebSocketProtocol 或 Error
-     */
-    private fun parseWebSocketProtocol(protocol: String): ProtocolParseResult {
-        try {
-            if (protocol.isEmpty()) {
-                return ProtocolParseResult.Error("WebSocket protocol is empty")
-            }
-
-            // 验证URL格式
-            if (!protocol.startsWith("ws://") && !protocol.startsWith("wss://")) {
-                return ProtocolParseResult.Error("Invalid WebSocket protocol, must start with ws:// or wss://")
-            }
-
-            return ProtocolParseResult.WebSocketProtocol(protocol)
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to parse websocket protocol: $protocol\n${e.stackTraceToString()}")
-            return ProtocolParseResult.Error("Failed to parse websocket protocol: ${e.message}")
         }
     }
 }

@@ -2,7 +2,7 @@ apply plugin: 'maven-publish'
 apply plugin: 'signing'
 
 //每个项目自定义
-def sdkProjectName = "taplink-sdk"
+def sdkProjectName = "sunbay-taplink-sdk-android"
 def sdkArtifactId = "${sdkProjectName}"
 def sdkName = "${sdkProjectName}"
 def sdkDescription = "${sdkProjectName}"
@@ -49,7 +49,7 @@ afterEvaluate {
         publications {
             // 从ext属性获取版本号（由build.gradle.kts设置）
             def versionName = project.ext.has('versionName') ? project.ext.versionName : '1.0.0'
-            def artifactName = file("../build/taplink-sdk-${versionName}").absolutePath
+            def artifactName = file("../build/sunbay-taplink-sdk-android-${versionName}").absolutePath
             // Creates a Maven publication called "release".
             release(MavenPublication) {
                 // Applies the component for the release build variant.

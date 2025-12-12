@@ -92,7 +92,25 @@ data class TaplinkConfig(
     /**
      * 默认超时时间（秒），默认 60
      */
-    val timeout: Int = 60
+    val timeout: Int = 60,
+    
+    // ========== 自动重连配置 ==========
+    
+    /**
+     * 是否启用自动重连（可选，默认 true）
+     * 当连接非主动断开时，SDK 会自动尝试重连
+     */
+    val autoReconnect: Boolean = true,
+    
+    /**
+     * 最大重试次数（可选，默认 3）
+     */
+    val maxRetryCount: Int = 3,
+    
+    /**
+     * 重试延迟时间（毫秒，默认 2000ms）
+     */
+    val retryDelayMs: Long = 2000L
 ) {
     // ========== 必需配置的链式调用方法 ==========
     
@@ -168,6 +186,22 @@ data class TaplinkConfig(
      * 链式调用：设置默认超时时间
      */
     fun setTimeout(timeout: Int): TaplinkConfig = copy(timeout = timeout)
+    
+    // ========== 自动重连配置的链式调用方法 ==========
+    
+    /**
+     * 链式调用：设置是否启用自动重连
+     */
+    fun setAutoReconnect(enabled: Boolean): TaplinkConfig = copy(autoReconnect = enabled)
+    
+    /**
+     * 链式调用：设置重试策略
+     * 
+     * @param maxRetries 最大重试次数
+     * @param delayMs 重试延迟时间（毫秒）
+     */
+    fun setRetryPolicy(maxRetries: Int, delayMs: Long): TaplinkConfig = 
+        copy(maxRetryCount = maxRetries, retryDelayMs = delayMs)
     
     companion object {
         /**

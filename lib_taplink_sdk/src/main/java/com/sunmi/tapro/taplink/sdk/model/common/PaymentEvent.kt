@@ -11,10 +11,10 @@ package com.sunmi.tapro.taplink.sdk.model.common
  */
 sealed class PaymentEvent(
     /** 状态码 */
-    val eventCode: String,
+    open val eventCode: String,
 
     /** 状态描述 */
-    val eventMsg: String,
+    open val eventMsg: String,
 
     /** 进度（0-100） */
     val progress: Int,
@@ -71,6 +71,16 @@ sealed class PaymentEvent(
      * 取消事件
      */
     object Cancel : PaymentEvent("CANCEL", "Transaction cancelled", 0)
+
+    /**
+     * 重连中事件
+     */
+    data class Reconnecting(
+        val attempt: Int,
+        val maxRetries: Int,
+        override val eventCode: String = "RECONNECTING",
+        override val eventMsg: String = "Reconnecting... (attempt $attempt/$maxRetries)"
+    ) : PaymentEvent(eventCode, eventMsg, 0)
 
     companion object {
         /**

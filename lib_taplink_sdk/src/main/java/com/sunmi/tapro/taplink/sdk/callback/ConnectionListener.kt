@@ -34,6 +34,18 @@ interface ConnectionListener {
      */
     fun onError(error: ConnectionError)
     
+    /**
+     * 正在重连（可选实现）
+     * 
+     * 当启用自动重连时，SDK 会在重连前调用此方法
+     * 
+     * @param attempt 当前重试次数
+     * @param maxRetries 最大重试次数
+     */
+    fun onReconnecting(attempt: Int, maxRetries: Int) {
+        // 默认空实现，子类可选择性覆盖
+    }
+    
 }
 
 

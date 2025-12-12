@@ -13,6 +13,7 @@ import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.enums.LogLevel
+import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.model.base.BasicResponse
@@ -21,6 +22,7 @@ import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 import com.sunmi.tapro.taplink.sdk.util.RequestConverter
+import com.sunmi.tapro.taplink.sdk.reconnect.ReconnectManager
 import com.sunmi.tapro.taplink.service.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.service.util.LocalCallbackManager
@@ -73,6 +75,10 @@ class TaplinkApiImpl : TaplinkApi {
     private var connectedDeviceId: String? = null
     private var taproVersion: String? = null
 
+    /**
+     * 重连管理器（延迟初始化）
+     */
+    private var reconnectManager: ReconnectManager? = null
 
     /**
      * Gson实例，用于JSON序列化
@@ -97,25 +103,22 @@ class TaplinkApiImpl : TaplinkApi {
     override fun init(context: Context, config: TaplinkConfig) {
         LogUtil.d(TAG, "Initializing SDK with appId: ${config.appId}")
         this.config = config
+        
+        // 初始化重连管理器
+        reconnectManager = ReconnectManager(config) { connectionConfig, listener ->
+            connectInternal(connectionConfig, listener)
+        }
+        
         // 初始化 ServiceKernel
         TaplinkServiceKernel.getInstance(context)
+        
+        // 配置日志级别
         if (config.logEnabled) {
             when (config.logLevel) {
-                LogLevel.INFO -> {
-                    LogUtil.setLevel(Log.INFO)
-                }
-
-                LogLevel.WARN -> {
-                    LogUtil.setLevel(Log.WARN)
-                }
-
-                LogLevel.DEBUG -> {
-                    LogUtil.setLevel(Log.DEBUG)
-                }
-
-                LogLevel.ERROR -> {
-                    LogUtil.setLevel(Log.ERROR)
-                }
+                LogLevel.INFO -> LogUtil.setLevel(Log.INFO)
+                LogLevel.WARN -> LogUtil.setLevel(Log.WARN)
+                LogLevel.DEBUG -> LogUtil.setLevel(Log.DEBUG)
+                LogLevel.ERROR -> LogUtil.setLevel(Log.ERROR)
             }
         } else {
             LogUtil.setLevel(9999)
@@ -125,13 +128,25 @@ class TaplinkApiImpl : TaplinkApi {
     // ==================== 连接管理 ====================
 
     override fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
+        // 准备重连管理器
+        reconnectManager?.prepareConnect(config, listener)
+        
+        // 执行实际连接
+        connectInternal(config, listener)
+    }
+    
+    /**
+     * 内部连接方法
+     * 
+     * 实际执行连接逻辑，供 connect() 和 ReconnectManager 调用
+     */
+    private fun connectInternal(config: ConnectionConfig?, listener: ConnectionListener) {
         LogUtil.d(
             TAG,
             "Connecting with config: cableProtocol=${config?.cableProtocol}, host=${config?.host}, port=${config?.port}"
         )
-        if (this.config?.appId.isNullOrBlank() ||
-            this.config?.secretKey.isNullOrBlank()
-        ) {
+        
+        if (this.config?.appId.isNullOrBlank() || this.config?.secretKey.isNullOrBlank()) {
             listener.onError(
                 ConnectionError(
                     "C20",
@@ -154,23 +169,30 @@ class TaplinkApiImpl : TaplinkApi {
                 object : ServiceConnectionCallback {
                     override fun onConnected(extraInfoMap: Map<String, String?>?) {
                         LogUtil.d(TAG, "onConnected, extraInfoMap=${extraInfoMap.toString()}")
+                        
+                        // 通知重连管理器连接成功
+                        reconnectManager?.onConnected()
+                        
                         // 注册数据接收器，用于接收响应
                         registerDataReceiver()
+                        
                         // 发送 INIT 指令初始化 tapro 应用，等待结果后再通知连接成功
                         sendInitCommand { success, errorCode, errorMsg ->
                             if (success) {
                                 LogUtil.d(TAG, "INIT command completed successfully, notifying connection listeners")
                                 updateConnectionStatus(ConnectionStatus.CONNECTED)
-                                // 生成设备ID（实际应该从连接结果中获取）
+                                
+                                // 获取设备信息
                                 connectedDeviceId = extraInfoMap?.getOrDefault("deviceId", "unknown")
                                 taproVersion = extraInfoMap?.getOrDefault("taproVersion", "unknown")
-                                // INIT 成功，通知监听器连接成功
+                                
+                                // 通知监听器连接成功
                                 listener.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
                                 connectionListener?.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
                             } else {
                                 LogUtil.e(TAG, "INIT command failed: code=$errorCode, msg=$errorMsg")
-                                // INIT 失败，断开连接并通知错误
                                 updateConnectionStatus(ConnectionStatus.DISCONNECTED)
+                                
                                 val error = ConnectionError(
                                     errorCode ?: "INIT_FAILED",
                                     errorMsg ?: "Failed to initialize tapro application"
@@ -188,20 +210,32 @@ class TaplinkApiImpl : TaplinkApi {
                     override fun onDisconnected(code: String, msg: String) {
                         updateConnectionStatus(ConnectionStatus.DISCONNECTED)
                         val reason = "Code: $code, Message: $msg"
-                        listener.onDisconnected(reason)
-                        connectionListener?.onDisconnected(reason)
-                        connectedDeviceId = null
-                        taproVersion = null
-                        currentConnectionMode = null
-
-                        // 清理所有待处理的请求回调
-                        callbackManager.clearAll()
+                        
+                        // 尝试自动重连
+                        val reconnected = reconnectManager?.onDisconnected(listener) ?: false
+                        
+                        if (!reconnected) {
+                            // 不重连，通知应用层并清理资源
+                            listener.onDisconnected(reason)
+                            connectionListener?.onDisconnected(reason)
+                            
+                            // 清理资源（只在不重连时清理）
+                            connectedDeviceId = null
+                            taproVersion = null
+                            currentConnectionMode = null
+                            callbackManager.clearAll()
+                        }
+                        // 如果正在重连，保留设备信息和连接模式，不清理回调管理器
                     }
                 })
     }
 
     override fun disconnect() {
-        LogUtil.d(TAG, "Disconnecting")
+        LogUtil.d(TAG, "Manual disconnect")
+        
+        // 通知重连管理器主动断开
+        reconnectManager?.disconnect()
+        
         updateConnectionStatus(ConnectionStatus.DISCONNECTED)
         TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
         connectedDeviceId = null
@@ -413,10 +447,10 @@ class TaplinkApiImpl : TaplinkApi {
             else -> "Query transaction"
         }
 
-        // 构建 PaymentRequest，action 为 "QUERY"
+        // 构建 PaymentRequest，action 为 QUERY
         // 查询时，将查询条件放入 originalTransactionId 或 originalTransactionRequestId 字段
         return PaymentRequest(
-            action = "QUERY",
+            action = TransactionAction.QUERY.value,
             transactionRequestId = transactionRequestId,
             description = description,
             // 查询条件：根据 QueryRequest 中的字段设置
@@ -504,7 +538,7 @@ class TaplinkApiImpl : TaplinkApi {
 
             // 构建 INIT 请求
             val initRequest = PaymentRequest(
-                action = "INIT"
+                action = TransactionAction.INIT.value
             )
 
             // 将 PaymentRequest 转换为 BasicRequest
