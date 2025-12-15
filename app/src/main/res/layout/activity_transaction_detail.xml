@@ -175,6 +175,33 @@
 
             </LinearLayout>
 
+            <!--Tax Amount (optional) -->
+            <LinearLayout
+                android:id="@+id/layout_tax_amount"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:text="Tax:"
+                    android:textColor="#666666"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/tv_tax_amount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="¥10.00"
+                    android:textColor="#333333"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
             <!-- Cashback Amount (optional) -->
             <LinearLayout
                 android:id="@+id/layout_cashback_amount"

@@ -31,7 +31,7 @@ import java.util.Locale
  * - Display transaction details
  * - Show available operations based on transaction type and status
  * - Implement refund, void, inquiry and other follow-up operations
- * - Implement tip adjustment, incremental authorization, pre-authorization completion and other functions
+ * - Implement tip adjustment, pre-authorization completion and other functions
  */
 class TransactionDetailActivity : AppCompatActivity() {
 
@@ -54,6 +54,8 @@ class TransactionDetailActivity : AppCompatActivity() {
     private lateinit var tvCashbackAmount: TextView
     private lateinit var layoutServiceFee: LinearLayout
     private lateinit var tvServiceFee: TextView
+    private lateinit var layoutTaxAmount: LinearLayout
+    private lateinit var tvTaxAmount: TextView
     private lateinit var tvOrderId: TextView
     private lateinit var tvTransactionId: TextView
     private lateinit var layoutOriginalTransactionId: LinearLayout
@@ -118,6 +120,8 @@ class TransactionDetailActivity : AppCompatActivity() {
         tvCashbackAmount = findViewById(R.id.tv_cashback_amount)
         layoutServiceFee = findViewById(R.id.layout_service_fee)
         tvServiceFee = findViewById(R.id.tv_service_fee)
+        layoutTaxAmount = findViewById(R.id.layout_tax_amount)
+        tvTaxAmount = findViewById(R.id.tv_tax_amount)
         tvOrderId = findViewById(R.id.tv_order_id)
         tvTransactionId = findViewById(R.id.tv_transaction_id)
         layoutOriginalTransactionId = findViewById(R.id.layout_original_transaction_id)
@@ -236,6 +240,13 @@ class TransactionDetailActivity : AppCompatActivity() {
                 layoutTipAmount.visibility = View.GONE
             }
 
+            if (txn.taxAmount != null) {
+                layoutTaxAmount.visibility = View.VISIBLE
+                tvTaxAmount.text = String.format("¥%.2f", txn.taxAmount)
+            } else {
+                layoutTaxAmount.visibility = View.GONE
+            }
+
             if (txn.cashbackAmount != null && txn.cashbackAmount > 0) {
                 layoutCashbackAmount.visibility = View.VISIBLE
                 tvCashbackAmount.text = String.format("¥%.2f", txn.cashbackAmount)
@@ -255,9 +266,10 @@ class TransactionDetailActivity : AppCompatActivity() {
             layoutTipAmount.visibility = View.GONE
             layoutCashbackAmount.visibility = View.GONE
             layoutServiceFee.visibility = View.GONE
+            layoutTaxAmount.visibility = View.GONE
         }
 
-        // Original Transaction ID (only shown for REFUND, VOID, POST_AUTH, INCREMENT_AUTH)
+        // Original Transaction ID (only shown for REFUND, VOID, POST_AUTH)
         if (shouldShowOriginalTransactionId(txn)) {
             layoutOriginalTransactionId.visibility = View.VISIBLE
             tvOriginalTransactionId.text = txn.originalTransactionId ?: "N/A"
@@ -325,13 +337,12 @@ class TransactionDetailActivity : AppCompatActivity() {
 
     /**
      * Check if original transaction ID should be displayed
-     * Only for REFUND, VOID, POST_AUTH, INCREMENT_AUTH transaction types
+     * Only for REFUND, VOID, POST_AUTH transaction types
      */
     private fun shouldShowOriginalTransactionId(txn: Transaction): Boolean {
         return txn.type == TransactionType.REFUND ||
                txn.type == TransactionType.VOID ||
-               txn.type == TransactionType.POST_AUTH ||
-               txn.type == TransactionType.INCREMENT_AUTH
+               txn.type == TransactionType.POST_AUTH
     }
 
     /**
@@ -531,7 +542,7 @@ class TransactionDetailActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle("Incremental Auth")
-            .setMessage("Please enter incremental authorization amount")
+            .setMessage("Please enter incremental amount to add to the authorization")
             .setView(input)
             .setPositiveButton("OK") { _, _ ->
                 val amountStr = input.text.toString().trim()
@@ -543,7 +554,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                 try {
                     val incrementalAmount = amountStr.toDouble()
                     if (incrementalAmount <= 0) {
-                        showToast("Incremental amount must be > 0")
+                        showToast("Incremental amount must be greater than 0")
                         return@setPositiveButton
                     }
                     executeIncrementalAuth(incrementalAmount)
@@ -604,10 +615,18 @@ class TransactionDetailActivity : AppCompatActivity() {
         val etCashbackAmount = dialogView.findViewById<EditText>(R.id.et_cashback_amount)
         val etServiceFee = dialogView.findViewById<EditText>(R.id.et_service_fee)
         
+        // Get the corresponding title TextView
+        val tvSurchargeAmount = dialogView.findViewById<TextView>(R.id.tv_surcharge_amount)
+        val tvCashbackAmount = dialogView.findViewById<TextView>(R.id.tv_cashback_amount)
+        val tvServiceFee = dialogView.findViewById<TextView>(R.id.tv_service_fee)
+
         // Hide surcharge, cashback and service fee fields as they're not supported for POST_AUTH
         etSurchargeAmount.visibility = View.GONE
+        tvSurchargeAmount.visibility = View.GONE
         etCashbackAmount.visibility = View.GONE
+        tvCashbackAmount.visibility = View.GONE
         etServiceFee.visibility = View.GONE
+        tvServiceFee.visibility = View.GONE
         
         AlertDialog.Builder(this)
             .setTitle("Additional Amounts (Optional)")
@@ -697,6 +716,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                             totalAmount = result.amount?.transAmount,
                             surchargeAmount = result.amount?.surchargeAmount,
                             tipAmount = result.amount?.tipAmount,
+                            taxAmount = result.amount?.taxAmount,
                             cashbackAmount = result.amount?.cashbackAmount,
                             serviceFee = result.amount?.serviceFee
                         )
@@ -802,6 +822,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                             totalAmount = result.amount?.transAmount,
                             surchargeAmount = result.amount?.surchargeAmount,
                             tipAmount = result.amount?.tipAmount,
+                            taxAmount = result.amount?.taxAmount,
                             cashbackAmount = result.amount?.cashbackAmount,
                             serviceFee = result.amount?.serviceFee
                         )
@@ -924,30 +945,9 @@ class TransactionDetailActivity : AppCompatActivity() {
         progressDialog.show()
 
         val transactionRequestId = existingTransactionRequestId ?: generateTransactionRequestId()
-        val referenceOrderId = generateOrderId()
+        val referenceOrderId = txn.referenceOrderId // Use the same order ID as original transaction
 
         val originalTxnId = txn.transactionId ?: txn.transactionRequestId
-
-        // Create transaction record or update existing one
-        val newTransaction = Transaction(
-            transactionRequestId = transactionRequestId,
-            transactionId = null,
-            referenceOrderId = referenceOrderId,
-            type = TransactionType.INCREMENT_AUTH,
-            amount = incrementalAmount,
-            currency = txn.currency,
-            status = TransactionStatus.PROCESSING,
-            timestamp = System.currentTimeMillis(),
-            originalTransactionId = originalTxnId
-        )
-        
-        if (existingTransactionRequestId == null) {
-            TransactionRepository.addTransaction(newTransaction)
-        } else {
-            TransactionRepository.updateTransaction(existingTransactionRequestId) {
-                it.copy(status = TransactionStatus.PROCESSING, errorCode = null, errorMessage = null)
-            }
-        }
 
         paymentService.executeIncrementalAuth(
             referenceOrderId = referenceOrderId,
@@ -961,53 +961,32 @@ class TransactionDetailActivity : AppCompatActivity() {
                     runOnUiThread {
                         progressDialog.dismiss()
                         
-                        // Update transaction status with actual amounts from SDK
-                        val status = when (result.transactionStatus) {
-                            "SUCCESS" -> TransactionStatus.SUCCESS
-                            "FAILED" -> TransactionStatus.FAILED
-                            "PROCESSING" -> TransactionStatus.PROCESSING
-                            else -> TransactionStatus.FAILED
+                        if (result.transactionStatus == "SUCCESS") {
+                            // Update the original transaction by adding the incremental amount
+                            val newOrderAmount = txn.amount + incrementalAmount
+                            val newTotalAmount = (txn.totalAmount ?: txn.amount) + incrementalAmount
+                            
+                            // Update the original transaction with new amounts
+                            TransactionRepository.updateTransaction(txn.transactionRequestId) { transaction ->
+                                transaction.copy(
+                                    amount = newOrderAmount,
+                                    totalAmount = newTotalAmount,
+                                    authCode = result.authCode ?: transaction.authCode
+                                )
+                            }
+                            
+                            showSuccessDialog("Incremental Authorization Successful", result)
+                            // Refresh current transaction information
+                            loadTransaction()
+                        } else {
+                            showToast("Incremental authorization failed: ${result.transactionResultMsg ?: "Unknown error"}")
                         }
-                        TransactionRepository.updateTransactionWithAmounts(
-                            transactionRequestId = transactionRequestId,
-                            status = status,
-                            transactionId = result.transactionId,
-                            authCode = result.authCode,
-                            orderAmount = result.amount?.orderAmount,
-                            totalAmount = result.amount?.transAmount,
-                            surchargeAmount = result.amount?.surchargeAmount,
-                            tipAmount = result.amount?.tipAmount,
-                            cashbackAmount = result.amount?.cashbackAmount,
-                            serviceFee = result.amount?.serviceFee
-                        )
-                        
-                        // If incremental auth is successful, update the original auth transaction amount
-                        if (status == TransactionStatus.SUCCESS) {
-                            // Use actual incremental amount from SDK result if available
-                            val actualIncrementalAmount = result.amount?.transAmount ?: incrementalAmount
-                            TransactionRepository.addToTransactionAmount(
-                                transactionRequestId = txn.transactionRequestId,
-                                incrementalAmount = actualIncrementalAmount
-                            )
-                        }
-                        
-                        showSuccessDialog("Incremental Authorization Successful", result)
-                        // Refresh current transaction information
-                        loadTransaction()
                     }
                 }
 
                 override fun onFailure(errorCode: String, errorMessage: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
-                        
-                        // Update transaction status to failed
-                        TransactionRepository.updateTransactionStatus(
-                            transactionRequestId = transactionRequestId,
-                            status = TransactionStatus.FAILED,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage
-                        )
                         
                         ErrorHandler.handlePaymentError(
                             context = this@TransactionDetailActivity,
@@ -1065,6 +1044,7 @@ class TransactionDetailActivity : AppCompatActivity() {
             originalTransactionId = originalTxnId,
             surchargeAmount = surchargeAmount,
             tipAmount = tipAmount,
+            taxAmount = taxAmount,
             cashbackAmount = cashbackAmount,
             serviceFee = serviceFee
         )
@@ -1103,6 +1083,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                             totalAmount = result.amount?.transAmount,
                             surchargeAmount = result.amount?.surchargeAmount,
                             tipAmount = result.amount?.tipAmount,
+                            taxAmount = result.amount?.taxAmount,
                             cashbackAmount = result.amount?.cashbackAmount,
                             serviceFee = result.amount?.serviceFee
                         )
@@ -1243,6 +1224,7 @@ class TransactionDetailActivity : AppCompatActivity() {
             totalAmount = result.amount?.transAmount,
             surchargeAmount = result.amount?.surchargeAmount,
             tipAmount = result.amount?.tipAmount,
+            taxAmount = result.amount?.taxAmount,
             cashbackAmount = result.amount?.cashbackAmount,
             serviceFee = result.amount?.serviceFee
         )

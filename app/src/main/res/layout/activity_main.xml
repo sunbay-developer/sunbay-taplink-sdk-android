@@ -281,19 +281,43 @@
         android:padding="24dp"
         android:background="#F8F9FA">
 
-        <!-- AUTH Button -->
-        <Button
-            android:id="@+id/btn_auth"
+        <!-- AUTH and FORCED AUTH Buttons (Horizontal Layout) -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="AUTH"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF"
-            android:background="@color/colorPrimary"
-            android:enabled="false"
-            android:elevation="4dp"
-            android:layout_marginBottom="16dp" />
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <!-- AUTH Button -->
+            <Button
+                android:id="@+id/btn_auth"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:text="AUTH"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="@color/colorPrimary"
+                android:enabled="false"
+                android:elevation="4dp"
+                android:layout_marginEnd="6dp" />
+
+            <!-- FORCED AUTH Button -->
+            <Button
+                android:id="@+id/btn_forced_auth"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:text="FORCED AUTH"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="@color/colorPrimary"
+                android:enabled="false"
+                android:elevation="4dp"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
 
         <!-- SALE Button -->
         <Button

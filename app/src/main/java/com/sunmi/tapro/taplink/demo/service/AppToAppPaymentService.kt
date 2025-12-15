@@ -41,6 +41,7 @@ class AppToAppPaymentService : PaymentService {
     
     // Connection Status
     private var connected = false
+    private var connecting = false
     
     // Connected Device Information
     private var connectedDeviceId: String? = null
@@ -76,6 +77,9 @@ class AppToAppPaymentService : PaymentService {
         
         Log.d(TAG, "=== Taplink SDK Connection Started ===")
 
+        // Set connecting status
+        connecting = true
+
         val connectionConfig = ConnectionConfig()
         
         Log.d(TAG, "=== Connection Request Parameters ===")
@@ -89,12 +93,16 @@ class AppToAppPaymentService : PaymentService {
                 Log.d(TAG, "=== SDK Connection Callback: onConnected ===")
                 Log.d(TAG, "Device ID: $deviceId")
                 Log.d(TAG, "Tapro Version: $taproVersion")
+                // Reset connecting status
+                connecting = false
                 handleConnected(deviceId, taproVersion)
             }
             
             override fun onDisconnected(reason: String) {
                 Log.d(TAG, "=== SDK Connection Callback: onDisconnected ===")
                 Log.d(TAG, "Disconnect Reason: $reason")
+                // Reset connecting status
+                connecting = false
                 handleDisconnected(reason)
             }
             
@@ -103,6 +111,8 @@ class AppToAppPaymentService : PaymentService {
                 Log.e(TAG, "Error Code: ${error.code}")
                 Log.e(TAG, "Error Message: ${error.message}")
                 Log.e(TAG, "Full Error Object: $error")
+                // Reset connecting status
+                connecting = false
                 handleConnectionError(error.code, error.message)
             }
         })
@@ -243,7 +253,6 @@ class AppToAppPaymentService : PaymentService {
             description = sdkResult.description,
             attach = sdkResult.attach,
             tipAmount = sdkResult.tipAmount?.toDouble(),
-            incrementalAmount = sdkResult.incrementalAmount?.toDouble(),
             totalAuthorizedAmount = sdkResult.totalAuthorizedAmount?.toDouble(),
             merchantRefundNo = sdkResult.merchantRefundNo,
             originalTransactionId = sdkResult.originalTransactionId,
@@ -334,6 +343,13 @@ class AppToAppPaymentService : PaymentService {
      */
     override fun isConnected(): Boolean {
         return connected
+    }
+    
+    /**
+     * Check if connecting
+     */
+    override fun isConnecting(): Boolean {
+        return connecting
     }
     
     /**
@@ -489,8 +505,80 @@ class AppToAppPaymentService : PaymentService {
             }
         })
     }
-    
 
+    /**
+     * Execute FORCED_AUTH transaction (forced authorization)
+     */
+    override fun executeForcedAuth(
+        referenceOrderId: String,
+        transactionRequestId: String,
+        amount: Double,
+        currency: String,
+        authCode: String,
+        description: String,
+        tipAmount: Double?,
+        taxAmount: Double?,
+        callback: PaymentCallback
+    ) {
+        if (!connected) {
+            callback.onFailure("C30", "Tapro payment terminal not connected")
+            return
+        }
+
+        Log.d(TAG, "Executing FORCED_AUTH transaction - OrderId: $referenceOrderId, AuthCode: $authCode")
+
+        // Create AmountInfo with all amounts
+        val amountInfo = AmountInfo(
+            orderAmount = BigDecimal.valueOf(amount),
+            pricingCurrency = currency,
+            tipAmount = tipAmount?.let { BigDecimal.valueOf(it) },
+            taxAmount = taxAmount?.let { BigDecimal.valueOf(it) }
+        )
+
+        val request = PaymentRequest("FORCED_AUTH")
+            .setReferenceOrderId(referenceOrderId)
+            .setTransactionRequestId(transactionRequestId)
+            .setAmount(amountInfo)
+            .setForcedAuthCode(authCode)
+            .setDescription(description)
+
+        Log.d(TAG, "=== FORCED_AUTH Request ===")
+        Log.d(TAG, "Request: $request")
+
+        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+            override fun onSuccess(result: SdkPaymentResult) {
+                handlePaymentResult(result, callback)
+            }
+
+            override fun onFailure(error: SdkPaymentError) {
+                handlePaymentFailure("FORCED_AUTH", error, callback)
+            }
+
+            override fun onProgress(event: SdkPaymentEvent) {
+                // Convert SDK returned status code to user-friendly message
+                val eventStr = event.eventMsg
+                Log.d(TAG, "FORCED_AUTH transaction progress - Event: $eventStr")
+
+                // Provide specific progress feedback based on event type
+                val progressMessage = when {
+                    eventStr.contains("PROCESSING", ignoreCase = true) -> "Processing transaction"
+                    eventStr.contains("WAITING_CARD", ignoreCase = true) -> "Please insert, swipe or tap card"
+                    eventStr.contains("CARD_DETECTED", ignoreCase = true) -> "Card detected"
+                    eventStr.contains("READING_CARD", ignoreCase = true) -> "Card information is being read"
+                    eventStr.contains("WAITING_PIN", ignoreCase = true) -> "Please enter PIN on payment terminal"
+                    eventStr.contains("WAITING_SIGNATURE", ignoreCase = true) -> "Please enter signature on payment terminal"
+                    eventStr.contains("WAITING_RESPONSE", ignoreCase = true) -> "Waiting for payment gateway response"
+                    eventStr.contains("PRINTING", ignoreCase = true) -> "Transaction is being printed"
+                    eventStr.contains("COMPLETED", ignoreCase = true) -> "Transaction completed successfully"
+                    eventStr.contains("CANCEL", ignoreCase = true) -> "Transaction cancelled"
+
+                    else -> "FORCED_AUTH transaction processing..."
+                }
+
+                callback.onProgress("PROCESSING", progressMessage)
+            }
+        })
+    }
     
     /**
      * Execute REFUND transaction (refund)
@@ -655,11 +743,11 @@ class AppToAppPaymentService : PaymentService {
         var amountInfo = AmountInfo(orderAmount = BigDecimal.valueOf(amount), pricingCurrency = currency)
         
         // Set additional amounts if provided
-        surchargeAmount?.let { amountInfo = amountInfo.setSurchargeAmount(BigDecimal.valueOf(it)) }
+        // surchargeAmount?.let { amountInfo = amountInfo.setSurchargeAmount(BigDecimal.valueOf(it)) }
         tipAmount?.let { amountInfo = amountInfo.setTipAmount(BigDecimal.valueOf(it)) }
         taxAmount?.let { amountInfo = amountInfo.setTaxAmount(BigDecimal.valueOf(it)) }
-        cashbackAmount?.let { amountInfo = amountInfo.setCashbackAmount(BigDecimal.valueOf(it)) }
-        serviceFee?.let { amountInfo = amountInfo.setServiceFee(BigDecimal.valueOf(it)) }
+        // cashbackAmount?.let { amountInfo = amountInfo.setCashbackAmount(BigDecimal.valueOf(it)) }
+        // serviceFee?.let { amountInfo = amountInfo.setServiceFee(BigDecimal.valueOf(it)) }
         
         val request = PaymentRequest("POST_AUTH")
             .setReferenceOrderId(referenceOrderId)

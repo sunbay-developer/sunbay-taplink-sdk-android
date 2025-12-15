@@ -4,14 +4,14 @@ import android.content.Context
 
 /**
  * Payment Service Interface
- * 
+ *
  * Defines core payment-related functionalities, including initialization, connection management and transaction execution
  */
 interface PaymentService {
-    
+
     /**
      * Initialize SDK
-     * 
+     *
      * @param context Application context
      * @param appId Application ID
      * @param merchantId Merchant ID
@@ -24,43 +24,50 @@ interface PaymentService {
         merchantId: String,
         secretKey: String
     ): Boolean
-    
+
     /**
      * Connect to payment terminal
-     * 
+     *
      * @param listener Connection status listener
      */
     fun connect(listener: ConnectionListener)
-    
+
     /**
      * Disconnect
      */
     fun disconnect()
-    
+
     /**
      * Check connection status
-     * 
+     *
      * @return Whether connected
      */
     fun isConnected(): Boolean
-    
+
+    /**
+     * Check if connecting
+     *
+     * @return Whether connecting
+     */
+    fun isConnecting(): Boolean
+
     /**
      * Get connected device ID
-     * 
+     *
      * @return Device ID, returns null if not connected
      */
     fun getConnectedDeviceId(): String?
-    
+
     /**
      * Get Tapro version
-     * 
+     *
      * @return Tapro version, returns null if not connected
      */
     fun getTaproVersion(): String?
-    
+
     /**
      * Execute SALE transaction
-     * 
+     *
      * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param amount Transaction amount
@@ -84,10 +91,10 @@ interface PaymentService {
         serviceFee: Double? = null,
         callback: PaymentCallback
     )
-    
+
     /**
      * Execute AUTH transaction (Pre-authorization)
-     * 
+     *
      * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param amount Transaction amount
@@ -103,12 +110,33 @@ interface PaymentService {
         description: String,
         callback: PaymentCallback
     )
-    
 
-    
+    /**
+     * Execute FORCED_AUTH transaction (Forced authorization)
+     *
+     * @param referenceOrderId Reference order ID
+     * @param transactionRequestId Transaction request ID
+     * @param amount Transaction amount
+     * @param currency Currency type
+     * @param authCode Authorization code
+     * @param description Transaction description
+     * @param callback Payment callback
+     */
+    fun executeForcedAuth(
+        referenceOrderId: String,
+        transactionRequestId: String,
+        amount: Double,
+        currency: String,
+        authCode: String,
+        description: String,
+        tipAmount: Double? = null,
+        taxAmount: Double? = null,
+        callback: PaymentCallback
+    )
+
     /**
      * Execute REFUND transaction (Refund)
-     * 
+     *
      * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param originalTransactionId Original transaction ID
@@ -128,10 +156,10 @@ interface PaymentService {
         reason: String?,
         callback: PaymentCallback
     )
-    
+
     /**
      * Execute VOID transaction (Void)
-     * 
+     *
      * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param originalTransactionId Original transaction ID
@@ -147,10 +175,10 @@ interface PaymentService {
         reason: String?,
         callback: PaymentCallback
     )
-    
+
     /**
      * Execute POST_AUTH transaction (Pre-authorization completion)
-     * 
+     *
      * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param originalTransactionId Original transaction ID
@@ -176,10 +204,10 @@ interface PaymentService {
         serviceFee: Double? = null,
         callback: PaymentCallback
     )
-    
+
     /**
      * Execute INCREMENTAL_AUTH transaction (Incremental authorization)
-     * 
+     *
      * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param originalTransactionId Original transaction ID
@@ -197,10 +225,10 @@ interface PaymentService {
         description: String,
         callback: PaymentCallback
     )
-    
+
     /**
      * Execute TIP_ADJUST transaction (Tip adjustment)
-     * 
+     *
      * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param originalTransactionId Original transaction ID
@@ -216,10 +244,10 @@ interface PaymentService {
         description: String,
         callback: PaymentCallback
     )
-    
+
     /**
      * Execute QUERY transaction (Inquiry) - Using transaction request ID
-     * 
+     *
      * @param transactionRequestId Transaction request ID
      * @param callback Payment callback
      */
@@ -227,10 +255,10 @@ interface PaymentService {
         transactionRequestId: String,
         callback: PaymentCallback
     )
-    
+
     /**
      * Execute QUERY transaction (Inquiry) - Using transaction ID
-     * 
+     *
      * @param transactionId Transaction ID
      * @param callback Payment callback
      */
@@ -238,10 +266,10 @@ interface PaymentService {
         transactionId: String,
         callback: PaymentCallback
     )
-    
+
     /**
      * Execute BATCH_CLOSE transaction (Batch close)
-     * 
+     *
      * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param description Transaction description
@@ -261,22 +289,22 @@ interface PaymentService {
 interface ConnectionListener {
     /**
      * Connection successful
-     * 
+     *
      * @param deviceId Device ID
      * @param taproVersion Tapro version
      */
     fun onConnected(deviceId: String, taproVersion: String)
-    
+
     /**
      * Connection disconnected
-     * 
+     *
      * @param reason Disconnect reason
      */
     fun onDisconnected(reason: String)
-    
+
     /**
      * Connection error
-     * 
+     *
      * @param code Error code
      * @param message Error message
      */
@@ -289,22 +317,22 @@ interface ConnectionListener {
 interface PaymentCallback {
     /**
      * Payment successful
-     * 
+     *
      * @param result Payment result
      */
     fun onSuccess(result: PaymentResult)
-    
+
     /**
      * Payment failed
-     * 
+     *
      * @param code Error code
      * @param message Error message
      */
     fun onFailure(code: String, message: String)
-    
+
     /**
      * Payment progress
-     * 
+     *
      * @param status Status code
      * @param message Status description
      */
@@ -338,7 +366,6 @@ data class PaymentResult(
     val attach: String?,
     val batchCloseInfo: BatchCloseInfo?,
     val tipAmount: Double?,
-    val incrementalAmount: Double?,
     val totalAuthorizedAmount: Double?,
     val merchantRefundNo: String?,
     val originalTransactionId: String?,
@@ -348,12 +375,12 @@ data class PaymentResult(
      * Check if transaction is successful
      */
     fun isSuccess(): Boolean = transactionStatus == "SUCCESS"
-    
+
     /**
      * Check if transaction is processing
      */
     fun isProcessing(): Boolean = transactionStatus == "PROCESSING"
-    
+
     /**
      * Check if transaction failed
      */

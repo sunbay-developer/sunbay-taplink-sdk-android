@@ -41,8 +41,8 @@ data class Transaction(
     val originalTransactionId: String? = null,
     val surchargeAmount: Double? = null,
     val tipAmount: Double? = null,
-    val cashbackAmount: Double? = null,
     val taxAmount: Double? = null,
+    val cashbackAmount: Double? = null,
     val serviceFee: Double? = null,
     val batchNo: Int? = null,
     val batchCloseInfo: BatchCloseInfo? = null
@@ -70,12 +70,13 @@ data class Transaction(
     
     /**
      * Check if transaction can be voided
-     * Only successful transactions of type SALE, AUTH and POST_AUTH can be voided
+     * Only successful transactions of type SALE, AUTH, FORCED_AUTH and POST_AUTH can be voided
      */
     fun canVoid(): Boolean {
         return isSuccess() && (
             type == TransactionType.SALE ||
             type == TransactionType.AUTH ||
+            type == TransactionType.FORCED_AUTH ||
             type == TransactionType.POST_AUTH
         )
     }
@@ -93,18 +94,24 @@ data class Transaction(
     
     /**
      * Check if transaction can be incremental authorized
-     * Only successful transactions of type AUTH can be incremental authorized
+     * Only successful transactions of type AUTH and FORCED_AUTH can be incremental authorized
      */
     fun canIncrementalAuth(): Boolean {
-        return isSuccess() && type == TransactionType.AUTH
+        return isSuccess() && (
+            type == TransactionType.AUTH ||
+            type == TransactionType.FORCED_AUTH
+        )
     }
     
     /**
      * Check if transaction can be post authorized
-     * Only successful transactions of type AUTH can be post authorized
+     * Only successful transactions of type AUTH and FORCED_AUTH can be post authorized
      */
     fun canPostAuth(): Boolean {
-        return isSuccess() && type == TransactionType.AUTH
+        return isSuccess() && (
+            type == TransactionType.AUTH ||
+            type == TransactionType.FORCED_AUTH
+        )
     }
     
     /**
@@ -115,6 +122,7 @@ data class Transaction(
             TransactionType.SALE -> "SALE"
             TransactionType.AUTH -> "AUTH"
             TransactionType.INCREMENT_AUTH -> "INCREMENT AUTH"
+            TransactionType.FORCED_AUTH -> "FORCED_AUTH"
             TransactionType.POST_AUTH -> "POST AUTH"
             TransactionType.REFUND -> "REFUND"
             TransactionType.VOID -> "VOID"

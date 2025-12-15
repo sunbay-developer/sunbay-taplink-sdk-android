@@ -13,6 +13,7 @@
         android:layout_marginBottom="16dp" />
 
     <TextView
+        android:id="@+id/tv_surcharge_amount"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Surcharge Amount:"
@@ -58,6 +59,7 @@
         android:layout_marginBottom="12dp" />
 
     <TextView
+        android:id="@+id/tv_cashback_amount"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Cashback Amount:"
@@ -73,6 +75,7 @@
         android:layout_marginBottom="12dp" />
 
     <TextView
+        android:id="@+id/tv_service_fee"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Service Fee:"

@@ -266,6 +266,7 @@ class TransactionListActivity : AppCompatActivity() {
                 totalAmount = result.amount?.transAmount,
                 surchargeAmount = result.amount?.surchargeAmount,
                 tipAmount = result.amount?.tipAmount,
+                taxAmount = result.amount?.taxAmount,
                 cashbackAmount = result.amount?.cashbackAmount,
                 serviceFee = result.amount?.serviceFee
             )
@@ -285,6 +286,7 @@ class TransactionListActivity : AppCompatActivity() {
                 "SALE" -> TransactionType.SALE
                 "AUTH" -> TransactionType.AUTH
                 "INCREMENT_AUTH" -> TransactionType.INCREMENT_AUTH
+                "FORCED_AUTH" -> TransactionType.FORCED_AUTH
                 "POST_AUTH" -> TransactionType.POST_AUTH
                 "REFUND" -> TransactionType.REFUND
                 "VOID" -> TransactionType.VOID
@@ -308,6 +310,7 @@ class TransactionListActivity : AppCompatActivity() {
                 errorMessage = if (status == TransactionStatus.FAILED) result.transactionResultMsg else null,
                 surchargeAmount = result.amount?.surchargeAmount,
                 tipAmount = result.amount?.tipAmount,
+                taxAmount = result.amount?.taxAmount,
                 cashbackAmount = result.amount?.cashbackAmount
             )
             

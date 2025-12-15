@@ -99,22 +99,6 @@ object TransactionRepository {
     }
     
     /**
-     * Add amount to existing transaction (used for incremental auth)
-     * 
-     * @param transactionRequestId Transaction request ID
-     * @param incrementalAmount Amount to add to existing amount
-     * @return Returns true if update successful, false if record not found
-     */
-    fun addToTransactionAmount(
-        transactionRequestId: String,
-        incrementalAmount: Double
-    ): Boolean {
-        return updateTransaction(transactionRequestId) { transaction ->
-            transaction.copy(amount = transaction.amount + incrementalAmount)
-        }
-    }
-    
-    /**
      * Update transaction with complete amount information from SDK result
      * 
      * @param transactionRequestId Transaction request ID
@@ -143,6 +127,7 @@ object TransactionRepository {
         totalAmount: Double? = null,
         surchargeAmount: Double? = null,
         tipAmount: Double? = null,
+        taxAmount: Double? = null,
         cashbackAmount: Double? = null,
         serviceFee: Double? = null,
         batchNo: Int? = null,
@@ -160,6 +145,7 @@ object TransactionRepository {
                 totalAmount = if (totalAmount != null) totalAmount else transaction.totalAmount,
                 surchargeAmount = if (surchargeAmount != null) surchargeAmount else transaction.surchargeAmount,
                 tipAmount = if (tipAmount != null) tipAmount else transaction.tipAmount,
+                taxAmount = if (taxAmount != null) taxAmount else transaction.taxAmount,
                 cashbackAmount = if (cashbackAmount != null) cashbackAmount else transaction.cashbackAmount,
                 serviceFee = if (serviceFee != null) serviceFee else transaction.serviceFee,
                 batchNo = batchNo ?: transaction.batchNo,

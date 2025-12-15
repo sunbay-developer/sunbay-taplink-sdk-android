@@ -56,6 +56,7 @@ class MainActivity : Activity() {
     private lateinit var tvSelectedAmount: TextView
     private lateinit var btnSale: Button
     private lateinit var btnAuth: Button
+    private lateinit var btnForcedAuth: Button
     private lateinit var tvPaymentStatus: TextView
 
     // Payment service instance
@@ -143,6 +144,7 @@ class MainActivity : Activity() {
             // Transaction buttons
             btnSale = findViewById(R.id.btn_sale)
             btnAuth = findViewById(R.id.btn_auth)
+            btnForcedAuth = findViewById(R.id.btn_forced_auth)
 
             // Payment status display
             tvPaymentStatus = findViewById(R.id.tv_payment_status)
@@ -221,6 +223,10 @@ class MainActivity : Activity() {
 
         btnAuth.setOnClickListener {
             startPayment(TransactionType.AUTH)
+        }
+
+        btnForcedAuth.setOnClickListener {
+            startPayment(TransactionType.FORCED_AUTH)
         }
 
 
@@ -355,24 +361,28 @@ class MainActivity : Activity() {
                 Log.d(TAG, "PaymentService not initialized yet, skip button state update")
                 btnSale.isEnabled = false
                 btnAuth.isEnabled = false
+                btnForcedAuth.isEnabled = false
                 return
             }
 
             val connected = paymentService.isConnected()
+            val connecting = paymentService.isConnecting()
             val hasAmount = selectedAmount > 0
             val enabled = connected && hasAmount
 
             btnSale.isEnabled = enabled
             btnAuth.isEnabled = enabled
+            btnForcedAuth.isEnabled = enabled
 
             Log.d(
                 TAG,
-                "Update transaction buttons state - Connected: $connected, HasAmount: $hasAmount"
+                "Update transaction buttons state - Connected: $connected, Connecting: $connecting, HasAmount: $hasAmount"
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error updating transaction buttons state", e)
             btnSale.isEnabled = false
             btnAuth.isEnabled = false
+            btnForcedAuth.isEnabled = false
         }
     }
 
@@ -452,7 +462,9 @@ class MainActivity : Activity() {
             override fun onFailure(code: String, message: String) {
                 runOnUiThread {
                     handlePaymentFailure(transactionRequestId, code, message)
+                    hidePaymentProgressDialog()
                 }
+
             }
 
             override fun onProgress(status: String, message: String) {
@@ -597,8 +609,11 @@ class MainActivity : Activity() {
                 )
             }
 
-
-
+            TransactionType.FORCED_AUTH -> {
+                // FORCED_AUTH requires an authorization code; here we use a sample code.
+                // In a real-world app, the user should be prompted to enter the authorization code.
+                showForcedAuthDialog(referenceOrderId, transactionRequestId, callback)
+            }
             else -> {
                 showToast("Unsupported transaction type: $transactionType")
                 hidePaymentProgressDialog()
@@ -627,6 +642,11 @@ class MainActivity : Activity() {
         val etTaxAmount = dialogView.findViewById<EditText>(R.id.et_tax_amount)
         val etCashbackAmount = dialogView.findViewById<EditText>(R.id.et_cashback_amount)
         val etServiceFee = dialogView.findViewById<EditText>(R.id.et_service_fee)
+        
+        // Hide service fee field
+        val tvServiceFee = dialogView.findViewById<TextView>(R.id.tv_service_fee)
+        etServiceFee.visibility = View.GONE
+        tvServiceFee.visibility = View.GONE
 
         AlertDialog.Builder(this)
             .setTitle("Additional Amounts (Optional)")
@@ -661,7 +681,7 @@ class MainActivity : Activity() {
         paymentProgressDialog = ProgressDialog(this).apply {
             setTitle("Starting Payment")
             setMessage("Launching Tapro payment app...")
-            setCancelable(false)
+            setCancelable(true)
             show()
         }
     }
@@ -1217,13 +1237,113 @@ class MainActivity : Activity() {
                 )
             }
 
-
+            TransactionType.FORCED_AUTH -> {
+                // FORCED_AUTH requires an authorization code; here we use a sample code.
+                // In a real-world app, the user should be prompted to enter the authorization code.
+                showForcedAuthDialog(referenceOrderId, transactionRequestId, callback)
+            }
 
             else -> {
                 showToast("Unsupported transaction type for retry: $transactionType")
                 hidePaymentProgressDialog()
             }
         }
+    }
+
+    /**
+     * Show forced authorization dialog for user to enter authorization code and additional amounts
+     */
+    private fun showForcedAuthDialog(
+        referenceOrderId: String,
+        transactionRequestId: String,
+        callback: PaymentCallback
+    ) {
+        // Create dialog layout for additional amounts
+        val dialogView = layoutInflater.inflate(R.layout.dialog_additional_amounts, null)
+        val etTipAmount = dialogView.findViewById<EditText>(R.id.et_tip_amount)
+        val etTaxAmount = dialogView.findViewById<EditText>(R.id.et_tax_amount)
+        val tvSurchargeAmount = dialogView.findViewById<TextView>(R.id.tv_surcharge_amount)
+        val etSurchargeAmount = dialogView.findViewById<EditText>(R.id.et_surcharge_amount)
+        val tvCashbackAmount = dialogView.findViewById<TextView>(R.id.tv_cashback_amount)
+        val etCashbackAmount = dialogView.findViewById<EditText>(R.id.et_cashback_amount)
+        val tvServiceFee = dialogView.findViewById<TextView>(R.id.tv_service_fee)
+        val etServiceFee = dialogView.findViewById<EditText>(R.id.et_service_fee)
+
+        // Hide all fields except tip and tax
+        tvSurchargeAmount.visibility = View.GONE
+        etSurchargeAmount.visibility = View.GONE
+        tvCashbackAmount.visibility = View.GONE
+        etCashbackAmount.visibility = View.GONE
+        tvServiceFee.visibility = View.GONE
+        etServiceFee.visibility = View.GONE
+
+        AlertDialog.Builder(this)
+            .setTitle("Forced Authorization - Additional Amounts")
+            .setMessage("Base Amount: ${amountFormatter.format(selectedAmount)}")
+            .setView(dialogView)
+            .setPositiveButton("Proceed") { _, _ ->
+                val tipAmount = etTipAmount.text.toString().toDoubleOrNull()
+                val taxAmount = etTaxAmount.text.toString().toDoubleOrNull()
+
+                // Now show dialog for authorization code
+                showAuthCodeDialog(referenceOrderId, transactionRequestId, tipAmount, taxAmount, callback)
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                hidePaymentProgressDialog()
+            }
+            .setNeutralButton("Skip") { _, _ ->
+                // Show dialog for authorization code without additional amounts
+                showAuthCodeDialog(referenceOrderId, transactionRequestId, null, null, callback)
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Show dialog for entering authorization code
+     */
+    private fun showAuthCodeDialog(
+        referenceOrderId: String,
+        transactionRequestId: String,
+        tipAmount: Double?,
+        taxAmount: Double?,
+        callback: PaymentCallback
+    ) {
+        val input = EditText(this).apply {
+            hint = "Enter authorization code"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Forced Authorization")
+            .setMessage("Please enter authorization code to complete forced auth transaction")
+            .setView(input)
+            .setPositiveButton("OK") { dialog, _ ->
+                val authCode = input.text.toString().trim()
+                if (authCode.isNotEmpty()) {
+                    // Execute forced authorization
+                    paymentService.executeForcedAuth(
+                        referenceOrderId = referenceOrderId,
+                        transactionRequestId = transactionRequestId,
+                        amount = selectedAmount,
+                        currency = "USD",
+                        authCode = authCode,
+                        description = "Demo FORCED_AUTH Payment - ${amountFormatter.format(selectedAmount)}",
+                        tipAmount = tipAmount,
+                        taxAmount = taxAmount,
+                        callback = callback
+                    )
+                    dialog.dismiss()
+                } else {
+                    showToast("Please enter valid authorization code")
+                }
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+                hidePaymentProgressDialog()
+            }
+            .setCancelable(false)
+            .show()
     }
 
     /**
@@ -1249,6 +1369,7 @@ class MainActivity : Activity() {
     private fun resetAmountSelection() {
         selectedAmount = 0.0
         etCustomAmount.setText("")
+        tvPaymentStatus.visibility = View.GONE
         updateSelectedAmountDisplay()
         updateTransactionButtonsState()
     }
@@ -1299,10 +1420,13 @@ class MainActivity : Activity() {
     private fun checkConnectionStatus() {
         try {
             if (::paymentService.isInitialized) {
+                val isConnecting = paymentService.isConnecting()
                 val isConnected = paymentService.isConnected()
-                Log.d(TAG, "Connection status check - Connected: $isConnected")
+                Log.d(TAG, "Connection status check - Connecting: $isConnecting, Connected: $isConnected")
 
-                if (isConnected) {
+                if (isConnecting) {
+                    updateConnectionStatus("Connecting...", false)
+                } else if (isConnected) {
                     // If connected, get version info and update status
                     val version = paymentService.getTaproVersion()
                     val statusText = if (version != null) {
