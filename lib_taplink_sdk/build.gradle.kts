@@ -6,8 +6,8 @@ plugins {
 
 // ==================== 常量配置 ====================
 object SdkVersion {
-    const val CODE = 1
-    const val NAME = "1.0.1"
+    const val CODE = 3
+    const val NAME = "1.0.3"
 }
 
 object BuildConfig {
@@ -67,7 +67,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
 
     // 内部模块依赖
-    embed(project(":lib_taplink_service"))
+    embed(project(":lib_taplink_communication"))
 
     // 第三方库
     implementation(libs.gson)

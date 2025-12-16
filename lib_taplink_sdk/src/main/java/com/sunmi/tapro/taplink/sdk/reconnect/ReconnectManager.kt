@@ -5,7 +5,7 @@ import android.os.Looper
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
-import com.sunmi.tapro.taplink.service.util.LogUtil
+import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
  * 重连管理器

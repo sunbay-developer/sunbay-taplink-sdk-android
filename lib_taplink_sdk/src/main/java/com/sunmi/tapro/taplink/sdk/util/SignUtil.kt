@@ -1,6 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.util
 
-import com.sunmi.tapro.taplink.service.util.LogUtil
+import com.sunmi.tapro.taplink.communication.util.LogUtil
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 

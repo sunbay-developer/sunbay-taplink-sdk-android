@@ -4,7 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.sunmi.tapro.taplink.sdk.model.base.BasicRequest
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
-import com.sunmi.tapro.taplink.service.util.LogUtil
+import com.sunmi.tapro.taplink.communication.util.LogUtil
 import java.text.SimpleDateFormat
 import java.util.*
 

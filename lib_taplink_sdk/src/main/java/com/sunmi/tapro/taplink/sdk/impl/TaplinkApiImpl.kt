@@ -23,11 +23,11 @@ import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 import com.sunmi.tapro.taplink.sdk.util.RequestConverter
 import com.sunmi.tapro.taplink.sdk.reconnect.ReconnectManager
-import com.sunmi.tapro.taplink.service.TaplinkServiceKernel
-import com.sunmi.tapro.taplink.service.interfaces.InnerCallback
-import com.sunmi.tapro.taplink.service.util.LocalCallbackManager
-import com.sunmi.tapro.taplink.service.util.LogUtil
-import com.sunmi.tapro.taplink.service.interfaces.ConnectionCallback as ServiceConnectionCallback
+import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
+import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
+import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
+import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback as ServiceConnectionCallback
 
 /**
  * Taplink API 实现类
