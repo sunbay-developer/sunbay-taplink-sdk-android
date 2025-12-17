@@ -470,7 +470,7 @@ class ConnectionActivity : AppCompatActivity() {
                 finishAffinity()
                 
                 // Force exit the process
-                android.os.Process.killProcess(android.os.Process.myPid())
+//                android.os.Process.killProcess(android.os.Process.myPid())
             }
             .setNegativeButton("Cancel") { dialog, _ ->
                 Log.d(TAG, "User cancels exit")

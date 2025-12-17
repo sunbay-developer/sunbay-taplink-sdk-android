@@ -22,7 +22,6 @@ object RetryManager {
     
     // Temporary errors - can retry with same ID
     private val TEMPORARY_ERROR_CODES = setOf(
-
         "E02",  // Network error
         "996",  // System timeout
         "E01",  // System busy

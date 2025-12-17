@@ -2,7 +2,7 @@
 
 SUNBAY Taplink SDK 支付集成演示应用，展示如何集成和使用 SUNBAY Taplink SDK 进行支付交易处理。
 
-> 🚀 **快速体验**: 下载 [APK文件](app/debug/TaplinkDemo-debug-1.0.0.apk) 直接安装，或观看演示视频了解功能
+> 🚀 **快速体验**: 下载 [APK文件](app/release/TaplinkDemo-release-1.0.0.apk) 直接安装，或观看演示视频了解功能
 
 ## 项目介绍
 
@@ -12,14 +12,14 @@ TaplinkDemo 是由商米提供的支付 SDK 集成示例应用，演示如何使
 
 本项目提供了完整的演示资源，方便开发者快速了解和体验：
 
-- **[TaplinkDemo-debug-1.0.0.apk](app/debug/TaplinkDemo-debug-1.0.0.apk)** - 预编译的演示应用
+- **[TaplinkDemo-release-1.0.0.apk](app/release/TaplinkDemo-release-1.0.0.apk)** - 预编译的演示应用
   - 可直接安装在 Android 7.1+ 设备上
   - 包含完整的支付功能演示
   - 支持 App-to-App 模式连接
 
 - **[Tapro [standalone] - preview_check_v1.0.0.60(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_check_v1.0.0.60%28develop%29.apk)** - Tapro 支付终端应用
   - 版本: v1.0.0.60 (develop)
-  - **必须安装**: App-to-App 模式需要此应用处理支付
+  - **必须安装**: App-to-App 模式需要Tapro应用处理支付
   - 需要将设备 SN 绑定到 SUNBAY 平台才能正常使用
   - 与 TaplinkDemo 配合使用完成支付交易
 
@@ -30,7 +30,6 @@ TaplinkDemo 是由商米提供的支付 SDK 集成示例应用，演示如何使
 > 📹 **演示说明**: 
 > - 上方GIF展示了完整的应用操作流程
 > - 如需查看高清版本，可下载 [完整视频文件](./taplinkdemo.mp4)
-> - GIF自动循环播放，展示主要功能操作
 
   - 展示完整的支付流程操作
   - App-to-App 模式连接演示
@@ -47,6 +46,7 @@ TaplinkDemo 是由商米提供的支付 SDK 集成示例应用，演示如何使
 - **撤销交易 (VOID)** - 交易撤销
 - **预授权完成 (POST_AUTH)** - 预授权完成
 - **增量授权 (INCREMENTAL_AUTH)** - 增量授权
+- **强制授权 (FORCE_AUTH)** - 强制授权
 - **小费调整 (TIP_ADJUST)** - 小费金额调整
 
 ### 连接模式
@@ -249,9 +249,6 @@ sdk.dir=/path/to/your/Android/sdk
 
     <!-- Secret key - Used for signature verification, assigned by Taplink platform -->
     <string name="taplink_secret_key">your_secret_key</string>
-
-    <!-- Default connection mode: APP_TO_APP, CABLE, LAN, CLOUD -->
-    <string name="taplink_default_connection_mode">APP_TO_APP</string>
 </resources>
 ```
 

@@ -4,6 +4,7 @@ import com.sunmi.tapro.taplink.demo.model.BatchCloseInfo
 import com.sunmi.tapro.taplink.demo.model.Transaction
 import com.sunmi.tapro.taplink.demo.model.TransactionStatus
 import com.sunmi.tapro.taplink.demo.model.TransactionType
+import java.math.BigDecimal
 
 /**
  * Transaction Repository (Singleton)
@@ -123,13 +124,13 @@ object TransactionRepository {
         authCode: String? = null,
         errorCode: String? = null,
         errorMessage: String? = null,
-        orderAmount: Double? = null,
-        totalAmount: Double? = null,
-        surchargeAmount: Double? = null,
-        tipAmount: Double? = null,
-        taxAmount: Double? = null,
-        cashbackAmount: Double? = null,
-        serviceFee: Double? = null,
+        orderAmount: BigDecimal? = null,
+        totalAmount: BigDecimal? = null,
+        surchargeAmount: BigDecimal? = null,
+        tipAmount: BigDecimal? = null,
+        taxAmount: BigDecimal? = null,
+        cashbackAmount: BigDecimal? = null,
+        serviceFee: BigDecimal? = null,
         batchNo: Int? = null,
         batchCloseInfo: BatchCloseInfo? = null
     ): Boolean {

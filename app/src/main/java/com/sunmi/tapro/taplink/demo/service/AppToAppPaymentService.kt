@@ -218,13 +218,13 @@ class AppToAppPaymentService : PaymentService {
             amount = sdkResult.amount?.let { amt ->
                 TransactionAmount(
                     priceCurrency = amt.priceCurrency,
-                    transAmount = amt.transAmount?.toDouble(),
-                    orderAmount = amt.orderAmount?.toDouble(),
-                    taxAmount = amt.taxAmount?.toDouble(),
-                    serviceFee = amt.serviceFee?.toDouble(),
-                    surchargeAmount = amt.surchargeAmount?.toDouble(),
-                    tipAmount = amt.tipAmount?.toDouble(),
-                    cashbackAmount = amt.cashbackAmount?.toDouble()
+                    transAmount = amt.transAmount,
+                    orderAmount = amt.orderAmount,
+                    taxAmount = amt.taxAmount,
+                    serviceFee = amt.serviceFee,
+                    surchargeAmount = amt.surchargeAmount,
+                    tipAmount = amt.tipAmount,
+                    cashbackAmount = amt.cashbackAmount
                 )
             },
             createTime = sdkResult.createTime,
@@ -252,20 +252,20 @@ class AppToAppPaymentService : PaymentService {
             transactionResultMsg = sdkResult.transactionResultMsg,
             description = sdkResult.description,
             attach = sdkResult.attach,
-            tipAmount = sdkResult.tipAmount?.toDouble(),
-            totalAuthorizedAmount = sdkResult.totalAuthorizedAmount?.toDouble(),
+            tipAmount = sdkResult.tipAmount,
+            totalAuthorizedAmount = sdkResult.totalAuthorizedAmount,
             merchantRefundNo = sdkResult.merchantRefundNo,
             originalTransactionId = sdkResult.originalTransactionId,
             originalTransactionRequestId = sdkResult.originalTransactionRequestId,
             batchCloseInfo = sdkResult.batchCloseInfo?.let { bci ->
                 BatchCloseInfo(
                     totalCount = bci.totalCount ?: 0,
-                    totalAmount = bci.totalAmount?.toDouble() ?: 0.0,
-                    totalTip = bci.totalTip?.toDouble() ?: 0.0,
-                    totalTax = bci.totalTax?.toDouble() ?: 0.0,
-                    totalSurchargeAmount = bci.totalSurchargeAmount?.toDouble() ?: 0.0,
-                    totalServiceFee = bci.totalServiceFee?.toDouble() ?: 0.0,
-                    cashDiscount = bci.cashDiscount?.toDouble() ?: 0.0,
+                    totalAmount = bci.totalAmount ?: BigDecimal.ZERO,
+                    totalTip = bci.totalTip ?: BigDecimal.ZERO,
+                    totalTax = bci.totalTax ?: BigDecimal.ZERO,
+                    totalSurchargeAmount = bci.totalSurchargeAmount ?: BigDecimal.ZERO,
+                    totalServiceFee = bci.totalServiceFee ?: BigDecimal.ZERO,
+                    cashDiscount = bci.cashDiscount ?: BigDecimal.ZERO,
                     closeTime = bci.closeTime ?: ""
                 )
             }
@@ -372,14 +372,14 @@ class AppToAppPaymentService : PaymentService {
     override fun executeSale(
         referenceOrderId: String,
         transactionRequestId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
-        surchargeAmount: Double?,
-        tipAmount: Double?,
-        taxAmount: Double?,
-        cashbackAmount: Double?,
-        serviceFee: Double?,
+        surchargeAmount: BigDecimal?,
+        tipAmount: BigDecimal?,
+        taxAmount: BigDecimal?,
+        cashbackAmount: BigDecimal?,
+        serviceFee: BigDecimal?,
         callback: PaymentCallback
     ) {
         if (!connected) {
@@ -391,13 +391,13 @@ class AppToAppPaymentService : PaymentService {
         
         // Create AmountInfo with all amounts
         val amountInfo = AmountInfo(
-            orderAmount = BigDecimal.valueOf(amount),
+            orderAmount = amount,
             pricingCurrency = currency,
-            tipAmount = tipAmount?.let { BigDecimal.valueOf(it) },
-            taxAmount = taxAmount?.let { BigDecimal.valueOf(it) },
-            surchargeAmount = surchargeAmount?.let { BigDecimal.valueOf(it) },
-            cashbackAmount = cashbackAmount?.let { BigDecimal.valueOf(it) },
-            serviceFee = serviceFee?.let { BigDecimal.valueOf(it) }
+            tipAmount = tipAmount,
+            taxAmount = taxAmount,
+            surchargeAmount = surchargeAmount,
+            cashbackAmount = cashbackAmount,
+            serviceFee = serviceFee
         )
         
         val request = PaymentRequest("SALE")
@@ -450,7 +450,7 @@ class AppToAppPaymentService : PaymentService {
     override fun executeAuth(
         referenceOrderId: String,
         transactionRequestId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
         callback: PaymentCallback
@@ -465,7 +465,7 @@ class AppToAppPaymentService : PaymentService {
         val request = PaymentRequest("AUTH")
             .setReferenceOrderId(referenceOrderId)
             .setTransactionRequestId(transactionRequestId)
-            .setAmount(AmountInfo(BigDecimal.valueOf(amount), currency))
+            .setAmount(AmountInfo(amount, currency))
             .setDescription(description)
         
         Log.d(TAG, "=== AUTH Request ===")
@@ -512,12 +512,12 @@ class AppToAppPaymentService : PaymentService {
     override fun executeForcedAuth(
         referenceOrderId: String,
         transactionRequestId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         authCode: String,
         description: String,
-        tipAmount: Double?,
-        taxAmount: Double?,
+        tipAmount: BigDecimal?,
+        taxAmount: BigDecimal?,
         callback: PaymentCallback
     ) {
         if (!connected) {
@@ -529,10 +529,10 @@ class AppToAppPaymentService : PaymentService {
 
         // Create AmountInfo with all amounts
         val amountInfo = AmountInfo(
-            orderAmount = BigDecimal.valueOf(amount),
+            orderAmount = amount,
             pricingCurrency = currency,
-            tipAmount = tipAmount?.let { BigDecimal.valueOf(it) },
-            taxAmount = taxAmount?.let { BigDecimal.valueOf(it) }
+            tipAmount = tipAmount,
+            taxAmount = taxAmount
         )
 
         val request = PaymentRequest("FORCED_AUTH")
@@ -587,7 +587,7 @@ class AppToAppPaymentService : PaymentService {
         referenceOrderId: String,
         transactionRequestId: String,
         originalTransactionId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
         reason: String?,
@@ -600,18 +600,28 @@ class AppToAppPaymentService : PaymentService {
         
         Log.d(TAG, "Executing REFUND transaction - OriginalTxnId: $originalTransactionId, Amount: $amount $currency")
         
-        val request = PaymentRequest("REFUND")
-            .setReferenceOrderId(referenceOrderId)
-            .setTransactionRequestId(transactionRequestId)
-            .setAmount(AmountInfo(BigDecimal.valueOf(amount), currency))
-            .setDescription(description)
-        
-        // Only set originalTransactionId if it's not empty (for reference-based refunds)
-        if (originalTransactionId.isNotEmpty()) {
-            request.setOriginalTransactionId(originalTransactionId)
+        val request = if (originalTransactionId.isNotEmpty()) {
+            Log.d(TAG, "Creating REFUND request with originalTransactionId: $originalTransactionId")
+            PaymentRequest("REFUND")
+                .setReferenceOrderId(referenceOrderId)
+                .setTransactionRequestId(transactionRequestId)
+                .setOriginalTransactionId(originalTransactionId)
+                .setAmount(AmountInfo(amount, currency))
+                .setDescription(description)
+        } else {
+            Log.d(TAG, "Creating standalone REFUND request without originalTransactionId")
+            PaymentRequest("REFUND")
+                .setReferenceOrderId(referenceOrderId)
+                .setTransactionRequestId(transactionRequestId)
+                .setAmount(AmountInfo(amount, currency))
+                .setDescription(description)
         }
         
-        reason?.let { request.setReason(it) }
+        // Set reason if provided
+        reason?.let { 
+            Log.d(TAG, "Setting refund reason: $it")
+            request.setReason(it) 
+        }
         
         Log.d(TAG, "=== REFUND Request ===")
         Log.d(TAG, "Request: $request")
@@ -722,14 +732,14 @@ class AppToAppPaymentService : PaymentService {
         referenceOrderId: String,
         transactionRequestId: String,
         originalTransactionId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
-        surchargeAmount: Double?,
-        tipAmount: Double?,
-        taxAmount: Double?,
-        cashbackAmount: Double?,
-        serviceFee: Double?,
+        surchargeAmount: BigDecimal?,
+        tipAmount: BigDecimal?,
+        taxAmount: BigDecimal?,
+        cashbackAmount: BigDecimal?,
+        serviceFee: BigDecimal?,
         callback: PaymentCallback
     ) {
         if (!connected) {
@@ -740,14 +750,14 @@ class AppToAppPaymentService : PaymentService {
         Log.d(TAG, "Executing POST_AUTH transaction - OriginalTxnId: $originalTransactionId, Amount: $amount $currency")
         
         // Create AmountInfo with all amounts using builder pattern
-        var amountInfo = AmountInfo(orderAmount = BigDecimal.valueOf(amount), pricingCurrency = currency)
+        var amountInfo = AmountInfo(orderAmount = amount, pricingCurrency = currency)
         
         // Set additional amounts if provided
-        // surchargeAmount?.let { amountInfo = amountInfo.setSurchargeAmount(BigDecimal.valueOf(it)) }
-        tipAmount?.let { amountInfo = amountInfo.setTipAmount(BigDecimal.valueOf(it)) }
-        taxAmount?.let { amountInfo = amountInfo.setTaxAmount(BigDecimal.valueOf(it)) }
-        // cashbackAmount?.let { amountInfo = amountInfo.setCashbackAmount(BigDecimal.valueOf(it)) }
-        // serviceFee?.let { amountInfo = amountInfo.setServiceFee(BigDecimal.valueOf(it)) }
+        // surchargeAmount?.let { amountInfo = amountInfo.setSurchargeAmount(it) }
+        tipAmount?.let { amountInfo = amountInfo.setTipAmount(it) }
+        taxAmount?.let { amountInfo = amountInfo.setTaxAmount(it) }
+        // cashbackAmount?.let { amountInfo = amountInfo.setCashbackAmount(it) }
+        // serviceFee?.let { amountInfo = amountInfo.setServiceFee(it) }
         
         val request = PaymentRequest("POST_AUTH")
             .setReferenceOrderId(referenceOrderId)
@@ -801,7 +811,7 @@ class AppToAppPaymentService : PaymentService {
         referenceOrderId: String,
         transactionRequestId: String,
         originalTransactionId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
         callback: PaymentCallback
@@ -817,7 +827,7 @@ class AppToAppPaymentService : PaymentService {
             .setReferenceOrderId(referenceOrderId)
             .setTransactionRequestId(transactionRequestId)
             .setOriginalTransactionId(originalTransactionId)
-            .setAmount(AmountInfo(BigDecimal.valueOf(amount), currency))
+            .setAmount(AmountInfo(amount, currency))
             .setDescription(description)
         
         Log.d(TAG, "=== INCREMENT_AUTH Request ===")
@@ -865,7 +875,7 @@ class AppToAppPaymentService : PaymentService {
         referenceOrderId: String,
         transactionRequestId: String,
         originalTransactionId: String,
-        tipAmount: Double,
+        tipAmount: BigDecimal,
         description: String,
         callback: PaymentCallback
     ) {
@@ -880,7 +890,7 @@ class AppToAppPaymentService : PaymentService {
             .setReferenceOrderId(referenceOrderId)
             .setTransactionRequestId(transactionRequestId)
             .setOriginalTransactionId(originalTransactionId)
-            .setTipAmount(BigDecimal.valueOf(tipAmount))
+            .setTipAmount(tipAmount)
             .setDescription(description)
         
         Log.d(TAG, "=== TIP_ADJUST Request ===")

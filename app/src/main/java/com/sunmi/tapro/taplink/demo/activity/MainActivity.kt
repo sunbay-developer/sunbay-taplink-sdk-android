@@ -23,6 +23,7 @@ import com.sunmi.tapro.taplink.demo.service.ConnectionListener
 import com.sunmi.tapro.taplink.demo.service.PaymentCallback
 import com.sunmi.tapro.taplink.demo.service.PaymentResult
 import com.sunmi.tapro.taplink.demo.util.ErrorHandler
+import java.math.BigDecimal
 import java.text.DecimalFormat
 
 /**
@@ -63,7 +64,7 @@ class MainActivity : Activity() {
     private lateinit var paymentService: AppToAppPaymentService
 
     // Currently selected amount
-    private var selectedAmount: Double = 0.0
+    private var selectedAmount: BigDecimal = BigDecimal.ZERO
 
     // Cache last transaction type for retry
     private var lastTransactionType: TransactionType? = null
@@ -304,7 +305,7 @@ class MainActivity : Activity() {
      * Add amount
      */
     private fun addAmount(amount: Double) {
-        selectedAmount += amount
+        selectedAmount = selectedAmount.add(BigDecimal.valueOf(amount))
 
         // Clear custom amount input field (mark as programmatically updated to avoid TextWatcher trigger)
         isUpdatingCustomAmount = true
@@ -328,12 +329,12 @@ class MainActivity : Activity() {
         }
 
         if (amountText.isBlank()) {
-            selectedAmount = 0.0
+            selectedAmount = BigDecimal.ZERO
         } else {
             try {
-                selectedAmount = amountText.toDouble()
+                selectedAmount = BigDecimal(amountText)
             } catch (e: NumberFormatException) {
-                selectedAmount = 0.0
+                selectedAmount = BigDecimal.ZERO
             }
         }
 
@@ -367,7 +368,7 @@ class MainActivity : Activity() {
 
             val connected = paymentService.isConnected()
             val connecting = paymentService.isConnecting()
-            val hasAmount = selectedAmount > 0
+            val hasAmount = selectedAmount > BigDecimal.ZERO
             val enabled = connected && hasAmount
 
             btnSale.isEnabled = enabled
@@ -401,7 +402,7 @@ class MainActivity : Activity() {
             return
         }
 
-        if (selectedAmount <= 0) {
+        if (selectedAmount <= BigDecimal.ZERO) {
             showToast("Please select payment amount")
             return
         }
@@ -434,19 +435,16 @@ class MainActivity : Activity() {
             currency = "USD",
             status = TransactionStatus.PROCESSING,
             timestamp = timestamp,
-            surchargeAmount = surchargeAmount,
-            tipAmount = tipAmount,
-            taxAmount = taxAmount,
-            cashbackAmount = cashbackAmount,
-            serviceFee = serviceFee
+            surchargeAmount = surchargeAmount?.let { BigDecimal.valueOf(it) },
+            tipAmount = tipAmount?.let { BigDecimal.valueOf(it) },
+            taxAmount = taxAmount?.let { BigDecimal.valueOf(it) },
+            cashbackAmount = cashbackAmount?.let { BigDecimal.valueOf(it) },
+            serviceFee = serviceFee?.let { BigDecimal.valueOf(it) }
         )
 
         // Save transaction to repository
         val added = TransactionRepository.addTransaction(transaction)
         Log.d(TAG, "Transaction added to repository: $added")
-
-        // Show payment progress dialog
-        showPaymentProgressDialog()
 
         // Prompt user to launch Tapro app
         showToast("Launch Tapro app for payment")
@@ -488,11 +486,11 @@ class MainActivity : Activity() {
             amount = selectedAmount,
             currency = "USD",
             description = "Demo SALE Payment - ${amountFormatter.format(selectedAmount)}",
-            surchargeAmount = surchargeAmount,
-            tipAmount = tipAmount,
-            taxAmount = taxAmount,
-            cashbackAmount = cashbackAmount,
-            serviceFee = serviceFee,
+            surchargeAmount = surchargeAmount?.let { BigDecimal.valueOf(it) },
+            tipAmount = tipAmount?.let { BigDecimal.valueOf(it) },
+            taxAmount = taxAmount?.let { BigDecimal.valueOf(it) },
+            cashbackAmount = cashbackAmount?.let { BigDecimal.valueOf(it) },
+            serviceFee = serviceFee?.let { BigDecimal.valueOf(it) },
             callback = callback
         )
     }
@@ -501,12 +499,12 @@ class MainActivity : Activity() {
      * Start payment
      */
     private fun startPayment(transactionType: TransactionType) {
-//        if (!paymentService.isConnected()) {
-//            showToast("Not connected to payment terminal")
-//            return
-//        }
+        if (!paymentService.isConnected()) {
+            showToast("Not connected to payment terminal")
+            return
+        }
 
-        if (selectedAmount <= 0) {
+        if (selectedAmount <= BigDecimal.ZERO) {
             showToast("Please select payment amount")
             return
         }
@@ -541,9 +539,6 @@ class MainActivity : Activity() {
         // Save transaction to repository
         val added = TransactionRepository.addTransaction(transaction)
         Log.d(TAG, "Transaction added to repository: $added")
-
-        // Show payment progress dialog
-        showPaymentProgressDialog()
 
         // Prompt user to launch Tapro app
         showToast("Launch Tapro app for payment")
@@ -612,7 +607,7 @@ class MainActivity : Activity() {
             TransactionType.FORCED_AUTH -> {
                 // FORCED_AUTH requires an authorization code; here we use a sample code.
                 // In a real-world app, the user should be prompted to enter the authorization code.
-                showForcedAuthDialog(referenceOrderId, transactionRequestId, callback)
+                showForcedAuthDialog(referenceOrderId, transactionRequestId, transaction, callback)
             }
             else -> {
                 showToast("Unsupported transaction type: $transactionType")
@@ -630,7 +625,7 @@ class MainActivity : Activity() {
             return
         }
 
-        if (selectedAmount <= 0) {
+        if (selectedAmount <= BigDecimal.ZERO) {
             showToast("Please select payment amount")
             return
         }
@@ -642,15 +637,17 @@ class MainActivity : Activity() {
         val etTaxAmount = dialogView.findViewById<EditText>(R.id.et_tax_amount)
         val etCashbackAmount = dialogView.findViewById<EditText>(R.id.et_cashback_amount)
         val etServiceFee = dialogView.findViewById<EditText>(R.id.et_service_fee)
-        
+
+        // Set base amount
+        val tvBaseAmount = dialogView.findViewById<TextView>(R.id.tv_base_amount)
+        tvBaseAmount.text = amountFormatter.format(selectedAmount)
+
         // Hide service fee field
         val tvServiceFee = dialogView.findViewById<TextView>(R.id.tv_service_fee)
         etServiceFee.visibility = View.GONE
         tvServiceFee.visibility = View.GONE
 
         AlertDialog.Builder(this)
-            .setTitle("Additional Amounts (Optional)")
-            .setMessage("Base Amount: ${amountFormatter.format(selectedAmount)}")
             .setView(dialogView)
             .setPositiveButton("Proceed") { _, _ ->
                 val surchargeAmount = etSurchargeAmount.text.toString().toDoubleOrNull()
@@ -668,23 +665,6 @@ class MainActivity : Activity() {
             .show()
     }
 
-
-
-    /**
-     * Show payment progress dialog
-     *
-     * Note: In App-to-App mode, payment request will immediately launch Tapro app,
-     * user completes payment in Tapro and returns to Demo app after completion.
-     * Therefore, this dialog mainly shows "Starting payment" status.
-     */
-    private fun showPaymentProgressDialog() {
-        paymentProgressDialog = ProgressDialog(this).apply {
-            setTitle("Starting Payment")
-            setMessage("Launching Tapro payment app...")
-            setCancelable(true)
-            show()
-        }
-    }
 
     /**
      * Hide payment progress dialog
@@ -938,20 +918,6 @@ class MainActivity : Activity() {
                 context = this,
                 errorCode = code,
                 errorMessage = message,
-                onRetryWithSameId = if (lastTransactionType != null) {
-                    {
-                        // Retry with same transaction request ID (for temporary errors)
-                        Log.d(TAG, "Retrying with same ID for temporary error: $code")
-                        retryPaymentWithSameId()
-                    }
-                } else null,
-                onRetryWithNewId = if (lastTransactionType != null) {
-                    {
-                        // Retry with new transaction request ID (for definite failures)
-                        Log.d(TAG, "Retrying with new ID for definite failure: $code")
-                        retryPaymentWithNewId()
-                    }
-                } else null,
                 onQuery = if (code == "E10") {
                     {
                         // Query transaction status for timeout errors
@@ -966,46 +932,6 @@ class MainActivity : Activity() {
                 }
             )
         }, 100) // Short delay to ensure progress dialog is dismissed
-    }
-
-    /**
-     * Retry payment with same transaction request ID (for temporary errors)
-     */
-    private fun retryPaymentWithSameId() {
-        lastTransactionType?.let { transactionType ->
-            Log.d(TAG, "Retrying payment with same ID - Type: $transactionType")
-
-            // Find the last failed transaction to get its transaction request ID
-            val failedTransactions =
-                TransactionRepository.getTransactionsByStatus(TransactionStatus.FAILED)
-            if (failedTransactions.isNotEmpty()) {
-                val lastFailedTransaction = failedTransactions.first()
-
-                // Show retry progress
-                showPaymentProgressDialog()
-
-                // Execute payment with same transaction request ID
-                executePaymentWithId(
-                    transactionType = transactionType,
-                    referenceOrderId = lastFailedTransaction.referenceOrderId,
-                    transactionRequestId = lastFailedTransaction.transactionRequestId
-                )
-            } else {
-                Log.e(TAG, "No failed transaction found for retry")
-                startPayment(transactionType)
-            }
-        }
-    }
-
-    /**
-     * Retry payment with new transaction request ID (for definite failures)
-     */
-    private fun retryPaymentWithNewId() {
-        lastTransactionType?.let { transactionType ->
-            Log.d(TAG, "Retrying payment with new ID - Type: $transactionType")
-            // Start new payment (will generate new IDs)
-            startPayment(transactionType)
-        }
     }
 
     /**
@@ -1125,9 +1051,6 @@ class MainActivity : Activity() {
                                 "Error: ${result.transactionResultMsg ?: "Unknown error"}\n" +
                                 "Error Code: ${result.transactionResultCode ?: "N/A"}"
                     )
-                    .setPositiveButton("Try New Transaction") { _, _ ->
-                        retryPaymentWithNewId()
-                    }
                     .setNegativeButton("Cancel") { _, _ ->
                         resetAmountSelection()
                     }
@@ -1172,12 +1095,11 @@ class MainActivity : Activity() {
      */
     private fun executePaymentWithId(
         transactionType: TransactionType,
-        referenceOrderId: String,
-        transactionRequestId: String
+        transaction: Transaction
     ) {
         Log.d(
             TAG,
-            "Executing payment with specific ID - Type: $transactionType, RequestId: $transactionRequestId"
+            "Executing payment with specific ID - Type: $transactionType, RequestId: ${transaction.transactionRequestId}"
         )
 
         val callback = object : PaymentCallback {
@@ -1189,7 +1111,7 @@ class MainActivity : Activity() {
 
             override fun onFailure(code: String, message: String) {
                 runOnUiThread {
-                    handlePaymentFailure(transactionRequestId, code, message)
+                    handlePaymentFailure(transaction.transactionRequestId, code, message)
                 }
             }
 
@@ -1204,33 +1126,33 @@ class MainActivity : Activity() {
         when (transactionType) {
             TransactionType.SALE -> {
                 paymentService.executeSale(
-                    referenceOrderId = referenceOrderId,
-                    transactionRequestId = transactionRequestId,
-                    amount = selectedAmount,
-                    currency = "USD",
+                    referenceOrderId = transaction.referenceOrderId,
+                    transactionRequestId = transaction.transactionRequestId,
+                    amount = transaction.amount,
+                    currency = transaction.currency,
                     description = "Demo SALE Payment (Retry) - ${
                         amountFormatter.format(
-                            selectedAmount
+                            transaction.amount
                         )
                     }",
-                    surchargeAmount = null,
-                    tipAmount = null,
-                    taxAmount = null,
-                    cashbackAmount = null,
-                    serviceFee = null,
+                    surchargeAmount = transaction.surchargeAmount,
+                    tipAmount = transaction.tipAmount,
+                    taxAmount = transaction.taxAmount,
+                    cashbackAmount = transaction.cashbackAmount,
+                    serviceFee = transaction.serviceFee,
                     callback = callback
                 )
             }
 
             TransactionType.AUTH -> {
                 paymentService.executeAuth(
-                    referenceOrderId = referenceOrderId,
-                    transactionRequestId = transactionRequestId,
-                    amount = selectedAmount,
-                    currency = "USD",
+                    referenceOrderId = transaction.referenceOrderId,
+                    transactionRequestId = transaction.transactionRequestId,
+                    amount = transaction.amount,
+                    currency = transaction.currency,
                     description = "Demo AUTH Payment (Retry) - ${
                         amountFormatter.format(
-                            selectedAmount
+                            transaction.amount
                         )
                     }",
                     callback = callback
@@ -1240,7 +1162,7 @@ class MainActivity : Activity() {
             TransactionType.FORCED_AUTH -> {
                 // FORCED_AUTH requires an authorization code; here we use a sample code.
                 // In a real-world app, the user should be prompted to enter the authorization code.
-                showForcedAuthDialog(referenceOrderId, transactionRequestId, callback)
+                showForcedAuthDialog(transaction.referenceOrderId, transaction.transactionRequestId, transaction, callback)
             }
 
             else -> {
@@ -1256,6 +1178,7 @@ class MainActivity : Activity() {
     private fun showForcedAuthDialog(
         referenceOrderId: String,
         transactionRequestId: String,
+        transaction: Transaction,
         callback: PaymentCallback
     ) {
         // Create dialog layout for additional amounts
@@ -1277,23 +1200,27 @@ class MainActivity : Activity() {
         tvServiceFee.visibility = View.GONE
         etServiceFee.visibility = View.GONE
 
+        // Pre-fill with original transaction amounts if available
+        transaction.tipAmount?.let { etTipAmount.setText(it.toString()) }
+        transaction.taxAmount?.let { etTaxAmount.setText(it.toString()) }
+
         AlertDialog.Builder(this)
             .setTitle("Forced Authorization - Additional Amounts")
-            .setMessage("Base Amount: ${amountFormatter.format(selectedAmount)}")
+            .setMessage("Base Amount: ${amountFormatter.format(transaction.amount)}")
             .setView(dialogView)
             .setPositiveButton("Proceed") { _, _ ->
                 val tipAmount = etTipAmount.text.toString().toDoubleOrNull()
                 val taxAmount = etTaxAmount.text.toString().toDoubleOrNull()
 
                 // Now show dialog for authorization code
-                showAuthCodeDialog(referenceOrderId, transactionRequestId, tipAmount, taxAmount, callback)
+                showAuthCodeDialog(referenceOrderId, transactionRequestId, tipAmount, taxAmount, transaction, callback)
             }
             .setNegativeButton("Cancel") { _, _ ->
                 hidePaymentProgressDialog()
             }
             .setNeutralButton("Skip") { _, _ ->
                 // Show dialog for authorization code without additional amounts
-                showAuthCodeDialog(referenceOrderId, transactionRequestId, null, null, callback)
+                showAuthCodeDialog(referenceOrderId, transactionRequestId, transaction.tipAmount?.toDouble(), transaction.taxAmount?.toDouble(), transaction, callback)
             }
             .setCancelable(false)
             .show()
@@ -1307,6 +1234,7 @@ class MainActivity : Activity() {
         transactionRequestId: String,
         tipAmount: Double?,
         taxAmount: Double?,
+        transaction: Transaction,
         callback: PaymentCallback
     ) {
         val input = EditText(this).apply {
@@ -1325,12 +1253,12 @@ class MainActivity : Activity() {
                     paymentService.executeForcedAuth(
                         referenceOrderId = referenceOrderId,
                         transactionRequestId = transactionRequestId,
-                        amount = selectedAmount,
-                        currency = "USD",
+                        amount = transaction.amount,
+                        currency = transaction.currency,
                         authCode = authCode,
-                        description = "Demo FORCED_AUTH Payment - ${amountFormatter.format(selectedAmount)}",
-                        tipAmount = tipAmount,
-                        taxAmount = taxAmount,
+                        description = "Demo FORCED_AUTH Payment - ${amountFormatter.format(transaction.amount)}",
+                        tipAmount = tipAmount?.let { BigDecimal.valueOf(it) },
+                        taxAmount = taxAmount?.let { BigDecimal.valueOf(it) },
                         callback = callback
                     )
                     dialog.dismiss()
@@ -1359,7 +1287,7 @@ class MainActivity : Activity() {
                 // Hide status text
                 tvPaymentStatus.visibility = View.GONE
             }
-            .setCancelable(false)
+            .setCancelable(true)
             .show()
     }
 
@@ -1367,7 +1295,7 @@ class MainActivity : Activity() {
      * Reset amount selection
      */
     private fun resetAmountSelection() {
-        selectedAmount = 0.0
+        selectedAmount = BigDecimal.ZERO
         etCustomAmount.setText("")
         tvPaymentStatus.visibility = View.GONE
         updateSelectedAmountDisplay()

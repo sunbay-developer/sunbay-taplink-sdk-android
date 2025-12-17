@@ -191,10 +191,10 @@ class TransactionListActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
-                        showToast("Query failed: $errorMessage")
+                        showToast("Query failed: $message")
                     }
                 }
             }
@@ -300,7 +300,7 @@ class TransactionListActivity : AppCompatActivity() {
                 transactionId = result.transactionId,
                 referenceOrderId = result.referenceOrderId ?: "UNKNOWN_ORDER_${System.currentTimeMillis()}",
                 type = transactionType,
-                amount = result.amount?.orderAmount ?: 0.0,
+                amount = result.amount?.orderAmount ?: java.math.BigDecimal.ZERO,
                 totalAmount = result.amount?.transAmount,
                 currency = result.amount?.priceCurrency ?: "USD",
                 status = status,
@@ -398,7 +398,7 @@ class TransactionListActivity : AppCompatActivity() {
             transactionId = null,
             referenceOrderId = referenceOrderId,
             type = TransactionType.REFUND,
-            amount = amount,
+            amount = java.math.BigDecimal.valueOf(amount),
             currency = "USD",
             status = TransactionStatus.PROCESSING,
             timestamp = System.currentTimeMillis()
@@ -409,7 +409,7 @@ class TransactionListActivity : AppCompatActivity() {
             referenceOrderId = referenceOrderId,
             transactionRequestId = transactionRequestId,
             originalTransactionId = "", // 无参考号退款，不设置原始交易ID
-            amount = amount,
+            amount = java.math.BigDecimal.valueOf(amount),
             currency = "USD",
             description = "Refund without reference",
             reason = "Refund requested by merchant",
@@ -450,7 +450,7 @@ class TransactionListActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
 
@@ -458,11 +458,11 @@ class TransactionListActivity : AppCompatActivity() {
                         TransactionRepository.updateTransactionStatus(
                             transactionRequestId = transactionRequestId,
                             status = TransactionStatus.FAILED,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage
+                            errorCode = code,
+                            errorMessage = message
                         )
 
-                        showToast("Refund failed: $errorMessage")
+                        showToast("Refund failed: $message")
                         loadTransactions()
                     }
                 }
@@ -496,7 +496,7 @@ class TransactionListActivity : AppCompatActivity() {
             transactionId = null,
             referenceOrderId = referenceOrderId,
             type = TransactionType.BATCH_CLOSE,
-            amount = 0.0,
+            amount = java.math.BigDecimal.ZERO,
             currency = "USD",
             status = TransactionStatus.PROCESSING,
             timestamp = System.currentTimeMillis()
@@ -555,7 +555,7 @@ class TransactionListActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
 
@@ -563,11 +563,11 @@ class TransactionListActivity : AppCompatActivity() {
                         TransactionRepository.updateTransactionStatus(
                             transactionRequestId = transactionRequestId,
                             status = TransactionStatus.FAILED,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage
+                            errorCode = code,
+                            errorMessage = message
                         )
 
-                        showToast("Batch close failed: $errorMessage")
+                        showToast("Batch close failed: $message")
                         loadTransactions()
                     }
                 }
@@ -585,10 +585,10 @@ class TransactionListActivity : AppCompatActivity() {
             result.batchCloseInfo?.let { info ->
                 append("Total Count: ${info.totalCount}\n")
                 append("Total Amount: $${String.format("%.2f", info.totalAmount)}\n")
-                if (info.totalTip > 0) {
+                if (info.totalTip > java.math.BigDecimal.ZERO) {
                     append("Total Tip: $${String.format("%.2f", info.totalTip)}\n")
                 }
-                if (info.totalTax > 0) {
+                if (info.totalTax > java.math.BigDecimal.ZERO) {
                     append("Total Tax: $${String.format("%.2f", info.totalTax)}\n")
                 }
                 append("Close Time: ${info.closeTime}\n")

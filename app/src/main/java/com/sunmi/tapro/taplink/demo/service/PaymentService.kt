@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.demo.service
 
 import android.content.Context
+import java.math.BigDecimal
 
 /**
  * Payment Service Interface
@@ -81,14 +82,14 @@ interface PaymentService {
     fun executeSale(
         referenceOrderId: String,
         transactionRequestId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
-        surchargeAmount: Double? = null,
-        tipAmount: Double? = null,
-        taxAmount: Double? = null,
-        cashbackAmount: Double? = null,
-        serviceFee: Double? = null,
+        surchargeAmount: BigDecimal? = null,
+        tipAmount: BigDecimal? = null,
+        taxAmount: BigDecimal? = null,
+        cashbackAmount: BigDecimal? = null,
+        serviceFee: BigDecimal? = null,
         callback: PaymentCallback
     )
 
@@ -105,7 +106,7 @@ interface PaymentService {
     fun executeAuth(
         referenceOrderId: String,
         transactionRequestId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
         callback: PaymentCallback
@@ -125,12 +126,12 @@ interface PaymentService {
     fun executeForcedAuth(
         referenceOrderId: String,
         transactionRequestId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         authCode: String,
         description: String,
-        tipAmount: Double? = null,
-        taxAmount: Double? = null,
+        tipAmount: BigDecimal? = null,
+        taxAmount: BigDecimal? = null,
         callback: PaymentCallback
     )
 
@@ -150,7 +151,7 @@ interface PaymentService {
         referenceOrderId: String,
         transactionRequestId: String,
         originalTransactionId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
         reason: String?,
@@ -194,14 +195,14 @@ interface PaymentService {
         referenceOrderId: String,
         transactionRequestId: String,
         originalTransactionId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
-        surchargeAmount: Double? = null,
-        tipAmount: Double? = null,
-        taxAmount: Double? = null,
-        cashbackAmount: Double? = null,
-        serviceFee: Double? = null,
+        surchargeAmount: BigDecimal? = null,
+        tipAmount: BigDecimal? = null,
+        taxAmount: BigDecimal? = null,
+        cashbackAmount: BigDecimal? = null,
+        serviceFee: BigDecimal? = null,
         callback: PaymentCallback
     )
 
@@ -220,7 +221,7 @@ interface PaymentService {
         referenceOrderId: String,
         transactionRequestId: String,
         originalTransactionId: String,
-        amount: Double,
+        amount: BigDecimal,
         currency: String,
         description: String,
         callback: PaymentCallback
@@ -240,7 +241,7 @@ interface PaymentService {
         referenceOrderId: String,
         transactionRequestId: String,
         originalTransactionId: String,
-        tipAmount: Double,
+        tipAmount: BigDecimal,
         description: String,
         callback: PaymentCallback
     )
@@ -365,8 +366,8 @@ data class PaymentResult(
     val description: String?,
     val attach: String?,
     val batchCloseInfo: BatchCloseInfo?,
-    val tipAmount: Double?,
-    val totalAuthorizedAmount: Double?,
+    val tipAmount: BigDecimal?,
+    val totalAuthorizedAmount: BigDecimal?,
     val merchantRefundNo: String?,
     val originalTransactionId: String?,
     val originalTransactionRequestId: String?
@@ -392,13 +393,13 @@ data class PaymentResult(
  */
 data class TransactionAmount(
     val priceCurrency: String?,
-    val transAmount: Double?,
-    val orderAmount: Double?,
-    val taxAmount: Double?,
-    val serviceFee: Double?,
-    val surchargeAmount: Double?,
-    val tipAmount: Double?,
-    val cashbackAmount: Double?
+    val transAmount: BigDecimal?,
+    val orderAmount: BigDecimal?,
+    val taxAmount: BigDecimal?,
+    val serviceFee: BigDecimal?,
+    val surchargeAmount: BigDecimal?,
+    val tipAmount: BigDecimal?,
+    val cashbackAmount: BigDecimal?
 )
 
 /**
@@ -422,11 +423,11 @@ data class CardInfo(
  */
 data class BatchCloseInfo(
     val totalCount: Int,
-    val totalAmount: Double,
-    val totalTip: Double,
-    val totalTax: Double,
-    val totalSurchargeAmount: Double,
-    val totalServiceFee: Double,
-    val cashDiscount: Double,
+    val totalAmount: BigDecimal,
+    val totalTip: BigDecimal,
+    val totalTax: BigDecimal,
+    val totalSurchargeAmount: BigDecimal,
+    val totalServiceFee: BigDecimal,
+    val cashDiscount: BigDecimal,
     val closeTime: String
 )

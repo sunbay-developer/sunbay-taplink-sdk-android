@@ -3,90 +3,158 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="20dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Enter additional amounts (leave blank if not applicable):"
+        android:text="Additional Amounts"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="@color/gray_dark"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tv_base_amount_t"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Order Amount:"
         android:textSize="14sp"
+        android:textColor="@color/gray_medium"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:id="@+id/tv_base_amount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@color/colorPrimary"
+        android:layout_marginBottom="20dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Enter optional additional amounts:"
+        android:textSize="14sp"
+        android:textColor="@color/gray_medium"
         android:layout_marginBottom="16dp" />
 
     <TextView
         android:id="@+id/tv_surcharge_amount"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Surcharge Amount:"
+        android:text="Surcharge"
         android:textSize="14sp"
-        android:layout_marginBottom="4dp" />
+        android:textColor="@color/gray_dark"
+        android:layout_marginBottom="6dp"
+        android:textStyle="normal" />
 
     <EditText
         android:id="@+id/et_surcharge_amount"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Enter surcharge amount"
+        android:layout_height="50dp"
+        android:hint="Enter surcharge"
         android:inputType="numberDecimal"
-        android:layout_marginBottom="12dp" />
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/rounded_edittext"
+        android:paddingHorizontal="16dp"
+        android:textSize="16sp"
+
+        android:textColor="@color/gray_dark"
+        android:gravity="center_vertical" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Tip Amount:"
+        android:text="Tip"
         android:textSize="14sp"
-        android:layout_marginBottom="4dp" />
+        android:textColor="@color/gray_dark"
+        android:layout_marginBottom="6dp"
+        android:textStyle="normal" />
 
     <EditText
         android:id="@+id/et_tip_amount"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Enter tip amount"
+        android:layout_height="50dp"
+        android:hint="Enter tip"
         android:inputType="numberDecimal"
-        android:layout_marginBottom="12dp" />
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/rounded_edittext"
+        android:paddingHorizontal="16dp"
+        android:textSize="16sp"
+
+        android:textColor="@color/gray_dark"
+        android:gravity="center_vertical" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Tax Amount:"
+        android:text="Tax"
         android:textSize="14sp"
-        android:layout_marginBottom="4dp" />
+        android:textColor="@color/gray_dark"
+        android:layout_marginBottom="6dp"
+        android:textStyle="normal" />
 
     <EditText
         android:id="@+id/et_tax_amount"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Enter tax amount"
+        android:layout_height="50dp"
+        android:hint="Enter tax"
         android:inputType="numberDecimal"
-        android:layout_marginBottom="12dp" />
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/rounded_edittext"
+        android:paddingHorizontal="16dp"
+        android:textSize="16sp"
+
+        android:textColor="@color/gray_dark"
+        android:gravity="center_vertical" />
 
     <TextView
         android:id="@+id/tv_cashback_amount"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Cashback Amount:"
+        android:text="Cashback"
         android:textSize="14sp"
-        android:layout_marginBottom="4dp" />
+        android:textColor="@color/gray_dark"
+        android:layout_marginBottom="6dp"
+        android:textStyle="normal" />
 
     <EditText
         android:id="@+id/et_cashback_amount"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Enter cashback amount"
+        android:layout_height="50dp"
+        android:hint="Enter cashback"
         android:inputType="numberDecimal"
-        android:layout_marginBottom="12dp" />
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/rounded_edittext"
+        android:paddingHorizontal="16dp"
+        android:textSize="16sp"
+
+        android:textColor="@color/gray_dark"
+        android:gravity="center_vertical" />
 
     <TextView
         android:id="@+id/tv_service_fee"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Service Fee:"
+        android:text="Service Fee"
         android:textSize="14sp"
-        android:layout_marginBottom="4dp" />
+        android:textColor="@color/gray_dark"
+        android:layout_marginBottom="6dp"
+        android:textStyle="normal" />
 
     <EditText
         android:id="@+id/et_service_fee"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="50dp"
         android:hint="Enter service fee"
-        android:inputType="numberDecimal" />
+        android:inputType="numberDecimal"
+        android:background="@drawable/rounded_edittext"
+        android:paddingHorizontal="16dp"
+        android:textSize="16sp"
+
+        android:textColor="@color/gray_dark"
+        android:gravity="center_vertical" />
 
 </LinearLayout>

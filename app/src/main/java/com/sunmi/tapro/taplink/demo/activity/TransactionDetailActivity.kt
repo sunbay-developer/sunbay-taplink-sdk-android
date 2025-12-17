@@ -20,6 +20,7 @@ import com.sunmi.tapro.taplink.demo.service.AppToAppPaymentService
 import com.sunmi.tapro.taplink.demo.service.PaymentCallback
 import com.sunmi.tapro.taplink.demo.service.PaymentResult
 import com.sunmi.tapro.taplink.demo.util.ErrorHandler
+import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,7 +38,7 @@ class TransactionDetailActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "TransactionDetailActivity"
-        private const val PROGRESS_DIALOG_TIMEOUT = 60000L // 60 seconds timeout
+        private const val PROGRESS_DIALOG_TIMEOUT = 360000L // 360 seconds timeout
     }
 
     // UI
@@ -226,14 +227,14 @@ class TransactionDetailActivity : AppCompatActivity() {
 
         // Additional amounts (only show for non-batch-close transactions if they exist and are greater than 0)
         if (txn.type != TransactionType.BATCH_CLOSE) {
-            if (txn.surchargeAmount != null && txn.surchargeAmount > 0) {
+            if (txn.surchargeAmount != null && txn.surchargeAmount > BigDecimal.ZERO) {
                 layoutSurchargeAmount.visibility = View.VISIBLE
                 tvSurchargeAmount.text = String.format("¥%.2f", txn.surchargeAmount)
             } else {
                 layoutSurchargeAmount.visibility = View.GONE
             }
 
-            if (txn.tipAmount != null && txn.tipAmount > 0) {
+            if (txn.tipAmount != null && txn.tipAmount > BigDecimal.ZERO) {
                 layoutTipAmount.visibility = View.VISIBLE
                 tvTipAmount.text = String.format("¥%.2f", txn.tipAmount)
             } else {
@@ -247,14 +248,14 @@ class TransactionDetailActivity : AppCompatActivity() {
                 layoutTaxAmount.visibility = View.GONE
             }
 
-            if (txn.cashbackAmount != null && txn.cashbackAmount > 0) {
+            if (txn.cashbackAmount != null && txn.cashbackAmount > BigDecimal.ZERO) {
                 layoutCashbackAmount.visibility = View.VISIBLE
                 tvCashbackAmount.text = String.format("¥%.2f", txn.cashbackAmount)
             } else {
                 layoutCashbackAmount.visibility = View.GONE
             }
 
-            if (txn.serviceFee != null && txn.serviceFee > 0) {
+            if (txn.serviceFee != null && txn.serviceFee > BigDecimal.ZERO) {
                 layoutServiceFee.visibility = View.VISIBLE
                 tvServiceFee.text = String.format("¥%.2f", txn.serviceFee)
             } else {
@@ -308,7 +309,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                 tvBatchCloseTime.text = batchInfo.closeTime
                 
                 // Show total tip if > 0
-                if (batchInfo.totalTip > 0) {
+                if (batchInfo.totalTip > BigDecimal.ZERO) {
                     layoutBatchTotalTip.visibility = View.VISIBLE
                     tvBatchTotalTip.text = String.format("¥%.2f", batchInfo.totalTip)
                 } else {
@@ -316,7 +317,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                 }
                 
                 // Show total surcharge if > 0
-                if (batchInfo.totalSurchargeAmount > 0) {
+                if (batchInfo.totalSurchargeAmount > BigDecimal.ZERO) {
                     layoutBatchTotalSurcharge.visibility = View.VISIBLE
                     tvBatchTotalSurcharge.text = String.format("¥%.2f", batchInfo.totalSurchargeAmount)
                 } else {
@@ -457,7 +458,7 @@ class TransactionDetailActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle("Refund")
-            .setMessage("Original amount: $${String.format("%.2f", txn.totalAmount)}")
+            .setMessage("Original amount: $${String.format("%.2f", txn.amount)}")
             .setView(input)
             .setPositiveButton("OK") { _, _ ->
                 val amountStr = input.text.toString().trim()
@@ -467,9 +468,9 @@ class TransactionDetailActivity : AppCompatActivity() {
                 }
 
                 try {
-                    val amount = amountStr.toDouble()
+                    val amount = BigDecimal(amountStr)
                     val originalTotalAmount = txn.totalAmount ?: txn.amount
-                    if (amount <= 0 || amount > originalTotalAmount) {
+                    if (amount <= BigDecimal.ZERO || amount > originalTotalAmount) {
                         showToast("Refund amount must be > 0 and <= original amount")
                         return@setPositiveButton
                     }
@@ -518,8 +519,8 @@ class TransactionDetailActivity : AppCompatActivity() {
                 }
 
                 try {
-                    val tipAmount = amountStr.toDouble()
-                    if (tipAmount < 0) {
+                    val tipAmount = BigDecimal(amountStr)
+                    if (tipAmount < BigDecimal.ZERO) {
                         showToast("Tip amount cannot be negative")
                         return@setPositiveButton
                     }
@@ -552,8 +553,8 @@ class TransactionDetailActivity : AppCompatActivity() {
                 }
 
                 try {
-                    val incrementalAmount = amountStr.toDouble()
-                    if (incrementalAmount <= 0) {
+                    val incrementalAmount = BigDecimal(amountStr)
+                    if (incrementalAmount <= BigDecimal.ZERO) {
                         showToast("Incremental amount must be greater than 0")
                         return@setPositiveButton
                     }
@@ -589,8 +590,8 @@ class TransactionDetailActivity : AppCompatActivity() {
                 }
 
                 try {
-                    val amount = amountStr.toDouble()
-                    if (amount <= 0 || amount > txn.amount) {
+                    val amount = BigDecimal(amountStr)
+                    if (amount <= BigDecimal.ZERO || amount > txn.amount) {
                         showToast("Completion amount must be > 0 and <= auth amount")
                         return@setPositiveButton
                     }
@@ -606,7 +607,7 @@ class TransactionDetailActivity : AppCompatActivity() {
     /**
      * Show post auth additional amounts dialog
      */
-    private fun showPostAuthAmountDialog(completionAmount: Double) {
+    private fun showPostAuthAmountDialog(completionAmount: BigDecimal) {
         // Create dialog layout
         val dialogView = layoutInflater.inflate(R.layout.dialog_additional_amounts, null)
         val etSurchargeAmount = dialogView.findViewById<EditText>(R.id.et_surcharge_amount)
@@ -614,13 +615,16 @@ class TransactionDetailActivity : AppCompatActivity() {
         val etTaxAmount = dialogView.findViewById<EditText>(R.id.et_tax_amount)
         val etCashbackAmount = dialogView.findViewById<EditText>(R.id.et_cashback_amount)
         val etServiceFee = dialogView.findViewById<EditText>(R.id.et_service_fee)
+
         
         // Get the corresponding title TextView
+        val tvOrderAmount = dialogView.findViewById<TextView>(R.id.tv_base_amount_t)
         val tvSurchargeAmount = dialogView.findViewById<TextView>(R.id.tv_surcharge_amount)
         val tvCashbackAmount = dialogView.findViewById<TextView>(R.id.tv_cashback_amount)
         val tvServiceFee = dialogView.findViewById<TextView>(R.id.tv_service_fee)
 
         // Hide surcharge, cashback and service fee fields as they're not supported for POST_AUTH
+        tvOrderAmount.visibility = View.GONE
         etSurchargeAmount.visibility = View.GONE
         tvSurchargeAmount.visibility = View.GONE
         etCashbackAmount.visibility = View.GONE
@@ -630,11 +634,11 @@ class TransactionDetailActivity : AppCompatActivity() {
         
         AlertDialog.Builder(this)
             .setTitle("Additional Amounts (Optional)")
-            .setMessage("Completion Amount: ${String.format("%.2f", completionAmount)}\n\nPost-authorization completion supports tip and tax amounts only.")
+            .setMessage("Completion Amount: ${String.format("%.2f", completionAmount)}")
             .setView(dialogView)
             .setPositiveButton("Proceed") { _, _ ->
-                val tipAmount = etTipAmount.text.toString().toDoubleOrNull()
-                val taxAmount = etTaxAmount.text.toString().toDoubleOrNull()
+                val tipAmount = etTipAmount.text.toString().let { if (it.isBlank()) null else BigDecimal(it) }
+                val taxAmount = etTaxAmount.text.toString().let { if (it.isBlank()) null else BigDecimal(it) }
                 
                 executePostAuth(completionAmount, null, tipAmount, taxAmount, null, null)
             }
@@ -648,7 +652,7 @@ class TransactionDetailActivity : AppCompatActivity() {
     /**
      * Execute refund
      */
-    private fun executeRefund(amount: Double, existingTransactionRequestId: String? = null) {
+    private fun executeRefund(amount: BigDecimal, existingTransactionRequestId: String? = null) {
         val txn = transaction ?: return
 
         Log.d(TAG, "Executing refund, amount: $amount, existingTransactionRequestId: $existingTransactionRequestId")
@@ -664,6 +668,8 @@ class TransactionDetailActivity : AppCompatActivity() {
         val transactionRequestId = existingTransactionRequestId ?: generateTransactionRequestId()
         val referenceOrderId = generateOrderId()
 
+        // For refund, use the original transaction's transactionId (SDK returned ID) as originalTransactionId
+        // If transactionId is null, fall back to transactionRequestId
         val originalTxnId = txn.transactionId ?: txn.transactionRequestId
 
         // Create transaction record or update existing one
@@ -727,7 +733,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
                         
@@ -735,16 +741,14 @@ class TransactionDetailActivity : AppCompatActivity() {
                         TransactionRepository.updateTransactionStatus(
                             transactionRequestId = transactionRequestId,
                             status = TransactionStatus.FAILED,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage
+                            errorCode = code,
+                            errorMessage = message
                         )
                         
                         ErrorHandler.handlePaymentError(
                             context = this@TransactionDetailActivity,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage,
-                            onRetryWithSameId = { executeRefund(amount, transactionRequestId) },
-                            onRetryWithNewId = { executeRefund(amount) }
+                            errorCode = code,
+                            errorMessage = message
                         )
                     }
                 }
@@ -771,6 +775,8 @@ class TransactionDetailActivity : AppCompatActivity() {
         val transactionRequestId = existingTransactionRequestId ?: generateTransactionRequestId()
         val referenceOrderId = generateOrderId()
 
+        // For void, use the original transaction's transactionId (SDK returned ID) as originalTransactionId
+        // If transactionId is null, fall back to transactionRequestId
         val originalTxnId = txn.transactionId ?: txn.transactionRequestId
 
         // Create transaction record or update existing one
@@ -833,7 +839,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
                         
@@ -841,14 +847,14 @@ class TransactionDetailActivity : AppCompatActivity() {
                         TransactionRepository.updateTransactionStatus(
                             transactionRequestId = transactionRequestId,
                             status = TransactionStatus.FAILED,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage
+                            errorCode = code,
+                            errorMessage = message
                         )
                         
                         ErrorHandler.handlePaymentError(
                             context = this@TransactionDetailActivity,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage,
+                            errorCode = code,
+                            errorMessage = message,
                             onRetryWithSameId = { executeVoid(transactionRequestId) },
                             onRetryWithNewId = { executeVoid() }
                         )
@@ -861,7 +867,7 @@ class TransactionDetailActivity : AppCompatActivity() {
     /**
      * Execute tip adjustment
      */
-    private fun executeTipAdjust(tipAmount: Double, existingTransactionRequestId: String? = null) {
+    private fun executeTipAdjust(tipAmount: BigDecimal, existingTransactionRequestId: String? = null) {
         val txn = transaction ?: return
 
         Log.d(TAG, "Executing tip adjustment, tip amount: $tipAmount, existingTransactionRequestId: $existingTransactionRequestId")
@@ -911,14 +917,14 @@ class TransactionDetailActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
                         
                         ErrorHandler.handlePaymentError(
                             context = this@TransactionDetailActivity,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage,
+                            errorCode = code,
+                            errorMessage = message,
                             onRetryWithSameId = { executeTipAdjust(tipAmount, transactionRequestId) },
                             onRetryWithNewId = { executeTipAdjust(tipAmount) }
                         )
@@ -931,7 +937,7 @@ class TransactionDetailActivity : AppCompatActivity() {
     /**
      * Execute incremental authorization
      */
-    private fun executeIncrementalAuth(incrementalAmount: Double, existingTransactionRequestId: String? = null) {
+    private fun executeIncrementalAuth(incrementalAmount: BigDecimal, existingTransactionRequestId: String? = null) {
         val txn = transaction ?: return
 
         Log.d(TAG, "Executing incremental authorization, incremental amount: $incrementalAmount, existingTransactionRequestId: $existingTransactionRequestId")
@@ -984,14 +990,14 @@ class TransactionDetailActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
                         
                         ErrorHandler.handlePaymentError(
                             context = this@TransactionDetailActivity,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage,
+                            errorCode = code,
+                            errorMessage = message,
                             onRetryWithSameId = { executeIncrementalAuth(incrementalAmount, transactionRequestId) },
                             onRetryWithNewId = { executeIncrementalAuth(incrementalAmount) }
                         )
@@ -1005,12 +1011,12 @@ class TransactionDetailActivity : AppCompatActivity() {
      * Execute pre-authorization completion
      */
     private fun executePostAuth(
-        amount: Double,
-        surchargeAmount: Double? = null,
-        tipAmount: Double? = null,
-        taxAmount: Double? = null,
-        cashbackAmount: Double? = null,
-        serviceFee: Double? = null,
+        amount: BigDecimal,
+        surchargeAmount: BigDecimal? = null,
+        tipAmount: BigDecimal? = null,
+        taxAmount: BigDecimal? = null,
+        cashbackAmount: BigDecimal? = null,
+        serviceFee: BigDecimal? = null,
         existingTransactionRequestId: String? = null
     ) {
         val txn = transaction ?: return
@@ -1094,7 +1100,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
                         
@@ -1102,14 +1108,14 @@ class TransactionDetailActivity : AppCompatActivity() {
                         TransactionRepository.updateTransactionStatus(
                             transactionRequestId = transactionRequestId,
                             status = TransactionStatus.FAILED,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage
+                            errorCode = code,
+                            errorMessage = message
                         )
                         
                         ErrorHandler.handlePaymentError(
                             context = this@TransactionDetailActivity,
-                            errorCode = errorCode,
-                            errorMessage = errorMessage,
+                            errorCode = code,
+                            errorMessage = message,
                             onRetryWithSameId = { executePostAuth(amount, surchargeAmount, tipAmount, taxAmount, cashbackAmount, serviceFee, transactionRequestId) },
                             onRetryWithNewId = { executePostAuth(amount, surchargeAmount, tipAmount, taxAmount, cashbackAmount, serviceFee) }
                         )
@@ -1146,10 +1152,10 @@ class TransactionDetailActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
-                        showErrorDialog("Query Failed", errorCode, errorMessage)
+                        showErrorDialog("Query Failed", code, message)
                     }
                 }
             }
@@ -1188,10 +1194,10 @@ class TransactionDetailActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onFailure(errorCode: String, errorMessage: String) {
+                override fun onFailure(code: String, message: String) {
                     runOnUiThread {
                         progressDialog.dismiss()
-                        showErrorDialog("Query Failed", errorCode, errorMessage)
+                        showErrorDialog("Query Failed", code, message)
                     }
                 }
             }

@@ -1,5 +1,7 @@
 package com.sunmi.tapro.taplink.demo.model
 
+import java.math.BigDecimal
+
 /**
  * Transaction data class
  * 
@@ -30,8 +32,8 @@ data class Transaction(
     val transactionId: String? = null,
     val referenceOrderId: String,
     val type: TransactionType,
-    val amount: Double,
-    val totalAmount: Double? = null,
+    val amount: BigDecimal,
+    val totalAmount: BigDecimal? = null,
     val currency: String,
     val status: TransactionStatus,
     val timestamp: Long,
@@ -39,11 +41,11 @@ data class Transaction(
     val errorCode: String? = null,
     val errorMessage: String? = null,
     val originalTransactionId: String? = null,
-    val surchargeAmount: Double? = null,
-    val tipAmount: Double? = null,
-    val taxAmount: Double? = null,
-    val cashbackAmount: Double? = null,
-    val serviceFee: Double? = null,
+    val surchargeAmount: BigDecimal? = null,
+    val tipAmount: BigDecimal? = null,
+    val taxAmount: BigDecimal? = null,
+    val cashbackAmount: BigDecimal? = null,
+    val serviceFee: BigDecimal? = null,
     val batchNo: Int? = null,
     val batchCloseInfo: BatchCloseInfo? = null
 ) {
@@ -151,10 +153,10 @@ data class Transaction(
  */
 data class BatchCloseInfo(
     val totalCount: Int,
-    val totalAmount: Double,
-    val totalTip: Double,
-    val totalTax: Double,
-    val totalSurchargeAmount: Double,
-    val cashDiscount: Double,
+    val totalAmount: BigDecimal,
+    val totalTip: BigDecimal,
+    val totalTax: BigDecimal,
+    val totalSurchargeAmount: BigDecimal,
+    val cashDiscount: BigDecimal,
     val closeTime: String
 )
