@@ -189,60 +189,21 @@
                     android:textColor="#333333"
                     android:layout_marginBottom="16dp" />
 
-                <!-- Connection Type Selection -->
+                <!-- Cable Protocol Selection -->
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/cable_connection_type_label"
-                    android:textSize="14sp"
-                    android:textColor="#666666"
-                    android:layout_marginBottom="8dp" />
-
-                <RadioGroup
-                    android:id="@+id/rg_cable_type"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="16dp">
-
-                    <RadioButton
-                        android:id="@+id/rb_usb"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/cable_type_usb"
-                        android:textSize="14sp"
-                        android:checked="true"
-                        android:enabled="true" />
-
-                    <RadioButton
-                        android:id="@+id/rb_serial"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/cable_type_serial"
-                        android:textSize="14sp"
-                        android:enabled="true" />
-
-                </RadioGroup>
-
-                <!-- Baud Rate Settings -->
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/cable_baud_rate_label"
+                    android:text="Cable Protocol"
                     android:textSize="14sp"
                     android:textColor="#666666"
                     android:layout_marginBottom="8dp" />
 
                 <Spinner
-                    android:id="@+id/spinner_baud_rate"
+                    android:id="@+id/spinner_cable_protocol"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
                     android:enabled="true" />
-
-
 
             </LinearLayout>
 
@@ -319,29 +280,29 @@
                     android:enabled="true" />
 
                 <!-- TLS Switch -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginBottom="16dp">
+<!--                <LinearLayout-->
+<!--                    android:layout_width="match_parent"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:orientation="horizontal"-->
+<!--                    android:gravity="center_vertical"-->
+<!--                    android:layout_marginBottom="16dp">-->
 
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/lan_tls_label"
-                        android:textSize="14sp"
-                        android:textColor="#666666" />
+<!--                    <TextView-->
+<!--                        android:layout_width="0dp"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:layout_weight="1"-->
+<!--                        android:text="@string/lan_tls_label"-->
+<!--                        android:textSize="14sp"-->
+<!--                        android:textColor="#666666" />-->
 
-                    <Switch
-                        android:id="@+id/switch_tls"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checked="true"
-                        android:enabled="true" />
+<!--                    <Switch-->
+<!--                        android:id="@+id/switch_tls"-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:checked="true"-->
+<!--                        android:enabled="true" />-->
 
-                </LinearLayout>
+<!--                </LinearLayout>-->
 
             </LinearLayout>
 

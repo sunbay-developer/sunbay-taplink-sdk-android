@@ -32,6 +32,16 @@ class ConnectionActivity : AppCompatActivity() {
         const val RESULT_CONNECTION_CHANGED = 100
     }
     
+    /**
+     * Cable protocol enumeration
+     */
+    enum class CableProtocol {
+        AUTO,       // 自动检测（默认）
+        USB_AOA,    // USB Android Open Accessory 2.0
+        USB_VSP,    // USB Virtual Serial Port (CDC-ACM)
+        RS232       // 标准 RS232 串行通信
+    }
+    
     // UI components
     private lateinit var rgConnectionMode: RadioGroup
     private lateinit var rbAppToApp: RadioButton
@@ -49,6 +59,9 @@ class ConnectionActivity : AppCompatActivity() {
     private lateinit var etLanIp: EditText
     private lateinit var etLanPort: EditText
     private lateinit var switchTls: Switch
+    
+    // Cable configuration inputs
+    private lateinit var spinnerCableProtocol: Spinner
     
     // Error prompts
     private lateinit var cardConfigError: CardView
@@ -102,7 +115,10 @@ class ConnectionActivity : AppCompatActivity() {
         // LAN configuration inputs
         etLanIp = findViewById(R.id.et_lan_ip)
         etLanPort = findViewById(R.id.et_lan_port)
-        switchTls = findViewById(R.id.switch_tls)
+//        switchTls = findViewById(R.id.switch_tls)
+        
+        // Cable configuration inputs
+        spinnerCableProtocol = findViewById(R.id.spinner_cable_protocol)
         
         // Error prompts
         cardConfigError = findViewById(R.id.card_config_error)
@@ -131,6 +147,7 @@ class ConnectionActivity : AppCompatActivity() {
             ConnectionPreferences.ConnectionMode.CABLE -> {
                 rbCable.isChecked = true
                 showConfigArea(ConnectionPreferences.ConnectionMode.CABLE)
+                setupCableProtocolSpinner()
             }
             ConnectionPreferences.ConnectionMode.LAN -> {
                 rbLan.isChecked = true
@@ -146,13 +163,30 @@ class ConnectionActivity : AppCompatActivity() {
      * Load LAN configuration
      */
     private fun loadLanConfig() {
-        val (ip, port, tlsEnabled) = ConnectionPreferences.getLanConfig(this)
+        val (ip, port, _) = ConnectionPreferences.getLanConfig(this)
         
         ip?.let { etLanIp.setText(it) }
         etLanPort.setText(port.toString())
-        switchTls.isChecked = tlsEnabled
+//        switchTls.isChecked = false // LAN模式默认关闭TLS
         
-        Log.d(TAG, "Load LAN configuration - IP: $ip, Port: $port, TLS: $tlsEnabled")
+        Log.d(TAG, "Load LAN configuration - IP: $ip, Port: $port, TLS: false")
+    }
+    
+    /**
+     * Setup cable protocol spinner
+     */
+    private fun setupCableProtocolSpinner() {
+        // Create adapter for spinner
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, CableProtocol.values())
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        
+        // Set adapter to spinner
+        spinnerCableProtocol.adapter = adapter
+        
+        // Set default selection to AUTO
+        spinnerCableProtocol.setSelection(CableProtocol.AUTO.ordinal)
+        
+        Log.d(TAG, "Cable protocol spinner setup with AUTO as default")
     }
     
     /**
@@ -169,10 +203,12 @@ class ConnectionActivity : AppCompatActivity() {
                 R.id.rb_cable -> {
                     selectedMode = ConnectionPreferences.ConnectionMode.CABLE
                     showConfigArea(ConnectionPreferences.ConnectionMode.CABLE)
+                    setupCableProtocolSpinner() // 初始化线缆协议选择器
                 }
                 R.id.rb_lan -> {
                     selectedMode = ConnectionPreferences.ConnectionMode.LAN
                     showConfigArea(ConnectionPreferences.ConnectionMode.LAN)
+                    loadLanConfig() // 重新加载LAN配置
                 }
             }
             
@@ -398,11 +434,11 @@ class ConnectionActivity : AppCompatActivity() {
         if (selectedMode == ConnectionPreferences.ConnectionMode.LAN) {
             val ip = etLanIp.text.toString().trim()
             val port = etLanPort.text.toString().trim().toInt()
-            val tlsEnabled = switchTls.isChecked
+//            val tlsEnabled = switchTls.isChecked
             
-            ConnectionPreferences.saveLanConfig(this, ip, port, tlsEnabled)
+            ConnectionPreferences.saveLanConfig(this, ip, port)
             
-            Log.d(TAG, "Save LAN configuration - IP: $ip, Port: $port, TLS: $tlsEnabled")
+            Log.d(TAG, "Save LAN configuration - IP: $ip, Port: $port")
         }
         
         Log.d(TAG, "Configuration saved successfully - Mode: $selectedMode")

@@ -67,7 +67,7 @@
     <string name="lan_ip_address_hint">192.168.1.100</string>
     <string name="lan_port_label">Port</string>
     <string name="lan_port_hint">8443</string>
-    <string name="lan_tls_label">Enable TLS Encryption</string>
+<!--    <string name="lan_tls_label">Enable TLS Encryption</string>-->
     
     <!-- Cloud Configuration -->
     <string name="cloud_config_title">Cloud Configuration</string>

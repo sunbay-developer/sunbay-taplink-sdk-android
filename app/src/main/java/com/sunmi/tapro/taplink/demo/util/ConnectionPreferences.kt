@@ -23,7 +23,7 @@ object ConnectionPreferences {
     // Default values
     private const val DEFAULT_MODE = "APP_TO_APP"
     private const val DEFAULT_LAN_PORT = 8443
-    private const val DEFAULT_LAN_TLS_ENABLED = true
+    private const val DEFAULT_LAN_TLS_ENABLED = false // LAN模式默认关闭TLS
     
     /**
      * Connection mode enumeration
@@ -77,14 +77,12 @@ object ConnectionPreferences {
      * @param context Android Context
      * @param ip IP address
      * @param port Port number
-     * @param tlsEnabled Whether TLS is enabled
      */
-    fun saveLanConfig(context: Context, ip: String, port: Int, tlsEnabled: Boolean = true) {
+    fun saveLanConfig(context: Context, ip: String, port: Int) {
         getPreferences(context)
             .edit()
             .putString(KEY_LAN_IP, ip)
             .putInt(KEY_LAN_PORT, port)
-            .putBoolean(KEY_LAN_TLS_ENABLED, tlsEnabled)
             .apply()
     }
     
