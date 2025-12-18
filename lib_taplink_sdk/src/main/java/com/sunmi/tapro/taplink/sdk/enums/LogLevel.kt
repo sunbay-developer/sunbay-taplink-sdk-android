@@ -1,22 +1,22 @@
 package com.sunmi.tapro.taplink.sdk.enums
 
 /**
- * 日志级别枚举
+ * Log Level Enum
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 enum class LogLevel {
-    /** 调试级别 */
+    /** Debug level */
     DEBUG,
     
-    /** 信息级别 */
+    /** Info level */
     INFO,
     
-    /** 警告级别 */
+    /** Warning level */
     WARN,
     
-    /** 错误级别 */
+    /** Error level */
     ERROR
 }
 

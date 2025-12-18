@@ -25,13 +25,13 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 /**
- * USB Accessory模式内核类
+ * USB Accessory Mode Kernel Class
  *
- * 负责处理USB Accessory模式的所有逻辑：
- * - Accessory查找和连接
- * - 权限请求
- * - 数据传输（发送和接收）
- * - Accessory插拔监听
+ * Responsible for handling all USB Accessory mode logic:
+ * - Accessory discovery and connection
+ * - Permission request
+ * - Data transfer (send and receive)
+ * - Accessory plug/unplug monitoring
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -46,20 +46,20 @@ class UsbAccessoryKernel(
     private val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // 连接相关
+    // Connection related
     private var connectedAccessory: UsbAccessory? = null
     private var accessoryFileDescriptor: ParcelFileDescriptor? = null
     private var accessoryInputStream: FileInputStream? = null
     private var accessoryOutputStream: FileOutputStream? = null
 
-    // 数据接收任务
+    // Data receive job
     private var dataReceiveJob: Job? = null
 
-    // 权限请求相关
+    // Permission request related
     private var pendingConnectionCallback: ConnectionCallback? = null
     private var pendingAccessory: UsbAccessory? = null
 
-    // 权限请求广播接收器
+    // Permission request broadcast receiver
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (permissionAction == intent.action) {
@@ -67,7 +67,7 @@ class UsbAccessoryKernel(
                     val accessory: UsbAccessory? = intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY)
 
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        // 权限授予
+                        // Permission granted
                         if (accessory != null && accessory == pendingAccessory) {
                             LogUtil.d(TAG, "USB accessory permission granted: ${accessory.manufacturer} ${accessory.model}")
                             pendingAccessory = null
@@ -86,7 +86,7 @@ class UsbAccessoryKernel(
                             }
                         }
                     } else {
-                        // 权限拒绝
+                        // Permission denied
                         LogUtil.d(TAG, "USB accessory permission denied")
                         val callback = pendingConnectionCallback
                         pendingConnectionCallback = null
@@ -101,7 +101,7 @@ class UsbAccessoryKernel(
         }
     }
 
-    // USB Accessory插拔广播接收器
+    // USB Accessory plug/unplug broadcast receiver
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -120,7 +120,7 @@ class UsbAccessoryKernel(
                             disconnectInternal()
                             updateStatus(ConnectionStatus.DISCONNECTED)
                         }
-                        // 如果断开的是待处理的Accessory，清除待处理状态
+                        // If detached accessory is pending, clear pending state
                         if (it == pendingAccessory) {
                             pendingAccessory = null
                             pendingConnectionCallback?.let { callback ->
@@ -135,7 +135,7 @@ class UsbAccessoryKernel(
     }
 
     init {
-        // 注册权限请求广播接收器
+        // Register permission request broadcast receiver
         val permissionFilter = IntentFilter(permissionAction)
         try {
             context.registerReceiver(permissionReceiver, permissionFilter)
@@ -144,7 +144,7 @@ class UsbAccessoryKernel(
             LogUtil.e(TAG, "Failed to register USB permission receiver: ${e.message}")
         }
 
-        // 注册USB Accessory插拔广播接收器
+        // Register USB Accessory attach/detach broadcast receiver
         val filter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_ACCESSORY_ATTACHED)
             addAction(UsbManager.ACTION_USB_ACCESSORY_DETACHED)
@@ -158,9 +158,10 @@ class UsbAccessoryKernel(
     }
 
     /**
-     * 连接USB Accessory
+     * Connect to USB Accessory
      *
-     * @param connectionCallback 连接回调
+     * @param protocol Protocol string
+     * @param connectionCallback Connection callback
      */
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
@@ -176,7 +177,7 @@ class UsbAccessoryKernel(
                 updateStatus(ConnectionStatus.CONNECTING)
                 connectionCallback.onWaitingConnect()
 
-                // 获取已连接的Accessory
+                // Get connected Accessory
                 val accessories = usbManager.accessoryList
                 val accessory = accessories?.firstOrNull()
 
@@ -185,9 +186,9 @@ class UsbAccessoryKernel(
                     return@launch
                 }
 
-                // 检查权限（Accessory模式通常通过Intent Filter自动授权，但也可以手动检查）
+                // Check permission (Accessory mode usually auto-granted via Intent Filter, but can be manually checked)
                 if (usbManager.hasPermission(accessory)) {
-                    // 已有权限，直接连接
+                    // Permission already granted, connect directly
                     val success = connectAccessory(accessory)
                     if (success) {
                         handleConnectionSuccess(connectionCallback, null)
@@ -195,7 +196,7 @@ class UsbAccessoryKernel(
                         handleConnectionError("Failed to connect USB accessory", connectionCallback)
                     }
                 } else {
-                    // 没有权限，请求权限（虽然Accessory通常自动授权，但为了完整性也支持手动请求）
+                    // Permission not granted, request permission (Accessory usually auto-granted, but manual request supported for completeness)
                     LogUtil.d(TAG, "Requesting permission for USB accessory: ${accessory.manufacturer} ${accessory.model}")
                     requestPermission(accessory, connectionCallback)
                 }
@@ -207,7 +208,7 @@ class UsbAccessoryKernel(
     }
 
     /**
-     * 请求Accessory权限
+     * Request accessory permission
      */
     private fun requestPermission(accessory: UsbAccessory, connectionCallback: ConnectionCallback) {
         synchronized(this) {
@@ -227,11 +228,11 @@ class UsbAccessoryKernel(
     }
 
     /**
-     * 连接Accessory
+     * Connect to accessory
      */
     private fun connectAccessory(accessory: UsbAccessory): Boolean {
         return try {
-            // 打开Accessory连接
+            // Open Accessory connection
             val fileDescriptor = usbManager.openAccessory(accessory) ?: run {
                 LogUtil.e(TAG, "Failed to open USB accessory")
                 return false
@@ -240,12 +241,12 @@ class UsbAccessoryKernel(
             accessoryFileDescriptor = fileDescriptor
             connectedAccessory = accessory
 
-            // 创建输入输出流
+            // Create input/output streams
             val fd = fileDescriptor.fileDescriptor
             accessoryInputStream = FileInputStream(fd)
             accessoryOutputStream = FileOutputStream(fd)
 
-            // 启动数据接收
+            // Start data receiving
             startDataReceive()
 
             LogUtil.d(TAG, "USB accessory connected: ${accessory.manufacturer} ${accessory.model}")
@@ -257,7 +258,7 @@ class UsbAccessoryKernel(
     }
 
     /**
-     * 启动数据接收
+     * Start data receiving
      */
     private fun startDataReceive() {
         dataReceiveJob?.cancel()
@@ -275,7 +276,7 @@ class UsbAccessoryKernel(
                         LogUtil.d(TAG, "Accessory data received: $bytesRead bytes")
                         dataReceiver?.invoke(data)
                     } else if (bytesRead == -1) {
-                        // 流结束
+                        // Stream ended
                         LogUtil.d(TAG, "Accessory input stream closed")
                         break
                     }
@@ -291,7 +292,7 @@ class UsbAccessoryKernel(
     }
 
     /**
-     * Accessory模式发送数据
+     * Send data in Accessory mode
      */
     private fun sendAccessoryData(data: ByteArray): Boolean {
         return try {
@@ -311,15 +312,15 @@ class UsbAccessoryKernel(
     }
 
     /**
-     * 断开连接（内部方法）
+     * Disconnect (internal method)
      */
     private fun disconnectInternal() {
         try {
-            // 停止数据接收
+            // Stop data receiving
             dataReceiveJob?.cancel()
             dataReceiveJob = null
 
-            // 断开连接
+            // Disconnect
             accessoryInputStream?.close()
             accessoryOutputStream?.close()
             accessoryFileDescriptor?.close()
@@ -335,7 +336,7 @@ class UsbAccessoryKernel(
     }
 
     /**
-     * 清理资源
+     * Release resources
      */
     fun release() {
         disconnect()
@@ -363,24 +364,24 @@ class UsbAccessoryKernel(
         scope.cancel()
     }
 
-    // ==================== 公共方法 ====================
+    // ==================== Public Methods ====================
 
     /**
-     * 获取所有连接的USB Accessory
+     * Get all connected USB Accessories
      */
     fun getAccessoryList(): Array<UsbAccessory>? {
         return usbManager.accessoryList
     }
 
     /**
-     * 获取当前连接的Accessory
+     * Get currently connected Accessory
      */
     fun getConnectedAccessory(): UsbAccessory? {
         return connectedAccessory
     }
 
     /**
-     * 实现IServiceKernel接口：发送数据
+     * Implement IServiceKernel interface: Send data
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
@@ -407,7 +408,7 @@ class UsbAccessoryKernel(
     }
 
     /**
-     * 实现IServiceKernel接口：断开连接
+     * Implement IServiceKernel interface: Disconnect
      */
     override fun disconnect() {
         if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {

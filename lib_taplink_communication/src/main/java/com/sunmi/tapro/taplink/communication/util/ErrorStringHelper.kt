@@ -4,9 +4,9 @@ import android.content.Context
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 
 /**
- * 错误字符串资源辅助类
+ * Error String Resource Helper Class
  * 
- * 用于从资源文件中获取错误描述和解决方案的本地化字符串
+ * Used to obtain localized strings for error descriptions and solutions from resource files
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -14,10 +14,10 @@ import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 object ErrorStringHelper {
     
     /**
-     * 获取错误描述
+     * Get error description
      * 
-     * @param code 错误码
-     * @return 错误描述字符串，如果未找到则返回默认值
+     * @param code Error code
+     * @return Error description string, returns default value if not found
      */
     fun getDescription(code: String): String {
         val context = getContext() ?: return getDefaultDescription(code)
@@ -33,10 +33,10 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取解决方案
+     * Get solution
      * 
-     * @param code 错误码
-     * @return 解决方案字符串，如果未找到则返回null
+     * @param code Error code
+     * @return Solution string, returns null if not found
      */
     fun getSolution(code: String): String? {
         val context = getContext() ?: return getDefaultSolution(code)
@@ -52,18 +52,18 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取应用上下文
+     * Get application context
      */
     private fun getContext(): Context? {
         return TaplinkServiceKernel.getInstance()?.getContext()
     }
     
     /**
-     * 获取字符串资源ID
+     * Get string resource ID
      * 
-     * @param context 上下文
-     * @param resourceName 资源名称
-     * @return 资源ID，如果未找到则返回0
+     * @param context Context
+     * @param resourceName Resource name
+     * @return Resource ID, returns 0 if not found
      */
     private fun getStringResourceId(context: Context, resourceName: String): Int {
         return try {
@@ -78,7 +78,7 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取默认错误描述（当资源文件不可用时的后备方案）
+     * Get default error description (fallback when resource files are unavailable)
      */
     private fun getDefaultDescription(code: String): String {
         return when (code.uppercase()) {
@@ -150,7 +150,7 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取默认解决方案（当资源文件不可用时的后备方案）
+     * Get default solution (fallback when resource files are unavailable)
      */
     private fun getDefaultSolution(code: String): String? {
         return when (code.uppercase()) {

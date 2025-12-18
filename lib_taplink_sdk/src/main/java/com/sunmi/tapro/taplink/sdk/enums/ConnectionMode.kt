@@ -1,28 +1,28 @@
 package com.sunmi.tapro.taplink.sdk.enums
 
 /**
- * 连接模式枚举
+ * Connection Mode Enum
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 enum class ConnectionMode {
-    /** 不启用 */
+    /** Not enabled */
     NONE,
     
-    /** 同设备 Intent */
+    /** Same device Intent */
     APP_TO_APP,
     
-    /** USB AOA 协议 */
+    /** USB AOA protocol */
     USB_AOA,
     
-    /** USB 虚拟串口 */
+    /** USB virtual serial port */
     USB_VSP,
     
-    /** RS232 串口 */
+    /** RS232 serial port */
     RS232,
     
-    /** WebSocket（LAN/WLAN） */
+    /** WebSocket (LAN/WLAN) */
     LAN
 }
 

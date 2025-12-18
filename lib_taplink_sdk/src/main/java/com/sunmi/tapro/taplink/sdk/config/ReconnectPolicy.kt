@@ -1,28 +1,28 @@
 package com.sunmi.tapro.taplink.sdk.config
 
 /**
- * 重连策略配置对象
+ * Reconnect Policy Configuration Object
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class ReconnectPolicy(
-    /** 是否启用自动重连，默认 true */
+    /** Whether to enable auto reconnect, default true */
     val enabled: Boolean = true,
     
-    /** 最大重连次数，默认 3 */
+    /** Maximum reconnect attempts, default 3 */
     val maxAttempts: Int = 3,
     
-    /** 首次重连延迟（毫秒），默认 0（立即） */
+    /** Initial reconnect delay (milliseconds), default 0 (immediate) */
     val initialDelay: Long = 0,
     
-    /** 重连间隔（毫秒），默认 3000 */
+    /** Reconnect interval (milliseconds), default 3000 */
     val retryDelay: Long = 3000,
     
-    /** 是否使用指数退避，默认 true */
+    /** Whether to use exponential backoff, default true */
     val exponentialBackoff: Boolean = true,
     
-    /** 最大重连间隔（毫秒），默认 10000 */
+    /** Maximum reconnect interval (milliseconds), default 10000 */
     val maxDelay: Long = 10000
 )
 

@@ -27,13 +27,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * USB Host模式内核类
+ * USB Host Mode Kernel Class
  * 
- * 负责处理USB Host模式的所有逻辑：
- * - 设备查找和连接
- * - 权限请求
- * - 数据传输（发送和接收）
- * - 设备插拔监听
+ * Responsible for handling all USB Host mode logic:
+ * - Device discovery and connection
+ * - Permission request
+ * - Data transfer (send and receive)
+ * - Device plug/unplug monitoring
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -48,21 +48,21 @@ class UsbHostKernel(
     private val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    // 连接相关
+    // Connection related
     private var connectedDevice: UsbDevice? = null
     private var usbDeviceConnection: UsbDeviceConnection? = null
     private var usbInterface: UsbInterface? = null
     private var usbEndpointIn: UsbEndpoint? = null
     private var usbEndpointOut: UsbEndpoint? = null
     
-    // 数据接收任务
+    // Data receive job
     private var dataReceiveJob: Job? = null
     
-    // 权限请求相关
+    // Permission request related
     private var pendingConnectionCallback: ConnectionCallback? = null
     private var pendingDevice: UsbDevice? = null
     
-    // 权限请求广播接收器
+    // Permission request broadcast receiver
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (permissionAction == intent.action) {
@@ -70,7 +70,7 @@ class UsbHostKernel(
                     val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        // 权限授予
+                        // Permission granted
                         if (device != null && device == pendingDevice) {
                             LogUtil.d(TAG, "USB device permission granted: ${device.deviceName}")
                             pendingDevice = null
@@ -89,7 +89,7 @@ class UsbHostKernel(
                             }
                         }
                     } else {
-                        // 权限拒绝
+                        // Permission denied
                         LogUtil.d(TAG, "USB permission denied")
                         val callback = pendingConnectionCallback
                         pendingConnectionCallback = null
@@ -104,7 +104,7 @@ class UsbHostKernel(
         }
     }
     
-    // USB设备插拔广播接收器
+    // USB device plug/unplug broadcast receiver
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -122,7 +122,7 @@ class UsbHostKernel(
                             disconnectInternal()
                             updateStatus(ConnectionStatus.DISCONNECTED)
                         }
-                        // 如果断开的是待处理的设备，清除待处理状态
+                        // If disconnected device is pending, clear pending state
                         if (it == pendingDevice) {
                             pendingDevice = null
                             pendingConnectionCallback?.let { callback ->
@@ -137,7 +137,7 @@ class UsbHostKernel(
     }
     
     init {
-        // 注册权限请求广播接收器
+        // Register permission request broadcast receiver
         val permissionFilter = IntentFilter(permissionAction)
         try {
             context.registerReceiver(permissionReceiver, permissionFilter)
@@ -146,7 +146,7 @@ class UsbHostKernel(
             LogUtil.e(TAG, "Failed to register USB permission receiver: ${e.message}")
         }
         
-        // 注册USB设备插拔广播接收器
+        // Register USB device attach/detach broadcast receiver
         val filter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
@@ -160,10 +160,10 @@ class UsbHostKernel(
     }
     
     /**
-     * 实现IServiceKernel接口：连接USB设备（Host模式）
+     * Implement IServiceKernel interface: Connect to USB device (Host mode)
      * 
-     * @param protocol 协议字符串
-     * @param connectionCallback 连接回调
+     * @param protocol Protocol string
+     * @param connectionCallback Connection callback
      */
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
@@ -179,7 +179,7 @@ class UsbHostKernel(
                 updateStatus(ConnectionStatus.CONNECTING)
                 connectionCallback.onWaitingConnect()
                 
-                // 解析协议字符串
+                // Parse protocol string
                 val parseResult = ProtocolParser.parse(protocol)
                 if (parseResult is ProtocolParseResult.Error) {
                     handleConnectionError(parseResult.message, connectionCallback)
@@ -191,7 +191,7 @@ class UsbHostKernel(
                     return@launch
                 }
                 
-                // 从已连接的设备中查找匹配的设备
+                // Find matching device from connected devices
                 val devices = usbManager.deviceList
                 val device = when {
                     parseResult.deviceName != null -> {
@@ -210,9 +210,9 @@ class UsbHostKernel(
                     return@launch
                 }
                 
-                // 检查权限
+                // Check permission
                 if (usbManager.hasPermission(device)) {
-                    // 已有权限，直接连接
+                    // Permission already granted, connect directly
                     val success = connectDevice(device)
                     if (success) {
                         handleConnectionSuccess(connectionCallback, null)
@@ -220,7 +220,7 @@ class UsbHostKernel(
                         handleConnectionError("Failed to connect USB device: ${device.deviceName}", connectionCallback)
                     }
                 } else {
-                    // 没有权限，请求权限
+                    // Permission not granted, request permission
                     LogUtil.d(TAG, "Requesting permission for USB device: ${device.deviceName}")
                     requestPermission(device, connectionCallback)
                 }
@@ -232,7 +232,7 @@ class UsbHostKernel(
     }
     
     /**
-     * 请求设备权限
+     * Request device permission
      */
     private fun requestPermission(device: UsbDevice, connectionCallback: ConnectionCallback) {
         synchronized(this) {
@@ -252,7 +252,7 @@ class UsbHostKernel(
     }
     
     /**
-     * 连接设备
+     * Connect to device
      */
     private fun connectDevice(device: UsbDevice): Boolean {
         return try {
@@ -261,18 +261,18 @@ class UsbHostKernel(
                 return false
             }
             
-            // 打开设备连接
+            // Open device connection
             val connection = usbManager.openDevice(device) ?: run {
                 LogUtil.e(TAG, "Failed to open USB device")
                 return false
             }
             
-            // 查找可用的接口和端点
+            // Find available interfaces and endpoints
             var interfaceFound = false
             for (i in 0 until device.interfaceCount) {
                 val usbInterface = device.getInterface(i)
                 
-                // 查找批量传输端点
+                // Find bulk transfer endpoints
                 var endpointIn: UsbEndpoint? = null
                 var endpointOut: UsbEndpoint? = null
                 
@@ -289,7 +289,7 @@ class UsbHostKernel(
                 }
                 
                 if (endpointIn != null && endpointOut != null) {
-                    // 声明接口
+                    // Claim interface
                     if (connection.claimInterface(usbInterface, true)) {
                         this.usbDeviceConnection = connection
                         this.usbInterface = usbInterface
@@ -298,7 +298,7 @@ class UsbHostKernel(
                         this.connectedDevice = device
                         interfaceFound = true
                         
-                        // 启动数据接收
+                        // Start data receiving
                         startDataReceive()
 
                         LogUtil.d(TAG, "USB host device connected: ${device.deviceName}")
@@ -321,7 +321,7 @@ class UsbHostKernel(
     }
     
     /**
-     * 启动数据接收
+     * Start data receiving
      */
     private fun startDataReceive() {
         dataReceiveJob?.cancel()
@@ -344,7 +344,7 @@ class UsbHostKernel(
                         LogUtil.d(TAG, "Host data received: $bytesRead bytes")
                         dataReceiver?.invoke(data)
                     } else if (bytesRead == -1) {
-                        // 超时或错误，继续循环
+                        // Timeout or error, continue loop
                     }
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Error receiving host data: ${e.message}")
@@ -358,7 +358,7 @@ class UsbHostKernel(
     }
     
     /**
-     * Host模式发送数据
+     * Send data in Host mode
      */
     private fun sendHostData(data: ByteArray): Boolean {
         return try {
@@ -388,7 +388,7 @@ class UsbHostKernel(
     }
     
     /**
-     * 断开连接（内部方法）
+     * Disconnect (internal method)
      */
     private fun disconnectInternal() {
         try {
@@ -414,7 +414,7 @@ class UsbHostKernel(
     }
     
     /**
-     * 清理资源
+     * Release resources
      */
     fun release() {
         disconnect()
@@ -442,31 +442,31 @@ class UsbHostKernel(
         scope.cancel()
     }
     
-    // ==================== 公共方法 ====================
+    // ==================== Public Methods ====================
     
     /**
-     * 获取所有连接的USB设备
+     * Get all connected USB devices
      */
     fun getConnectedDevices(): Map<String, UsbDevice> {
         return usbManager.deviceList
     }
     
     /**
-     * 检查USB设备权限
+     * Check USB device permission
      */
     fun hasPermission(device: UsbDevice): Boolean {
         return usbManager.hasPermission(device)
     }
     
     /**
-     * 获取当前连接的设备
+     * Get currently connected device
      */
     fun getConnectedDevice(): UsbDevice? {
         return connectedDevice
     }
     
     /**
-     * 实现IServiceKernel接口：发送数据
+     * Implement IServiceKernel interface: Send data
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
@@ -493,7 +493,7 @@ class UsbHostKernel(
     }
     
     /**
-     * 实现IServiceKernel接口：断开连接
+     * Implement IServiceKernel interface: Disconnect
      */
     override fun disconnect() {
         if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {

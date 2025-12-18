@@ -20,11 +20,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
 /**
- * USB服务内核类
+ * USB Service Kernel Class
  * 
- * 作为USB服务的统一入口，根据协议自动选择Host或Accessory模式：
- * - Host模式：Android设备作为USB主机，控制外部USB设备
- * - Accessory模式：Android设备作为USB配件，被外部USB主机控制
+ * Serves as the unified entry point for USB services, automatically selects Host or Accessory mode based on protocol:
+ * - Host mode: Android device acts as USB host, controlling external USB devices
+ * - Accessory mode: Android device acts as USB accessory, controlled by external USB host
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -34,20 +34,20 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
     
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    // 权限请求相关
+    // Permission request related
     private val USB_PERMISSION_ACTION = "com.sunmi.tapro.taplink.communication.USB_PERMISSION"
     private var permissionPendingIntent: PendingIntent? = null
     
-    // Host和Accessory内核
+    // Host and Accessory kernels
     private var hostKernel: UsbHostKernel? = null
     private var accessoryKernel: UsbAccessoryKernel? = null
     
-    // 当前使用的内核
+    // Currently used kernel
     private var currentKernel: BaseServiceKernel? = null
     private var currentMode: UsbMode = UsbMode.HOST
     
     init {
-        // 创建权限请求的PendingIntent
+        // Create PendingIntent for permission request
         val permissionIntent = Intent(USB_PERMISSION_ACTION).apply {
             setPackage(context.packageName)
         }
@@ -67,7 +67,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
             )
         }
         
-        // 初始化Host和Accessory内核
+        // Initialize Host and Accessory kernels
         permissionPendingIntent?.let { pendingIntent ->
             hostKernel = UsbHostKernel(context, USB_PERMISSION_ACTION, pendingIntent)
             accessoryKernel = UsbAccessoryKernel(context, USB_PERMISSION_ACTION, pendingIntent)
@@ -75,13 +75,25 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 实现IServiceKernel接口：连接USB设备
+     * Implement IServiceKernel interface: Connect to USB device
      * 
-     * @param protocol 协议字符串
-     *   - usb://host/deviceName 或 usb://host/deviceId - Host模式
-     *   - usb://accessory - Accessory模式
-     *   - usb://deviceName 或 usb://deviceId - Host模式（兼容旧格式）
-     * @param connectionCallback 连接回调
+     * Communication Flow:
+     * 1. Check if connection is allowed (not already connected/connecting)
+     * 2. Update status to CONNECTING and notify callback
+     * 3. Parse protocol string to determine USB mode and parameters
+     * 4. Validate protocol type is USB protocol
+     * 5. Set current USB mode based on protocol
+     * 6. Disconnect any existing connection if present
+     * 7. Select appropriate kernel based on USB mode:
+     *    a. Host mode: Use UsbHostKernel
+     *    b. Accessory mode: Use UsbAccessoryKernel
+     * 8. Call connect method of selected kernel
+     * 
+     * @param protocol Protocol string
+     *   - usb://host/deviceName or usb://host/deviceId - Host mode
+     *   - usb://accessory - Accessory mode
+     *   - usb://deviceName or usb://deviceId - Host mode (compatible with old format)
+     * @param connectionCallback Connection callback to notify status changes
      */
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
@@ -96,7 +108,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
             updateStatus(ConnectionStatus.CONNECTING)
             connectionCallback.onWaitingConnect()
             
-            // 解析协议字符串
+            // Parse protocol string to determine USB mode and parameters
             val parseResult = ProtocolParser.parse(protocol)
             if (parseResult is ProtocolParseResult.Error) {
                 handleConnectionError(parseResult.message, connectionCallback)
@@ -110,11 +122,11 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
             
             currentMode = parseResult.mode
             
-            // 断开之前的连接
+            // Disconnect any existing connection
             currentKernel?.disconnect()
             currentKernel = null
             
-            // 根据模式选择对应的内核
+            // Select corresponding kernel based on USB mode
             when (parseResult.mode) {
                 UsbMode.HOST -> {
                     val kernel = hostKernel ?: run {
@@ -140,7 +152,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 实现IServiceKernel接口：发送数据
+     * Implement IServiceKernel interface: Send data
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         val kernel = currentKernel
@@ -161,7 +173,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 实现IServiceKernel接口：断开连接
+     * Implement IServiceKernel interface: Disconnect
      */
     override fun disconnect() {
         currentKernel?.disconnect()
@@ -170,7 +182,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 清理资源
+     * Release resources
      */
     fun release() {
         disconnect()
@@ -185,47 +197,47 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
         scope.cancel()
     }
     
-    // ==================== Host模式公共方法 ====================
+    // ==================== Host Mode Public Methods ====================
     
     /**
-     * 获取所有连接的USB设备（Host模式）
+     * Get all connected USB devices (Host mode)
      */
     fun getConnectedDevices(): Map<String, android.hardware.usb.UsbDevice> {
         return hostKernel?.getConnectedDevices() ?: emptyMap()
     }
     
     /**
-     * 检查USB设备权限（Host模式）
+     * Check USB device permission (Host mode)
      */
     fun hasPermission(device: android.hardware.usb.UsbDevice): Boolean {
         return hostKernel?.hasPermission(device) ?: false
     }
     
     /**
-     * 获取当前连接的设备（Host模式）
+     * Get currently connected device (Host mode)
      */
     fun getConnectedDevice(): android.hardware.usb.UsbDevice? {
         return hostKernel?.getConnectedDevice()
     }
     
-    // ==================== Accessory模式公共方法 ====================
+    // ==================== Accessory Mode Public Methods ====================
     
     /**
-     * 获取所有连接的USB Accessory
+     * Get all connected USB Accessories
      */
     fun getAccessoryList(): Array<android.hardware.usb.UsbAccessory>? {
         return accessoryKernel?.getAccessoryList()
     }
     
     /**
-     * 获取当前连接的Accessory
+     * Get currently connected Accessory
      */
     fun getConnectedAccessory(): android.hardware.usb.UsbAccessory? {
         return accessoryKernel?.getConnectedAccessory()
     }
     
     /**
-     * 获取当前USB模式
+     * Get current USB mode
      */
     fun getCurrentMode(): UsbMode {
         return currentMode

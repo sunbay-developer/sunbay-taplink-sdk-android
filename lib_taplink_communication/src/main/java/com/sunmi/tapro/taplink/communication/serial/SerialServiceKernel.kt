@@ -18,9 +18,9 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 /**
- * 串口服务内核类
+ * Serial Service Kernel Class
  * 
- * 提供串口通信的功能，实现IServiceKernel接口
+ * Provides serial communication functionality, implements IServiceKernel interface
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -38,10 +38,22 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
     private var isReading = false
     
     /**
-     * 实现IServiceKernel接口：连接串口
+     * Implement IServiceKernel interface: Connect to serial port
      * 
-     * @param protocol 协议字符串，格式：devicePath:baudRate（如 "/dev/ttyS1:9600"）
-     * @param connectionCallback 连接回调
+     * Communication Flow:
+     * 1. Check if connection is allowed (not already connected/connecting)
+     * 2. Update status to CONNECTING and notify callback
+     * 3. Parse protocol string to determine serial port type and parameters
+     * 4. Handle different protocol types:
+     *    a. SerialProtocol: Open physical serial port with specified device path and baud rate
+     *    b. VspProtocol: Open virtual serial port with specified parameters
+     *    c. Other protocols: Return protocol mismatch error
+     * 5. Notify connection success or failure
+     * 
+     * @param protocol Protocol string, supports formats:
+     *   - serial://devicePath:baudRate (e.g., serial:///dev/ttyS1:9600)
+     *   - vsp://baudRate/dataBits/parity/stopBits
+     * @param connectionCallback Connection callback to notify status changes
      */
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
@@ -56,14 +68,14 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
             updateStatus(ConnectionStatus.CONNECTING)
             connectionCallback.onWaitingConnect()
             
-            // 解析协议字符串
+            // Parse protocol string to determine serial port type and parameters
             val parseResult = ProtocolParser.parse(protocol)
             if (parseResult is ProtocolParseResult.Error) {
                 handleConnectionError(parseResult.message, connectionCallback)
                 return
             }
             
-            // 支持两种协议格式：serial:// 和 vsp://
+            // Support two protocol formats: serial:// and vsp://
             when (parseResult) {
                 is ProtocolParseResult.SerialProtocol -> {
                     val success = open(parseResult.devicePath, parseResult.baudRate)
@@ -74,7 +86,7 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
                     }
                 }
                 is ProtocolParseResult.VspProtocol -> {
-                    // VSP虚拟串口连接逻辑
+                    // VSP virtual serial port connection logic
                     val success = openVsp(parseResult.baudRate, parseResult.dataBits, parseResult.parity, parseResult.stopBits)
                     if (success) {
                         handleConnectionSuccess(connectionCallback, null)
@@ -87,17 +99,25 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
                 }
             }
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to connect serial port:${e.message}")
+            LogUtil.e(TAG, "Failed to connect serial port: ${e.message}")
             handleConnectionError(e.message ?: "Unknown error", connectionCallback)
         }
     }
     
     /**
-     * 实现IServiceKernel接口：发送数据
+     * Implement IServiceKernel interface: Send data
      * 
-     * @param traceId 追踪ID
-     * @param data 要发送的数据
-     * @param sendCallback 发送结果回调
+     * Communication Flow:
+     * 1. Check if data can be sent (connection status is CONNECTED)
+     * 2. If not connected, notify callback with NOT_CONNECTED error
+     * 3. Call internal send method to write data to serial port
+     * 4. Handle send result:
+     *    a. Success: Notify callback with SUCCESS response
+     *    b. Failure: Update status to ERROR and notify callback with SEND_FAILED error
+     * 
+     * @param traceId Trace ID for request tracing
+     * @param data Data to send via serial port
+     * @param callback Send result callback to notify success/failure
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
@@ -116,21 +136,21 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 实现IServiceKernel接口：注册数据接收器
+     * Implement IServiceKernel interface: Register data receiver
      * 
-     * @param receiver 数据接收回调
+     * @param receiver Data receive callback
      */
     override fun registerDataReceiver(receiver: (dataArray: ByteArray?) -> Unit) {
-        // 调用基类方法注册接收器
+        // Call base class method to register receiver
         super.registerDataReceiver(receiver)
-        // 同时设置原有的监听器，确保兼容性
+        // Also set the original listener for compatibility
         setOnDataReceivedListener { data ->
             receiver(data)
         }
     }
     
     /**
-     * 实现IServiceKernel接口：断开连接
+     * Implement IServiceKernel interface: Disconnect
      */
     override fun disconnect() {
         if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {
@@ -142,37 +162,37 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 打开VSP虚拟串口
+     * Open VSP virtual serial port
      * 
-     * @param baudRate 波特率
-     * @param dataBits 数据位
-     * @param parity 校验位
-     * @param stopBits 停止位
-     * @return Boolean 是否打开成功
+     * @param baudRate Baud rate
+     * @param dataBits Data bits
+     * @param parity Parity
+     * @param stopBits Stop bits
+     * @return Boolean Whether opening succeeded
      */
     private fun openVsp(baudRate: Int, dataBits: Int, parity: String, stopBits: Int): Boolean {
         return try {
-            // VSP虚拟串口连接逻辑
-            // 注意：实际串口操作需要使用JNI或第三方库（如usb-serial-for-android）
-            // 这里只是示例框架，实际实现需要根据具体需求使用相应的库
+            // VSP virtual serial port connection logic
+            // Note: Actual serial port operations require JNI or third-party libraries (e.g., usb-serial-for-android)
+            // This is just an example framework, actual implementation needs to use appropriate library based on requirements
             LogUtil.d(TAG, "Opening VSP port: baudRate=$baudRate, dataBits=$dataBits, parity=$parity, stopBits=$stopBits")
             
-            // 启动数据读取
+            // Start data reading
             startReading()
             
             true
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to open VSP port:${e.message}")
+            LogUtil.e(TAG, "Failed to open VSP port: ${e.message}")
             false
         }
     }
     
     /**
-     * 打开串口
+     * Open serial port
      * 
-     * @param devicePath 串口设备路径（如 /dev/ttyS1）
-     * @param baudRate 波特率
-     * @return Boolean 是否打开成功
+     * @param devicePath Serial device path (e.g., /dev/ttyS1)
+     * @param baudRate Baud rate
+     * @return Boolean Whether opening succeeded
      */
     private fun open(devicePath: String, baudRate: Int): Boolean {
         return try {
@@ -182,13 +202,13 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
                 return false
             }
             
-            // 注意：实际串口操作需要使用JNI或第三方库（如usb-serial-for-android）
-            // 这里只是示例框架，实际实现需要根据具体需求使用相应的库
+            // Note: Actual serial port operations require JNI or third-party libraries (e.g., usb-serial-for-android)
+            // This is just an example framework, actual implementation needs to use appropriate library based on requirements
             
             serialPort = device
             LogUtil.d(TAG, "Serial port opened: $devicePath, baudRate: $baudRate")
             
-            // 启动数据读取
+            // Start data reading
             startReading()
             
             true
@@ -199,7 +219,7 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 关闭串口（内部实现）
+     * Close serial port (internal implementation)
      */
     private fun disconnectInternal() {
         try {
@@ -216,10 +236,10 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 发送数据
+     * Send data
      * 
-     * @param data 要发送的数据
-     * @return Boolean 是否发送成功
+     * @param data Data to send
+     * @return Boolean Whether sending succeeded
      */
     private fun send(data: ByteArray): Boolean {
         return try {
@@ -234,17 +254,17 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 发送字符串
+     * Send string
      * 
-     * @param text 要发送的文本
-     * @return Boolean 是否发送成功
+     * @param text Text to send
+     * @return Boolean Whether sending succeeded
      */
     fun send(text: String): Boolean {
         return send(text.toByteArray(Charsets.UTF_8))
     }
     
     /**
-     * 启动数据读取
+     * Start data reading
      */
     private fun startReading() {
         if (isReading) return
@@ -273,18 +293,18 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
     }
     
     /**
-     * 设置数据接收监听器
+     * Set data received listener
      * 
-     * @param listener 监听器
+     * @param listener Listener
      */
     fun setOnDataReceivedListener(listener: (ByteArray) -> Unit) {
         onDataReceivedListener = listener
     }
     
     /**
-     * 检查是否已连接
+     * Check if connected
      * 
-     * @return Boolean 是否已连接
+     * @return Boolean Whether connected
      */
     fun isConnected(): Boolean {
         return serialPort != null && inputStream != null && outputStream != null

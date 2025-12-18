@@ -1,27 +1,27 @@
 package com.sunmi.tapro.taplink.sdk.enums
 
 /**
- * 连接状态枚举
+ * Connection Status Enum
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 enum class ConnectionStatus {
-    /** 未连接 */
+    /** Disconnected */
     DISCONNECTED,
     
-    /** 连接中 */
+    /** Connecting */
     CONNECTING,
 
     /**
-     * 等待连接中
+     * Waiting for connection
      */
     WAIT_CONNECTING,
     
-    /** 已连接 */
+    /** Connected */
     CONNECTED,
     
-    /** 连接错误 */
+    /** Connection error */
     ERROR
 }
 

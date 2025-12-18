@@ -4,53 +4,53 @@ import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
- * 服务内核抽象基类
+ * Abstract Base Service Kernel Class
  *
- * 提供统一的状态管理功能，减少代码重复
+ * Provides unified status management functionality to reduce code duplication
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 abstract class BaseServiceKernel : IServiceKernel {
     /**
-     * 当前连接状态
+     * Current connection status
      */
     @Volatile
     protected var currentConnectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED
 
     /**
-     * 状态变化监听器
+     * Status change listener
      */
     private var statusChangeListener: ((ConnectionStatus) -> Unit)? = null
 
     /**
-     * 数据接收器
-     * 用于接收从服务端推送的数据
+     * Data receiver
+     * Used to receive data pushed from server
      */
     protected var dataReceiver: ((ByteArray?) -> Unit)? = null
 
     /**
-     * 获取当前连接状态
+     * Get current connection status
      *
-     * @return ConnectionStatus 当前连接状态
+     * @return ConnectionStatus Current connection status
      */
     override fun getConnectionStatus(): ConnectionStatus {
         return currentConnectionStatus
     }
 
     /**
-     * 设置状态变化监听器
+     * Set status change listener
      *
-     * @param listener 状态变化监听器
+     * @param listener Status change listener
      */
     override fun setStatusChangeListener(listener: (ConnectionStatus) -> Unit) {
         statusChangeListener = listener
     }
 
     /**
-     * 更新连接状态
+     * Update connection status
      *
-     * @param newStatus 新状态
+     * @param newStatus New status
      */
     protected fun updateStatus(newStatus: ConnectionStatus) {
         if (currentConnectionStatus != newStatus) {
@@ -62,37 +62,37 @@ abstract class BaseServiceKernel : IServiceKernel {
     }
 
     /**
-     * 记录状态变化日志
+     * Log status change
      *
-     * @param oldStatus 旧状态
-     * @param newStatus 新状态
+     * @param oldStatus Old status
+     * @param newStatus New status
      */
     protected open fun logStatusChange(oldStatus: ConnectionStatus, newStatus: ConnectionStatus) {
         LogUtil.d(getTag(), "Status changed: $oldStatus -> $newStatus")
     }
 
     /**
-     * 获取日志标签
+     * Get log tag
      *
-     * 默认使用类名
+     * Defaults to class name
      *
-     * @return String 日志标签
+     * @return String Log tag
      */
     protected open fun getTag(): String = this::class.simpleName ?: "BaseServiceKernel"
 
     /**
-     * 检查是否可以发送数据
+     * Check if data can be sent
      *
-     * @return Boolean 是否可以发送数据
+     * @return Boolean Whether data can be sent
      */
     protected fun canSendData(): Boolean {
         return currentConnectionStatus == ConnectionStatus.CONNECTED
     }
 
     /**
-     * 检查是否可以连接
+     * Check if connection is allowed
      *
-     * @return Boolean 是否可以连接
+     * @return Boolean Whether connection is allowed
      */
     protected fun canConnect(): Boolean {
         return currentConnectionStatus == ConnectionStatus.DISCONNECTED ||
@@ -100,11 +100,11 @@ abstract class BaseServiceKernel : IServiceKernel {
     }
 
     /**
-     * 处理连接错误
+     * Handle connection error
      *
-     * @param errorMessage 错误信息
-     * @param connectionCallback 连接回调
-     * @param errorCode 错误码，默认为-1
+     * @param errorMessage Error message
+     * @param connectionCallback Connection callback
+     * @param errorCode Error code, default is -1
      */
     protected fun handleConnectionError(
         errorMessage: String,
@@ -116,10 +116,10 @@ abstract class BaseServiceKernel : IServiceKernel {
     }
 
     /**
-     * 处理连接成功
+     * Handle connection success
      *
-     * @param connectionCallback 连接回调
-     * @param taproVersion 版本信息，可为null
+     * @param connectionCallback Connection callback
+     * @param extraInfoMap Extra information map, can be null
      */
     protected fun handleConnectionSuccess(
         connectionCallback: ConnectionCallback,
@@ -130,9 +130,9 @@ abstract class BaseServiceKernel : IServiceKernel {
     }
 
     /**
-     * 实现IServiceKernel接口：注册数据接收器
+     * Implement IServiceKernel interface: Register data receiver
      *
-     * @param receiver 数据接收回调
+     * @param receiver Data receive callback
      */
     override fun registerDataReceiver(receiver: (dataArray: ByteArray?) -> Unit) {
         dataReceiver = receiver
@@ -140,11 +140,11 @@ abstract class BaseServiceKernel : IServiceKernel {
     }
 
     /**
-     * 实现IServiceKernel接口：接收数据
+     * Implement IServiceKernel interface: Receive data
      *
-     * 将接收到的数据传递给已注册的数据接收器
+     * Pass received data to registered data receiver
      *
-     * @param data 接收到的数据
+     * @param data Received data
      */
     override fun receiveData(data: ByteArray) {
         if (dataReceiver != null) {

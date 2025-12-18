@@ -1,25 +1,25 @@
 package com.sunmi.tapro.taplink.sdk.error
 
 /**
- * 交易错误
+ * Payment Error
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class PaymentError(
-    /** 错误码（如：E01, E10, E30） */
+    /** Error code (e.g.: E01, E10, E30) */
     val code: String,
     
-    /** 错误描述 */
+    /** Error description */
     val message: String,
     
-    /** 订单号 */
+    /** Order number */
     val orderNo: String? = null,
     
-    /** 交易 ID（如果有） */
+    /** Transaction ID (if available) */
     val transactionId: String? = null,
     
-    /** 处理建议 */
+    /** Handling suggestion */
     val suggestion: String? = null
 )
 

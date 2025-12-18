@@ -1,33 +1,33 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 员工信息
+ * Staff Information
  * 
- * 用于描述处理交易的员工信息
+ * Used to describe staff information for processing transactions
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class StaffInfo(
     /**
-     * 操作员 ID（可选）
-     * 处理交易的员工标识符
+     * Operator ID (optional)
+     * Staff identifier for processing transactions
      */
     val operatorId: String? = null,
     
     /**
-     * 小费接收者 ID（可选）
-     * 接收小费的员工标识符（如服务员）
+     * Tip recipient ID (optional)
+     * Staff identifier for receiving tips (e.g., waiter)
      */
     val tipRecipientId: String? = null
 ) {
     /**
-     * 链式调用：设置操作员 ID
+     * Chained call: Set operator ID
      */
     fun setOperatorId(operatorId: String): StaffInfo = copy(operatorId = operatorId)
     
     /**
-     * 链式调用：设置小费接收者 ID
+     * Chained call: Set tip recipient ID
      */
     fun setTipRecipientId(tipRecipientId: String): StaffInfo = copy(tipRecipientId = tipRecipientId)
 }

@@ -10,13 +10,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * 异步服务内核抽象基类
+ * Abstract Async Service Kernel Class
  *
- * 提供通用的异步操作功能，减少 LocalServiceKernel 和 WebSocketClientKernel 的重复代码
- * 包含协程管理、并发控制、协议解析等通用功能
+ * Provides common asynchronous operation functionality to reduce code duplication between LocalServiceKernel and WebSocketClientKernel
+ * Includes coroutine management, concurrency control, protocol parsing, and other common functionalities
  *
- * @param appId 应用ID
- * @param appSecretKey 应用密钥
+ * @param appId Application ID
+ * @param appSecretKey Application secret key
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -27,22 +27,22 @@ abstract class AsyncServiceKernel(
 ) : BaseServiceKernel() {
 
     /**
-     * 协程作用域
+     * Coroutine scope
      */
     protected val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
-     * 发送数据互斥锁
+     * Send data mutex lock
      */
     protected val sendMutex = Mutex()
 
     /**
-     * 当前连接回调
+     * Current connection callback
      */
     protected var currentConnectionCallback: ConnectionCallback? = null
 
     /**
-     * 实现IServiceKernel接口：连接服务
+     * Implement IServiceKernel interface: Connect to service
      */
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
@@ -96,7 +96,7 @@ abstract class AsyncServiceKernel(
     }
 
     /**
-     * 实现IServiceKernel接口：发送数据
+     * Implement IServiceKernel interface: Send data
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
@@ -123,7 +123,7 @@ abstract class AsyncServiceKernel(
     }
 
     /**
-     * 实现IServiceKernel接口：断开连接
+     * Implement IServiceKernel interface: Disconnect
      */
     override fun disconnect() {
         if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {
@@ -152,75 +152,75 @@ abstract class AsyncServiceKernel(
     }
 
     /**
-     * 清理通用资源
+     * Clean up common resources
      */
     protected open fun cleanupCommonResources() {
         currentConnectionCallback = null
         dataReceiver = null
     }
 
-    // ==================== 抽象方法 - 子类必须实现 ====================
+    // ==================== Abstract methods - must be implemented by subclasses ====================
 
     /**
-     * 获取服务类型名称（用于日志）
+     * Get service type name (for logging)
      */
     protected abstract fun getServiceType(): String
 
     /**
-     * 获取期望的协议类型描述
+     * Get expected protocol type description
      */
     protected abstract fun getExpectedProtocolType(): String
 
     /**
-     * 验证协议类型是否有效
+     * Validate if protocol type is valid
      */
     protected abstract fun isValidProtocolType(parseResult: ProtocolParseResult): Boolean
 
     /**
-     * 执行具体的连接逻辑
+     * Perform specific connection logic
      */
     protected abstract fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback)
 
     /**
-     * 执行具体的发送数据逻辑
+     * Perform specific send data logic
      */
     protected abstract fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?)
 
     /**
-     * 执行具体的断开连接逻辑
+     * Perform specific disconnect logic
      */
     protected abstract fun performDisconnect()
 
-    // ==================== 可重写的方法 - 子类可以自定义 ====================
+    // ==================== Overridable methods - can be customized by subclasses ====================
 
     /**
-     * 获取连接繁忙时的错误码
+     * Get error code when connection is busy
      */
     protected open fun getConnectionBusyErrorCode(): String = InnerErrorCode.C25.code
 
     /**
-     * 获取连接失败时的错误码
+     * Get error code when connection fails
      */
     protected open fun getConnectionFailedErrorCode(): String = InnerErrorCode.C25.code
 
-    // ==================== 辅助方法 ====================
+    // ==================== Helper methods ====================
 
     /**
-     * 在协程中执行操作
+     * Execute operation in coroutine
      */
     protected fun launchInScope(block: suspend CoroutineScope.() -> Unit): Job {
         return scope.launch(block = block)
     }
 
     /**
-     * 在互斥锁保护下执行操作
+     * Execute operation under mutex protection
      */
     protected suspend fun <T> withSendLock(block: suspend () -> T): T {
         return sendMutex.withLock { block() }
     }
 
     /**
-     * 通知连接成功
+     * Notify connection success
      */
     protected fun notifyConnectionSuccess(extraInfoMap: Map<String, String?>? = null) {
         currentConnectionCallback?.let { callback ->
@@ -229,7 +229,7 @@ abstract class AsyncServiceKernel(
     }
 
     /**
-     * 通知连接失败
+     * Notify connection error
      */
     protected fun notifyConnectionError(message: String, error: InnerErrorCode = InnerErrorCode.C25) {
         currentConnectionCallback?.let { callback ->
@@ -238,7 +238,7 @@ abstract class AsyncServiceKernel(
     }
 
     /**
-     * 通知连接断开
+     * Notify connection disconnected
      */
     protected fun notifyConnectionDisconnected(code: String, message: String) {
         currentConnectionCallback?.onDisconnected(code, message)

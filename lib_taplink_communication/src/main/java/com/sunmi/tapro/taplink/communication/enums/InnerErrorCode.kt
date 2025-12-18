@@ -3,33 +3,33 @@ package com.sunmi.tapro.taplink.communication.enums
 import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 
 /**
- * 错误码定义
+ * Error Code Definition
  * 
- * 根据 Taplink SDK 文档定义的所有错误码及其说明
- * 支持多语言本地化，错误描述和解决方案从资源文件中获取
+ * Defines all error codes and their descriptions according to Taplink SDK documentation
+ * Supports multi-language localization, error descriptions and solutions are retrieved from resource files
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 sealed class InnerErrorCode(
-    /** 错误码 */
+    /** Error code */
     val code: String
 ) {
-    /** 错误说明（从资源文件获取） */
+    /** Error description (retrieved from resource files) */
     val description: String
         get() = getDescriptionForCode(code)
 
     /**
-     * 获取错误码对应的描述
+     * Get description for error code
      */
     protected open fun getDescriptionForCode(code: String): String {
         return ErrorStringHelper.getDescription(code)
     }
 
-    // ==================== 成功响应 ====================
+    // ==================== Success Response ====================
     object Success : InnerErrorCode("0")
 
-    // ==================== 安全限制错误（S 系列） ====================
+    // ==================== Security Restriction Errors (S Series) ====================
     object S01 : InnerErrorCode("S01")
     object S02 : InnerErrorCode("S02")
     object S03 : InnerErrorCode("S03")
@@ -40,7 +40,7 @@ sealed class InnerErrorCode(
     object S08 : InnerErrorCode("S08")
     object S09 : InnerErrorCode("S09")
 
-    // ==================== 客户端错误（C 系列） ====================
+    // ==================== Client Errors (C Series) ====================
     object C01 : InnerErrorCode("C01")
     object C02 : InnerErrorCode("C02")
     object C03 : InnerErrorCode("C03")
@@ -83,28 +83,28 @@ sealed class InnerErrorCode(
     object C40 : InnerErrorCode("C40")
     object C41 : InnerErrorCode("C41")
 
-    // ==================== 商户配置错误（M 系列） ====================
+    // ==================== Merchant Configuration Errors (M Series) ====================
     object M01 : InnerErrorCode("M01")
     object M02 : InnerErrorCode("M02")
     object M03 : InnerErrorCode("M03")
     object M04 : InnerErrorCode("M04")
 
-    // ==================== 支付渠道错误（P 系列） ====================
+    // ==================== Payment Channel Errors (P Series) ====================
     object P01 : InnerErrorCode("P01")
 
-    // ==================== 系统错误（E 系列） ====================
+    // ==================== System Errors (E Series) ====================
     object E01 : InnerErrorCode("E01")
     object E02 : InnerErrorCode("E02")
     object E03 : InnerErrorCode("E03")
 
-    // ==================== 风控拦截（R 系列） ====================
+    // ==================== Risk Control Interception (R Series) ====================
     object R01 : InnerErrorCode("R01")
 
-    // ==================== 其他错误码 ====================
+    // ==================== Other Error Codes ====================
     object Exception : InnerErrorCode("E04")
     object Timeout : InnerErrorCode("996")
 
-    // ==================== 未知错误码 ====================
+    // ==================== Unknown Error Code ====================
     class Unknown(
         errorCode: String,
         private val customDescription: String? = null
@@ -117,10 +117,10 @@ sealed class InnerErrorCode(
 
     companion object {
         /**
-         * 根据错误码字符串获取对应的 ErrorCode 对象
+         * Get corresponding ErrorCode object from error code string
          * 
-         * @param code 错误码字符串
-         * @return ErrorCode 对象，如果未找到则返回 Unknown
+         * @param code Error code string
+         * @return ErrorCode object, returns Unknown if not found
          */
         fun fromCode(code: String?): InnerErrorCode {
             if (code.isNullOrBlank()) {
@@ -128,10 +128,10 @@ sealed class InnerErrorCode(
             }
             
             return when (code.uppercase()) {
-                // 成功响应
+                // Success Response
                 "0" -> Success
                 
-                // 安全限制错误（S 系列）
+                // Security Restriction Errors (S Series)
                 "S01" -> S01
                 "S02" -> S02
                 "S03" -> S03
@@ -142,7 +142,7 @@ sealed class InnerErrorCode(
                 "S08" -> S08
                 "S09" -> S09
                 
-                // 客户端错误（C 系列）
+                // Client Errors (C Series)
                 "C01" -> C01
                 "C02" -> C02
                 "C03" -> C03
@@ -185,36 +185,36 @@ sealed class InnerErrorCode(
                 "C40" -> C40
                 "C41" -> C41
                 
-                // 商户配置错误（M 系列）
+                // Merchant Configuration Errors (M Series)
                 "M01" -> M01
                 "M02" -> M02
                 "M03" -> M03
                 "M04" -> M04
                 
-                // 支付渠道错误（P 系列）
+                // Payment Channel Errors (P Series)
                 "P01" -> P01
                 
-                // 系统错误（E 系列）
+                // System Errors (E Series)
                 "E01" -> E01
                 "E02" -> E02
                 "E03" -> E03
                 "E04" -> Exception
                 
-                // 风控拦截（R 系列）
+                // Risk Control Interception (R Series)
                 "R01" -> R01
                 
-                // 其他错误码
+                // Other Error Codes
                 "996" -> Timeout
                 
-                // 未知错误码
+                // Unknown Error Code
                 else -> Unknown(code)
             }
         }
 
         /**
-         * 获取所有预定义的错误码列表
+         * Get all predefined error codes list
          * 
-         * @return 所有预定义的错误码列表
+         * @return All predefined error codes list
          */
         fun getAllErrorCodes(): List<InnerErrorCode> {
             return listOf(
@@ -233,42 +233,42 @@ sealed class InnerErrorCode(
         }
 
         /**
-         * 判断错误码是否为客户端错误（C 系列）
+         * Check if error code is client error (C Series)
          */
         fun isClientError(code: String?): Boolean {
             return code?.uppercase()?.startsWith("C") == true
         }
 
         /**
-         * 判断错误码是否为系统错误（E 系列）
+         * Check if error code is system error (E Series)
          */
         fun isSystemError(code: String?): Boolean {
             return code?.uppercase()?.startsWith("E") == true
         }
 
         /**
-         * 判断错误码是否为安全限制错误（S 系列）
+         * Check if error code is security restriction error (S Series)
          */
         fun isSecurityError(code: String?): Boolean {
             return code?.uppercase()?.startsWith("S") == true
         }
 
         /**
-         * 判断错误码是否为商户配置错误（M 系列）
+         * Check if error code is merchant configuration error (M Series)
          */
         fun isMerchantConfigError(code: String?): Boolean {
             return code?.uppercase()?.startsWith("M") == true
         }
 
         /**
-         * 判断错误码是否为支付渠道错误（P 系列）
+         * Check if error code is payment channel error (P Series)
          */
         fun isPaymentChannelError(code: String?): Boolean {
             return code?.uppercase()?.startsWith("P") == true
         }
 
         /**
-         * 判断错误码是否为风控拦截错误（R 系列）
+         * Check if error code is risk control error (R Series)
          */
         fun isRiskControlError(code: String?): Boolean {
             return code?.uppercase()?.startsWith("R") == true

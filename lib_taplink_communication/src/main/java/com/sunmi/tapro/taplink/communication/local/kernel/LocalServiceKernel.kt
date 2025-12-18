@@ -18,10 +18,10 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.util.ProtocolParseResult
 
 /**
- * 本地服务内核类
+ * Local Service Kernel Class
  *
- * 提供本地通信的功能，实现IServiceKernel接口
- * 支持通过action和packageName启动和绑定服务
+ * Provides local communication functionality, implements IServiceKernel interface
+ * Supports starting and binding services via action and packageName
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -38,31 +38,31 @@ class LocalServiceKernel constructor(
     override fun getTag(): String = TAG
 
     /**
-     * Gson实例，用于JSON解析
+     * Gson instance, used for JSON parsing
      */
     private val gson = Gson()
 
     /**
-     * 当前连接的服务Intent
+     * Currently connected service Intent
      */
     private var currentIntent: Intent? = null
 
     /**
-     * 服务连接对象
+     * Service connection object
      */
     private var serviceConnection: ServiceConnection? = null
 
     /**
-     * 服务绑定状态
+     * Service binding status
      */
     private var isServiceBound: Boolean = false
 
     /**
-     * ITransaction接口实例
+     * ITransaction interface instance
      */
     private var iTransaction: ITransaction? = null
 
-    // ==================== AsyncServiceKernel 抽象方法实现 ====================
+    // ==================== AsyncServiceKernel abstract method implementations ====================
 
     override fun getServiceType(): String = "Local Service"
 
@@ -72,12 +72,25 @@ class LocalServiceKernel constructor(
         return parseResult is ProtocolParseResult.LocalProtocol
     }
 
+    /**
+     * Perform local service connection
+     * 
+     * Communication Flow:
+     * 1. Extract package name and action from local protocol
+     * 2. Get application context from TaplinkServiceKernel
+     * 3. Create Intent for service binding with app_id and secret_key extras
+     * 4. Query available services matching the intent
+     * 5. Verify matching service exists
+     * 6. Set up service connection callback
+     * 7. Bind to the service
+     * 8. Handle service connection results in callback
+     */
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
         val localProtocol = parseResult as ProtocolParseResult.LocalProtocol
         val packageName = localProtocol.packageName
         val action = localProtocol.action
 
-        // 本地服务连接逻辑
+        // Local service connection logic
         LogUtil.d(TAG, "Connecting to local service: packageName=$packageName, action=$action")
 
         val context = TaplinkServiceKernel.getInstance()?.getContext()
@@ -86,13 +99,13 @@ class LocalServiceKernel constructor(
             return
         }
 
-        // 创建Intent
+        // Create Intent for service binding
         val intent = Intent(action)
         intent.setPackage(packageName)
         intent.putExtra("app_id", appId)
         intent.putExtra("secret_key", appSecretKey)
         
-        // 检查服务是否存在
+        // Check if service exists
         val resolveInfoList = context.packageManager.queryIntentServices(intent, 0)
         LogUtil.d(TAG, "Query intent services result: ${resolveInfoList.size}")
 
@@ -108,13 +121,13 @@ class LocalServiceKernel constructor(
             return
         }
 
-        // 保存当前Intent
+        // Save current Intent
         currentIntent = intent
 
-        // 创建服务连接
+        // Create service connection
         serviceConnection = createServiceConnection(connectionCallback)
 
-        // 绑定服务
+        // Bind service
         try {
             val bindResult = context.bindService(
                 intent,
@@ -126,7 +139,7 @@ class LocalServiceKernel constructor(
             if (!bindResult) {
                 notifyConnectionError("Bind service result:$bindResult", InnerErrorCode.C25)
             }
-            // 绑定成功会在ServiceConnection的onServiceConnected中处理
+            // Successful binding will be handled in ServiceConnection's onServiceConnected
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to bind service: ${e.message}")
             notifyConnectionError("Exception: ${e.message}", InnerErrorCode.C25)
@@ -196,10 +209,10 @@ class LocalServiceKernel constructor(
     }
 
     /**
-     * 创建服务连接对象
+     * Create service connection object
      *
-     * @param connectionCallback 连接回调
-     * @return ServiceConnection 服务连接对象
+     * @param connectionCallback Connection callback
+     * @return ServiceConnection Service connection object
      */
     private fun createServiceConnection(connectionCallback: ConnectionCallback): ServiceConnection {
         return object : ServiceConnection {

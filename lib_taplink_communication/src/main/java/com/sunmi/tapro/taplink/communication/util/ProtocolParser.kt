@@ -4,14 +4,14 @@ import com.sunmi.tapro.taplink.communication.enums.UsbMode
 import com.sunmi.tapro.taplink.communication.local.constant.LocalServiceConstant
 
 /**
- * 协议解析结果数据类
+ * Protocol Parse Result Data Class
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 sealed class ProtocolParseResult {
     /**
-     * 本地服务协议解析结果
+     * Local service protocol parse result
      */
     data class LocalProtocol(
         val packageName: String,
@@ -19,7 +19,7 @@ sealed class ProtocolParseResult {
     ) : ProtocolParseResult()
 
     /**
-     * 局域网协议解析结果
+     * LAN protocol parse result
      */
     data class LanProtocol(
         val ip: String,
@@ -27,7 +27,7 @@ sealed class ProtocolParseResult {
     ) : ProtocolParseResult()
 
     /**
-     * 虚拟串口协议解析结果
+     * Virtual serial port protocol parse result
      */
     data class VspProtocol(
         val baudRate: Int,
@@ -37,16 +37,16 @@ sealed class ProtocolParseResult {
     ) : ProtocolParseResult()
 
     /**
-     * USB协议解析结果
+     * USB protocol parse result
      */
     data class UsbProtocol(
-        val mode: UsbMode = UsbMode.HOST,  // USB模式：HOST 或 ACCESSORY
+        val mode: UsbMode = UsbMode.HOST,  // USB mode: HOST or ACCESSORY
         val deviceName: String? = null,
         val deviceId: String? = null
     ) : ProtocolParseResult()
 
     /**
-     * 串口协议解析结果（兼容旧格式）
+     * Serial protocol parse result (compatible with old format)
      */
     data class SerialProtocol(
         val devicePath: String,
@@ -54,23 +54,23 @@ sealed class ProtocolParseResult {
     ) : ProtocolParseResult()
 
     /**
-     * 解析失败
+     * Parse error
      */
     data class Error(val message: String) : ProtocolParseResult()
 }
 
 /**
- * 协议解析工具类
+ * Protocol Parser Utility Class
  *
- * 支持解析以下协议格式：
- * - local://packageName/action - 本地服务
- * - lan://ip/port - 局域网连接
- * - vsp://baudRate/dataBits/parity/stopBits - 虚拟串口
- * - usb://host/deviceName 或 usb://host/deviceId - USB Host模式
- * - usb://accessory - USB Accessory模式
- * - usb://deviceName 或 usb://deviceId - USB设备（默认Host模式，兼容旧格式）
- * - serial://devicePath:baudRate - 串口（兼容格式）
- * - ws:// 或 wss:// - WebSocket
+ * Supports parsing the following protocol formats:
+ * - local://packageName/action - Local service
+ * - lan://ip/port - LAN connection
+ * - vsp://baudRate/dataBits/parity/stopBits - Virtual serial port
+ * - usb://host/deviceName or usb://host/deviceId - USB Host mode
+ * - usb://accessory - USB Accessory mode
+ * - usb://deviceName or usb://deviceId - USB device (default Host mode, compatible with old format)
+ * - serial://devicePath:baudRate - Serial port (compatible format)
+ * - ws:// or wss:// - WebSocket
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -79,10 +79,10 @@ object ProtocolParser {
     private const val TAG = "ProtocolParser"
 
     /**
-     * 解析协议字符串
+     * Parse protocol string
      *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult 解析结果
+     * @param protocol Protocol string
+     * @return ProtocolParseResult Parse result
      */
     fun parse(protocol: String): ProtocolParseResult {
         if (protocol.isEmpty()) {
@@ -100,10 +100,10 @@ object ProtocolParser {
     }
 
     /**
-     * 解析本地服务协议：local://packageName/action
+     * Parse local service protocol: local://packageName/action
      *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult.LocalProtocol 或 Error
+     * @param protocol Protocol string
+     * @return ProtocolParseResult.LocalProtocol or Error
      */
     private fun parseLocalProtocol(protocol: String): ProtocolParseResult {
         try {
@@ -131,10 +131,10 @@ object ProtocolParser {
     }
 
     /**
-     * 解析局域网协议：lan://ip/port
+     * Parse LAN protocol: lan://ip/port
      *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult.LanProtocol 或 Error
+     * @param protocol Protocol string
+     * @return ProtocolParseResult.LanProtocol or Error
      */
     private fun parseLanProtocol(protocol: String): ProtocolParseResult {
         try {
@@ -167,10 +167,10 @@ object ProtocolParser {
     }
 
     /**
-     * 解析虚拟串口协议：vsp://baudRate/dataBits/parity/stopBits
+     * Parse virtual serial port protocol: vsp://baudRate/dataBits/parity/stopBits
      *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult.VspProtocol 或 Error
+     * @param protocol Protocol string
+     * @return ProtocolParseResult.VspProtocol or Error
      */
     private fun parseVspProtocol(protocol: String): ProtocolParseResult {
         try {
@@ -213,56 +213,56 @@ object ProtocolParser {
     }
 
     /**
-     * 解析USB协议
+     * Parse USB protocol
      *
-     * 支持格式：
-     * - usb://host/deviceName 或 usb://host/deviceId - Host模式
-     * - usb://accessory - Accessory模式
-     * - usb://deviceName 或 usb://deviceId - 默认Host模式（兼容旧格式）
-     * - usb:// - 默认Host模式，使用第一个可用设备
+     * Supported formats:
+     * - usb://host/deviceName or usb://host/deviceId - Host mode
+     * - usb://accessory - Accessory mode
+     * - usb://deviceName or usb://deviceId - Default Host mode (compatible with old format)
+     * - usb:// - Default Host mode, use first available device
      *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult.UsbProtocol 或 Error
+     * @param protocol Protocol string
+     * @return ProtocolParseResult.UsbProtocol or Error
      */
     private fun parseUsbProtocol(protocol: String): ProtocolParseResult {
         try {
             val content = protocol.removePrefix("usb://")
 
-            // USB协议可以为空，表示使用默认设备（Host模式）
+            // USB protocol can be empty, indicating use default device (Host mode)
             if (content.isEmpty()) {
                 return ProtocolParseResult.UsbProtocol(mode = UsbMode.HOST)
             }
 
-            // 支持 usb://host/deviceName 或 usb://accessory 格式
+            // Supports usb://host/deviceName or usb://accessory format
             val parts = content.split("/")
             val firstPart = parts[0].lowercase()
 
             val mode = when {
                 firstPart == "host" -> UsbMode.HOST
                 firstPart == "accessory" -> UsbMode.ACCESSORY
-                else -> UsbMode.HOST  // 默认Host模式（兼容旧格式）
+                else -> UsbMode.HOST  // Default Host mode (compatible with old format)
             }
 
             if (mode == UsbMode.ACCESSORY) {
-                // Accessory模式不需要设备标识
+                // Accessory mode doesn't require device identifier
                 return ProtocolParseResult.UsbProtocol(mode = UsbMode.ACCESSORY)
             }
 
-            // Host模式：解析设备标识
-            // 如果第一部分是"host"，则从第二部分获取设备标识；否则第一部分就是设备标识
+            // Host mode: Parse device identifier
+            // If first part is "host", get device identifier from second part; otherwise first part is device identifier
             val deviceIdentifier = if (firstPart == "host" && parts.size > 1) {
                 parts[1]
             } else if (firstPart != "host") {
                 parts[0]
             } else {
-                ""  // usb://host 没有指定设备
+                ""  // usb://host without device specified
             }
 
             if (deviceIdentifier.isEmpty()) {
                 return ProtocolParseResult.UsbProtocol(mode = UsbMode.HOST)
             }
 
-            // 尝试解析为deviceId（数字）或deviceName（字符串）
+            // Try to parse as deviceId (number) or deviceName (string)
             val deviceId = deviceIdentifier.toIntOrNull()
             return if (deviceId != null) {
                 ProtocolParseResult.UsbProtocol(mode = UsbMode.HOST, deviceId = deviceId.toString())
@@ -276,10 +276,10 @@ object ProtocolParser {
     }
 
     /**
-     * 解析串口协议：serial://devicePath:baudRate（兼容旧格式）
+     * Parse serial protocol: serial://devicePath:baudRate (compatible with old format)
      *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult.SerialProtocol 或 Error
+     * @param protocol Protocol string
+     * @return ProtocolParseResult.SerialProtocol or Error
      */
     private fun parseSerialProtocol(protocol: String): ProtocolParseResult {
         try {

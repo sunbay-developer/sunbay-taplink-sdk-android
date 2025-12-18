@@ -1,28 +1,28 @@
 package com.sunmi.tapro.taplink.sdk.model.response
 
 /**
- * 连接结果
+ * Connection Result
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class ConnectionResult(
-    /** 是否成功 */
+    /** Whether successful */
     val success: Boolean,
     
-    /** 设备标识 */
+    /** Device identifier */
     val deviceId: String? = null,
     
-    /** 设备名称 */
+    /** Device name */
     val deviceName: String? = null,
     
-    /** Tapro 版本号 */
+    /** Tapro version number */
     val taproVersion: String? = null,
     
-    /** 错误码（失败时） */
+    /** Error code (when failed) */
     val errorCode: String? = null,
     
-    /** 错误信息（失败时） */
+    /** Error message (when failed) */
     val errorMessage: String? = null
 )
 

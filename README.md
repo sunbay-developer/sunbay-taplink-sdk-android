@@ -62,7 +62,7 @@ Taplink_SDK/
 │   ├── build.gradle.kts      # SDK 构建配置
 │   ├── sdk_publish.gradle    # 发布配置
 │   └── src/                  # 源代码
-├── lib_taplink_service/       # 服务层模块
+├── lib_taplink_communication/       # 服务层模块
 ├── lib_log/                  # 日志模块
 ├── app/                      # 示例应用
 ├── docs/                     # 文档目录

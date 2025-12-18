@@ -1,92 +1,92 @@
 package com.sunmi.tapro.taplink.sdk.enums
 
 /**
- * 交易类型枚举
+ * Transaction Type Enumeration
  *
- * 定义所有支持的交易类型，避免使用魔法字符串
+ * Defines all supported transaction types, avoiding the use of magic strings
  *
  * @author TaPro Team
  * @since 2025-12-12
  */
 enum class TransactionAction(val value: String) {
     /**
-     * 初始化连接
-     * 用于建立连接后初始化 TaPro 应用
+     * Initialize connection
+     * Used to initialize TaPro application after establishing connection
      */
     INIT("INIT"),
 
     /**
-     * 销售交易
-     * 标准的支付交易
+     * Sale transaction
+     * Standard payment transaction
      */
     SALE("SALE"),
 
     /**
-     * 退款交易
-     * 对已完成的交易进行退款
+     * Refund transaction
+     * Refund a completed transaction
      */
     REFUND("REFUND"),
 
     /**
-     * 撤销交易
-     * 撤销当天的交易（当日退款）
+     * Void transaction
+     * Cancel same-day transaction (same-day refund)
      */
     VOID("VOID"),
 
     /**
-     * 预授权
-     * 冻结资金但不扣款
+     * Pre-authorization
+     * Freeze funds but do not charge
      */
     AUTH("AUTH"),
 
     /**
-     * 预授权完成
-     * 完成预授权并扣款
+     * Pre-authorization completion
+     * Complete pre-authorization and charge
      */
     POST_AUTH("POST_AUTH"),
 
     /**
-     * 预授权追加
-     * 增加预授权金额
+     * Pre-authorization increment
+     * Increase pre-authorization amount
      */
     INCREMENT_AUTH("INCREMENT_AUTH"),
 
     /**
-     * 强制授权
-     * 使用授权码强制完成交易
+     * Forced authorization
+     * Force complete transaction using authorization code
      */
     FORCED_AUTH("FORCED_AUTH"),
 
     /**
-     * 小费调整
-     * 调整已完成交易的小费金额
+     * Tip adjustment
+     * Adjust tip amount for completed transaction
      */
     TIP_ADJUST("TIP_ADJUST"),
 
     /**
-     * 批次结算
-     * 结算当前批次的所有交易
+     * Batch settlement
+     * Settle all transactions in current batch
      */
     BATCH_CLOSE("BATCH_CLOSE"),
 
     /**
-     * 查询交易
-     * 查询交易状态
+     * Query transaction
+     * Query transaction status
      */
     QUERY("QUERY"),
 
     /**
-     * 终止交易
-     * 终止当前正在进行的交易
+     * Abort transaction
+     * Terminate current ongoing transaction
      */
     ABORT("ABORT");
 
     companion object {
         /**
-         * 从字符串值获取枚举
+         * Get enumeration from string value
          *
-         * @param value 字符串值
-         * @return TransactionAction? 对应的枚举，如果不存在则返回 null
+         * @param value String value
+         * @return TransactionAction? Corresponding enumeration, returns null if not found
          */
         @JvmStatic
         fun fromValue(value: String): TransactionAction? {
@@ -94,9 +94,9 @@ enum class TransactionAction(val value: String) {
         }
 
         /**
-         * 获取所有支持的交易类型值
+         * Get all supported transaction type values
          *
-         * @return List<String> 所有交易类型的字符串值列表
+         * @return List<String> List of string values for all transaction types
          */
         @JvmStatic
         fun getAllValues(): List<String> {
@@ -105,7 +105,7 @@ enum class TransactionAction(val value: String) {
     }
 
     /**
-     * 转换为字符串
+     * Convert to string
      */
     override fun toString(): String = value
 }

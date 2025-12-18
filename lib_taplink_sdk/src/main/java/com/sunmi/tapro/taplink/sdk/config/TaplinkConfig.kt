@@ -7,206 +7,206 @@ import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
- * Taplink SDK 配置类
+ * Taplink SDK Configuration Class
  * 
- * 支持默认值以简化请求参数。
- * 使用链式调用方式设置配置项。
+ * Supports default values to simplify request parameters.
+ * Uses chained method calls to set configuration items.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class TaplinkConfig(
-    // ========== 必需配置 ==========
+    // ========== Required Configuration ==========
     
     /**
-     * 应用标识（必需）
-     * 由 SUNBAY 平台分配
+     * Application identifier (required)
+     * Assigned by SUNBAY platform
      */
     val appId: String,
     
     /**
-     * 商户 ID（必需）
-     * 商户在 SUNBAY 平台的唯一标识
+     * Merchant ID (required)
+     * Unique identifier for merchant on SUNBAY platform
      */
     val merchantId: String,
     
     /**
-     * 签名密钥（必需）
-     * 用于 HMAC-SHA256 签名验证
+     * Signature key (required)
+     * Used for HMAC-SHA256 signature verification
      */
     val secretKey: String,
     
-    // ========== 环境和连接配置 ==========
+    // ========== Environment and Connection Configuration ==========
     
     /**
-     * 环境配置（可选，默认 PRODUCTION）
+     * Environment configuration (optional, default PRODUCTION)
      */
     val environment: Environment = Environment.PRODUCTION,
     
     /**
-     * 连接模式（可选）
+     * Connection mode (optional)
      */
     val connectionMode: ConnectionMode? = null,
     
     /**
-     * 连接超时时间（可选，默认 10 秒）
+     * Connection timeout (optional, default 10 seconds)
      */
     val connectionTimeout: Int = 10,
     
     /**
-     * 信任自签名证书（可选，默认 true）
+     * Trust self-signed certificates (optional, default true)
      */
     val trustSelfSignedCert: Boolean = true,
     
-    // ========== 日志配置 ==========
+    // ========== Log Configuration ==========
     
     /**
-     * 是否启用日志（可选，默认 false）
+     * Whether to enable logging (optional, default false)
      */
     val logEnabled: Boolean = false,
     
     /**
-     * 日志级别（可选，默认 INFO）
+     * Log level (optional, default INFO)
      */
     val logLevel: LogLevel = LogLevel.INFO,
     
-    // ========== 默认值配置（简化请求参数）==========
+    // ========== Default Value Configuration (Simplify Request Parameters) ==========
     
     /**
-     * 默认员工信息（可选）
-     * 设置后，PaymentRequest 可以省略 staffInfo 参数
+     * Default staff information (optional)
+     * When set, PaymentRequest can omit staffInfo parameter
      */
     val defaultStaffInfo: StaffInfo? = null,
     
     /**
-     * 默认设备信息（可选）
-     * 设置后，PaymentRequest 可以省略 deviceInfo 参数
+     * Default device information (optional)
+     * When set, PaymentRequest can omit deviceInfo parameter
      */
     val defaultDeviceInfo: DeviceInfo? = null,
     
     /**
-     * SDK版本号，格式：x.y.z，默认 1.0.0
+     * SDK version number, format: x.y.z, default 1.0.0
      */
     val version: String = "1.0.0",
     
     /**
-     * 默认超时时间（秒），默认 60
+     * Default timeout (seconds), default 60
      */
     val timeout: Int = 60,
     
-    // ========== 自动重连配置 ==========
+    // ========== Auto Reconnect Configuration ==========
     
     /**
-     * 是否启用自动重连（可选，默认 true）
-     * 当连接非主动断开时，SDK 会自动尝试重连
+     * Whether to enable auto reconnect (optional, default true)
+     * When connection is not actively disconnected, SDK will automatically attempt to reconnect
      */
     val autoReconnect: Boolean = true,
     
     /**
-     * 最大重试次数（可选，默认 3）
+     * Maximum retry count (optional, default 3)
      */
     val maxRetryCount: Int = 3,
     
     /**
-     * 重试延迟时间（毫秒，默认 2000ms）
+     * Retry delay time (milliseconds, default 2000ms)
      */
     val retryDelayMs: Long = 2000L
 ) {
-    // ========== 必需配置的链式调用方法 ==========
+    // ========== Chained Method Calls for Required Configuration ==========
     
     /**
-     * 链式调用：设置 AppId
+     * Chained call: Set AppId
      */
     fun setAppId(appId: String): TaplinkConfig = copy(appId = appId)
     
     /**
-     * 链式调用：设置商户 ID
+     * Chained call: Set Merchant ID
      */
     fun setMerchantId(merchantId: String): TaplinkConfig = copy(merchantId = merchantId)
     
     /**
-     * 链式调用：设置签名密钥
+     * Chained call: Set signature key
      */
     fun setSecretKey(secretKey: String): TaplinkConfig = copy(secretKey = secretKey)
     
-    // ========== 环境和连接配置的链式调用方法 ==========
+    // ========== Chained Method Calls for Environment and Connection Configuration ==========
     
     /**
-     * 链式调用：设置环境
+     * Chained call: Set environment
      */
     fun setEnvironment(environment: Environment): TaplinkConfig = copy(environment = environment)
     
     /**
-     * 链式调用：设置连接模式
+     * Chained call: Set connection mode
      */
     fun setConnectionMode(mode: ConnectionMode): TaplinkConfig = copy(connectionMode = mode)
     
     /**
-     * 链式调用：设置连接超时
+     * Chained call: Set connection timeout
      */
     fun setConnectionTimeout(seconds: Int): TaplinkConfig = copy(connectionTimeout = seconds)
     
     /**
-     * 链式调用：设置是否信任自签名证书
+     * Chained call: Set whether to trust self-signed certificates
      */
     fun setTrustSelfSignedCert(trust: Boolean): TaplinkConfig = copy(trustSelfSignedCert = trust)
     
-    // ========== 日志配置的链式调用方法 ==========
+    // ========== Chained Method Calls for Log Configuration ==========
     
     /**
-     * 链式调用：设置是否启用日志
+     * Chained call: Set whether to enable logging
      */
     fun setLogEnabled(enabled: Boolean): TaplinkConfig = copy(logEnabled = enabled)
     
     /**
-     * 链式调用：设置日志级别
+     * Chained call: Set log level
      */
     fun setLogLevel(level: LogLevel): TaplinkConfig = copy(logLevel = level)
     
-    // ========== 默认值配置的链式调用方法 ==========
+    // ========== Chained Method Calls for Default Value Configuration ==========
     
     /**
-     * 链式调用：设置默认员工信息
-     * 设置后，PaymentRequest 可以省略 staffInfo 参数
+     * Chained call: Set default staff information
+     * When set, PaymentRequest can omit staffInfo parameter
      */
     fun setDefaultStaffInfo(staffInfo: StaffInfo): TaplinkConfig = copy(defaultStaffInfo = staffInfo)
     
     /**
-     * 链式调用：设置默认设备信息
-     * 设置后，PaymentRequest 可以省略 deviceInfo 参数
+     * Chained call: Set default device information
+     * When set, PaymentRequest can omit deviceInfo parameter
      */
     fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
     
     /**
-     * 链式调用：设置 SDK 版本
+     * Chained call: Set SDK version
      */
     fun setVersion(version: String): TaplinkConfig = copy(version = version)
     
     /**
-     * 链式调用：设置默认超时时间
+     * Chained call: Set default timeout
      */
     fun setTimeout(timeout: Int): TaplinkConfig = copy(timeout = timeout)
     
-    // ========== 自动重连配置的链式调用方法 ==========
+    // ========== Chained Method Calls for Auto Reconnect Configuration ==========
     
     /**
-     * 链式调用：设置是否启用自动重连
+     * Chained call: Set whether to enable auto reconnect
      */
     fun setAutoReconnect(enabled: Boolean): TaplinkConfig = copy(autoReconnect = enabled)
     
     /**
-     * 链式调用：设置重试策略
+     * Chained call: Set retry policy
      * 
-     * @param maxRetries 最大重试次数
-     * @param delayMs 重试延迟时间（毫秒）
+     * @param maxRetries Maximum retry count
+     * @param delayMs Retry delay time (milliseconds)
      */
     fun setRetryPolicy(maxRetries: Int, delayMs: Long): TaplinkConfig = 
         copy(maxRetryCount = maxRetries, retryDelayMs = delayMs)
     
     companion object {
         /**
-         * 创建默认配置
-         * 需要提供必需的 appId, merchantId, secretKey
+         * Create default configuration
+         * Requires providing required appId, merchantId, secretKey
          */
         fun create(
             appId: String,

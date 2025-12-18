@@ -3,10 +3,10 @@ package com.sunmi.tapro.taplink.sdk.config
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 
 /**
- * 连接配置类
+ * Connection Configuration Class
  * 
- * 用于配置不同连接模式的参数
- * 支持应用间模式、线缆模式和局域网模式
+ * Used to configure parameters for different connection modes
+ * Supports app-to-app mode, cable mode, and LAN mode
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -14,31 +14,31 @@ import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 class ConnectionConfig {
     
     /**
-     * 线缆协议类型（可选）
-     * 用于线缆模式时指定协议类型
+     * Cable protocol type (optional)
+     * Used to specify protocol type for cable mode
      */
     var cableProtocol: CableProtocol? = null
         private set
     
     /**
-     * 主机地址（可选）
-     * 用于局域网模式时指定支付终端的IP地址
+     * Host address (optional)
+     * Used to specify payment terminal IP address for LAN mode
      */
     var host: String? = null
         private set
     
     /**
-     * 端口号（可选）
-     * 用于局域网模式时指定支付终端的端口（8443-8453）
+     * Port number (optional)
+     * Used to specify payment terminal port for LAN mode (8443-8453)
      */
     var port: Int? = null
         private set
     
     /**
-     * 设置线缆协议
+     * Set cable protocol
      * 
-     * @param protocol 线缆协议类型
-     * @return ConnectionConfig 当前配置对象，支持链式调用
+     * @param protocol Cable protocol type
+     * @return ConnectionConfig Current configuration object, supports chained calls
      */
     fun setCableProtocol(protocol: CableProtocol): ConnectionConfig {
         this.cableProtocol = protocol
@@ -46,10 +46,10 @@ class ConnectionConfig {
     }
     
     /**
-     * 设置主机地址
+     * Set host address
      * 
-     * @param host 主机IP地址
-     * @return ConnectionConfig 当前配置对象，支持链式调用
+     * @param host Host IP address
+     * @return ConnectionConfig Current configuration object, supports chained calls
      */
     fun setHost(host: String): ConnectionConfig {
         this.host = host
@@ -57,10 +57,10 @@ class ConnectionConfig {
     }
     
     /**
-     * 设置端口号
+     * Set port number
      * 
-     * @param port 端口号（8443-8453）
-     * @return ConnectionConfig 当前配置对象，支持链式调用
+     * @param port Port number (8443-8453)
+     * @return ConnectionConfig Current configuration object, supports chained calls
      */
     fun setPort(port: Int): ConnectionConfig {
         this.port = port
@@ -69,12 +69,12 @@ class ConnectionConfig {
     
     companion object {
         /**
-         * 创建默认连接配置
+         * Create default connection configuration
          * 
-         * 空配置，SDK会自动检测连接模式
-         * 适用于应用间模式、线缆模式（自动检测）和局域网模式（使用缓存设备）
+         * Empty configuration, SDK will auto-detect connection mode
+         * Suitable for app-to-app mode, cable mode (auto-detection), and LAN mode (using cached device)
          * 
-         * @return ConnectionConfig 默认配置对象
+         * @return ConnectionConfig Default configuration object
          */
         fun createDefault(): ConnectionConfig {
             return ConnectionConfig()

@@ -30,10 +30,10 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback as ServiceConnectionCallback
 
 /**
- * Taplink API 实现类
+ * Taplink API Implementation Class
  *
- * 具体实现TaplinkApi接口的所有方法
- * 这是代理类，负责具体的业务逻辑实现
+ * Concrete implementation of all methods in TaplinkApi interface
+ * This is a proxy class responsible for specific business logic implementation
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -50,47 +50,47 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * SDK配置
+     * SDK configuration
      */
     private var config: TaplinkConfig? = null
 
     /**
-     * 连接状态
+     * Connection status
      */
     private var connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED
 
     /**
-     * 连接监听器
+     * Connection listener
      */
     private var connectionListener: ConnectionListener? = null
 
     /**
-     * 当前连接模式
+     * Current connection mode
      */
     private var currentConnectionMode: ConnectionMode? = null
 
     /**
-     * 已连接设备ID
+     * Connected device ID
      */
     private var connectedDeviceId: String? = null
     private var taproVersion: String? = null
 
     /**
-     * 重连管理器（延迟初始化）
+     * Reconnection manager (lazy initialization)
      */
     private var reconnectManager: ReconnectManager? = null
 
     /**
-     * Gson实例，用于JSON序列化
+     * Gson instance for JSON serialization
      */
     private val gson = Gson()
 
     /**
-     * 回调管理器
-     * 用于管理多个异步请求的回调，支持根据traceId查找和移除对应的回调
+     * Callback manager
+     * Used to manage callbacks for multiple asynchronous requests, supports finding and removing corresponding callbacks by traceId
      */
     private val callbackManager = LocalCallbackManager<InnerCallback?>(
-        timeoutMillis = 60_000L, // 超时时间60秒
+        timeoutMillis = 60_000L, // Timeout 60 seconds
         tag = TAG
     )
 
@@ -98,21 +98,21 @@ class TaplinkApiImpl : TaplinkApi {
         LogUtil.d(TAG, "TaplinkApiImpl initialized")
     }
 
-    // ==================== 初始化 ====================
+    // ==================== Initialization ====================
 
     override fun init(context: Context, config: TaplinkConfig) {
         LogUtil.d(TAG, "Initializing SDK with appId: ${config.appId}")
         this.config = config
         
-        // 初始化重连管理器
+        // Initialize reconnection manager
         reconnectManager = ReconnectManager(config) { connectionConfig, listener ->
             connectInternal(connectionConfig, listener)
         }
         
-        // 初始化 ServiceKernel
+        // Initialize ServiceKernel
         TaplinkServiceKernel.getInstance(context)
         
-        // 配置日志级别
+        // Configure log level
         if (config.logEnabled) {
             when (config.logLevel) {
                 LogLevel.INFO -> LogUtil.setLevel(Log.INFO)
@@ -125,20 +125,20 @@ class TaplinkApiImpl : TaplinkApi {
         }
     }
 
-    // ==================== 连接管理 ====================
+    // ==================== Connection Management ====================
 
     override fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
-        // 准备重连管理器
+        // Prepare reconnection manager
         reconnectManager?.prepareConnect(config, listener)
         
-        // 执行实际连接
+        // Execute actual connection
         connectInternal(config, listener)
     }
     
     /**
-     * 内部连接方法
+     * Internal connection method
      * 
-     * 实际执行连接逻辑，供 connect() 和 ReconnectManager 调用
+     * Actually executes connection logic, called by connect() and ReconnectManager
      */
     private fun connectInternal(config: ConnectionConfig?, listener: ConnectionListener) {
         LogUtil.d(
@@ -156,11 +156,11 @@ class TaplinkApiImpl : TaplinkApi {
             return
         }
 
-        // 根据 ConnectionConfig 构建协议字符串
+        // Build protocol string based on ConnectionConfig
         val protocol = buildProtocolString(config)
         LogUtil.d(TAG, "Built protocol string: $protocol")
 
-        // 通过 ServiceKernel 连接
+        // Connect through ServiceKernel
         TaplinkServiceKernel.getInstance()
             ?.connect(
                 protocol,
@@ -170,23 +170,23 @@ class TaplinkApiImpl : TaplinkApi {
                     override fun onConnected(extraInfoMap: Map<String, String?>?) {
                         LogUtil.d(TAG, "onConnected, extraInfoMap=${extraInfoMap.toString()}")
                         
-                        // 通知重连管理器连接成功
+                        // Notify reconnection manager of successful connection
                         reconnectManager?.onConnected()
                         
-                        // 注册数据接收器，用于接收响应
+                        // Register data receiver for receiving responses
                         registerDataReceiver()
                         
-                        // 发送 INIT 指令初始化 tapro 应用，等待结果后再通知连接成功
+                        // Send INIT command to initialize tapro application, wait for result before notifying connection success
                         sendInitCommand { success, errorCode, errorMsg ->
                             if (success) {
                                 LogUtil.d(TAG, "INIT command completed successfully, notifying connection listeners")
                                 updateConnectionStatus(ConnectionStatus.CONNECTED)
                                 
-                                // 获取设备信息
+                                // Get device information
                                 connectedDeviceId = extraInfoMap?.getOrDefault("deviceId", "unknown")
                                 taproVersion = extraInfoMap?.getOrDefault("taproVersion", "unknown")
                                 
-                                // 通知监听器连接成功
+                                // Notify listeners of successful connection
                                 listener.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
                                 connectionListener?.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
                             } else {
@@ -211,21 +211,21 @@ class TaplinkApiImpl : TaplinkApi {
                         updateConnectionStatus(ConnectionStatus.DISCONNECTED)
                         val reason = "Code: $code, Message: $msg"
                         
-                        // 尝试自动重连
+                        // Attempt automatic reconnection
                         val reconnected = reconnectManager?.onDisconnected(listener) ?: false
                         
                         if (!reconnected) {
-                            // 不重连，通知应用层并清理资源
+                            // No reconnection, notify application layer and clean up resources
                             listener.onDisconnected(reason)
                             connectionListener?.onDisconnected(reason)
                             
-                            // 清理资源（只在不重连时清理）
+                            // Clean up resources (only clean up when not reconnecting)
                             connectedDeviceId = null
                             taproVersion = null
                             currentConnectionMode = null
                             callbackManager.clearAll()
                         }
-                        // 如果正在重连，保留设备信息和连接模式，不清理回调管理器
+                        // If reconnecting, keep device info and connection mode, don't clean callback manager
                     }
                 })
     }
@@ -233,7 +233,7 @@ class TaplinkApiImpl : TaplinkApi {
     override fun disconnect() {
         LogUtil.d(TAG, "Manual disconnect")
         
-        // 通知重连管理器主动断开
+        // Notify reconnection manager of manual disconnection
         reconnectManager?.disconnect()
         
         updateConnectionStatus(ConnectionStatus.DISCONNECTED)
@@ -242,7 +242,7 @@ class TaplinkApiImpl : TaplinkApi {
         taproVersion = null
         currentConnectionMode = null
 
-        // 清理所有待处理的请求回调
+        // Clean up all pending request callbacks
         callbackManager.clearAll()
     }
 
@@ -262,23 +262,23 @@ class TaplinkApiImpl : TaplinkApi {
         return taproVersion
     }
 
-    // ==================== 交易执行 ====================
+    // ==================== Transaction Execution ====================
 
     override fun execute(request: PaymentRequest, callback: PaymentCallback) {
         LogUtil.d(TAG, "Executing payment request: action=${request.action}, referenceOrderId=${request.referenceOrderId}")
         sendPaymentRequest(request, callback)
     }
 
-    // ==================== 交易查询 ====================
+    // ==================== Transaction Query ====================
 
     /**
-     * 异步查询交易状态
+     * Query transaction status asynchronously
      *
-     * **实现方式：** 将 QueryRequest 转换为 PaymentRequest（action="QUERY"），然后调用 sendPaymentRequest
-     * 这样可以复用相同的请求发送逻辑，确保代码一致性
+     * **Implementation:** Convert QueryRequest to PaymentRequest (action="QUERY"), then call sendPaymentRequest
+     * This allows reusing the same request sending logic, ensuring code consistency
      *
-     * @param request 查询请求对象
-     * @param callback 支付回调接口
+     * @param request Query request object
+     * @param callback Payment callback interface
      */
     override fun query(request: QueryRequest, callback: PaymentCallback) {
         LogUtil.d(
@@ -287,10 +287,10 @@ class TaplinkApiImpl : TaplinkApi {
         )
 
         try {
-            // 将 QueryRequest 转换为 PaymentRequest
+            // Convert QueryRequest to PaymentRequest
             val paymentRequest = convertQueryRequestToPaymentRequest(request)
 
-            // 调用 sendPaymentRequest 发送请求
+            // Call sendPaymentRequest to send request
             sendPaymentRequest(paymentRequest, callback)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error converting QueryRequest to PaymentRequest: ${e.message}")
@@ -298,7 +298,7 @@ class TaplinkApiImpl : TaplinkApi {
         }
     }
 
-    // ==================== 监听器管理 ====================
+    // ==================== Listener Management ====================
 
     override fun setConnectionListener(listener: ConnectionListener?) {
         LogUtil.d(TAG, "Setting connection listener")
@@ -310,7 +310,7 @@ class TaplinkApiImpl : TaplinkApi {
         this.connectionListener = null
     }
 
-    // ==================== 实用方法 ====================
+    // ==================== Utility Methods ====================
 
     override fun getVersion(): String {
         return config?.version ?: BuildConfig.VERSION_NAME
@@ -321,27 +321,27 @@ class TaplinkApiImpl : TaplinkApi {
         connectedDeviceId = null
         taproVersion = null
         currentConnectionMode = null
-        // TODO: 清除本地缓存的设备信息
+        // TODO: Clear locally cached device information
     }
 
-    // ==================== 私有辅助方法 ====================
+    // ==================== Private Helper Methods ====================
 
     /**
-     * 构建协议字符串
+     * Build protocol string
      *
-     * 根据 ConnectionConfig 构建协议字符串
-     * 如果 config 为空或空对象，则根据 init 时的 connectionMode 来判断
-     * 如果 connectionMode 也为空，则默认为 APP_TO_APP
+     * Build protocol string based on ConnectionConfig
+     * If config is null or empty object, determine based on connectionMode from init
+     * If connectionMode is also null, default to APP_TO_APP
      *
-     * @param config 连接配置
-     * @return String 协议字符串
+     * @param config Connection configuration
+     * @return String protocol string
      */
     private fun buildProtocolString(config: ConnectionConfig?): String {
-        // 检查 config 是否为空或空对象
+        // Check if config is null or empty object
         if (config == null || isEmptyConnectionConfig(config)) {
             LogUtil.d(TAG, "ConnectionConfig is null or empty, using TaplinkConfig.connectionMode")
 
-            // 根据 init 时的 connectionMode 来判断
+            // Determine based on connectionMode from init
             val initConnectionMode = this.config?.connectionMode
             return when (initConnectionMode) {
                 ConnectionMode.USB_AOA -> {
@@ -370,7 +370,7 @@ class TaplinkApiImpl : TaplinkApi {
                 }
 
                 else -> {
-                    // connectionMode 也为空，默认为 APP_TO_APP
+                    // connectionMode is also null, default to APP_TO_APP
                     LogUtil.d(TAG, "Both ConnectionConfig and connectionMode are null, using default APP_TO_APP")
                     currentConnectionMode = ConnectionMode.APP_TO_APP
                     "local://"
@@ -378,7 +378,7 @@ class TaplinkApiImpl : TaplinkApi {
             }
         }
 
-        // 线缆模式
+        // Cable mode
         config.cableProtocol?.let { protocol ->
             currentConnectionMode = when (protocol) {
                 com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA -> ConnectionMode.USB_AOA
@@ -394,23 +394,23 @@ class TaplinkApiImpl : TaplinkApi {
             }
         }
 
-        // 局域网模式
+        // LAN mode
         config.host?.let { host ->
             val port = config.port ?: 8443
             currentConnectionMode = ConnectionMode.LAN
             return "ws://$host:$port"
         }
 
-        // 默认：应用间模式
+        // Default: app-to-app mode
         currentConnectionMode = ConnectionMode.APP_TO_APP
         return "local://"
     }
 
     /**
-     * 判断 ConnectionConfig 是否为空对象
+     * Check if ConnectionConfig is an empty object
      *
-     * @param config 连接配置
-     * @return Boolean 是否为空对象
+     * @param config Connection configuration
+     * @return Boolean Whether it is an empty object
      */
     private fun isEmptyConnectionConfig(config: ConnectionConfig): Boolean {
         return config.cableProtocol == null &&
@@ -419,13 +419,13 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * 将 QueryRequest 转换为 PaymentRequest
+     * Convert QueryRequest to PaymentRequest
      *
-     * 查询请求需要转换为 PaymentRequest 格式，action 设置为 "QUERY"
-     * 其他必需字段使用默认值或从配置中获取
+     * Query requests need to be converted to PaymentRequest format, with action set to "QUERY"
+     * Other required fields use default values or are obtained from configuration
      *
-     * @param queryRequest 查询请求对象
-     * @return PaymentRequest 转换后的支付请求对象
+     * @param queryRequest Query request object
+     * @return PaymentRequest Converted payment request object
      */
     private fun convertQueryRequestToPaymentRequest(queryRequest: QueryRequest): PaymentRequest {
         val currentConfig = config
@@ -433,66 +433,66 @@ class TaplinkApiImpl : TaplinkApi {
             throw IllegalStateException("SDK not initialized")
         }
 
-        // 验证查询请求必须有一个查询条件
+        // Validate that query request must have one query condition
         if (queryRequest.transactionId == null && queryRequest.transactionRequestId == null) {
             throw IllegalArgumentException("Either transactionId or transactionRequestId must be provided")
         }
 
         val transactionRequestId = queryRequest.transactionRequestId
 
-        // 构建查询描述
+        // Build query description
         val description = when {
             queryRequest.transactionId != null -> "Query transaction by transactionId: ${queryRequest.transactionId}"
             queryRequest.transactionRequestId != null -> "Query transaction by transactionRequestId: ${queryRequest.transactionRequestId}"
             else -> "Query transaction"
         }
 
-        // 构建 PaymentRequest，action 为 QUERY
-        // 查询时，将查询条件放入 originalTransactionId 或 originalTransactionRequestId 字段
+        // Build PaymentRequest with action as QUERY
+        // For queries, put query conditions in originalTransactionId or originalTransactionRequestId fields
         return PaymentRequest(
             action = TransactionAction.QUERY.value,
             transactionRequestId = transactionRequestId,
             description = description,
-            // 查询条件：根据 QueryRequest 中的字段设置
+            // Query conditions: set according to fields in QueryRequest
             originalTransactionId = queryRequest.transactionId,
             originalTransactionRequestId = queryRequest.transactionRequestId,
-            // 使用配置中的默认值
+            // Use default values from configuration
             staffInfo = currentConfig.defaultStaffInfo,
             deviceInfo = currentConfig.defaultDeviceInfo
         )
     }
 
     /**
-     * 发送支付请求
+     * Send payment request
      *
-     * @param request 支付请求
-     * @param callback 支付回调
+     * @param request Payment request
+     * @param callback Payment callback
      */
     private fun sendPaymentRequest(request: PaymentRequest, callback: PaymentCallback) {
         try {
-            // 验证前置条件
+            // Validate preconditions
             val currentConfig = validateAndGetConfig(callback) ?: return
             if (!validateConnection(callback)) return
 
-            // 将 PaymentRequest 转换为 BasicRequest
+            // Convert PaymentRequest to BasicRequest
             val basicRequest = RequestConverter.convertToBasicRequest(
                 request = request,
                 version = currentConfig.version,
                 secretKey = currentConfig.secretKey
             )
 
-            // 将 BasicRequest 转换为 JSON 字符串
+            // Convert BasicRequest to JSON string
             val requestJson = gson.toJson(basicRequest)
             LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
 
-            // 创建内部回调，用于接收原始响应
+            // Create internal callback for receiving raw responses
             val internalCallback = createInternalCallback(callback, request, basicRequest.traceId)
 
-            // 在发送前添加回调到 LocalCallbackManager
+            // Add callback to LocalCallbackManager before sending
             callbackManager.addCallbackByTraceId(basicRequest.traceId, internalCallback)
             LogUtil.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}")
 
-            // 通过 TaplinkServiceKernel 发送数据
+            // Send data through TaplinkServiceKernel
             val serviceKernel = TaplinkServiceKernel.getInstance()
             if (serviceKernel == null) {
                 LogUtil.e(TAG, "Service kernel not available")
@@ -501,15 +501,15 @@ class TaplinkApiImpl : TaplinkApi {
                 return
             }
 
-            // 发送数据
+            // Send data
             try {
                 serviceKernel.sendData(
                     basicRequest.traceId,
                     requestJson.toByteArray(Charsets.UTF_8),
-                    internalCallback // 回调已由 LocalCallbackManager 管理
+                    internalCallback // Callback is managed by LocalCallbackManager
                 )
             } catch (e: Exception) {
-                // 发送失败时，移除回调并通知错误
+                // When sending fails, remove callback and notify error
                 LogUtil.e(TAG, "Failed to send data: traceId=${basicRequest.traceId}, error=${e.message}")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
                 callback.onFailure(PaymentError("SEND_ERROR", "Failed to send data: ${e.message}"))
@@ -521,9 +521,9 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * 发送 INIT 指令初始化 tapro 应用
+     * Send INIT command to initialize tapro application
      *
-     * @param onComplete 完成回调，参数为 (success: Boolean, errorCode: String?, errorMsg: String?)
+     * @param onComplete Completion callback with parameters (success: Boolean, errorCode: String?, errorMsg: String?)
      */
     private fun sendInitCommand(onComplete: (Boolean, String?, String?) -> Unit) {
         try {
@@ -536,23 +536,23 @@ class TaplinkApiImpl : TaplinkApi {
                 return
             }
 
-            // 构建 INIT 请求
+            // Build INIT request
             val initRequest = PaymentRequest(
                 action = TransactionAction.INIT.value
             )
 
-            // 将 PaymentRequest 转换为 BasicRequest
+            // Convert PaymentRequest to BasicRequest
             val basicRequest = RequestConverter.convertToBasicRequest(
                 request = initRequest,
                 version = currentConfig.version,
                 secretKey = currentConfig.secretKey
             )
 
-            // 将 BasicRequest 转换为 JSON 字符串
+            // Convert BasicRequest to JSON string
             val requestJson = gson.toJson(basicRequest)
             LogUtil.d(TAG, "INIT command prepared: traceId=${basicRequest.traceId}")
 
-            // 创建内部回调，用于接收 INIT 响应
+            // Create internal callback for receiving INIT response
             val initCallback = object : InnerCallback {
                 override fun onError(code: String, msg: String) {
                     LogUtil.e(TAG, "INIT command failed: code=$code, msg=$msg")
@@ -562,17 +562,17 @@ class TaplinkApiImpl : TaplinkApi {
                 override fun onResponse(responseData: String) {
                     LogUtil.d(TAG, "INIT command response received: $responseData")
                     try {
-                        // 解析响应，判断是否成功
+                        // Parse response and determine if successful
                         val basicResponse = gson.fromJson(responseData, BasicResponse::class.java)
 
-                        // 从 bizData 解析 PaymentResult
+                        // Parse PaymentResult from bizData
                         val paymentResult = if (basicResponse.bizData != null) {
                             gson.fromJson(basicResponse.bizData, PaymentResult::class.java)
                         } else {
                             PaymentResult(code = "ERROR", message = basicResponse.event.eventMsg)
                         }
 
-                        // 判断是否成功
+                        // Determine if successful
                         if (paymentResult.code == SUCCESS_CODE && basicResponse.event is PaymentEvent.Completed) {
                             LogUtil.d(TAG, "INIT command completed successfully")
                             onComplete(true, null, null)
@@ -587,10 +587,10 @@ class TaplinkApiImpl : TaplinkApi {
                 }
             }
 
-            // 注册回调
+            // Register callback
             callbackManager.addCallbackByTraceId(basicRequest.traceId, initCallback)
 
-            // 发送 INIT 指令
+            // Send INIT command
             val serviceKernel = TaplinkServiceKernel.getInstance()
             if (serviceKernel == null) {
                 LogUtil.e(TAG, "Service kernel not available")
@@ -618,7 +618,7 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * 注册数据接收器，用于接收响应
+     * Register data receiver for receiving responses
      */
     private fun registerDataReceiver() {
         TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.registerDataReceiver { data ->
@@ -636,9 +636,9 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * 处理接收到的响应数据
+     * Process received response data
      *
-     * @param responseJson 响应JSON字符串
+     * @param responseJson Response JSON string
      */
     private fun processReceivedResponse(responseJson: String) {
         try {
@@ -651,10 +651,10 @@ class TaplinkApiImpl : TaplinkApi {
                 return
             }
 
-            // 判断是否是错误响应
+            // Determine if it's an error response
             val isError = eventCode == ERROR_EVENT_CODE
 
-            // 判断是否需要移除回调
+            // Determine if callback should be removed
             val shouldRemove = shouldRemoveCallback(responseJson) || isError
 
             val callback = if (shouldRemove) {
@@ -663,7 +663,7 @@ class TaplinkApiImpl : TaplinkApi {
                 callbackManager.getCallbackByTraceId(traceId)
             }
 
-            // 根据响应类型调用相应的回调方法
+            // Call corresponding callback method based on response type
             if (isError) {
                 val errorCode = jsonObject.get("errorCode")?.asString ?: "UNKNOWN_ERROR"
                 val errorMsg = jsonObject.get("eventMsg")?.asString ?: "Unknown error"
@@ -672,18 +672,18 @@ class TaplinkApiImpl : TaplinkApi {
                 callback?.onResponse(responseJson)
             }
         } catch (e: Exception) {
-            // 如果无法解析为 JSON，可能是旧格式的错误响应
+            // If unable to parse as JSON, might be old format error response
             LogUtil.e(TAG, "Failed to parse response as JSON: $responseJson, error=${e.message}")
         }
     }
 
     /**
-     * 创建内部回调对象
+     * Create internal callback object
      *
-     * @param callback 支付回调
-     * @param request 支付请求
-     * @param traceId 追踪ID
-     * @return InnerCallback 内部回调对象
+     * @param callback Payment callback
+     * @param request Payment request
+     * @param traceId Trace ID
+     * @return InnerCallback Internal callback object
      */
     private fun createInternalCallback(
         callback: PaymentCallback,
@@ -703,10 +703,10 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * 判断是否需要移除回调
+     * Determine if callback should be removed
      *
-     * @param responseJson 响应JSON字符串
-     * @return Boolean 是否需要移除回调
+     * @param responseJson Response JSON string
+     * @return Boolean Whether callback should be removed
      */
     private fun shouldRemoveCallback(responseJson: String): Boolean {
         return try {
@@ -715,7 +715,7 @@ class TaplinkApiImpl : TaplinkApi {
                 return false
             }
 
-            // 使用 PaymentEvent.fromEventCode 判断是否是 Completed 或 Cancel
+            // Use PaymentEvent.fromEventCode to determine if it's Completed or Cancel
             val paymentEvent = PaymentEvent.fromEventCode(eventCode)
             when (paymentEvent) {
                 is PaymentEvent.Completed -> true
@@ -724,15 +724,15 @@ class TaplinkApiImpl : TaplinkApi {
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to parse responseJson for shouldRemoveCallback: ${e.message}")
-            true // 解析失败时默认移除
+            true // Default to remove when parsing fails
         }
     }
 
     /**
-     * 从响应JSON中提取eventCode
+     * Extract eventCode from response JSON
      *
-     * @param responseJson 响应JSON字符串
-     * @return String? eventCode，如果解析失败则返回null
+     * @param responseJson Response JSON string
+     * @return String? eventCode, returns null if parsing fails
      */
     private fun extractEventCode(responseJson: String): String? {
         return try {
@@ -756,11 +756,11 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * 处理响应数据
+     * Handle response data
      *
-     * @param result 响应JSON字符串
-     * @param callback 支付回调
-     * @param request 原始支付请求
+     * @param result Response JSON string
+     * @param callback Payment callback
+     * @param request Original payment request
      */
     private fun handleResponse(result: String, callback: PaymentCallback, request: PaymentRequest) {
         try {
@@ -770,20 +770,20 @@ class TaplinkApiImpl : TaplinkApi {
                 "Received BasicResponse: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}"
             )
 
-            // 从 bizData 解析 PaymentResult
+            // Parse PaymentResult from bizData
             val paymentResult = if (basicResponse.bizData != null) {
                 gson.fromJson(basicResponse.bizData, PaymentResult::class.java)
             } else {
-                // 如果 bizData 为空，创建一个默认的 PaymentResult
+                // If bizData is empty, create a default PaymentResult
                 PaymentResult(
                     code = "ERROR",
                     message = basicResponse.event.eventMsg
                 )
             }
 
-            // 先判断 code 码
+            // First check the code
             if (paymentResult.code != SUCCESS_CODE) {
-                // code 不为 0，调用 onFailure
+                // Code is not 0, call onFailure
                 LogUtil.e(TAG, "Payment failed: code=${paymentResult.code}, message=${paymentResult.message}")
                 callback.onFailure(
                     PaymentError(
@@ -792,10 +792,10 @@ class TaplinkApiImpl : TaplinkApi {
                     )
                 )
             } else {
-                // code 为 0，根据 PaymentEvent 类型判断
+                // Code is 0, determine based on PaymentEvent type
                 when (basicResponse.event) {
                     is PaymentEvent.Completed -> {
-                        // 事件是 Completed，调用 onSuccess
+                        // Event is Completed, call onSuccess
                         LogUtil.d(
                             TAG,
                             "Payment completed successfully: eventCode=${basicResponse.event.eventCode}"
@@ -804,7 +804,7 @@ class TaplinkApiImpl : TaplinkApi {
                     }
 
                     is PaymentEvent.Cancel -> {
-                        // 事件是 Cancel，调用 onFailure
+                        // Event is Cancel, call onFailure
                         LogUtil.e(
                             TAG,
                             "Payment cancelled: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}"
@@ -818,7 +818,7 @@ class TaplinkApiImpl : TaplinkApi {
                     }
 
                     else -> {
-                        // 其他事件类型，调用 onProgress
+                        // Other event types, call onProgress
                         LogUtil.d(
                             TAG,
                             "Payment in progress: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}, progress=${basicResponse.event.progress}"
@@ -828,17 +828,17 @@ class TaplinkApiImpl : TaplinkApi {
                 }
             }
         } catch (e: Exception) {
-            // 解析失败，作为发送失败处理
+            // Parsing failed, treat as send failure
             LogUtil.e(TAG, "Failed to parse response: action=${request.action}, result=$result, error=${e.message}")
             callback.onFailure(PaymentError("PARSE_ERROR", "Failed to parse response: ${e.message}"))
         }
     }
 
     /**
-     * 验证并获取配置
+     * Validate and get configuration
      *
-     * @param callback 支付回调，用于通知错误
-     * @return TaplinkConfig? 配置对象，如果验证失败则返回null
+     * @param callback Payment callback for error notification
+     * @return TaplinkConfig? Configuration object, returns null if validation fails
      */
     private fun validateAndGetConfig(callback: PaymentCallback): TaplinkConfig? {
         val currentConfig = config
@@ -851,10 +851,10 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * 验证连接状态
+     * Validate connection status
      *
-     * @param callback 支付回调，用于通知错误
-     * @return Boolean 是否已连接
+     * @param callback Payment callback for error notification
+     * @return Boolean Whether connected
      */
     private fun validateConnection(callback: PaymentCallback): Boolean {
         if (!isConnected()) {
@@ -866,20 +866,20 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * 更新连接状态
+     * Update connection status
      *
-     * @param newStatus 新状态
+     * @param newStatus New status
      */
     private fun updateConnectionStatus(newStatus: ConnectionStatus) {
         if (connectionStatus != newStatus) {
             val oldStatus = connectionStatus
             connectionStatus = newStatus
             LogUtil.d(TAG, "Connection status changed: $oldStatus -> $newStatus")
-            // 通知监听器
+            // Notify listeners
             connectionListener?.let { listener ->
                 when (newStatus) {
                     ConnectionStatus.CONNECTED -> {
-                        // 连接成功时，使用实际获取的deviceId和taproVersion
+                        // When connection is successful, use actually obtained deviceId and taproVersion
                         listener.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
                     }
 
@@ -892,7 +892,7 @@ class TaplinkApiImpl : TaplinkApi {
                     }
 
                     else -> {
-                        // 其他状态
+                        // Other statuses
                     }
                 }
             }

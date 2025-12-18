@@ -1,44 +1,44 @@
 package com.sunmi.tapro.taplink.sdk.model.response
 
 /**
- * 批次关闭结果
+ * Batch Close Result
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class BatchCloseResult(
-    /** 批次号 */
+    /** Batch number */
     val batchNo: String,
     
-    /** 总笔数 */
+    /** Total count */
     val totalCount: Int,
     
-    /** 总金额（分/美分等最小单位） */
+    /** Total amount (cents/smallest currency unit) */
     val totalAmount: Int,
     
-    /** 销售笔数 */
+    /** Sale count */
     val saleCount: Int,
     
-    /** 销售金额（分/美分等最小单位） */
+    /** Sale amount (cents/smallest currency unit) */
     val saleAmount: Int,
     
-    /** 退款笔数 */
+    /** Refund count */
     val refundCount: Int,
     
-    /** 退款金额（分/美分等最小单位） */
+    /** Refund amount (cents/smallest currency unit) */
     val refundAmount: Int,
     
-    /** 货币代码（ISO 4217） */
+    /** Currency code (ISO 4217) */
     val currency: String? = null,
     
-    /** 批次关闭时间（ISO 8601 格式） */
+    /** Batch close time (ISO 8601 format) */
     val closeTime: String? = null,
     
-    /** 结果描述 */
+    /** Result description */
     val message: String? = null
 ) {
     /**
-     * 是否成功
+     * Whether successful
      */
     fun isSuccess(): Boolean = batchNo.isNotEmpty() && totalCount >= 0
 }

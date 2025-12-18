@@ -22,19 +22,19 @@ import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * WebSocket 客户端服务内核类
+ * WebSocket Client Service Kernel Class
  *
- * 功能特性：
- * 1. WebSocket 客户端连接
- * 2. 心跳机制保持连接活跃
- * 3. mDNS 服务发现（连接失败时自动查找设备）
- * 4. 线程安全的数据发送
+ * Features:
+ * 1. WebSocket client connection
+ * 2. Heartbeat mechanism to keep connection alive
+ * 3. mDNS service discovery (automatically find devices when connection fails)
+ * 4. Thread-safe data sending
  *
- * 注意：重连逻辑由 SDK 层（ReconnectManager）统一管理，Service 层只负责底层通信
+ * Note: Reconnection logic is uniformly managed by SDK layer (ReconnectManager), Service layer only handles underlying communication
  *
- * @param appId 应用ID
- * @param appSecretKey 应用密钥
- * @param context Android上下文，用于mDNS服务
+ * @param appId Application ID
+ * @param appSecretKey Application secret key
+ * @param context Android context, used for mDNS service
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -48,73 +48,73 @@ class WebSocketClientKernel constructor(
     companion object {
         private const val TAG = "WebSocketClientKernel"
         
-        // 心跳配置
-        private const val HEARTBEAT_INTERVAL = 30_000L // 30秒心跳间隔
-        private const val HEARTBEAT_TIMEOUT = 10_000L // 10秒心跳超时
+        // Heartbeat configuration
+        private const val HEARTBEAT_INTERVAL = 30_000L // 30 seconds heartbeat interval
+        private const val HEARTBEAT_TIMEOUT = 10_000L // 10 seconds heartbeat timeout
         private const val HEARTBEAT_MESSAGE = "{\"type\":\"ping\"}"
         
-        // NSD配置
-        private const val NSD_SERVICE_TYPE = "_taplink._tcp" // Taplink服务类型
-        private const val NSD_DISCOVERY_TIMEOUT = 10_000L // NSD发现超时10秒
+        // NSD configuration
+        private const val NSD_SERVICE_TYPE = "_taplink._tcp" // Taplink service type
+        private const val NSD_DISCOVERY_TIMEOUT = 10_000L // NSD discovery timeout 10 seconds
     }
 
     override fun getTag(): String = TAG
 
     /**
-     * 协程作用域
+     * Coroutine scope
      */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
-     * 发送数据互斥锁
+     * Send data mutex lock
      */
     private val sendMutex = Mutex()
 
     /**
-     * 当前WebSocket客户端连接实例
+     * Current WebSocket client connection instance
      */
     private var client: TaplinkWebSocketClient? = null
 
     /**
-     * 当前连接的服务URI
+     * Currently connected service URI
      */
     private var currentUri: URI? = null
 
     /**
-     * 当前连接回调
+     * Current connection callback
      */
     private var currentConnectionCallback: ConnectionCallback? = null
 
     /**
-     * 心跳任务
+     * Heartbeat job
      */
     private var heartbeatJob: Job? = null
 
     /**
-     * 最后一次心跳响应时间
+     * Last heartbeat response time
      */
     private var lastHeartbeatResponse = 0L
 
     /**
-     * NSD Manager 实例
+     * NSD Manager instance
      */
     private var nsdManager: NsdManager? = null
 
     /**
-     * NSD 发现监听器
+     * NSD discovery listener
      */
     private var discoveryListener: NsdManager.DiscoveryListener? = null
 
     /**
-     * NSD 发现的服务列表
+     * NSD discovered services list
      */
     private val discoveredServices = mutableListOf<ServiceInfo>()
 
     /**
-     * 实现IServiceKernel接口：连接WebSocket服务器
+     * Implement IServiceKernel interface: Connect to WebSocket server
      *
-     * @param protocol 协议字符串，支持 ws://、wss:// 和 lan:// 格式
-     * @param connectionCallback 连接回调
+     * @param protocol Protocol string, supports ws://, wss://, and lan:// formats
+     * @param connectionCallback Connection callback
      */
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
@@ -150,7 +150,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 根据协议字符串进行连接
+     * Connect with protocol string
      */
     private fun connectWithProtocol(protocol: String, connectionCallback: ConnectionCallback) {
         scope.launch {
@@ -210,31 +210,43 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 连接到指定URI
+     * Connect to specified URI
+     * 
+     * Communication Flow:
+     * 1. Save current URI for future reference
+     * 2. Close any existing WebSocket connection if present
+     * 3. Create new WebSocket client instance with the URI
+     * 4. Initiate asynchronous connection
+     * 5. Wait up to 5 seconds for connection status change
+     * 6. Return connection result
+     * 
+     * @param uri WebSocket server URI to connect to
+     * @param connectionCallback Callback to notify connection status changes
+     * @return Boolean True if connection successful, false otherwise
      */
     private suspend fun connectToUri(uri: URI, connectionCallback: ConnectionCallback): Boolean {
         return try {
             LogUtil.d(TAG, "Attempting to connect to: $uri")
             
-            // 保存当前URI
+            // Save current URI
             currentUri = uri
 
-            // 如果已有连接，先断开
+            // If there's an existing connection, close it first
             client?.let { 
                 LogUtil.d(TAG, "Closing existing connection")
                 it.close(1000, "Reconnecting")
                 client = null
             }
 
-            // 创建新的WebSocket客户端
+            // Create new WebSocket client
             client = TaplinkWebSocketClient(uri, connectionCallback)
             
-            // 连接（这是异步的，结果会通过回调返回）
+            // Connect (this is asynchronous, results will be returned via callback)
             client?.connect()
             
-            // 等待连接结果（通过状态变化判断）
+            // Wait for connection result (judged by status change)
             var attempts = 0
-            while (attempts < 50 && currentConnectionStatus == ConnectionStatus.CONNECTING) { // 最多等待5秒
+            while (attempts < 50 && currentConnectionStatus == ConnectionStatus.CONNECTING) { // Wait up to 5 seconds
                 delay(100)
                 attempts++
             }
@@ -247,7 +259,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * NSD 服务发现并连接
+     * NSD service discovery and connection
      */
     private suspend fun discoverAndConnect(connectionCallback: ConnectionCallback) {
         try {
@@ -360,7 +372,19 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 实现IServiceKernel接口：发送数据
+     * Implement IServiceKernel interface: Send data
+     * 
+     * Communication Flow:
+     * 1. Check if data can be sent (connection status is CONNECTED)
+     * 2. Verify WebSocket client is initialized
+     * 3. Execute in coroutine with thread-safe Mutex lock
+     * 4. Log data sending information with traceId for debugging
+     * 5. Send data asynchronously via WebSocket
+     * 6. Notify callback of send result (success/failure)
+     * 
+     * @param traceId Unique identifier for request tracing
+     * @param data Data to be sent via WebSocket
+     * @param callback Callback to notify send result
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
@@ -375,15 +399,15 @@ class WebSocketClientKernel constructor(
             return
         }
 
-        // 在协程中执行，使用Mutex保证并发安全
+        // Execute in coroutine, use Mutex to ensure thread safety
         scope.launch {
             sendMutex.withLock {
                 try {
                     LogUtil.d(TAG, "Sending data via WebSocket: traceId=$traceId, dataSize=${data.size} bytes")
 
-                    // 发送数据
+                    // Send data
                     client?.send(data)
-                    // WebSocket 发送是异步的，这里假设发送成功
+                    // WebSocket send is asynchronous, assuming success here
                     if (client != null) {
                         LogUtil.d(TAG, "Data sent via WebSocket successfully: traceId=$traceId")
                         callback?.onResponse("SUCCESS")
@@ -400,7 +424,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 实现IServiceKernel接口：断开连接
+     * Implement IServiceKernel interface: Disconnect
      */
     override fun disconnect() {
         if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {
@@ -429,7 +453,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 断开连接（内部方法）
+     * Disconnect (internal method)
      */
     private fun disconnectInternal() {
         try {
@@ -440,7 +464,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 清理资源
+     * Clean up resources
      */
     private fun cleanupResources() {
         client = null
@@ -461,10 +485,27 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 启动心跳机制
+     * Start heartbeat mechanism
+     * 
+     * Communication Flow:
+     * 1. Stop any existing heartbeat to avoid conflicts
+     * 2. Initialize heartbeat job in coroutine scope
+     * 3. Set initial heartbeat response timestamp
+     * 4. Enter periodic heartbeat loop:
+     *    a. Wait for heartbeat interval (30 seconds)
+     *    b. Check if last heartbeat response timed out (40 seconds total)
+     *    c. If timed out, notify connection lost and break loop
+     *    d. If still connected, send heartbeat message
+     *    e. Log heartbeat sending status
+     * 5. Handle any exceptions during heartbeat process
+     * 
+     * Heartbeat Protocol:
+     * - Send: {"type":"ping"} every 30 seconds
+     * - Expect: Server should respond with pong message
+     * - Timeout: 40 seconds without pong response triggers reconnection
      */
     private fun startHeartbeat() {
-        stopHeartbeat() // 先停止现有的心跳
+        stopHeartbeat() // Stop existing heartbeat first to avoid conflicts
         
         heartbeatJob = scope.launch {
             LogUtil.d(TAG, "Starting heartbeat mechanism")
@@ -474,7 +515,7 @@ class WebSocketClientKernel constructor(
                 try {
                     delay(HEARTBEAT_INTERVAL)
                     
-                    // 检查上次心跳响应时间
+                    // Check last heartbeat response time
                     val now = System.currentTimeMillis()
                     if (now - lastHeartbeatResponse > HEARTBEAT_INTERVAL + HEARTBEAT_TIMEOUT) {
                         LogUtil.w(TAG, "Heartbeat timeout detected, connection may be lost")
@@ -482,9 +523,9 @@ class WebSocketClientKernel constructor(
                         break
                     }
                     
-                    // 发送心跳
+                    // Send heartbeat
                     client?.send(HEARTBEAT_MESSAGE)
-                    // WebSocket 发送是异步的，这里假设发送成功
+                    // WebSocket send is asynchronous, assuming success here
                     if (client != null) {
                         LogUtil.d(TAG, "Heartbeat sent")
                     } else {
@@ -505,7 +546,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 停止心跳机制
+     * Stop heartbeat mechanism
      */
     private fun stopHeartbeat() {
         heartbeatJob?.cancel()
@@ -514,9 +555,9 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 处理连接丢失
+     * Handle connection lost
      * 
-     * 注意：不在 Service 层处理重连，由 SDK 层统一管理重连逻辑
+     * Note: Reconnection is not handled in Service layer, it's uniformly managed by SDK layer
      */
     private fun handleConnectionLost() {
         LogUtil.w(TAG, "Connection lost, notifying upper layer")
@@ -530,7 +571,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 处理心跳响应
+     * Handle heartbeat response
      */
     private fun handleHeartbeatResponse() {
         lastHeartbeatResponse = System.currentTimeMillis()
@@ -538,7 +579,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 内部 WebSocketClient 实现类
+     * Inner WebSocketClient implementation class
      */
     private inner class TaplinkWebSocketClient(
         serverUri: URI,
@@ -609,7 +650,7 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 服务信息数据类
+     * Service information data class
      */
     private data class ServiceInfo(
         val name: String,

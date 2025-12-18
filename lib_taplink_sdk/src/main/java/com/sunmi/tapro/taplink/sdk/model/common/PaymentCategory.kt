@@ -1,55 +1,55 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 支付方式类别枚举
+ * Payment Category Enum
  * 
- * 定义所有支持的支付方式类别
+ * Defines all supported payment method categories
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 enum class PaymentCategory {
     /**
-     * 银行卡（通用）
+     * Bank card (general)
      */
     CARD,
     
     /**
-     * 信用卡
+     * Credit card
      */
     CARD_CREDIT,
     
     /**
-     * 借记卡
+     * Debit card
      */
     CARD_DEBIT,
     
     /**
-     * 二维码主扫模式（商户扫客户）
+     * QR code merchant-present mode (merchant scans customer)
      */
     QR_MPM,
     
     /**
-     * 二维码被扫模式（客户扫商户）
+     * QR code customer-present mode (customer scans merchant)
      */
     QR_CPM,
     
     /**
-     * 电子福利转账
+     * Electronic Benefit Transfer
      */
     EBT,
     
     /**
-     * 现金
+     * Cash
      */
     CASH;
     
     companion object {
         /**
-         * 从字符串转换为枚举
+         * Convert from string to enum
          * 
-         * @param value 字符串值
-         * @return PaymentCategory? 对应的枚举值，如果无法识别则返回 null
+         * @param value String value
+         * @return PaymentCategory? Corresponding enum value, returns null if not recognized
          */
         fun fromString(value: String?): PaymentCategory? {
             if (value.isNullOrBlank()) return null
@@ -68,7 +68,7 @@ enum class PaymentCategory {
     }
     
     /**
-     * 转换为字符串（用于API传输）
+     * Convert to string (for API transmission)
      */
     fun toApiString(): String {
         return when (this) {

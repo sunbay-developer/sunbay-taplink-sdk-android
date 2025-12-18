@@ -8,12 +8,12 @@ import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
- * 重连管理器
+ * Reconnection Manager
  * 
- * 负责管理自动重连逻辑，包括：
- * - 重连状态管理
- * - 重试计数
- * - 延迟重连调度
+ * Responsible for managing automatic reconnection logic, including:
+ * - Reconnection state management
+ * - Retry counting
+ * - Delayed reconnection scheduling
  * 
  * @author TaPro Team
  * @since 2025-12-11
@@ -25,37 +25,37 @@ class ReconnectManager(
     private val TAG = "ReconnectManager"
     
     /**
-     * 是否为主动断开连接
+     * Whether it's a manual disconnection
      */
     private var isManualDisconnect = false
     
     /**
-     * 当前重试次数
+     * Current retry count
      */
     private var currentRetryCount = 0
     
     /**
-     * 上次连接配置（用于重连）
+     * Last connection configuration (for reconnection)
      */
     private var lastConnectionConfig: ConnectionConfig? = null
     
     /**
-     * 上次连接监听器（用于重连）
+     * Last connection listener (for reconnection)
      */
     private var lastConnectionListener: ConnectionListener? = null
     
     /**
-     * 重连处理器
+     * Reconnection handler
      */
     private val retryHandler = Handler(Looper.getMainLooper())
     
     /**
-     * 准备连接
+     * Prepare connection
      * 
-     * 保存连接参数，重置重连状态
+     * Save connection parameters, reset reconnection state
      * 
-     * @param config 连接配置
-     * @param listener 连接监听器
+     * @param config Connection configuration
+     * @param listener Connection listener
      */
     fun prepareConnect(config: ConnectionConfig?, listener: ConnectionListener) {
         lastConnectionConfig = config
@@ -65,21 +65,21 @@ class ReconnectManager(
     }
     
     /**
-     * 连接成功
+     * Connection successful
      * 
-     * 重置重试计数
+     * Reset retry count
      */
     fun onConnected() {
         currentRetryCount = 0
     }
     
     /**
-     * 连接断开
+     * Connection disconnected
      * 
-     * 判断是否需要自动重连
+     * Determine whether automatic reconnection is needed
      * 
-     * @param listener 连接监听器
-     * @return Boolean 是否触发了自动重连
+     * @param listener Connection listener
+     * @return Boolean Whether automatic reconnection was triggered
      */
     fun onDisconnected(listener: ConnectionListener): Boolean {
         val shouldAutoReconnect = config.autoReconnect && 
@@ -90,11 +90,11 @@ class ReconnectManager(
             currentRetryCount++
             LogUtil.d(TAG, "Connection lost, attempting reconnect ($currentRetryCount/${config.maxRetryCount})")
             
-            // 通知监听器正在重连
+            // Notify listeners that reconnection is in progress
             listener.onReconnecting(currentRetryCount, config.maxRetryCount)
             lastConnectionListener?.onReconnecting(currentRetryCount, config.maxRetryCount)
             
-            // 延迟重连
+            // Delayed reconnection
             retryHandler.postDelayed({
                 attemptReconnect()
             }, config.retryDelayMs)
@@ -110,9 +110,9 @@ class ReconnectManager(
     }
     
     /**
-     * 主动断开
+     * Manual disconnection
      * 
-     * 标记为主动断开，取消所有重试任务
+     * Mark as manual disconnection, cancel all retry tasks
      */
     fun disconnect() {
         LogUtil.d(TAG, "Manual disconnect")
@@ -122,9 +122,9 @@ class ReconnectManager(
     }
     
     /**
-     * 尝试重新连接
+     * Attempt to reconnect
      * 
-     * 使用上次保存的连接配置和监听器进行重连
+     * Reconnect using last saved connection configuration and listener
      */
     private fun attemptReconnect() {
         LogUtil.d(TAG, "Attempting to reconnect...")
@@ -133,14 +133,14 @@ class ReconnectManager(
         val listener = lastConnectionListener
         
         if (listener != null) {
-            // 保存当前重连状态
+            // Save current reconnection state
             val savedRetryCount = currentRetryCount
             val savedManualDisconnect = isManualDisconnect
             
-            // 重新连接
+            // Reconnect
             reconnectAction(config, listener)
             
-            // 恢复重连状态（因为 reconnectAction 可能会重置这些值）
+            // Restore reconnection state (because reconnectAction might reset these values)
             currentRetryCount = savedRetryCount
             isManualDisconnect = savedManualDisconnect
         } else {
@@ -149,12 +149,12 @@ class ReconnectManager(
     }
     
     /**
-     * 是否为主动断开
+     * Whether it's a manual disconnection
      */
     fun isManualDisconnect(): Boolean = isManualDisconnect
     
     /**
-     * 获取当前重试次数
+     * Get current retry count
      */
     fun getCurrentRetryCount(): Int = currentRetryCount
 }
