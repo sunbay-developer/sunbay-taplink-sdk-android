@@ -26,7 +26,8 @@ class TaplinkDemoApplication : Application() {
 
     /**
      * Initialize Taplink SDK
-     * Complete SDK initialization when the application starts, subsequent calls only need TaplinkSDK.connect
+     * Initialize SDK based on user's saved connection mode preference
+     * This ensures the SDK starts with the correct mode after app restart
      */
     private fun initializeTaplinkSDK() {
         try {
@@ -37,21 +38,44 @@ class TaplinkDemoApplication : Application() {
             val merchantId = getString(R.string.taplink_merchant_id)
             val secretKey = getString(R.string.taplink_secret_key)
 
+            // Get user's saved connection mode preference
+            val savedMode = com.sunmi.tapro.taplink.demo.util.ConnectionPreferences.getConnectionMode(this)
+            
+            // Map to SDK ConnectionMode
+            val sdkConnectionMode = when (savedMode) {
+                com.sunmi.tapro.taplink.demo.util.ConnectionPreferences.ConnectionMode.APP_TO_APP -> {
+                    Log.d(TAG, "Using saved mode: App-to-App")
+                    ConnectionMode.APP_TO_APP
+                }
+                com.sunmi.tapro.taplink.demo.util.ConnectionPreferences.ConnectionMode.CABLE -> {
+                    Log.d(TAG, "Using saved mode: Cable")
+                    ConnectionMode.USB_AOA
+                }
+                com.sunmi.tapro.taplink.demo.util.ConnectionPreferences.ConnectionMode.LAN -> {
+                    Log.d(TAG, "Using saved mode: LAN")
+                    ConnectionMode.LAN
+                }
+                else -> {
+                    Log.d(TAG, "No saved mode or unsupported mode, defaulting to App-to-App")
+                    ConnectionMode.APP_TO_APP
+                }
+            }
+
             // Log configuration parameters (mask sensitive data)
             Log.d(TAG, "=== SDK Init Request Parameters ===")
             Log.d(TAG, "App ID: $appId")
             Log.d(TAG, "Merchant ID: $merchantId")
             Log.d(TAG, "Secret Key: ${secretKey.take(4)}****${secretKey.takeLast(4)}")
-            Log.d(TAG, "Connection Mode: APP_TO_APP")
+            Log.d(TAG, "Connection Mode: $sdkConnectionMode")
             Log.d(TAG, "Log Level: DEBUG")
             Log.d(TAG, "Log Enabled: true")
 
-            // Create SDK configuration (using document-standard chain call style)
+            // Create SDK configuration
             val config = TaplinkConfig(
                 appId = appId,
                 merchantId = merchantId,
                 secretKey = secretKey
-            ).setLogEnabled(true).setLogLevel(LogLevel.DEBUG).setConnectionMode(ConnectionMode.APP_TO_APP)  // Set to App-to-App mode
+            ).setLogEnabled(true).setLogLevel(LogLevel.DEBUG).setConnectionMode(sdkConnectionMode)
 
             Log.d(TAG, "=== SDK Config Object Created ===")
             Log.d(TAG, "Config: $config")
@@ -62,7 +86,7 @@ class TaplinkDemoApplication : Application() {
 
             Log.d(TAG, "=== Taplink SDK Initialization Response ===")
             Log.d(TAG, "Status: SUCCESS")
-            Log.d(TAG, "Mode: App-to-App")
+            Log.d(TAG, "Mode: $sdkConnectionMode")
             Log.d(TAG, "SDK Ready for connection")
 
         } catch (e: Exception) {

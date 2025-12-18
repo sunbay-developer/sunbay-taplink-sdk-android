@@ -78,7 +78,7 @@ data class Transaction(
         return isSuccess() && (
             type == TransactionType.SALE ||
             type == TransactionType.AUTH ||
-            type == TransactionType.FORCED_AUTH ||
+//            type == TransactionType.FORCED_AUTH ||
             type == TransactionType.POST_AUTH
         )
     }
@@ -100,8 +100,7 @@ data class Transaction(
      */
     fun canIncrementalAuth(): Boolean {
         return isSuccess() && (
-            type == TransactionType.AUTH ||
-            type == TransactionType.FORCED_AUTH
+            type == TransactionType.AUTH
         )
     }
     
@@ -111,8 +110,7 @@ data class Transaction(
      */
     fun canPostAuth(): Boolean {
         return isSuccess() && (
-            type == TransactionType.AUTH ||
-            type == TransactionType.FORCED_AUTH
+            type == TransactionType.AUTH
         )
     }
     

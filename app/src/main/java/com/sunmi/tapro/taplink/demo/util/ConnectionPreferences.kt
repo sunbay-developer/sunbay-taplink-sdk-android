@@ -30,9 +30,8 @@ object ConnectionPreferences {
      */
     enum class ConnectionMode {
         APP_TO_APP,    // Same-device integration (default)
-        CABLE,         // Cross-device via cable (reserved)
-        LAN,           // Local Area Network (reserved)
-        CLOUD          // Cloud mode (reserved)
+        CABLE,         // Cross-device via cable
+        LAN            // Local Area Network
     }
     
     /**

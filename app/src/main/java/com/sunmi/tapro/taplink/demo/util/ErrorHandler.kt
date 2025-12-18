@@ -6,12 +6,12 @@ import android.util.Log
 import android.widget.Toast
 
 /**
- * Simple error handling utility class
+ * Enhanced error handling utility class for cross-device connection modes
  * 
- * Provides basic error handling with retry options:
- * - Shows original SDK error messages
- * - Provides retry buttons based on error type
- * - Keeps UI simple and user-friendly
+ * Provides comprehensive error handling using SDK provided error information:
+ * - Uses SDK provided error codes and messages directly
+ * - Shows user-friendly error messages without additional mapping
+ * - Provides retry buttons based on error type and connection mode
  */
 object ErrorHandler {
 
@@ -67,10 +67,7 @@ object ErrorHandler {
         onCancel: (() -> Unit)?
     ) {
         // Display original error message from SDK
-        val message = buildString {
-            append(errorMessage)
-            append("\n\nError Code: $errorCode")
-        }
+        val message = "$errorMessage\n\nError Code: $errorCode"
 
         val builder = AlertDialog.Builder(context)
             .setTitle("Payment Error")
@@ -126,7 +123,8 @@ object ErrorHandler {
     }
 
     /**
-     * Handle connection-related errors
+     * Handle connection errors using SDK provided error information
+     * Shows original SDK error message without additional mapping
      */
     fun handleConnectionError(
         context: Context,
@@ -136,13 +134,15 @@ object ErrorHandler {
     ) {
         Log.e(TAG, "Connection error - Code: $errorCode, Message: $errorMessage")
         
-        // Show simple connection error dialog 
+        // Use SDK provided error message directly
+        val fullMessage = "$errorMessage\n\nError Code: $errorCode"
+        
         val builder = AlertDialog.Builder(context)
             .setTitle("Connection Error")
-            .setMessage("$errorMessage\n\nError Code: $errorCode")
+            .setMessage(fullMessage)
             .setCancelable(false)
             
-            if (onRetry != null) {
+        if (onRetry != null) {
             builder.setPositiveButton("Retry") { _, _ ->
                 onRetry.invoke()
             }

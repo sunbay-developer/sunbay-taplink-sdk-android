@@ -16,7 +16,7 @@ import com.sunmi.tapro.taplink.demo.model.Transaction
 import com.sunmi.tapro.taplink.demo.model.TransactionStatus
 import com.sunmi.tapro.taplink.demo.model.TransactionType
 import com.sunmi.tapro.taplink.demo.repository.TransactionRepository
-import com.sunmi.tapro.taplink.demo.service.AppToAppPaymentService
+import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.demo.service.PaymentCallback
 import com.sunmi.tapro.taplink.demo.service.PaymentResult
 import com.sunmi.tapro.taplink.demo.util.ErrorHandler
@@ -88,13 +88,12 @@ class TransactionDetailActivity : AppCompatActivity() {
 
     // Data
     private var transaction: Transaction? = null
-    private lateinit var paymentService: AppToAppPaymentService
+    private lateinit var paymentService: TaplinkPaymentService
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_transaction_detail)
-        
 
         initViews()
         initPaymentService()
@@ -151,8 +150,6 @@ class TransactionDetailActivity : AppCompatActivity() {
         btnQueryByRequestId = findViewById(R.id.btn_query_by_request_id)
         btnQueryByTransactionId = findViewById(R.id.btn_query_by_transaction_id)
         tvNoOperations = findViewById(R.id.tv_no_operations)
-        
-
     }
 
 
@@ -161,7 +158,7 @@ class TransactionDetailActivity : AppCompatActivity() {
      * Initialize payment service
      */
     private fun initPaymentService() {
-        paymentService = AppToAppPaymentService.getInstance()
+        paymentService = TaplinkPaymentService.getInstance()
     }
 
     /**
@@ -241,7 +238,7 @@ class TransactionDetailActivity : AppCompatActivity() {
                 layoutTipAmount.visibility = View.GONE
             }
 
-            if (txn.taxAmount != null) {
+            if (txn.taxAmount != null && txn.taxAmount > BigDecimal.ZERO) {
                 layoutTaxAmount.visibility = View.VISIBLE
                 tvTaxAmount.text = String.format("¥%.2f", txn.taxAmount)
             } else {
@@ -1072,7 +1069,6 @@ class TransactionDetailActivity : AppCompatActivity() {
                 override fun onSuccess(result: PaymentResult) {
                     runOnUiThread {
                         progressDialog.dismiss()
-                        
                         // Update transaction status with actual amounts from SDK
                         val status = when (result.transactionStatus) {
                             "SUCCESS" -> TransactionStatus.SUCCESS

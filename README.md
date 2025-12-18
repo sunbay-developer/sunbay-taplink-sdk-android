@@ -106,7 +106,7 @@ app/src/main/java/com/sunmi/tapro/taplink/demo/
 │   └── TransactionRepository.kt      # 交易数据管理
 ├── service/                          # SDK 集成层
 │   ├── PaymentService.kt             # 支付服务接口
-│   └── AppToAppPaymentService.kt     # App-to-App 支付实现
+│   └── TaplinkPaymentService.kt     # App-to-App 支付实现
 └── util/                             # 工具类
     ├── ConnectionPreferences.kt      # 连接配置管理
     ├── ErrorHandler.kt               # 错误处理工具

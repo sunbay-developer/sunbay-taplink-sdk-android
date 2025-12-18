@@ -18,11 +18,13 @@ import com.sunmi.tapro.taplink.demo.model.Transaction
 import com.sunmi.tapro.taplink.demo.model.TransactionStatus
 import com.sunmi.tapro.taplink.demo.model.TransactionType
 import com.sunmi.tapro.taplink.demo.repository.TransactionRepository
-import com.sunmi.tapro.taplink.demo.service.AppToAppPaymentService
+import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.demo.service.ConnectionListener
 import com.sunmi.tapro.taplink.demo.service.PaymentCallback
 import com.sunmi.tapro.taplink.demo.service.PaymentResult
 import com.sunmi.tapro.taplink.demo.util.ErrorHandler
+import com.sunmi.tapro.taplink.demo.util.ConnectionPreferences
+import com.sunmi.tapro.taplink.demo.util.ConnectionStatusMonitor
 import java.math.BigDecimal
 import java.text.DecimalFormat
 
@@ -61,7 +63,7 @@ class MainActivity : Activity() {
     private lateinit var tvPaymentStatus: TextView
 
     // Payment service instance
-    private lateinit var paymentService: AppToAppPaymentService
+    private lateinit var paymentService: TaplinkPaymentService
 
     // Currently selected amount
     private var selectedAmount: BigDecimal = BigDecimal.ZERO
@@ -77,6 +79,9 @@ class MainActivity : Activity() {
 
     // Flag to indicate if custom amount is being programmatically updated (to avoid TextWatcher trigger)
     private var isUpdatingCustomAmount = false
+    
+    // Connection status monitor for network quality and device reachability
+    private lateinit var connectionStatusMonitor: ConnectionStatusMonitor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,7 +92,6 @@ class MainActivity : Activity() {
 
             Log.d(TAG, "Layout file loaded successfully")
 
-
             // Initialize UI components
             initViews()
             Log.d(TAG, "UI components initialization completed")
@@ -95,6 +99,10 @@ class MainActivity : Activity() {
             // Initialize payment service
             initPaymentService()
             Log.d(TAG, "Payment service initialization completed")
+            
+            // Initialize connection status monitor
+            initConnectionStatusMonitor()
+            Log.d(TAG, "Connection status monitor initialization completed")
 
             // Now safe to update transaction buttons state
             updateTransactionButtonsState()
@@ -104,8 +112,8 @@ class MainActivity : Activity() {
             setupEventListeners()
             Log.d(TAG, "Event listeners setup completed")
 
-            // Start background connection
-            startBackgroundConnection()
+            // Start auto-connection based on saved mode
+            startAutoConnection()
             Log.d(TAG, "MainActivity creation completed")
 
         } catch (e: Exception) {
@@ -166,14 +174,39 @@ class MainActivity : Activity() {
 
     /**
      * Initialize payment service
-     * SDK is already initialized in TaplinkDemoApplication, only need to get service instance here
+     * Re-initializes SDK if connection mode has changed since last initialization
      */
     private fun initPaymentService() {
         try {
             Log.d(TAG, "Begin initializing payment service instance")
 
-            // Get service instance (SDK already initialized in Application)
-            paymentService = AppToAppPaymentService.getInstance()
+            // Get service instance
+            paymentService = TaplinkPaymentService.getInstance()
+            
+            // Get current connection mode
+            val currentMode = ConnectionPreferences.getConnectionMode(this)
+            val serviceMode = paymentService.getCurrentConnectionMode()
+            
+            Log.d(TAG, "Current saved mode: $currentMode")
+            Log.d(TAG, "Service current mode: $serviceMode")
+            
+            // Re-initialize SDK if mode has changed
+            if (currentMode != serviceMode) {
+                Log.d(TAG, "Connection mode changed, re-initializing SDK")
+                val success = paymentService.reinitializeForMode(this, currentMode)
+                if (success) {
+                    Log.d(TAG, "SDK re-initialization successful for mode: $currentMode")
+                } else {
+                    Log.e(TAG, "SDK re-initialization failed for mode: $currentMode")
+                    Toast.makeText(
+                        this,
+                        "Failed to initialize SDK for $currentMode mode",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } else {
+                Log.d(TAG, "Connection mode unchanged, using existing SDK initialization")
+            }
 
             Log.d(TAG, "Payment service instance initialized successfully")
         } catch (e: Exception) {
@@ -183,6 +216,96 @@ class MainActivity : Activity() {
                 "Payment service initialization failed: ${e.message}",
                 Toast.LENGTH_LONG
             ).show()
+        }
+    }
+    
+    /**
+     * Initialize connection status monitor for network quality and device reachability
+     */
+    private fun initConnectionStatusMonitor() {
+        try {
+            connectionStatusMonitor = ConnectionStatusMonitor(this)
+            
+            // Start monitoring for LAN mode only
+            val currentMode = ConnectionPreferences.getConnectionMode(this)
+            if (currentMode == ConnectionPreferences.ConnectionMode.LAN) {
+                startConnectionStatusMonitoring()
+            }
+            
+            Log.d(TAG, "Connection status monitor initialized for mode: $currentMode")
+        } catch (e: Exception) {
+            Log.e(TAG, "Connection status monitor initialization failed", e)
+        }
+    }
+    
+    /**
+     * Start connection status monitoring with enhanced network quality feedback
+     */
+    private fun startConnectionStatusMonitoring() {
+        connectionStatusMonitor.startMonitoring(object : ConnectionStatusMonitor.ConnectionStatusListener {
+            override fun onNetworkAvailable(isWifi: Boolean) {
+                runOnUiThread {
+                    val networkType = if (isWifi) "WiFi" else "Mobile"
+                    Log.d(TAG, "Network available: $networkType")
+                    
+                    // Show brief toast for network changes
+                    if (isWifi) {
+                        ErrorHandler.showToast(this@MainActivity, "WiFi connected - Good for LAN mode")
+                    } else {
+                        ErrorHandler.showToast(this@MainActivity, "Mobile network - LAN mode may not work")
+                    }
+                }
+            }
+            
+            override fun onNetworkLost() {
+                runOnUiThread {
+                    Log.w(TAG, "Network connection lost")
+                    updateConnectionStatus("Not Connected", false)
+                    ErrorHandler.showToast(this@MainActivity, "Network connection lost")
+                }
+            }
+            
+            override fun onConnectionQualityChanged(quality: ConnectionStatusMonitor.NetworkQuality) {
+                runOnUiThread {
+                    val qualityDesc = connectionStatusMonitor.getNetworkQualityDescription(quality)
+                    Log.d(TAG, "Network quality: $qualityDesc")
+                    
+                    // Update status with quality indicator for poor connections
+                    if (quality == ConnectionStatusMonitor.NetworkQuality.POOR || 
+                        quality == ConnectionStatusMonitor.NetworkQuality.UNAVAILABLE) {
+                        val currentStatus = tvConnectionStatus.text.toString()
+                        if (!currentStatus.contains("Poor network")) {
+                            updateConnectionStatus("Connection Poor", false)
+                        }
+                    }
+                }
+            }
+            
+            override fun onLanDeviceReachable(ip: String, responseTime: Long) {
+                runOnUiThread {
+                    Log.d(TAG, "LAN device reachable: $ip (${responseTime}ms)")
+                    // Could update UI with device reachability status
+                }
+            }
+            
+            override fun onLanDeviceUnreachable(ip: String) {
+                runOnUiThread {
+                    Log.w(TAG, "LAN device unreachable: $ip")
+                    // Could show warning about device availability
+                }
+            }
+        })
+    }
+    
+    /**
+     * Stop connection status monitoring
+     */
+    private fun stopConnectionStatusMonitoring() {
+        try {
+            connectionStatusMonitor.stopMonitoring()
+            Log.d(TAG, "Connection status monitoring stopped")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop connection status monitoring", e)
         }
     }
 
@@ -234,49 +357,145 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Start background connection
+     * Start auto-connection based on saved connection mode
+     * Implements automatic connection logic for application restart
      */
-    private fun startBackgroundConnection() {
-        Log.d(TAG, "Start background connection")
-
+    private fun startAutoConnection() {
+        Log.d(TAG, "=== Starting Auto-Connection ===")
+        
+        // Get saved connection mode
+        val savedMode = ConnectionPreferences.getConnectionMode(this)
+        Log.d(TAG, "Saved connection mode: $savedMode")
+        
         // Update connection status display
         updateConnectionStatus("Connecting...", false)
-
-        // Connect to payment terminal (SDK already initialized in initPaymentService)
-        connectToPaymentService()
+        
+        // Attempt auto-connection based on mode
+        when (savedMode) {
+            ConnectionPreferences.ConnectionMode.APP_TO_APP -> {
+                Log.d(TAG, "Auto-connecting with App-to-App mode")
+                connectToPaymentService()
+            }
+            ConnectionPreferences.ConnectionMode.CABLE -> {
+                Log.d(TAG, "Auto-connecting with Cable mode")
+                connectToPaymentService()
+            }
+            ConnectionPreferences.ConnectionMode.LAN -> {
+                Log.d(TAG, "Auto-connecting with LAN mode")
+                attemptLanAutoConnection()
+            }
+            else -> {
+                Log.w(TAG, "Unknown connection mode, defaulting to App-to-App")
+                connectToPaymentService()
+            }
+        }
+    }
+    
+    /**
+     * Attempt LAN auto-connection
+     * Uses saved IP configuration or SDK cached device info
+     */
+    private fun attemptLanAutoConnection() {
+        val lanConfig = ConnectionPreferences.getLanConfig(this)
+        val ip = lanConfig.first
+        val port = lanConfig.second
+        
+        if (ip != null && ip.isNotEmpty()) {
+            Log.d(TAG, "LAN auto-connect using saved configuration: $ip:$port")
+            updateConnectionStatus("Connecting...", false)
+        } else {
+            Log.d(TAG, "LAN auto-connect using SDK cached device info")
+            updateConnectionStatus("Connecting...", false)
+        }
+        
+        // Use TaplinkPaymentService's auto-connect method
+        val success = paymentService.attemptAutoConnect(object : ConnectionListener {
+            override fun onConnected(deviceId: String, taproVersion: String) {
+                runOnUiThread {
+                    Log.d(TAG, "LAN auto-connect successful - Device ID: $deviceId, Version: $taproVersion")
+                    updateConnectionStatus("Connected", true)
+                }
+            }
+            
+            override fun onDisconnected(reason: String) {
+                runOnUiThread {
+                    Log.d(TAG, "LAN auto-connect disconnected - Reason: $reason")
+                    updateConnectionStatus("Not Connected", false)
+                }
+            }
+            
+            override fun onError(code: String, message: String) {
+                runOnUiThread {
+                    Log.e(TAG, "LAN auto-connect error - Code: $code, Message: $message")
+                    handleAutoConnectionError(code, message)
+                }
+            }
+        })
+        
+        if (!success) {
+            Log.w(TAG, "LAN auto-connect could not be started")
+            updateConnectionStatus("Configuration Required", false)
+        }
+    }
+    
+    /**
+     * Handle auto-connection errors using SDK provided error information
+     * Shows brief status update and toast with SDK error message
+     */
+    private fun handleAutoConnectionError(code: String, message: String) {
+        val currentMode = ConnectionPreferences.getConnectionMode(this)
+        
+        // Use SDK provided error message for status
+        val modePrefix = when (currentMode) {
+            ConnectionPreferences.ConnectionMode.LAN -> "LAN"
+            ConnectionPreferences.ConnectionMode.CABLE -> "Cable"
+            ConnectionPreferences.ConnectionMode.APP_TO_APP -> "App-to-App"
+            else -> "Connection"
+        }
+        
+        updateConnectionStatus("Connection Failed", false)
+        
+        // Show SDK error message in toast
+        val toastMsg = if (message.isNotEmpty()) {
+            message
+        } else {
+            "Auto-connect failed (Code: $code)"
+        }
+        ErrorHandler.showToast(this, toastMsg)
+        
+        Log.d(TAG, "Auto-connect error - Mode: $currentMode, Code: $code, Message: $message")
     }
 
     /**
      * Connect to payment service
-     * Call TaplinkSDK.connect to establish connection
+     * Call TaplinkSDK.connect to establish connection based on current mode
      */
     private fun connectToPaymentService() {
+        val currentMode = ConnectionPreferences.getConnectionMode(this)
+        Log.d(TAG, "Connecting with mode: $currentMode")
+        
         paymentService.connect(object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
                 runOnUiThread {
-                    Log.d(TAG, "Connected - Device ID: $deviceId, Version: $taproVersion")
-                    updateConnectionStatus("Connected (v$taproVersion)", true)
+                    Log.d(TAG, "Connected - Device ID: $deviceId, Version: $taproVersion, Mode: $currentMode")
+                    updateConnectionStatus("Connected", true)
                 }
             }
 
             override fun onDisconnected(reason: String) {
                 runOnUiThread {
-                    Log.d(TAG, "Disconnected - Reason: $reason")
+                    Log.d(TAG, "Disconnected - Reason: $reason, Mode: $currentMode")
                     updateConnectionStatus("Not Connected", false)
                 }
             }
 
             override fun onError(code: String, message: String) {
                 runOnUiThread {
-                    Log.e(TAG, "Connection error - Code: $code, Message: $message")
-                    val errorMsg = when (code) {
-                        "C22" -> "Tapro not installed"
-                        "S03" -> "Signature verification failed"
-                        else -> "Connection failed: $message"
-                    }
-                    updateConnectionStatus(errorMsg, false)
+                    Log.e(TAG, "Connection error - Code: $code, Message: $message, Mode: $currentMode")
+                    
+                    updateConnectionStatus("Connection Failed", false)
 
-                    // Use unified error handling
+                    // Use unified error handling for manual connections (not auto-connect)
                     ErrorHandler.handleConnectionError(
                         context = this@MainActivity,
                         errorCode = code,
@@ -290,16 +509,24 @@ class MainActivity : Activity() {
             }
         })
     }
+    
+
 
     /**
-     * Update connection status display
+     * Update connection status display with simple status information
      */
     private fun updateConnectionStatus(status: String, connected: Boolean) {
+        // Display simple status without additional details
         tvConnectionStatus.text = status
 
         // Update transaction button state based on connection status
         updateTransactionButtonsState()
+        
+        // Log status change for debugging
+        Log.d(TAG, "Connection status updated: $status (connected: $connected)")
     }
+    
+
 
     /**
      * Add amount
@@ -1389,6 +1616,11 @@ class MainActivity : Activity() {
 
         // Clean up resources
         hidePaymentProgressDialog()
+        
+        // Stop connection status monitoring
+        if (::connectionStatusMonitor.isInitialized) {
+            stopConnectionStatusMonitoring()
+        }
 
         Log.d(TAG, "MainActivity destroyed")
     }
@@ -1413,11 +1645,14 @@ class MainActivity : Activity() {
                         showToast(message)
                     }
 
-                    // Update connection status display
-                    updateConnectionStatus(
-                        connectionMessage ?: "Connection configuration updated",
-                        true
-                    )
+                    // Re-initialize payment service for the new mode
+                    initPaymentService()
+                    
+                    // Re-initialize connection status monitor for the new mode
+                    initConnectionStatusMonitor()
+                    
+                    // Attempt auto-connection with new settings
+                    startAutoConnection()
                 }
             }
             REQUEST_CODE_TRANSACTION_LIST -> {

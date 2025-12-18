@@ -4,23 +4,23 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
+import android.text.TextWatcher
 import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import com.sunmi.tapro.taplink.demo.R
-import com.sunmi.tapro.taplink.demo.service.AppToAppPaymentService
+import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.demo.service.ConnectionListener
 import com.sunmi.tapro.taplink.demo.util.ConnectionPreferences
-
-import java.util.regex.Pattern
+import com.sunmi.tapro.taplink.demo.util.NetworkUtils
 
 /**
  * Connection Mode Selection Activity
  * 
  * Functions:
- * 1. Select connection mode (App-to-App, Cable, LAN, Cloud)
+ * 1. Select connection mode (App-to-App, Cable, LAN)
  * 2. Configure connection parameters (LAN requires IP and port)
  * 3. Validate configuration integrity
  * 4. Save configuration and reconnect
@@ -63,7 +63,7 @@ class ConnectionActivity : AppCompatActivity() {
     private var selectedMode: ConnectionPreferences.ConnectionMode = ConnectionPreferences.ConnectionMode.APP_TO_APP
     
     // Payment service
-    private val paymentService = AppToAppPaymentService.getInstance()
+    private val paymentService = TaplinkPaymentService.getInstance()
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +71,13 @@ class ConnectionActivity : AppCompatActivity() {
         initViews()
         loadCurrentConfig()
         setupListeners()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Clean up validation runnables to prevent memory leaks
+        etLanIp.removeCallbacks(ipValidationRunnable)
+        etLanPort.removeCallbacks(portValidationRunnable)
     }
     
 
@@ -130,10 +137,6 @@ class ConnectionActivity : AppCompatActivity() {
                 showConfigArea(ConnectionPreferences.ConnectionMode.LAN)
                 loadLanConfig()
             }
-            ConnectionPreferences.ConnectionMode.CLOUD -> {
-                rbCloud.isChecked = true
-                showConfigArea(ConnectionPreferences.ConnectionMode.CLOUD)
-            }
         }
         
         Log.d(TAG, "Load current configuration - Connection mode: $currentMode")
@@ -171,10 +174,6 @@ class ConnectionActivity : AppCompatActivity() {
                     selectedMode = ConnectionPreferences.ConnectionMode.LAN
                     showConfigArea(ConnectionPreferences.ConnectionMode.LAN)
                 }
-                R.id.rb_cloud -> {
-                    selectedMode = ConnectionPreferences.ConnectionMode.CLOUD
-                    showConfigArea(ConnectionPreferences.ConnectionMode.CLOUD)
-                }
             }
             
             // Hide error prompt
@@ -198,11 +197,102 @@ class ConnectionActivity : AppCompatActivity() {
             handleExitApp()
         }
         
-        // LAN configuration input focus change listener (hide error prompt)
-        etLanIp.setOnFocusChangeListener { _, _ -> hideConfigError() }
-        etLanPort.setOnFocusChangeListener { _, _ -> hideConfigError() }
+        // LAN configuration real-time validation listeners
+        setupLanConfigValidation()
     }
     
+    /**
+     * Set up real-time validation for LAN configuration inputs
+     */
+    private fun setupLanConfigValidation() {
+        // IP address real-time validation
+        etLanIp.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                validateLanIpInput()
+            } else {
+                hideConfigError()
+            }
+        }
+        
+        // Port number real-time validation
+        etLanPort.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                validateLanPortInput()
+            } else {
+                hideConfigError()
+            }
+        }
+        
+        // Add text change listeners for immediate feedback
+        etLanIp.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                // Only validate if user has finished typing (after a short delay)
+                etLanIp.removeCallbacks(ipValidationRunnable)
+                etLanIp.postDelayed(ipValidationRunnable, 500)
+            }
+        })
+        
+        etLanPort.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                // Only validate if user has finished typing (after a short delay)
+                etLanPort.removeCallbacks(portValidationRunnable)
+                etLanPort.postDelayed(portValidationRunnable, 500)
+            }
+        })
+    }
+    
+    // Validation runnables for delayed validation
+    private val ipValidationRunnable = Runnable {
+        if (selectedMode == ConnectionPreferences.ConnectionMode.LAN) {
+            validateLanIpInput()
+        }
+    }
+    
+    private val portValidationRunnable = Runnable {
+        if (selectedMode == ConnectionPreferences.ConnectionMode.LAN) {
+            validateLanPortInput()
+        }
+    }
+    
+    /**
+     * Validate LAN IP address input
+     */
+    private fun validateLanIpInput() {
+        val ip = etLanIp.text.toString().trim()
+        
+        if (ip.isNotEmpty() && !NetworkUtils.isValidIpAddress(ip)) {
+            showConfigError("IP address format is incorrect. Please enter a valid IPv4 address (e.g., 192.168.1.100)")
+        } else {
+            hideConfigError()
+        }
+    }
+    
+    /**
+     * Validate LAN port number input
+     */
+    private fun validateLanPortInput() {
+        val portStr = etLanPort.text.toString().trim()
+        
+        if (portStr.isNotEmpty()) {
+            try {
+                val port = portStr.toInt()
+                if (!NetworkUtils.isPortValid(port)) {
+                    showConfigError("Port number must be between 1-65535. Recommended range: 8443-8453")
+                } else {
+                    hideConfigError()
+                }
+            } catch (e: NumberFormatException) {
+                showConfigError("Port number format is incorrect. Please enter a valid number")
+            }
+        } else {
+            hideConfigError()
+        }
+    }
+
     /**
      * Show corresponding configuration area
      */
@@ -224,9 +314,6 @@ class ConnectionActivity : AppCompatActivity() {
             ConnectionPreferences.ConnectionMode.LAN -> {
                 layoutLanConfig.visibility = View.VISIBLE
             }
-            ConnectionPreferences.ConnectionMode.CLOUD -> {
-                layoutCloudConfig.visibility = View.VISIBLE
-            }
         }
         
         Log.d(TAG, "Show configuration area: $mode")
@@ -245,16 +332,10 @@ class ConnectionActivity : AppCompatActivity() {
             return
         }
         
-        // Check if it's a mode under development
-        if (selectedMode != ConnectionPreferences.ConnectionMode.APP_TO_APP) {
-            showConfigError("This mode is under development, please stay tuned")
-            return
-        }
-        
         // Save configuration
         saveConfig()
         
-        // Reconnect
+        // Reconnect with new mode (includes SDK re-initialization)
         reconnectWithNewMode()
     }
     
@@ -277,8 +358,8 @@ class ConnectionActivity : AppCompatActivity() {
                     return ValidationResult(false, "Please enter IP address")
                 }
                 
-                if (!isValidIpAddress(ip)) {
-                    return ValidationResult(false, "IP address format is incorrect")
+                if (!NetworkUtils.isValidIpAddress(ip)) {
+                    return ValidationResult(false, "IP address format is incorrect. Please enter a valid IPv4 address (e.g., 192.168.1.100)")
                 }
                 
                 if (TextUtils.isEmpty(portStr)) {
@@ -288,34 +369,24 @@ class ConnectionActivity : AppCompatActivity() {
                 val port = try {
                     portStr.toInt()
                 } catch (e: NumberFormatException) {
-                    return ValidationResult(false, "Port number format is incorrect")
+                    return ValidationResult(false, "Port number format is incorrect. Please enter a valid number")
                 }
                 
-                if (port < 1 || port > 65535) {
-                    return ValidationResult(false, "Port number must be between 1-65535")
+                if (!NetworkUtils.isPortValid(port)) {
+                    return ValidationResult(false, "Port number must be between 1-65535. Recommended range: 8443-8453")
                 }
                 
                 return ValidationResult(true, "")
             }
             
-            ConnectionPreferences.ConnectionMode.CABLE,
-            ConnectionPreferences.ConnectionMode.CLOUD -> {
-                // These modes are not yet implemented, but configuration validation passes
+            ConnectionPreferences.ConnectionMode.CABLE -> {
+                // Cable mode requires no additional configuration (auto-detection)
                 return ValidationResult(true, "")
             }
         }
     }
     
-    /**
-     * Validate IP address format
-     */
-    private fun isValidIpAddress(ip: String): Boolean {
-        val pattern = Pattern.compile(
-            "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-        )
-        return pattern.matcher(ip).matches()
-    }
-    
+
     /**
      * Save configuration
      */
@@ -338,10 +409,10 @@ class ConnectionActivity : AppCompatActivity() {
     }
     
     /**
-     * Reconnect with new mode
+     * Reconnect with new mode (includes SDK re-initialization)
      */
     private fun reconnectWithNewMode() {
-        Log.d(TAG, "Start reconnecting - Mode: $selectedMode")
+        Log.d(TAG, "Start reconnecting with mode switch - Mode: $selectedMode")
         
         // Show connecting status
         btnConfirm.text = "Connecting..."
@@ -351,57 +422,67 @@ class ConnectionActivity : AppCompatActivity() {
         // Disconnect current connection
         paymentService.disconnect()
         
-        // Wait a moment before reconnecting
+        // Wait a moment before re-initializing SDK and connecting
         btnConfirm.postDelayed({
-            initializeAndConnect()
+            reinitializeSDKAndConnect()
         }, 500)
     }
     
     /**
-     * Initialize and connect
+     * Re-initialize SDK and connect for mode switching
+     * This method handles SDK re-initialization when switching between connection modes
      */
-    private fun initializeAndConnect() {
-        // Get configuration
-        val appId = getString(R.string.taplink_app_id)
-        val merchantId = getString(R.string.taplink_merchant_id)
-        val secretKey = getString(R.string.taplink_secret_key)
+    private fun reinitializeSDKAndConnect() {
+        Log.d(TAG, "=== SDK Re-initialization for Mode Switch ===")
+        Log.d(TAG, "Target Mode: $selectedMode")
         
-        // Initialize SDK
-        val initSuccess = paymentService.initialize(this, appId, merchantId, secretKey)
-        if (!initSuccess) {
-            Log.e(TAG, "SDK initialization failed")
-            showConnectionResult(false, "SDK initialization failed")
+        // Re-initialize SDK for the new connection mode
+        val reinitSuccess = paymentService.reinitializeForMode(this, selectedMode)
+        if (!reinitSuccess) {
+            Log.e(TAG, "SDK re-initialization failed for mode: $selectedMode")
+            showConnectionResult(false, "SDK re-initialization failed")
             return
         }
         
-        // Connect to payment terminal
+        Log.d(TAG, "SDK re-initialized successfully for mode: $selectedMode")
+        
+        // Connect to payment terminal with new mode
         paymentService.connect(object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
-                Log.d(TAG, "Reconnection successful - DeviceId: $deviceId, Version: $taproVersion")
+                Log.d(TAG, "Mode switch connection successful - DeviceId: $deviceId, Version: $taproVersion")
                 runOnUiThread {
                     showConnectionResult(true, "Connected (v$taproVersion)")
                 }
             }
             
             override fun onDisconnected(reason: String) {
-                Log.d(TAG, "Connection disconnected - Reason: $reason")
+                Log.d(TAG, "Mode switch connection disconnected - Reason: $reason")
                 runOnUiThread {
                     showConnectionResult(false, "Connection disconnected: $reason")
                 }
             }
             
             override fun onError(code: String, message: String) {
-                Log.e(TAG, "Connection failed - Code: $code, Message: $message")
+                Log.e(TAG, "Mode switch connection failed - Code: $code, Message: $message")
                 runOnUiThread {
-                    val errorMsg = when (code) {
-                        "C22" -> "Tapro not installed"
-                        "S03" -> "Signature verification failed, please check configuration"
-                        else -> "Connection failed: $message"
-                    }
+                    val errorMsg = mapConnectionError(code, message)
                     showConnectionResult(false, errorMsg)
                 }
             }
         })
+    }
+    
+    /**
+     * Use SDK provided error message directly without additional mapping
+     */
+    private fun mapConnectionError(code: String, message: String): String {
+        // Return SDK provided error message as-is
+        // SDK already provides user-friendly error messages and suggestions
+        return if (message.isNotEmpty()) {
+            message
+        } else {
+            "Connection failed (Code: $code)"
+        }
     }
     
     /**
@@ -430,13 +511,43 @@ class ConnectionActivity : AppCompatActivity() {
     }
     
     /**
-     * Show configuration error
+     * Show configuration error with enhanced formatting and guidance
      */
     private fun showConfigError(message: String) {
-        tvConfigError.text = message
+        // Format error message with mode-specific guidance
+        val enhancedMessage = buildString {
+            append(message)
+            
+            // Add mode-specific troubleshooting tips
+            when (selectedMode) {
+                ConnectionPreferences.ConnectionMode.LAN -> {
+                    append("\n\nTroubleshooting tips:")
+                    append("\n• Ensure both devices are on the same network")
+                    append("\n• Verify IP address and port number")
+                    append("\n• Check if Tapro service is running")
+                    append("\n• Try disabling TLS if connection fails")
+                }
+                ConnectionPreferences.ConnectionMode.CABLE -> {
+                    append("\n\nTroubleshooting tips:")
+                    append("\n• Check cable connection on both ends")
+                    append("\n• Try a different USB/serial cable")
+                    append("\n• Grant USB permissions if prompted")
+                    append("\n• Ensure cable supports data transfer")
+                }
+                ConnectionPreferences.ConnectionMode.APP_TO_APP -> {
+                    append("\n\nTroubleshooting tips:")
+                    append("\n• Install Tapro app if not present")
+                    append("\n• Start Tapro app and wait for initialization")
+                    append("\n• Check app signature configuration")
+                    append("\n• Restart both apps if needed")
+                }
+            }
+        }
+        
+        tvConfigError.text = enhancedMessage
         cardConfigError.visibility = View.VISIBLE
         
-        Log.w(TAG, "Configuration error: $message")
+        Log.w(TAG, "Configuration error displayed - Mode: $selectedMode, Message: $message")
     }
     
     /**

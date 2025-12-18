@@ -73,9 +73,9 @@
                         android:layout_height="wrap_content"
                         android:text="@string/connection_mode_cable"
                         android:textSize="16sp"
-                        android:textColor="#999999"
+                        android:textColor="#333333"
                         android:padding="16dp"
-                        android:enabled="false" />
+                        android:enabled="true" />
 
                     <View
                         android:layout_width="match_parent"
@@ -88,9 +88,9 @@
                         android:layout_height="wrap_content"
                         android:text="@string/connection_mode_lan"
                         android:textSize="16sp"
-                        android:textColor="#999999"
+                        android:textColor="#333333"
                         android:padding="16dp"
-                        android:enabled="false" />
+                        android:enabled="true" />
 
                     <View
                         android:layout_width="match_parent"
@@ -171,15 +171,14 @@
             android:layout_marginBottom="16dp"
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
-            app:cardBackgroundColor="#F8F9FA"
+            app:cardBackgroundColor="#F0F8FF"
             android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp"
-                android:alpha="0.6">
+                android:padding="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -214,7 +213,7 @@
                         android:text="@string/cable_type_usb"
                         android:textSize="14sp"
                         android:checked="true"
-                        android:enabled="false" />
+                        android:enabled="true" />
 
                     <RadioButton
                         android:id="@+id/rb_serial"
@@ -223,7 +222,7 @@
                         android:layout_weight="1"
                         android:text="@string/cable_type_serial"
                         android:textSize="14sp"
-                        android:enabled="false" />
+                        android:enabled="true" />
 
                 </RadioGroup>
 
@@ -241,27 +240,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
-                    android:enabled="false" />
+                    android:enabled="true" />
 
-                <!-- Under Development Note -->
-                <androidx.cardview.widget.CardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="8dp"
-                    app:cardElevation="1dp"
-                    app:cardBackgroundColor="#FFF3E0">
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/mode_under_development"
-                        android:textSize="14sp"
-                        android:textColor="#FF9800"
-                        android:textStyle="bold"
-                        android:padding="12dp"
-                        android:gravity="center" />
-
-                </androidx.cardview.widget.CardView>
 
             </LinearLayout>
 
@@ -277,15 +258,14 @@
             android:layout_marginBottom="16dp"
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
-            app:cardBackgroundColor="#F8F9FA"
+            app:cardBackgroundColor="#F0FFF0"
             android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp"
-                android:alpha="0.6">
+                android:padding="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -313,9 +293,9 @@
                     android:inputType="textNoSuggestions"
                     android:textSize="16sp"
                     android:padding="12dp"
-                    android:background="@android:color/white"
+                    android:background="@drawable/rounded_edittext"
                     android:layout_marginBottom="16dp"
-                    android:enabled="false" />
+                    android:enabled="true" />
 
                 <!-- Port Number Settings -->
                 <TextView
@@ -334,9 +314,9 @@
                     android:inputType="number"
                     android:textSize="16sp"
                     android:padding="12dp"
-                    android:background="@android:color/white"
+                    android:background="@drawable/rounded_edittext"
                     android:layout_marginBottom="16dp"
-                    android:enabled="false" />
+                    android:enabled="true" />
 
                 <!-- TLS Switch -->
                 <LinearLayout
@@ -359,29 +339,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checked="true"
-                        android:enabled="false" />
+                        android:enabled="true" />
 
                 </LinearLayout>
-
-                <!-- 开发中提示 -->
-                <androidx.cardview.widget.CardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="8dp"
-                    app:cardElevation="1dp"
-                    app:cardBackgroundColor="#FFF3E0">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/mode_under_development"
-                        android:textSize="14sp"
-                        android:textColor="#FF9800"
-                        android:textStyle="bold"
-                        android:padding="12dp"
-                        android:gravity="center" />
-
-                </androidx.cardview.widget.CardView>
 
             </LinearLayout>
 
@@ -457,26 +417,6 @@
                     android:background="@android:color/white"
                     android:layout_marginBottom="16dp"
                     android:enabled="false" />
-
-                <!-- 开发中提示 -->
-                <androidx.cardview.widget.CardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="8dp"
-                    app:cardElevation="1dp"
-                    app:cardBackgroundColor="#FFF3E0">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/mode_under_development"
-                        android:textSize="14sp"
-                        android:textColor="#FF9800"
-                        android:textStyle="bold"
-                        android:padding="12dp"
-                        android:gravity="center" />
-
-                </androidx.cardview.widget.CardView>
 
             </LinearLayout>
 

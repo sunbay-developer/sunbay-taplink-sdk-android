@@ -19,7 +19,7 @@ import com.sunmi.tapro.taplink.demo.model.Transaction
 import com.sunmi.tapro.taplink.demo.model.TransactionStatus
 import com.sunmi.tapro.taplink.demo.model.TransactionType
 import com.sunmi.tapro.taplink.demo.repository.TransactionRepository
-import com.sunmi.tapro.taplink.demo.service.AppToAppPaymentService
+import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.demo.service.PaymentCallback
 import com.sunmi.tapro.taplink.demo.service.PaymentResult
 
@@ -47,7 +47,7 @@ class TransactionListActivity : AppCompatActivity() {
     
     private lateinit var adapter: TransactionAdapter
     private var transactions: List<Transaction> = emptyList()
-    private lateinit var paymentService: AppToAppPaymentService
+    private lateinit var paymentService: TaplinkPaymentService
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,7 +90,7 @@ class TransactionListActivity : AppCompatActivity() {
      * Initialize payment service
      */
     private fun initPaymentService() {
-        paymentService = AppToAppPaymentService.getInstance()
+        paymentService = TaplinkPaymentService.getInstance()
     }
 
     /**
@@ -484,7 +484,7 @@ class TransactionListActivity : AppCompatActivity() {
 
         val progressDialog = ProgressDialog(this)
         progressDialog.setMessage("Processing batch close...")
-        progressDialog.setCancelable(false)
+        progressDialog.setCancelable(true)
         progressDialog.show()
 
         val transactionRequestId = generateTransactionRequestId()
