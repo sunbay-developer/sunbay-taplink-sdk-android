@@ -17,15 +17,15 @@ import java.util.*
  * @since 2025-01-XX
  */
 object RequestConverter {
-    
+
     private const val TAG = "RequestConverter"
-    
+
     /** 时间戳格式：yyyyMMddHHmmssSSS */
     private val TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.US)
-    
+
     /** Gson实例 */
     private val gson = Gson()
-    
+
     /**
      * 将具体的Request转换为BasicRequest
      *
@@ -37,27 +37,30 @@ object RequestConverter {
     fun convertToBasicRequest(
         request: Any,
         version: String,
+        appid: String,
         secretKey: String
     ): BasicRequest {
         try {
             // 1. 获取 action（从 PaymentRequest 中提取或使用默认值）
             val action = getActionByRequest(request)
-            
+
             // 2. 将request转换为JsonObject作为bizData
             val bizDataJson = gson.toJsonTree(request).asJsonObject
-            
+
+            bizDataJson.addProperty("appId", appid)
+
             // 3. 生成时间戳
             val timestamp = getCurrentTimestamp()
-            
+
             // 4. 生成traceId（用于跟踪并发请求）
             val traceId = generateTraceId()
-            
+
             // 5. 构建签名数据（排除appSign字段，按字段名排序，包含traceId）
             val signData = buildSignData(version, timestamp, action, bizDataJson, traceId)
-            
+
             // 6. 生成签名
             val appSign = SignUtil.generateHMACSHA256(signData, secretKey)
-            
+
             // 7. 创建BasicRequest对象
             return BasicRequest(
                 appSign = appSign,
@@ -72,7 +75,7 @@ object RequestConverter {
             throw RequestConvertException("Failed to convert request", e)
         }
     }
-    
+
     /**
      * 根据Request类型自动确定action
      *
@@ -85,13 +88,14 @@ object RequestConverter {
                 // PaymentRequest 包含 action 字段，直接返回
                 request.action.uppercase()
             }
+
             else -> {
                 LogUtil.i(TAG, "Unknown request type: ${request.javaClass.simpleName}, using class name as action")
                 request.javaClass.simpleName.replace("Request", "").lowercase()
             }
         }
     }
-    
+
     /**
      * 构建签名数据
      *
@@ -116,7 +120,7 @@ object RequestConverter {
         val bizDataStr = gson.toJson(bizData)
         return "action=$action&bizData=$bizDataStr&timeStamp=$timestamp&traceId=$traceId&version=$version"
     }
-    
+
     /**
      * 获取当前时间戳
      *
@@ -125,7 +129,7 @@ object RequestConverter {
     private fun getCurrentTimestamp(): String {
         return TIMESTAMP_FORMAT.format(Date())
     }
-    
+
     /**
      * 生成追踪ID
      *
@@ -136,7 +140,7 @@ object RequestConverter {
     private fun generateTraceId(): String {
         return UUID.randomUUID().toString().replace("-", "")
     }
-    
+
     /**
      * 请求转换异常
      */

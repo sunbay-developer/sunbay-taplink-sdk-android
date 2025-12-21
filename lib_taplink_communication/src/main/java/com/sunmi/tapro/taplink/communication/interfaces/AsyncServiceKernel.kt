@@ -1,10 +1,10 @@
 package com.sunmi.tapro.taplink.communication.interfaces
 
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.LogUtil
-import com.sunmi.tapro.taplink.communication.util.ProtocolParser
-import com.sunmi.tapro.taplink.communication.util.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -47,7 +47,7 @@ abstract class AsyncServiceKernel(
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
             handleConnectionError(
-                "Service is already connected or connecting. Current status: $currentConnectionStatus",
+                "Service is already connected or connecting. Current status: $currentInnerConnectionStatus",
                 connectionCallback,
                 getConnectionBusyErrorCode()
             )
@@ -56,14 +56,14 @@ abstract class AsyncServiceKernel(
 
         try {
             LogUtil.d(getTag(), "Starting connection with protocol: $protocol")
-            updateStatus(ConnectionStatus.CONNECTING)
+            updateStatus(InnerConnectionStatus.CONNECTING)
             connectionCallback.onWaitingConnect()
 
             // 保存连接回调
             currentConnectionCallback = connectionCallback
 
             // 解析协议
-            val parseResult = ProtocolParser.parse(protocol)
+            val parseResult = ProtocolManager.parseProtocol(protocol)
             if (parseResult is ProtocolParseResult.Error) {
                 handleConnectionError(
                     parseResult.message, connectionCallback,
@@ -100,7 +100,7 @@ abstract class AsyncServiceKernel(
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            LogUtil.d(getTag(), "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.d(getTag(), "Cannot send data, not connected. Status: $currentInnerConnectionStatus")
             callback?.onError("NOT_CONNECTED", "${getServiceType()} not connected")
             return
         }
@@ -126,7 +126,7 @@ abstract class AsyncServiceKernel(
      * 实现IServiceKernel接口：断开连接
      */
     override fun disconnect() {
-        if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {
+        if (currentInnerConnectionStatus == InnerConnectionStatus.DISCONNECTED) {
             return
         }
 
@@ -142,12 +142,12 @@ abstract class AsyncServiceKernel(
             // 清理通用资源
             cleanupCommonResources()
 
-            updateStatus(ConnectionStatus.DISCONNECTED)
+            updateStatus(InnerConnectionStatus.DISCONNECTED)
             LogUtil.d(getTag(), "${getServiceType()} disconnected")
 
         } catch (e: Exception) {
             LogUtil.e(getTag(), "Error during disconnect: ${e.message}")
-            updateStatus(ConnectionStatus.ERROR)
+            updateStatus(InnerConnectionStatus.ERROR)
         }
     }
 

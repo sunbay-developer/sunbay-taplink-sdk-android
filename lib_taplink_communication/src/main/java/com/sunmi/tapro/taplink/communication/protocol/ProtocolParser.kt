@@ -1,7 +1,8 @@
-package com.sunmi.tapro.taplink.communication.util
+package com.sunmi.tapro.taplink.communication.protocol
 
 import com.sunmi.tapro.taplink.communication.enums.UsbMode
 import com.sunmi.tapro.taplink.communication.local.constant.LocalServiceConstant
+import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
  * 协议解析结果数据类
@@ -90,11 +91,14 @@ object ProtocolParser {
         }
 
         return when {
-            protocol.startsWith("local://") -> parseLocalProtocol(protocol)
-            protocol.startsWith("lan://") -> parseLanProtocol(protocol)
-            protocol.startsWith("vsp://") -> parseVspProtocol(protocol)
-            protocol.startsWith("usb://") -> parseUsbProtocol(protocol)
-            protocol.startsWith("serial://") -> parseSerialProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.LOCAL_PROTOCOL_PREFIX) -> parseLocalProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.LAN_PROTOCOL_PREFIX) -> parseLanProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.LAN_WS_PROTOCOL_PREFIX) -> parseLanProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.VSP_PROTOCOL_PREFIX) -> parseVspProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.USB_PROTOCOL_PREFIX) -> parseUsbProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.SERIAL_PROTOCOL_PREFIX) -> parseSerialProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.RS232_PROTOCOL_PREFIX) -> parseRs232Protocol(protocol)
+            protocol.startsWith(ProtocolConstants.AUTO_PROTOCOL_PREFIX) -> parseAutoProtocol(protocol)
             else -> ProtocolParseResult.Error("Unsupported protocol format: $protocol")
         }
     }
@@ -107,7 +111,7 @@ object ProtocolParser {
      */
     private fun parseLocalProtocol(protocol: String): ProtocolParseResult {
         try {
-            val content = protocol.removePrefix("local://")
+            val content = protocol.removePrefix(ProtocolConstants.LOCAL_PROTOCOL_PREFIX)
             if (content.isEmpty()) {
                 return ProtocolParseResult.LocalProtocol(
                     LocalServiceConstant.DEFAULT_PACKAGE_NAME,
@@ -138,14 +142,28 @@ object ProtocolParser {
      */
     private fun parseLanProtocol(protocol: String): ProtocolParseResult {
         try {
-            val content = protocol.removePrefix("lan://")
+            // 支持 wss:// 和 ws:// 两种格式
+            val content = when {
+                protocol.startsWith(ProtocolConstants.LAN_PROTOCOL_PREFIX) -> 
+                    protocol.removePrefix(ProtocolConstants.LAN_PROTOCOL_PREFIX)
+                protocol.startsWith(ProtocolConstants.LAN_WS_PROTOCOL_PREFIX) -> 
+                    protocol.removePrefix(ProtocolConstants.LAN_WS_PROTOCOL_PREFIX)
+                else -> protocol
+            }
+            
             if (content.isEmpty()) {
                 return ProtocolParseResult.Error("Lan protocol content is empty")
             }
 
-            val parts = content.split("/")
+            // 支持 host:port 格式
+            val parts = if (content.contains(":")) {
+                content.split(":")
+            } else {
+                content.split("/")
+            }
+            
             if (parts.size < 2) {
-                return ProtocolParseResult.Error("Invalid lan protocol format, expected: lan://ip/port")
+                return ProtocolParseResult.Error("Invalid lan protocol format, expected: wss://host:port or ws://host:port")
             }
 
             val ip = parts[0]
@@ -174,7 +192,7 @@ object ProtocolParser {
      */
     private fun parseVspProtocol(protocol: String): ProtocolParseResult {
         try {
-            val content = protocol.removePrefix("vsp://")
+            val content = protocol.removePrefix(ProtocolConstants.VSP_PROTOCOL_PREFIX)
             if (content.isEmpty()) {
                 return ProtocolParseResult.Error("VSP protocol content is empty")
             }
@@ -226,7 +244,7 @@ object ProtocolParser {
      */
     private fun parseUsbProtocol(protocol: String): ProtocolParseResult {
         try {
-            val content = protocol.removePrefix("usb://")
+            val content = protocol.removePrefix(ProtocolConstants.USB_PROTOCOL_PREFIX)
 
             // USB协议可以为空，表示使用默认设备（Host模式）
             if (content.isEmpty()) {
@@ -283,7 +301,7 @@ object ProtocolParser {
      */
     private fun parseSerialProtocol(protocol: String): ProtocolParseResult {
         try {
-            val content = protocol.removePrefix("serial://")
+            val content = protocol.removePrefix(ProtocolConstants.SERIAL_PROTOCOL_PREFIX)
             if (content.isEmpty()) {
                 return ProtocolParseResult.Error("Serial protocol content is empty")
             }
@@ -309,6 +327,53 @@ object ProtocolParser {
             LogUtil.e(TAG, "Failed to parse serial protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse serial protocol: ${e.message}")
         }
+    }
+
+    /**
+     * 解析 RS232 协议：rs232://devicePath:baudRate
+     *
+     * @param protocol 协议字符串
+     * @return ProtocolParseResult.SerialProtocol 或 Error
+     */
+    private fun parseRs232Protocol(protocol: String): ProtocolParseResult {
+        try {
+            val content = protocol.removePrefix(ProtocolConstants.RS232_PROTOCOL_PREFIX)
+            if (content.isEmpty()) {
+                return ProtocolParseResult.Error("RS232 protocol content is empty")
+            }
+
+            val parts = content.split(":")
+            if (parts.size != 2) {
+                return ProtocolParseResult.Error("Invalid RS232 protocol format, expected: rs232://devicePath:baudRate")
+            }
+
+            val devicePath = parts[0]
+            val baudRate = parts[1].toIntOrNull()
+
+            if (devicePath.isEmpty()) {
+                return ProtocolParseResult.Error("Device path is empty in RS232 protocol")
+            }
+
+            if (baudRate == null || baudRate <= 0) {
+                return ProtocolParseResult.Error("Invalid baud rate: ${parts[1]}")
+            }
+
+            return ProtocolParseResult.SerialProtocol(devicePath, baudRate)
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to parse RS232 protocol: $protocol\n${e.stackTraceToString()}")
+            return ProtocolParseResult.Error("Failed to parse RS232 protocol: ${e.message}")
+        }
+    }
+
+    /**
+     * 解析自动检测协议：auto://
+     *
+     * @param protocol 协议字符串
+     * @return ProtocolParseResult.AutoProtocol 或 Error
+     */
+    private fun parseAutoProtocol(protocol: String): ProtocolParseResult {
+        // 自动检测协议暂时返回错误，需要在上层实现自动检测逻辑
+        return ProtocolParseResult.Error("Auto protocol detection not implemented yet")
     }
 }
 

@@ -10,7 +10,6 @@ import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
-import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.enums.LogLevel
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
@@ -21,13 +20,16 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
+import com.google.gson.JsonObject
 import com.sunmi.tapro.taplink.sdk.util.RequestConverter
 import com.sunmi.tapro.taplink.sdk.reconnect.ReconnectManager
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback as ServiceConnectionCallback
+import com.sunmi.tapro.taplink.sdk.util.ProtocolBuilder
 
 /**
  * Taplink API 实现类
@@ -67,13 +69,14 @@ class TaplinkApiImpl : TaplinkApi {
     /**
      * 当前连接模式
      */
-    private var currentConnectionMode: ConnectionMode? = null
+    private var currentConnectionMode: String? = null
+
 
     /**
      * 已连接设备ID
      */
     private var connectedDeviceId: String? = null
-    private var taproVersion: String? = null
+    private var connectedTaproVersion: String? = null
 
     /**
      * 重连管理器（延迟初始化）
@@ -103,15 +106,15 @@ class TaplinkApiImpl : TaplinkApi {
     override fun init(context: Context, config: TaplinkConfig) {
         LogUtil.d(TAG, "Initializing SDK with appId: ${config.appId}")
         this.config = config
-        
+
         // 初始化重连管理器
         reconnectManager = ReconnectManager(config) { connectionConfig, listener ->
             connectInternal(connectionConfig, listener)
         }
-        
+
         // 初始化 ServiceKernel
         TaplinkServiceKernel.getInstance(context)
-        
+
         // 配置日志级别
         if (config.logEnabled) {
             when (config.logLevel) {
@@ -128,16 +131,32 @@ class TaplinkApiImpl : TaplinkApi {
     // ==================== 连接管理 ====================
 
     override fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
+        // 如果没有传递 config，尝试从 ReconnectManager 获取上次的连接参数
+        val actualConfig = config ?: reconnectManager?.getLastConnectionConfig()
+
+        if (actualConfig == null) {
+            LogUtil.e(TAG, "No connection config provided and no previous connection config available")
+            listener.onError(
+                ConnectionError(
+                    "C21",
+                    "No connection config provided and no previous connection config available"
+                )
+            )
+            return
+        }
+
+        LogUtil.d(TAG, "Using connection config: ${if (config != null) "provided" else "previous"}")
+
         // 准备重连管理器
-        reconnectManager?.prepareConnect(config, listener)
-        
+        reconnectManager?.prepareConnect(actualConfig, listener)
+
         // 执行实际连接
-        connectInternal(config, listener)
+        connectInternal(actualConfig, listener)
     }
-    
+
     /**
      * 内部连接方法
-     * 
+     *
      * 实际执行连接逻辑，供 connect() 和 ReconnectManager 调用
      */
     private fun connectInternal(config: ConnectionConfig?, listener: ConnectionListener) {
@@ -145,7 +164,7 @@ class TaplinkApiImpl : TaplinkApi {
             TAG,
             "Connecting with config: cableProtocol=${config?.cableProtocol}, host=${config?.host}, port=${config?.port}"
         )
-        
+
         if (this.config?.appId.isNullOrBlank() || this.config?.secretKey.isNullOrBlank()) {
             listener.onError(
                 ConnectionError(
@@ -157,8 +176,20 @@ class TaplinkApiImpl : TaplinkApi {
         }
 
         // 根据 ConnectionConfig 构建协议字符串
-        val protocol = buildProtocolString(config)
-        LogUtil.d(TAG, "Built protocol string: $protocol")
+        val (protocol, connectionMode) = ProtocolBuilder.buildProtocol(config, this.config!!)
+        currentConnectionMode = connectionMode
+        LogUtil.d(TAG, "Built protocol string: $protocol, connectionMode: $connectionMode")
+
+        // 验证协议格式
+        if (!ProtocolManager.isValidProtocol(protocol)) {
+            listener.onError(
+                ConnectionError(
+                    "C41",
+                    "Invalid protocol format: $protocol"
+                )
+            )
+            return
+        }
 
         // 通过 ServiceKernel 连接
         TaplinkServiceKernel.getInstance()
@@ -169,30 +200,41 @@ class TaplinkApiImpl : TaplinkApi {
                 object : ServiceConnectionCallback {
                     override fun onConnected(extraInfoMap: Map<String, String?>?) {
                         LogUtil.d(TAG, "onConnected, extraInfoMap=${extraInfoMap.toString()}")
-                        
+
                         // 通知重连管理器连接成功
                         reconnectManager?.onConnected()
-                        
+
                         // 注册数据接收器，用于接收响应
                         registerDataReceiver()
-                        
+
                         // 发送 INIT 指令初始化 tapro 应用，等待结果后再通知连接成功
-                        sendInitCommand { success, errorCode, errorMsg ->
+                        sendInitCommand { success, errorCode, errorMsg, deviceId, taproVersion ->
                             if (success) {
                                 LogUtil.d(TAG, "INIT command completed successfully, notifying connection listeners")
                                 updateConnectionStatus(ConnectionStatus.CONNECTED)
-                                
-                                // 获取设备信息
-                                connectedDeviceId = extraInfoMap?.getOrDefault("deviceId", "unknown")
-                                taproVersion = extraInfoMap?.getOrDefault("taproVersion", "unknown")
-                                
+
+                                // 连接参数已经在 prepareConnect 时保存到 ReconnectManager 中
+                                LogUtil.d(TAG, "Connection successful, config saved in ReconnectManager")
+
+                                // 从 INIT 响应中获取设备信息
+                                connectedDeviceId = deviceId ?: "unknown"
+                                connectedTaproVersion = taproVersion ?: "unknown"
+
+                                LogUtil.d(
+                                    TAG,
+                                    "Device info from INIT response: deviceId=$connectedDeviceId, taproVersion=${connectedTaproVersion}"
+                                )
+
                                 // 通知监听器连接成功
-                                listener.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
-                                connectionListener?.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
+                                listener.onConnected(connectedDeviceId ?: "unknown", connectedTaproVersion ?: "unknown")
+                                connectionListener?.onConnected(
+                                    connectedDeviceId ?: "unknown",
+                                    connectedTaproVersion ?: "unknown"
+                                )
                             } else {
                                 LogUtil.e(TAG, "INIT command failed: code=$errorCode, msg=$errorMsg")
                                 updateConnectionStatus(ConnectionStatus.DISCONNECTED)
-                                
+
                                 val error = ConnectionError(
                                     errorCode ?: "INIT_FAILED",
                                     errorMsg ?: "Failed to initialize tapro application"
@@ -210,37 +252,55 @@ class TaplinkApiImpl : TaplinkApi {
                     override fun onDisconnected(code: String, msg: String) {
                         updateConnectionStatus(ConnectionStatus.DISCONNECTED)
                         val reason = "Code: $code, Message: $msg"
-                        
+
                         // 尝试自动重连
                         val reconnected = reconnectManager?.onDisconnected(listener) ?: false
-                        
+
                         if (!reconnected) {
                             // 不重连，通知应用层并清理资源
                             listener.onDisconnected(reason)
                             connectionListener?.onDisconnected(reason)
-                            
+
                             // 清理资源（只在不重连时清理）
                             connectedDeviceId = null
-                            taproVersion = null
+                            connectedTaproVersion = null
                             currentConnectionMode = null
                             callbackManager.clearAll()
                         }
                         // 如果正在重连，保留设备信息和连接模式，不清理回调管理器
+                    }
+
+                    override fun onServiceAddressChanged(newHost: String, newPort: Int, oldHost: String, oldPort: Int) {
+                        LogUtil.i(TAG, "Service address changed detected: $oldHost:$oldPort -> $newHost:$newPort")
+
+                        // 创建新的连接配置
+                        val newConnectionConfig = ConnectionConfig().apply {
+                            setHost(newHost)
+                            setPort(newPort)
+                        }
+
+                        LogUtil.d(TAG, "Triggering reconnection with new address: $newHost:$newPort")
+
+                        // 通知重连管理器地址变更，触发重连
+                        reconnectManager?.onAddressChanged(newConnectionConfig, listener)
                     }
                 })
     }
 
     override fun disconnect() {
         LogUtil.d(TAG, "Manual disconnect")
-        
+
         // 通知重连管理器主动断开
         reconnectManager?.disconnect()
-        
+
         updateConnectionStatus(ConnectionStatus.DISCONNECTED)
         TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
         connectedDeviceId = null
-        taproVersion = null
+        connectedTaproVersion = null
         currentConnectionMode = null
+
+        // ReconnectManager 会在 disconnect() 时清空保存的连接参数
+        LogUtil.d(TAG, "Connection config will be cleared by ReconnectManager")
 
         // 清理所有待处理的请求回调
         callbackManager.clearAll()
@@ -254,12 +314,12 @@ class TaplinkApiImpl : TaplinkApi {
         return connectedDeviceId
     }
 
-    override fun getConnectionMode(): ConnectionMode? {
+    override fun getConnectionMode(): String? {
         return currentConnectionMode
     }
 
     override fun getTaproVersion(): String? {
-        return taproVersion
+        return connectedTaproVersion
     }
 
     // ==================== 交易执行 ====================
@@ -319,104 +379,13 @@ class TaplinkApiImpl : TaplinkApi {
     override fun clearDeviceCache() {
         LogUtil.d(TAG, "Clearing device cache")
         connectedDeviceId = null
-        taproVersion = null
+        connectedTaproVersion = null
         currentConnectionMode = null
         // TODO: 清除本地缓存的设备信息
     }
 
     // ==================== 私有辅助方法 ====================
 
-    /**
-     * 构建协议字符串
-     *
-     * 根据 ConnectionConfig 构建协议字符串
-     * 如果 config 为空或空对象，则根据 init 时的 connectionMode 来判断
-     * 如果 connectionMode 也为空，则默认为 APP_TO_APP
-     *
-     * @param config 连接配置
-     * @return String 协议字符串
-     */
-    private fun buildProtocolString(config: ConnectionConfig?): String {
-        // 检查 config 是否为空或空对象
-        if (config == null || isEmptyConnectionConfig(config)) {
-            LogUtil.d(TAG, "ConnectionConfig is null or empty, using TaplinkConfig.connectionMode")
-
-            // 根据 init 时的 connectionMode 来判断
-            val initConnectionMode = this.config?.connectionMode
-            return when (initConnectionMode) {
-                ConnectionMode.USB_AOA -> {
-                    currentConnectionMode = ConnectionMode.USB_AOA
-                    "usb_aoa://"
-                }
-
-                ConnectionMode.USB_VSP -> {
-                    currentConnectionMode = ConnectionMode.USB_VSP
-                    "usb_vsp://"
-                }
-
-                ConnectionMode.RS232 -> {
-                    currentConnectionMode = ConnectionMode.RS232
-                    "rs232://"
-                }
-
-                ConnectionMode.LAN -> {
-                    currentConnectionMode = ConnectionMode.LAN
-                    "wss://"
-                }
-
-                ConnectionMode.APP_TO_APP -> {
-                    currentConnectionMode = ConnectionMode.APP_TO_APP
-                    "local://"
-                }
-
-                else -> {
-                    // connectionMode 也为空，默认为 APP_TO_APP
-                    LogUtil.d(TAG, "Both ConnectionConfig and connectionMode are null, using default APP_TO_APP")
-                    currentConnectionMode = ConnectionMode.APP_TO_APP
-                    "local://"
-                }
-            }
-        }
-
-        // 线缆模式
-        config.cableProtocol?.let { protocol ->
-            currentConnectionMode = when (protocol) {
-                com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA -> ConnectionMode.USB_AOA
-                com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_VSP -> ConnectionMode.USB_VSP
-                com.sunmi.tapro.taplink.sdk.enums.CableProtocol.RS232 -> ConnectionMode.RS232
-                com.sunmi.tapro.taplink.sdk.enums.CableProtocol.AUTO -> null
-            }
-            return when (protocol) {
-                com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA -> "usb_aoa://"
-                com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_VSP -> "usb_vsp://"
-                com.sunmi.tapro.taplink.sdk.enums.CableProtocol.RS232 -> "rs232://"
-                com.sunmi.tapro.taplink.sdk.enums.CableProtocol.AUTO -> "auto://"
-            }
-        }
-
-        // 局域网模式
-        config.host?.let { host ->
-            val port = config.port ?: 8443
-            currentConnectionMode = ConnectionMode.LAN
-            return "ws://$host:$port"
-        }
-
-        // 默认：应用间模式
-        currentConnectionMode = ConnectionMode.APP_TO_APP
-        return "local://"
-    }
-
-    /**
-     * 判断 ConnectionConfig 是否为空对象
-     *
-     * @param config 连接配置
-     * @return Boolean 是否为空对象
-     */
-    private fun isEmptyConnectionConfig(config: ConnectionConfig): Boolean {
-        return config.cableProtocol == null &&
-                config.host.isNullOrBlank() &&
-                config.port == null
-    }
 
     /**
      * 将 QueryRequest 转换为 PaymentRequest
@@ -478,6 +447,7 @@ class TaplinkApiImpl : TaplinkApi {
             val basicRequest = RequestConverter.convertToBasicRequest(
                 request = request,
                 version = currentConfig.version,
+                currentConfig.appId,
                 secretKey = currentConfig.secretKey
             )
 
@@ -523,16 +493,16 @@ class TaplinkApiImpl : TaplinkApi {
     /**
      * 发送 INIT 指令初始化 tapro 应用
      *
-     * @param onComplete 完成回调，参数为 (success: Boolean, errorCode: String?, errorMsg: String?)
+     * @param onComplete 完成回调，参数为 (success: Boolean, errorCode: String?, errorMsg: String?, deviceId: String?, taproVersion: String?)
      */
-    private fun sendInitCommand(onComplete: (Boolean, String?, String?) -> Unit) {
+    private fun sendInitCommand(onComplete: (Boolean, String?, String?, String?, String?) -> Unit) {
         try {
             LogUtil.d(TAG, "Sending INIT command to initialize tapro application")
 
             val currentConfig = config
             if (currentConfig == null) {
                 LogUtil.e(TAG, "Cannot send INIT command: SDK not initialized")
-                onComplete(false, "SDK_NOT_INITIALIZED", "SDK not initialized")
+                onComplete(false, "SDK_NOT_INITIALIZED", "SDK not initialized", null, null)
                 return
             }
 
@@ -545,6 +515,7 @@ class TaplinkApiImpl : TaplinkApi {
             val basicRequest = RequestConverter.convertToBasicRequest(
                 request = initRequest,
                 version = currentConfig.version,
+                currentConfig.appId,
                 secretKey = currentConfig.secretKey
             )
 
@@ -556,7 +527,7 @@ class TaplinkApiImpl : TaplinkApi {
             val initCallback = object : InnerCallback {
                 override fun onError(code: String, msg: String) {
                     LogUtil.e(TAG, "INIT command failed: code=$code, msg=$msg")
-                    onComplete(false, code, msg)
+                    onComplete(false, code, msg, null, null)
                 }
 
                 override fun onResponse(responseData: String) {
@@ -565,24 +536,36 @@ class TaplinkApiImpl : TaplinkApi {
                         // 解析响应，判断是否成功
                         val basicResponse = gson.fromJson(responseData, BasicResponse::class.java)
 
-                        // 从 bizData 解析 PaymentResult
-                        val paymentResult = if (basicResponse.bizData != null) {
-                            gson.fromJson(basicResponse.bizData, PaymentResult::class.java)
-                        } else {
-                            PaymentResult(code = "ERROR", message = basicResponse.event.eventMsg)
+                        // 从 bizData 直接解析设备信息
+                        var code = "ERROR"
+                        var message: String? = basicResponse.event.eventMsg
+                        var deviceId: String? = null
+                        var taproVersion: String? = null
+
+                        if (basicResponse.bizData != null) {
+                            try {
+                                val bizDataJson = gson.fromJson(basicResponse.bizData, JsonObject::class.java)
+                                code = bizDataJson.get("code")?.asString ?: "ERROR"
+                                message = bizDataJson.get("message")?.asString
+                                deviceId = bizDataJson.get("deviceId")?.asString
+                                taproVersion = bizDataJson.get("taproVersion")?.asString
+                            } catch (e: Exception) {
+                                LogUtil.w(TAG, "Failed to parse bizData as JSON: ${e.message}")
+                            }
                         }
 
                         // 判断是否成功
-                        if (paymentResult.code == SUCCESS_CODE && basicResponse.event is PaymentEvent.Completed) {
+                        if (code == SUCCESS_CODE && basicResponse.event is PaymentEvent.Completed) {
                             LogUtil.d(TAG, "INIT command completed successfully")
-                            onComplete(true, null, null)
+                            LogUtil.d(TAG, "Device info: deviceId=$deviceId, taproVersion=$taproVersion")
+                            onComplete(true, null, null, deviceId, taproVersion)
                         } else {
-                            LogUtil.e(TAG, "INIT command failed: code=${paymentResult.code}, message=${paymentResult.message}")
-                            onComplete(false, paymentResult.code, paymentResult.message)
+                            LogUtil.e(TAG, "INIT command failed: code=$code, message=$message")
+                            onComplete(false, code, message, null, null)
                         }
                     } catch (e: Exception) {
                         LogUtil.e(TAG, "Failed to parse INIT response: ${e.message}")
-                        onComplete(false, "PARSE_ERROR", "Failed to parse INIT response: ${e.message}")
+                        onComplete(false, "PARSE_ERROR", "Failed to parse INIT response: ${e.message}", null, null)
                     }
                 }
             }
@@ -595,7 +578,7 @@ class TaplinkApiImpl : TaplinkApi {
             if (serviceKernel == null) {
                 LogUtil.e(TAG, "Service kernel not available")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                onComplete(false, "SERVICE_UNAVAILABLE", "Service kernel not available")
+                onComplete(false, "SERVICE_UNAVAILABLE", "Service kernel not available", null, null)
                 return
             }
 
@@ -609,11 +592,11 @@ class TaplinkApiImpl : TaplinkApi {
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to send INIT command: ${e.message}")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                onComplete(false, "SEND_ERROR", "Failed to send INIT command: ${e.message}")
+                onComplete(false, "SEND_ERROR", "Failed to send INIT command: ${e.message}", null, null)
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to prepare INIT command: ${e.message}")
-            onComplete(false, "PREPARE_ERROR", "Failed to prepare INIT command: ${e.message}")
+            onComplete(false, "PREPARE_ERROR", "Failed to prepare INIT command: ${e.message}", null, null)
         }
     }
 
@@ -880,7 +863,7 @@ class TaplinkApiImpl : TaplinkApi {
                 when (newStatus) {
                     ConnectionStatus.CONNECTED -> {
                         // 连接成功时，使用实际获取的deviceId和taproVersion
-                        listener.onConnected(connectedDeviceId ?: "unknown", taproVersion ?: "unknown")
+                        listener.onConnected(connectedDeviceId ?: "unknown", connectedTaproVersion ?: "unknown")
                     }
 
                     ConnectionStatus.DISCONNECTED -> {

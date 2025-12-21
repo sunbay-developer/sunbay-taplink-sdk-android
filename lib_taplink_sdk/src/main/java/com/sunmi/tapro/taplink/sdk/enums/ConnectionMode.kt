@@ -12,15 +12,11 @@ enum class ConnectionMode {
     
     /** 同设备 Intent */
     APP_TO_APP,
-    
-    /** USB AOA 协议 */
-    USB_AOA,
-    
-    /** USB 虚拟串口 */
-    USB_VSP,
-    
-    /** RS232 串口 */
-    RS232,
+
+    /**
+     * 线缆模式
+     */
+    CABLE,
     
     /** WebSocket（LAN/WLAN） */
     LAN

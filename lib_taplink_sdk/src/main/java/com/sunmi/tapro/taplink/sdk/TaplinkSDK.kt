@@ -125,7 +125,7 @@ class TaplinkSDK private constructor() : TaplinkApi {
          */
         @JvmStatic
         @JvmName("getSDKConnectionMode")
-        fun getConnectionMode(): ConnectionMode? {
+        fun getConnectionMode(): String? {
             return getInstance().getConnectionMode()
         }
 
@@ -252,7 +252,7 @@ class TaplinkSDK private constructor() : TaplinkApi {
         return apiImpl.getConnectedDeviceId()
     }
 
-    override fun getConnectionMode(): ConnectionMode? {
+    override fun getConnectionMode(): String? {
         return apiImpl.getConnectionMode()
     }
 

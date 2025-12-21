@@ -1,6 +1,6 @@
 package com.sunmi.tapro.taplink.communication.interfaces
 
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
@@ -16,12 +16,12 @@ abstract class BaseServiceKernel : IServiceKernel {
      * 当前连接状态
      */
     @Volatile
-    protected var currentConnectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED
+    protected var currentInnerConnectionStatus: InnerConnectionStatus = InnerConnectionStatus.DISCONNECTED
 
     /**
      * 状态变化监听器
      */
-    private var statusChangeListener: ((ConnectionStatus) -> Unit)? = null
+    private var statusChangeListener: ((InnerConnectionStatus) -> Unit)? = null
 
     /**
      * 数据接收器
@@ -34,8 +34,8 @@ abstract class BaseServiceKernel : IServiceKernel {
      *
      * @return ConnectionStatus 当前连接状态
      */
-    override fun getConnectionStatus(): ConnectionStatus {
-        return currentConnectionStatus
+    override fun getConnectionStatus(): InnerConnectionStatus {
+        return currentInnerConnectionStatus
     }
 
     /**
@@ -43,7 +43,7 @@ abstract class BaseServiceKernel : IServiceKernel {
      *
      * @param listener 状态变化监听器
      */
-    override fun setStatusChangeListener(listener: (ConnectionStatus) -> Unit) {
+    override fun setStatusChangeListener(listener: (InnerConnectionStatus) -> Unit) {
         statusChangeListener = listener
     }
 
@@ -52,10 +52,10 @@ abstract class BaseServiceKernel : IServiceKernel {
      *
      * @param newStatus 新状态
      */
-    protected fun updateStatus(newStatus: ConnectionStatus) {
-        if (currentConnectionStatus != newStatus) {
-            val oldStatus = currentConnectionStatus
-            currentConnectionStatus = newStatus
+    protected fun updateStatus(newStatus: InnerConnectionStatus) {
+        if (currentInnerConnectionStatus != newStatus) {
+            val oldStatus = currentInnerConnectionStatus
+            currentInnerConnectionStatus = newStatus
             logStatusChange(oldStatus, newStatus)
             statusChangeListener?.invoke(newStatus)
         }
@@ -67,7 +67,7 @@ abstract class BaseServiceKernel : IServiceKernel {
      * @param oldStatus 旧状态
      * @param newStatus 新状态
      */
-    protected open fun logStatusChange(oldStatus: ConnectionStatus, newStatus: ConnectionStatus) {
+    protected open fun logStatusChange(oldStatus: InnerConnectionStatus, newStatus: InnerConnectionStatus) {
         LogUtil.d(getTag(), "Status changed: $oldStatus -> $newStatus")
     }
 
@@ -86,7 +86,7 @@ abstract class BaseServiceKernel : IServiceKernel {
      * @return Boolean 是否可以发送数据
      */
     protected fun canSendData(): Boolean {
-        return currentConnectionStatus == ConnectionStatus.CONNECTED
+        return currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED
     }
 
     /**
@@ -95,8 +95,8 @@ abstract class BaseServiceKernel : IServiceKernel {
      * @return Boolean 是否可以连接
      */
     protected fun canConnect(): Boolean {
-        return currentConnectionStatus == ConnectionStatus.DISCONNECTED ||
-                currentConnectionStatus == ConnectionStatus.ERROR
+        return currentInnerConnectionStatus == InnerConnectionStatus.DISCONNECTED ||
+                currentInnerConnectionStatus == InnerConnectionStatus.ERROR
     }
 
     /**
@@ -111,7 +111,7 @@ abstract class BaseServiceKernel : IServiceKernel {
         connectionCallback: ConnectionCallback,
         errorCode: String ="-1"
     ) {
-        updateStatus(ConnectionStatus.ERROR)
+        updateStatus(InnerConnectionStatus.ERROR)
         connectionCallback.onDisconnected(errorCode, errorMessage)
     }
 
@@ -125,7 +125,7 @@ abstract class BaseServiceKernel : IServiceKernel {
         connectionCallback: ConnectionCallback,
         extraInfoMap: Map<String, String?>? = null
     ) {
-        updateStatus(ConnectionStatus.CONNECTED)
+        updateStatus(InnerConnectionStatus.CONNECTED)
         connectionCallback.onConnected(extraInfoMap)
     }
 

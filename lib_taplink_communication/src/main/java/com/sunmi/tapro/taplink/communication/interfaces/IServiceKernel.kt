@@ -1,6 +1,6 @@
 package com.sunmi.tapro.taplink.communication.interfaces
 
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 
 /**
  * 服务内核接口
@@ -56,12 +56,12 @@ interface IServiceKernel {
      * 
      * @return ConnectionStatus 当前连接状态
      */
-    fun getConnectionStatus(): ConnectionStatus
+    fun getConnectionStatus(): InnerConnectionStatus
     
     /**
      * 设置状态变化监听器
      * 
      * @param listener 状态变化监听器
      */
-    fun setStatusChangeListener(listener: (ConnectionStatus) -> Unit)
+    fun setStatusChangeListener(listener: (InnerConnectionStatus) -> Unit)
 }

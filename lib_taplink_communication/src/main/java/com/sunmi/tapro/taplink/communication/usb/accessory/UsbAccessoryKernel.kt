@@ -8,7 +8,7 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
 import android.os.ParcelFileDescriptor
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.interfaces.BaseServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
@@ -118,7 +118,7 @@ class UsbAccessoryKernel(
                         LogUtil.d(TAG, "USB accessory detached: ${it.manufacturer} ${it.model}")
                         if (it == connectedAccessory) {
                             disconnectInternal()
-                            updateStatus(ConnectionStatus.DISCONNECTED)
+                            updateStatus(InnerConnectionStatus.DISCONNECTED)
                         }
                         // 如果断开的是待处理的Accessory，清除待处理状态
                         if (it == pendingAccessory) {
@@ -165,7 +165,7 @@ class UsbAccessoryKernel(
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
             handleConnectionError(
-                "USB accessory is already connected or connecting. Current status: $currentConnectionStatus",
+                "USB accessory is already connected or connecting. Current status: $currentInnerConnectionStatus",
                 connectionCallback
             )
             return
@@ -173,7 +173,7 @@ class UsbAccessoryKernel(
 
         scope.launch {
             try {
-                updateStatus(ConnectionStatus.CONNECTING)
+                updateStatus(InnerConnectionStatus.CONNECTING)
                 connectionCallback.onWaitingConnect()
 
                 // 获取已连接的Accessory
@@ -264,7 +264,7 @@ class UsbAccessoryKernel(
         dataReceiveJob = scope.launch(Dispatchers.IO) {
             val buffer = ByteArray(16384) // 16KB buffer
 
-            while (isActive && currentConnectionStatus == ConnectionStatus.CONNECTED &&
+            while (isActive && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED &&
                 accessoryInputStream != null
             ) {
                 try {
@@ -281,8 +281,8 @@ class UsbAccessoryKernel(
                     }
                 } catch (e: IOException) {
                     LogUtil.e(TAG, "Error receiving accessory data: ${e.message}")
-                    if (currentConnectionStatus == ConnectionStatus.CONNECTED) {
-                        updateStatus(ConnectionStatus.ERROR)
+                    if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
+                        updateStatus(InnerConnectionStatus.ERROR)
                     }
                     break
                 }
@@ -384,7 +384,7 @@ class UsbAccessoryKernel(
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentInnerConnectionStatus")
             callback?.onError("NOT_CONNECTED", "Service not connected")
             return
         }
@@ -395,12 +395,12 @@ class UsbAccessoryKernel(
                 if (success) {
                     callback?.onResponse("SUCCESS")
                 } else {
-                    updateStatus(ConnectionStatus.ERROR)
+                    updateStatus(InnerConnectionStatus.ERROR)
                     callback?.onError("SEND_FAILED", "Failed to send data via USB Accessory")
                 }
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to send data: ${e.message}")
-                updateStatus(ConnectionStatus.ERROR)
+                updateStatus(InnerConnectionStatus.ERROR)
                 callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
             }
         }
@@ -410,11 +410,11 @@ class UsbAccessoryKernel(
      * 实现IServiceKernel接口：断开连接
      */
     override fun disconnect() {
-        if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {
+        if (currentInnerConnectionStatus == InnerConnectionStatus.DISCONNECTED) {
             return
         }
 
         disconnectInternal()
-        updateStatus(ConnectionStatus.DISCONNECTED)
+        updateStatus(InnerConnectionStatus.DISCONNECTED)
     }
 }

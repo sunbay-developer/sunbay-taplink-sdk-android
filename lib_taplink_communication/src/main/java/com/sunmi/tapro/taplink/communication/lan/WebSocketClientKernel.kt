@@ -1,14 +1,14 @@
 package com.sunmi.tapro.taplink.communication.lan
 
 import android.content.Context
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.BaseServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.util.LogUtil
-import com.sunmi.tapro.taplink.communication.util.ProtocolParser
-import com.sunmi.tapro.taplink.communication.util.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -16,10 +16,8 @@ import org.java_websocket.client.WebSocketClient
 import org.java_websocket.handshake.ServerHandshake
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import java.net.InetAddress
 import java.net.URI
 import java.nio.ByteBuffer
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * WebSocket 客户端服务内核类
@@ -47,12 +45,12 @@ class WebSocketClientKernel constructor(
 
     companion object {
         private const val TAG = "WebSocketClientKernel"
-        
+
         // 心跳配置
         private const val HEARTBEAT_INTERVAL = 30_000L // 30秒心跳间隔
         private const val HEARTBEAT_TIMEOUT = 10_000L // 10秒心跳超时
         private const val HEARTBEAT_MESSAGE = "{\"type\":\"ping\"}"
-        
+
         // NSD配置
         private const val NSD_SERVICE_TYPE = "_taplink._tcp" // Taplink服务类型
         private const val NSD_DISCOVERY_TIMEOUT = 10_000L // NSD发现超时10秒
@@ -111,6 +109,16 @@ class WebSocketClientKernel constructor(
     private val discoveredServices = mutableListOf<ServiceInfo>()
 
     /**
+     * 当前连接的服务信息
+     */
+    private var currentServiceInfo: ServiceInfo? = null
+
+    /**
+     * 是否启用服务监听（用于检测 IP/端口变化）
+     */
+    private var isServiceMonitoringEnabled = false
+
+    /**
      * 实现IServiceKernel接口：连接WebSocket服务器
      *
      * @param protocol 协议字符串，支持 ws://、wss:// 和 lan:// 格式
@@ -119,7 +127,7 @@ class WebSocketClientKernel constructor(
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
             handleConnectionError(
-                "WebSocket client is already connected or connecting. Current status: $currentConnectionStatus",
+                "WebSocket client is already connected or connecting. Current status: $currentInnerConnectionStatus",
                 connectionCallback,
                 InnerErrorCode.C33.code
             )
@@ -128,7 +136,7 @@ class WebSocketClientKernel constructor(
 
         try {
             LogUtil.d(TAG, "Starting connection with protocol: $protocol")
-            updateStatus(ConnectionStatus.CONNECTING)
+            updateStatus(InnerConnectionStatus.CONNECTING)
             connectionCallback.onWaitingConnect()
 
             // 无需重置状态，由 SDK 层管理
@@ -155,8 +163,8 @@ class WebSocketClientKernel constructor(
     private fun connectWithProtocol(protocol: String, connectionCallback: ConnectionCallback) {
         scope.launch {
             try {
-                // 解析协议字符串
-                val parseResult = ProtocolParser.parse(protocol)
+                // 使用统一的协议管理器解析协议字符串
+                val parseResult = ProtocolManager.parseProtocol(protocol)
                 if (parseResult is ProtocolParseResult.Error) {
                     handleConnectionError(
                         parseResult.message, connectionCallback,
@@ -167,26 +175,22 @@ class WebSocketClientKernel constructor(
 
                 if (parseResult !is ProtocolParseResult.LanProtocol) {
                     handleConnectionError(
-                        "Protocol type mismatch, expected websocket or lan protocol", 
+                        "Protocol type mismatch, expected websocket or lan protocol",
                         connectionCallback,
                         InnerErrorCode.C41.code
                     )
                     return@launch
                 }
 
-                val uri = when (parseResult) {
-                    is ProtocolParseResult.LanProtocol -> {
-                        // 将 lan:// 转换为 ws://
-                        val scheme = if (parseResult.port == 443) "wss" else "ws"
-                        URI("$scheme://${parseResult.ip}:${parseResult.port}")
-                    }
-                    else -> {
-                        handleConnectionError(
-                            "Invalid protocol", connectionCallback,
-                            InnerErrorCode.C41.code
-                        )
-                        return@launch
-                    }
+                // 使用统一的协议管理器转换为WebSocket URI
+                val uri = ProtocolManager.lanProtocolToWebSocketUri(protocol)
+                if (uri == null) {
+                    handleConnectionError(
+                        "Failed to convert protocol to WebSocket URI: $protocol",
+                        connectionCallback,
+                        InnerErrorCode.C41.code
+                    )
+                    return@launch
                 }
 
                 // 尝试直接连接
@@ -215,12 +219,12 @@ class WebSocketClientKernel constructor(
     private suspend fun connectToUri(uri: URI, connectionCallback: ConnectionCallback): Boolean {
         return try {
             LogUtil.d(TAG, "Attempting to connect to: $uri")
-            
+
             // 保存当前URI
             currentUri = uri
 
             // 如果已有连接，先断开
-            client?.let { 
+            client?.let {
                 LogUtil.d(TAG, "Closing existing connection")
                 it.close(1000, "Reconnecting")
                 client = null
@@ -228,18 +232,18 @@ class WebSocketClientKernel constructor(
 
             // 创建新的WebSocket客户端
             client = TaplinkWebSocketClient(uri, connectionCallback)
-            
+
             // 连接（这是异步的，结果会通过回调返回）
             client?.connect()
-            
+
             // 等待连接结果（通过状态变化判断）
             var attempts = 0
-            while (attempts < 50 && currentConnectionStatus == ConnectionStatus.CONNECTING) { // 最多等待5秒
+            while (attempts < 50 && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) { // 最多等待5秒
                 delay(100)
                 attempts++
             }
-            
-            currentConnectionStatus == ConnectionStatus.CONNECTED
+
+            currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to connect to $uri: ${e.message}")
             false
@@ -252,43 +256,43 @@ class WebSocketClientKernel constructor(
     private suspend fun discoverAndConnect(connectionCallback: ConnectionCallback) {
         try {
             LogUtil.d(TAG, "Starting NSD service discovery")
-            
+
             // 初始化 NSD Manager
             nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
             discoveredServices.clear()
-            
+
             // 创建发现监听器
             discoveryListener = object : NsdManager.DiscoveryListener {
                 override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                     LogUtil.e(TAG, "NSD discovery start failed: $serviceType, errorCode: $errorCode")
                 }
-                
+
                 override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
                     LogUtil.e(TAG, "NSD discovery stop failed: $serviceType, errorCode: $errorCode")
                 }
-                
+
                 override fun onDiscoveryStarted(serviceType: String) {
                     LogUtil.d(TAG, "NSD discovery started: $serviceType")
                 }
-                
+
                 override fun onDiscoveryStopped(serviceType: String) {
                     LogUtil.d(TAG, "NSD discovery stopped: $serviceType")
                 }
-                
+
                 override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                     LogUtil.d(TAG, "NSD service found: ${serviceInfo.serviceName}")
-                    
+
                     // 解析服务信息
                     nsdManager?.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                             LogUtil.e(TAG, "NSD resolve failed: ${serviceInfo.serviceName}, errorCode: $errorCode")
                         }
-                        
+
                         override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                             LogUtil.d(TAG, "NSD service resolved: ${serviceInfo.serviceName}")
                             val host = serviceInfo.host?.hostAddress ?: ""
                             val port = serviceInfo.port
-                            
+
                             if (host.isNotEmpty() && port > 0) {
                                 val service = ServiceInfo(
                                     name = serviceInfo.serviceName,
@@ -301,45 +305,45 @@ class WebSocketClientKernel constructor(
                         }
                     })
                 }
-                
+
                 override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                     LogUtil.d(TAG, "NSD service lost: ${serviceInfo.serviceName}")
                 }
             }
-            
+
             // 开始服务发现
             nsdManager?.discoverServices(NSD_SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
-            
+
             // 等待发现服务
             delay(NSD_DISCOVERY_TIMEOUT)
-            
+
             // 停止服务发现
             try {
                 discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) }
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Error stopping NSD discovery: ${e.message}")
             }
-            
+
             // 尝试连接发现的服务
             for (service in discoveredServices) {
                 if (service.host.isNotEmpty() && service.port > 0) {
                     val uri = URI("ws://${service.host}:${service.port}")
                     LogUtil.d(TAG, "Trying discovered service: $uri")
-                    
+
                     if (connectToUri(uri, connectionCallback)) {
                         LogUtil.d(TAG, "Successfully connected to discovered service: $uri")
                         return
                     }
                 }
             }
-            
+
             // 没有找到可用的服务
             handleConnectionError(
                 "No available Taplink services found via NSD",
                 connectionCallback,
                 InnerErrorCode.C35.code
             )
-            
+
         } catch (e: Exception) {
             LogUtil.e(TAG, "NSD discovery failed: ${e.message}")
             handleConnectionError(
@@ -364,7 +368,7 @@ class WebSocketClientKernel constructor(
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentInnerConnectionStatus")
             callback?.onError("NOT_CONNECTED", "WebSocket client not connected")
             return
         }
@@ -380,17 +384,8 @@ class WebSocketClientKernel constructor(
             sendMutex.withLock {
                 try {
                     LogUtil.d(TAG, "Sending data via WebSocket: traceId=$traceId, dataSize=${data.size} bytes")
-
                     // 发送数据
                     client?.send(data)
-                    // WebSocket 发送是异步的，这里假设发送成功
-                    if (client != null) {
-                        LogUtil.d(TAG, "Data sent via WebSocket successfully: traceId=$traceId")
-                        callback?.onResponse("SUCCESS")
-                    } else {
-                        LogUtil.e(TAG, "Failed to send data via WebSocket: traceId=$traceId")
-                        callback?.onError("SEND_FAILED", "Failed to send data via WebSocket")
-                    }
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Failed to send data via WebSocket: traceId=$traceId, error=${e.message}")
                     callback?.onError("SEND_FAILED", e.message ?: "Unknown error")
@@ -403,28 +398,28 @@ class WebSocketClientKernel constructor(
      * 实现IServiceKernel接口：断开连接
      */
     override fun disconnect() {
-        if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {
+        if (currentInnerConnectionStatus == InnerConnectionStatus.DISCONNECTED) {
             return
         }
 
         try {
             LogUtil.d(TAG, "Disconnect requested")
-            
+
             // 停止心跳
             stopHeartbeat()
-            
+
             // 断开WebSocket连接
             disconnectInternal()
-            
+
             // 清理资源
             cleanupResources()
-            
-            updateStatus(ConnectionStatus.DISCONNECTED)
+
+            updateStatus(InnerConnectionStatus.DISCONNECTED)
             LogUtil.d(TAG, "WebSocket client disconnected manually")
-            
+
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error during manual disconnect: ${e.message}")
-            updateStatus(ConnectionStatus.ERROR)
+            updateStatus(InnerConnectionStatus.ERROR)
         }
     }
 
@@ -447,7 +442,13 @@ class WebSocketClientKernel constructor(
         currentUri = null
         currentConnectionCallback = null
         dataReceiver = null
-        
+
+        // 停止服务监听
+        stopServiceMonitoring()
+
+        // 清理服务信息
+        currentServiceInfo = null
+
         // 清理 NSD
         try {
             discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) }
@@ -456,7 +457,7 @@ class WebSocketClientKernel constructor(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error cleaning up NSD: ${e.message}")
         }
-        
+
         discoveredServices.clear()
     }
 
@@ -465,15 +466,15 @@ class WebSocketClientKernel constructor(
      */
     private fun startHeartbeat() {
         stopHeartbeat() // 先停止现有的心跳
-        
+
         heartbeatJob = scope.launch {
             LogUtil.d(TAG, "Starting heartbeat mechanism")
             lastHeartbeatResponse = System.currentTimeMillis()
-            
-            while (isActive && currentConnectionStatus == ConnectionStatus.CONNECTED) {
+
+            while (isActive && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
                 try {
                     delay(HEARTBEAT_INTERVAL)
-                    
+
                     // 检查上次心跳响应时间
                     val now = System.currentTimeMillis()
                     if (now - lastHeartbeatResponse > HEARTBEAT_INTERVAL + HEARTBEAT_TIMEOUT) {
@@ -481,7 +482,7 @@ class WebSocketClientKernel constructor(
                         handleConnectionLost()
                         break
                     }
-                    
+
                     // 发送心跳
                     client?.send(HEARTBEAT_MESSAGE)
                     // WebSocket 发送是异步的，这里假设发送成功
@@ -492,7 +493,7 @@ class WebSocketClientKernel constructor(
                         handleConnectionLost()
                         break
                     }
-                    
+
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Heartbeat error: ${e.message}")
                     if (isActive) {
@@ -515,13 +516,13 @@ class WebSocketClientKernel constructor(
 
     /**
      * 处理连接丢失
-     * 
+     *
      * 注意：不在 Service 层处理重连，由 SDK 层统一管理重连逻辑
      */
     private fun handleConnectionLost() {
         LogUtil.w(TAG, "Connection lost, notifying upper layer")
-        updateStatus(ConnectionStatus.ERROR)
-        
+        updateStatus(InnerConnectionStatus.ERROR)
+
         // 通知上层连接丢失，由 SDK 层决定是否重连
         currentConnectionCallback?.onDisconnected(
             InnerErrorCode.C35.code,
@@ -547,37 +548,41 @@ class WebSocketClientKernel constructor(
 
         override fun onOpen(handshakedata: ServerHandshake) {
             LogUtil.d(TAG, "WebSocket connected to server: $uri")
-            
+
+            // 保存当前连接的服务信息
+            saveCurrentServiceInfo(uri)
+
             // 启动心跳
             startHeartbeat()
-            
+
+            // 启动服务监听（检测 IP/端口变化）
+            startServiceMonitoring()
+
             // 通知连接成功
-            handleConnectionSuccess(connectionCallback, mapOf(
-                "deviceId" to "websocket_device",
-                "taproVersion" to "1.0.0"
-            ))
+            handleConnectionSuccess(connectionCallback, null)
         }
 
         override fun onClose(code: Int, reason: String, remote: Boolean) {
             LogUtil.d(TAG, "WebSocket closed: code=$code, reason=$reason, remote=$remote")
-            
+
             // 停止心跳
             stopHeartbeat()
-            
+
+            // 停止服务监听
+            stopServiceMonitoring()
+
             // 通知上层连接断开，由 SDK 层判断是主动还是被动
-            updateStatus(ConnectionStatus.DISCONNECTED)
+            updateStatus(InnerConnectionStatus.DISCONNECTED)
             currentConnectionCallback?.onDisconnected("$code", reason)
         }
 
         override fun onMessage(message: String) {
             LogUtil.d(TAG, "Text message received: $message")
-            
             // 检查是否是心跳响应
             if (message.contains("pong") || message.contains("ping")) {
                 handleHeartbeatResponse()
                 return
             }
-            
             // 通过 dataReceiver 传递响应
             dataReceiver?.invoke(message.toByteArray(Charsets.UTF_8))
         }
@@ -586,15 +591,15 @@ class WebSocketClientKernel constructor(
             val data = ByteArray(message.remaining())
             message.get(data)
             LogUtil.d(TAG, "Binary message received: ${data.size} bytes")
-            
+
             // 通过 dataReceiver 传递响应
             dataReceiver?.invoke(data)
         }
 
         override fun onError(ex: Exception) {
             LogUtil.e(TAG, "WebSocket error: ${ex.message}")
-            
-            if (currentConnectionStatus == ConnectionStatus.CONNECTING) {
+
+            if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
                 // 连接阶段的错误
                 handleConnectionError(
                     ex.message ?: "Connection error",
@@ -605,6 +610,141 @@ class WebSocketClientKernel constructor(
                 // 运行时错误，通知上层
                 handleConnectionLost()
             }
+        }
+    }
+
+    /**
+     * 保存当前连接的服务信息
+     */
+    private fun saveCurrentServiceInfo(uri: URI) {
+        currentServiceInfo = ServiceInfo(
+            name = "taplink-service", // 默认服务名
+            host = uri.host,
+            port = uri.port
+        )
+        LogUtil.d(TAG, "Saved current service info: ${currentServiceInfo}")
+    }
+
+    /**
+     * 启动服务监听（检测 IP/端口变化）
+     */
+    private fun startServiceMonitoring() {
+        if (isServiceMonitoringEnabled) {
+            LogUtil.d(TAG, "Service monitoring already enabled")
+            return
+        }
+
+        isServiceMonitoringEnabled = true
+        LogUtil.d(TAG, "Starting service monitoring for IP/port changes")
+
+        scope.launch {
+            try {
+                // 初始化 NSD Manager
+                val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+
+                // 创建监听器
+                val monitoringListener = object : NsdManager.DiscoveryListener {
+                    override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                        LogUtil.e(TAG, "Service monitoring start failed: $serviceType, errorCode: $errorCode")
+                    }
+
+                    override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                        LogUtil.e(TAG, "Service monitoring stop failed: $serviceType, errorCode: $errorCode")
+                    }
+
+                    override fun onDiscoveryStarted(serviceType: String) {
+                        LogUtil.d(TAG, "Service monitoring started: $serviceType")
+                    }
+
+                    override fun onDiscoveryStopped(serviceType: String) {
+                        LogUtil.d(TAG, "Service monitoring stopped: $serviceType")
+                        isServiceMonitoringEnabled = false
+                    }
+
+                    override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                        LogUtil.d(TAG, "Service monitoring found: ${serviceInfo.serviceName}")
+
+                        // 解析服务信息
+                        nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                            override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                                LogUtil.e(TAG, "Service monitoring resolve failed: ${serviceInfo.serviceName}")
+                            }
+
+                            override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                                val host = serviceInfo.host?.hostAddress ?: ""
+                                val port = serviceInfo.port
+
+                                LogUtil.d(TAG, "Service monitoring resolved: ${serviceInfo.serviceName}, $host:$port")
+
+                                // 检查是否是当前连接的服务，且 IP/端口发生变化
+                                checkAndHandleServiceChange(host, port)
+                            }
+                        })
+                    }
+
+                    override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+                        LogUtil.w(TAG, "Service monitoring lost: ${serviceInfo.serviceName}")
+                        // 服务丢失，可能需要重新发现
+                    }
+                }
+
+                // 开始监听
+                nsdManager.discoverServices(NSD_SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, monitoringListener)
+
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Failed to start service monitoring: ${e.message}")
+                isServiceMonitoringEnabled = false
+            }
+        }
+    }
+
+    /**
+     * 检查并处理服务变化
+     */
+    private fun checkAndHandleServiceChange(newHost: String, newPort: Int) {
+        val currentService = currentServiceInfo
+        if (currentService == null) {
+            LogUtil.d(TAG, "No current service info, ignoring service change")
+            return
+        }
+
+        // 检查 IP 或端口是否发生变化
+        if (currentService.host != newHost || currentService.port != newPort) {
+            LogUtil.i(TAG, "Service address changed: ${currentService.host}:${currentService.port} -> $newHost:$newPort")
+
+            // 通知SDK层地址发生变更，让SDK层决定是否重连
+            currentConnectionCallback?.onServiceAddressChanged(
+                newHost = newHost,
+                newPort = newPort,
+                oldHost = currentService.host,
+                oldPort = currentService.port
+            )
+
+            // 更新服务信息
+            currentServiceInfo = ServiceInfo(
+                name = currentService.name,
+                host = newHost,
+                port = newPort
+            )
+        }
+    }
+
+
+    /**
+     * 停止服务监听
+     */
+    private fun stopServiceMonitoring() {
+        if (!isServiceMonitoringEnabled) {
+            return
+        }
+
+        LogUtil.d(TAG, "Stopping service monitoring")
+        isServiceMonitoringEnabled = false
+
+        try {
+            discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Error stopping service monitoring: ${e.message}")
         }
     }
 

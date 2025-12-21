@@ -81,7 +81,7 @@ interface TaplinkApi {
      *
      * @return ConnectionMode 当前连接模式，如果未连接返回null
      */
-    fun getConnectionMode(): ConnectionMode?
+    fun getConnectionMode(): String?
 
     /**
      * 获取 Tapro 版本号

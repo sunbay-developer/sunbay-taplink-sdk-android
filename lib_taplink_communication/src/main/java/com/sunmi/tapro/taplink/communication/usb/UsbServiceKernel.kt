@@ -4,7 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.UsbMode
 import com.sunmi.tapro.taplink.communication.interfaces.BaseServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
@@ -12,8 +12,8 @@ import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.usb.accessory.UsbAccessoryKernel
 import com.sunmi.tapro.taplink.communication.usb.host.UsbHostKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
-import com.sunmi.tapro.taplink.communication.util.ProtocolParser
-import com.sunmi.tapro.taplink.communication.util.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -86,18 +86,18 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
             handleConnectionError(
-                "USB device is already connected or connecting. Current status: $currentConnectionStatus",
+                "USB device is already connected or connecting. Current status: $currentInnerConnectionStatus",
                 connectionCallback
             )
             return
         }
         
         try {
-            updateStatus(ConnectionStatus.CONNECTING)
+            updateStatus(InnerConnectionStatus.CONNECTING)
             connectionCallback.onWaitingConnect()
             
             // 解析协议字符串
-            val parseResult = ProtocolParser.parse(protocol)
+            val parseResult = ProtocolManager.parseProtocol(protocol)
             if (parseResult is ProtocolParseResult.Error) {
                 handleConnectionError(parseResult.message, connectionCallback)
                 return
@@ -166,7 +166,7 @@ class UsbServiceKernel(private val context: Context) : BaseServiceKernel() {
     override fun disconnect() {
         currentKernel?.disconnect()
         currentKernel = null
-        updateStatus(ConnectionStatus.DISCONNECTED)
+        updateStatus(InnerConnectionStatus.DISCONNECTED)
     }
     
     /**

@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
@@ -15,7 +15,7 @@ import com.sunmi.tapro.taplink.communication.local.ITransactionCallback
 import com.google.gson.Gson
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.LogUtil
-import com.sunmi.tapro.taplink.communication.util.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 
 /**
  * 本地服务内核类
@@ -58,6 +58,11 @@ class LocalServiceKernel constructor(
     private var isServiceBound: Boolean = false
 
     /**
+     * 服务是否被启动（用于 Android 14+ 兼容性）
+     */
+    private var isServiceStarted: Boolean = false
+
+    /**
      * ITransaction接口实例
      */
     private var iTransaction: ITransaction? = null
@@ -91,7 +96,7 @@ class LocalServiceKernel constructor(
         intent.setPackage(packageName)
         intent.putExtra("app_id", appId)
         intent.putExtra("secret_key", appSecretKey)
-        
+
         // 检查服务是否存在
         val resolveInfoList = context.packageManager.queryIntentServices(intent, 0)
         LogUtil.d(TAG, "Query intent services result: ${resolveInfoList.size}")
@@ -114,8 +119,32 @@ class LocalServiceKernel constructor(
         // 创建服务连接
         serviceConnection = createServiceConnection(connectionCallback)
 
-        // 绑定服务
+        // Android 14+ 兼容性：先启动服务，再绑定
+        // 在 Android 14 中，如果服务没有运行，仅使用 bindService 可能无法启动服务
         try {
+            // 先尝试启动服务（如果服务未运行，这会启动它）
+            val startResult = try {
+                val component = context.startService(intent)
+                component != null
+            } catch (e: SecurityException) {
+                // 如果服务不允许启动（例如需要前台服务权限），记录日志但继续尝试绑定
+                LogUtil.w(TAG, "Cannot start service directly (may require foreground service): ${e.message}")
+                false
+            } catch (e: IllegalStateException) {
+                // Android 14+ 可能抛出此异常，如果服务需要前台服务类型
+                LogUtil.w(TAG, "Cannot start service (may require foreground service type): ${e.message}")
+                false
+            } catch (e: Exception) {
+                LogUtil.w(TAG, "Failed to start service: ${e.message}")
+                false
+            }
+
+            if (startResult) {
+                isServiceStarted = true
+                LogUtil.d(TAG, "Service started successfully")
+            }
+
+            // 然后绑定服务
             val bindResult = context.bindService(
                 intent,
                 serviceConnection!!,
@@ -124,11 +153,29 @@ class LocalServiceKernel constructor(
             LogUtil.d(TAG, "Bind service result: $bindResult")
 
             if (!bindResult) {
+                // 如果绑定失败且服务已启动，尝试停止服务
+                if (isServiceStarted) {
+                    try {
+                        context.stopService(intent)
+                        isServiceStarted = false
+                    } catch (e: Exception) {
+                        LogUtil.e(TAG, "Failed to stop service after bind failure: ${e.message}")
+                    }
+                }
                 notifyConnectionError("Bind service result:$bindResult", InnerErrorCode.C25)
             }
             // 绑定成功会在ServiceConnection的onServiceConnected中处理
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to bind service: ${e.message}")
+            // 如果启动成功但绑定失败，尝试停止服务
+            if (isServiceStarted && currentIntent != null) {
+                try {
+                    context.stopService(currentIntent)
+                    isServiceStarted = false
+                } catch (stopException: Exception) {
+                    LogUtil.e(TAG, "Failed to stop service after exception: ${stopException.message}")
+                }
+            }
             notifyConnectionError("Exception: ${e.message}", InnerErrorCode.C25)
         }
     }
@@ -189,6 +236,17 @@ class LocalServiceKernel constructor(
             isServiceBound = false
         }
 
+        // 如果服务是通过 startService 启动的，需要停止服务
+        if (isServiceStarted && currentIntent != null && context != null) {
+            try {
+                val stopResult = context.stopService(currentIntent)
+                LogUtil.d(TAG, "Service stopped: $stopResult")
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Failed to stop service: ${e.message}")
+            }
+            isServiceStarted = false
+        }
+
         // 清理资源
         serviceConnection = null
         currentIntent = null
@@ -241,7 +299,7 @@ class LocalServiceKernel constructor(
                 iTransaction = null
 
                 // 服务异常断开
-                updateStatus(ConnectionStatus.DISCONNECTED)
+                updateStatus(InnerConnectionStatus.DISCONNECTED)
                 notifyConnectionDisconnected(InnerErrorCode.C36.code, "Service disconnected unexpectedly")
             }
 
@@ -251,15 +309,17 @@ class LocalServiceKernel constructor(
                 iTransaction = null
 
                 // 服务绑定死亡
-                updateStatus(ConnectionStatus.ERROR)
+                updateStatus(InnerConnectionStatus.ERROR)
                 notifyConnectionDisconnected(InnerErrorCode.C36.code, "Service binding died")
             }
 
             override fun onNullBinding(name: ComponentName?) {
                 LogUtil.d(TAG, "Service null binding: $name")
                 isServiceBound = false
+                iTransaction = null
 
                 // 服务返回null绑定
+                updateStatus(InnerConnectionStatus.ERROR)
                 notifyConnectionError("Service returned null binding", InnerErrorCode.C36)
             }
         }

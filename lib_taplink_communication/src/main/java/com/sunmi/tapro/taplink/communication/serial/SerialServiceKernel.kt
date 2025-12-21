@@ -1,13 +1,13 @@
 package com.sunmi.tapro.taplink.communication.serial
 
 import android.content.Context
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.interfaces.BaseServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.util.LogUtil
-import com.sunmi.tapro.taplink.communication.util.ProtocolParser
-import com.sunmi.tapro.taplink.communication.util.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,18 +46,18 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
             handleConnectionError(
-                "Serial port is already connected or connecting. Current status: $currentConnectionStatus",
+                "Serial port is already connected or connecting. Current status: $currentInnerConnectionStatus",
                 connectionCallback
             )
             return
         }
         
         try {
-            updateStatus(ConnectionStatus.CONNECTING)
+            updateStatus(InnerConnectionStatus.CONNECTING)
             connectionCallback.onWaitingConnect()
             
             // 解析协议字符串
-            val parseResult = ProtocolParser.parse(protocol)
+            val parseResult = ProtocolManager.parseProtocol(protocol)
             if (parseResult is ProtocolParseResult.Error) {
                 handleConnectionError(parseResult.message, connectionCallback)
                 return
@@ -101,14 +101,14 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            LogUtil.e(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.e(TAG, "Cannot send data, not connected. Status: $currentInnerConnectionStatus")
             callback?.onError("NOT_CONNECTED", "Service not connected")
             return
         }
         
         val result = send(data)
         if (!result) {
-            updateStatus(ConnectionStatus.ERROR)
+            updateStatus(InnerConnectionStatus.ERROR)
             callback?.onError("SEND_FAILED", "Failed to send data via serial port")
         } else {
             callback?.onResponse("SUCCESS")
@@ -133,11 +133,11 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
      * 实现IServiceKernel接口：断开连接
      */
     override fun disconnect() {
-        if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {
+        if (currentInnerConnectionStatus == InnerConnectionStatus.DISCONNECTED) {
             return
         }
         
-        updateStatus(ConnectionStatus.DISCONNECTED)
+        updateStatus(InnerConnectionStatus.DISCONNECTED)
         disconnectInternal()
     }
     
@@ -264,7 +264,7 @@ class SerialServiceKernel(private val context: Context) : BaseServiceKernel() {
                 } catch (e: IOException) {
                     if (isReading) {
                         LogUtil.e(TAG, "Error reading serial data:${e.message}")
-                        updateStatus(ConnectionStatus.ERROR)
+                        updateStatus(InnerConnectionStatus.ERROR)
                     }
                     break
                 }

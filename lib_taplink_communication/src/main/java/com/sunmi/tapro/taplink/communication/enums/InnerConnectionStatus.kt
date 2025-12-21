@@ -8,7 +8,7 @@ package com.sunmi.tapro.taplink.communication.enums
  * @author TaPro Team
  * @since 2025-01-XX
  */
-enum class ConnectionStatus {
+enum class InnerConnectionStatus {
     /**
      * 未连接
      */
@@ -23,6 +23,11 @@ enum class ConnectionStatus {
      * 已连接
      */
     CONNECTED,
+
+    /**
+     * 等待连接
+     */
+    WAITING_CONNECT,
     
     /**
      * 重连中

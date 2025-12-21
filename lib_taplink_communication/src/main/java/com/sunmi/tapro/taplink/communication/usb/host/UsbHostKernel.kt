@@ -11,13 +11,13 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.interfaces.BaseServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.util.LogUtil
-import com.sunmi.tapro.taplink.communication.util.ProtocolParser
-import com.sunmi.tapro.taplink.communication.util.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -120,7 +120,7 @@ class UsbHostKernel(
                         LogUtil.d(TAG, "USB device detached: ${it.deviceName}")
                         if (it == connectedDevice) {
                             disconnectInternal()
-                            updateStatus(ConnectionStatus.DISCONNECTED)
+                            updateStatus(InnerConnectionStatus.DISCONNECTED)
                         }
                         // 如果断开的是待处理的设备，清除待处理状态
                         if (it == pendingDevice) {
@@ -168,7 +168,7 @@ class UsbHostKernel(
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
             handleConnectionError(
-                "USB device is already connected or connecting. Current status: $currentConnectionStatus",
+                "USB device is already connected or connecting. Current status: $currentInnerConnectionStatus",
                 connectionCallback
             )
             return
@@ -176,11 +176,11 @@ class UsbHostKernel(
         
         scope.launch {
             try {
-                updateStatus(ConnectionStatus.CONNECTING)
+                updateStatus(InnerConnectionStatus.CONNECTING)
                 connectionCallback.onWaitingConnect()
                 
                 // 解析协议字符串
-                val parseResult = ProtocolParser.parse(protocol)
+                val parseResult = ProtocolManager.parseProtocol(protocol)
                 if (parseResult is ProtocolParseResult.Error) {
                     handleConnectionError(parseResult.message, connectionCallback)
                     return@launch
@@ -328,7 +328,7 @@ class UsbHostKernel(
         dataReceiveJob = scope.launch {
             val buffer = ByteArray(16384) // 16KB buffer
             
-            while (isActive && currentConnectionStatus == ConnectionStatus.CONNECTED &&
+            while (isActive && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED &&
                    usbDeviceConnection != null && 
                    usbEndpointIn != null) {
                 try {
@@ -348,8 +348,8 @@ class UsbHostKernel(
                     }
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Error receiving host data: ${e.message}")
-                    if (currentConnectionStatus == ConnectionStatus.CONNECTED) {
-                        updateStatus(ConnectionStatus.ERROR)
+                    if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
+                        updateStatus(InnerConnectionStatus.ERROR)
                     }
                     break
                 }
@@ -470,7 +470,7 @@ class UsbHostKernel(
      */
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
-            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentConnectionStatus")
+            LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentInnerConnectionStatus")
             callback?.onError("NOT_CONNECTED", "Service not connected")
             return
         }
@@ -481,12 +481,12 @@ class UsbHostKernel(
                 if (success) {
                     callback?.onResponse("SUCCESS")
                 } else {
-                    updateStatus(ConnectionStatus.ERROR)
+                    updateStatus(InnerConnectionStatus.ERROR)
                     callback?.onError("SEND_FAILED", "Failed to send data via USB Host")
                 }
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to send data: ${e.message}")
-                updateStatus(ConnectionStatus.ERROR)
+                updateStatus(InnerConnectionStatus.ERROR)
                 callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
             }
         }
@@ -496,12 +496,12 @@ class UsbHostKernel(
      * 实现IServiceKernel接口：断开连接
      */
     override fun disconnect() {
-        if (currentConnectionStatus == ConnectionStatus.DISCONNECTED) {
+        if (currentInnerConnectionStatus == InnerConnectionStatus.DISCONNECTED) {
             return
         }
         
         disconnectInternal()
-        updateStatus(ConnectionStatus.DISCONNECTED)
+        updateStatus(InnerConnectionStatus.DISCONNECTED)
     }
 }
 

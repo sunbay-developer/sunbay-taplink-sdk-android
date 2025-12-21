@@ -1,7 +1,7 @@
 package com.sunmi.tapro.taplink.communication
 
 import android.content.Context
-import com.sunmi.tapro.taplink.communication.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.IServiceKernel
@@ -11,8 +11,8 @@ import com.sunmi.tapro.taplink.communication.local.kernel.LocalServiceKernel
 import com.sunmi.tapro.taplink.communication.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.communication.usb.UsbServiceKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
-import com.sunmi.tapro.taplink.communication.util.ProtocolParser
-import com.sunmi.tapro.taplink.communication.util.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
+import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 
 /**
  * Taplink服务内核类
@@ -60,7 +60,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         }
 
         // 解析协议，确定使用哪个服务
-        val parseResult = ProtocolParser.parse(protocol)
+        val parseResult = ProtocolManager.parseProtocol(protocol)
         if (parseResult is ProtocolParseResult.Error) {
             connectionCallback.onDisconnected(InnerErrorCode.C41.code, parseResult.message)
             return
@@ -81,7 +81,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         if (oldServiceKernel != null && oldServiceKernel !== serviceKernel) {
             // 如果当前连接的服务内核和要连接的不是同一个，且当前服务处于连接状态，先断开旧的
             val oldStatus = oldServiceKernel.getConnectionStatus()
-            if (oldStatus != ConnectionStatus.DISCONNECTED) {
+            if (oldStatus != InnerConnectionStatus.DISCONNECTED) {
                 LogUtil.d(TAG, "Disconnecting old service kernel before connecting new one. Old status: $oldStatus")
                 try {
                     oldServiceKernel.disconnect()
@@ -94,7 +94,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         } else if (oldServiceKernel === serviceKernel) {
             // 如果是同一个实例，检查是否需要先断开
             val oldStatus = oldServiceKernel.getConnectionStatus()
-            if (oldStatus != ConnectionStatus.DISCONNECTED) {
+            if (oldStatus != InnerConnectionStatus.DISCONNECTED) {
                 LogUtil.d(TAG, "Disconnecting current service kernel before reconnecting. Status: $oldStatus")
                 try {
                     oldServiceKernel.disconnect()
@@ -140,7 +140,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         if (current != null && isServiceKernelOfType(current, serviceKey)) {
             // 如果是同一类型且已断开，可以复用
             val status = current.getConnectionStatus()
-            if (status == ConnectionStatus.DISCONNECTED) {
+            if (status == InnerConnectionStatus.DISCONNECTED) {
                 LogUtil.d(TAG, "Reusing existing service kernel of type: $serviceKey")
                 return current
             }
