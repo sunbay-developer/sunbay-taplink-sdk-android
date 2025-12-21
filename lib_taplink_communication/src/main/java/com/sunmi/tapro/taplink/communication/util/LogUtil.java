@@ -5,11 +5,11 @@ import android.util.Log;
 import java.util.Locale;
 
 /**
- * 输出各种级别的log到控制台
- * msg字符长度不受限制，默认的Log是受限制的，超过的部分不输出
- * 输出的log头有链接，可以点击链接到执行代码文件位置
- * 可以直接输出msg,使用默认Tag
- * 支持设置 LEVEL，小于LEVEL级别以下不再打印log
+ * Output various levels of log to console
+ * Message character length is unlimited, default Log is limited, excess parts are not output
+ * Output log header has links, can click to link to execution code file location
+ * Can directly output msg, using default Tag
+ * Supports setting LEVEL, levels below LEVEL will not print log
  */
 public class LogUtil {
     private static final String TAG = "LogUtil";
@@ -58,7 +58,7 @@ public class LogUtil {
         }
     }
 
-    //Log输出的最大长度
+    //Maximum length of Log output
     private static final int LOG_MAX_LENGTH = 2000;//2000
 
     private static String getLogWithLink(String msg) {
@@ -73,7 +73,7 @@ public class LogUtil {
     }
 
     /**
-     * 带有链接的log打印
+     * Log printing with links
      */
 //    private static void logWithLink(int logPriority, String TAG, String msg) {
 //
@@ -81,7 +81,7 @@ public class LogUtil {
 //    }
 
     /**
-     * 循环打印log，解决msg过长不打印问题
+     * Loop print log, solve the problem of msg being too long and not printing
      */
     @SuppressWarnings("DanglingJavadoc")
     private static void LogWrapperLoop(int logPriority, String TAG, String msg) {
@@ -92,7 +92,7 @@ public class LogUtil {
          *  |   index=1
          * print a
          */
-        int index = 0;//输出字符的位置
+        int index = 0;//Position of output character
         while (index < msgLength) {
             if (index + LOG_MAX_LENGTH > msgLength) {
                 LogWrapper(logPriority, TAG, msg.substring(index, msgLength));

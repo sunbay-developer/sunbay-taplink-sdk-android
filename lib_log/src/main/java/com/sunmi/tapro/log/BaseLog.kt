@@ -27,7 +27,7 @@ interface BaseLog {
 
     fun log(priority: Int, tag: String, msg: String) {
         if (msg.length > MAX_LOG_LENGTH) {
-            // 分段打印
+            // Print in segments
             var start = 0
             while (start < msg.length) {
                 val end = minOf(start + MAX_LOG_LENGTH, msg.length)
@@ -39,13 +39,13 @@ interface BaseLog {
         }
     }
 
-    // 新增统一的分段打印方法
+    // New unified segment printing method
     private fun printLog(priority: Int, tag: String, message: String) {
         when (priority) {
             Log.INFO -> Log.i(tag, message)
             Log.ERROR -> Log.e(tag, message)
             Log.DEBUG -> Log.d(tag, message)
-            else -> Log.i(tag, message) // 默认使用 INFO 级别
+            else -> Log.i(tag, message) // Default to INFO level
         }
         return
     }

@@ -1,27 +1,27 @@
 package com.sunmi.tapro.taplink.communication.interfaces
 
 /**
- * 内部回调接口
+ * Internal callback interface
  *
- * 用于内部服务层和SDK层之间的回调通信
- * 提供成功响应和错误响应两种回调方式
+ * Used for callback communication between internal service layer and SDK layer
+ * Provides both success response and error response callback methods
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 interface InnerCallback {
     /**
-     * 错误回调
+     * Error callback
      *
-     * @param code 错误码
-     * @param msg 错误信息
+     * @param code Error code
+     * @param msg Error message
      */
     fun onError(code: String, msg: String)
 
     /**
-     * 响应回调
+     * Response callback
      *
-     * @param responseData 响应数据（JSON字符串）
+     * @param responseData Response data (JSON string)
      */
     fun onResponse(responseData: String)
 }

@@ -4,30 +4,30 @@ import android.util.Log
 import com.sunmi.tapro.log.interceptor.LogInterceptor
 
 /**
- * 打印系统崩溃日志
+ * Print system crash logs
  * @author sunmi-pupan
  */
 object CLog : BaseLog {
 
     /**
-     * 应用构建模式
+     * Application build mode
      */
     val isDebug = true
 
     /**
-     * 日志拦截器
+     * Log interceptor
      */
     var logInterceptor: LogInterceptor? = null
 
     /**
-     * 添加拦截器
+     * Add interceptor
      */
     override fun addInterceptor(logInterceptor: LogInterceptor) {
         CLog.logInterceptor = logInterceptor
     }
 
     /**
-     * 移出拦截器
+     * Remove interceptor
      */
     override fun clearInterceptor() {
         logInterceptor = null

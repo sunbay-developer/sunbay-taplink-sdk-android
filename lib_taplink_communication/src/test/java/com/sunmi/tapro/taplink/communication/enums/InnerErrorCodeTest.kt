@@ -12,7 +12,7 @@ class InnerErrorCodeTest {
 
     @Test
     fun testErrorCodeProperties() {
-        // 测试预定义错误码
+        // Test predefined error codes
         val errorC20 = InnerErrorCode.C20
         assertEquals("C20", errorC20.code)
         assertNotNull(errorC20.description)
@@ -20,21 +20,21 @@ class InnerErrorCodeTest {
 
     @Test
     fun testFromCodeMethod() {
-        // 测试已知错误码
+        // Test known error codes
         val errorFromCode = InnerErrorCode.fromCode("C20")
         assertEquals("C20", errorFromCode.code)
 
-        // 测试未知错误码
+        // Test unknown error codes
         val unknownError = InnerErrorCode.fromCode("X99")
         assertTrue(unknownError is InnerErrorCode.Unknown)
         assertEquals("X99", unknownError.code)
 
-        // 测试空错误码
+        // Test empty error code
         val emptyError = InnerErrorCode.fromCode("")
         assertTrue(emptyError is InnerErrorCode.Unknown)
         assertEquals("", emptyError.code)
 
-        // 测试null错误码
+        // Test null error code
         val nullError = InnerErrorCode.fromCode(null)
         assertTrue(nullError is InnerErrorCode.Unknown)
         assertEquals("", nullError.code)
@@ -42,7 +42,7 @@ class InnerErrorCodeTest {
 
     @Test
     fun testUnknownErrorCode() {
-        // 测试自定义描述和解决方案
+        // Test custom description and solution
         val customError = InnerErrorCode.Unknown(
             "CUSTOM01",
             "Custom error description",
@@ -50,7 +50,7 @@ class InnerErrorCodeTest {
         assertEquals("CUSTOM01", customError.code)
         assertEquals("Custom error description", customError.description)
 
-        // 测试默认描述和解决方案
+        // Test default description and solution
         val defaultError = InnerErrorCode.Unknown("DEFAULT01")
         assertEquals("DEFAULT01", defaultError.code)
         assertNotNull(defaultError.description)
@@ -58,27 +58,27 @@ class InnerErrorCodeTest {
 
     @Test
     fun testErrorCodeCategories() {
-        // 测试客户端错误
+        // Test client errors
         assertTrue(InnerErrorCode.isClientError("C20"))
         assertFalse(InnerErrorCode.isClientError("S01"))
 
-        // 测试系统错误
+        // Test system errors
         assertTrue(InnerErrorCode.isSystemError("E01"))
         assertFalse(InnerErrorCode.isSystemError("C20"))
 
-        // 测试安全错误
+        // Test security errors
         assertTrue(InnerErrorCode.isSecurityError("S01"))
         assertFalse(InnerErrorCode.isSecurityError("C20"))
 
-        // 测试商户配置错误
+        // Test merchant configuration errors
         assertTrue(InnerErrorCode.isMerchantConfigError("M01"))
         assertFalse(InnerErrorCode.isMerchantConfigError("C20"))
 
-        // 测试支付渠道错误
+        // Test payment channel errors
         assertTrue(InnerErrorCode.isPaymentChannelError("P01"))
         assertFalse(InnerErrorCode.isPaymentChannelError("C20"))
 
-        // 测试风控错误
+        // Test risk control errors
         assertTrue(InnerErrorCode.isRiskControlError("R01"))
         assertFalse(InnerErrorCode.isRiskControlError("C20"))
     }

@@ -38,22 +38,22 @@ class WebSocketServerKernelTest {
 
     @Test
     fun testParseDefaultPort() {
-        // 测试默认端口解析
+        // Test default port parsing
         val protocol = "server://"
-        // 由于 parsePort 是私有方法，我们通过 connect 间接测试
-        // 这里只是示例，实际测试需要更多 mock
+        // Since parsePort is a private method, we test indirectly through connect
+        // This is just an example, actual testing requires more mocking
     }
 
     @Test
     fun testParseCustomPort() {
-        // 测试自定义端口解析
+        // Test custom port parsing
         val protocol = "server://8444"
-        // 实际测试需要 mock
+        // Actual testing requires mocking
     }
 
     @Test
     fun testClientInfoCreation() {
-        // 测试客户端信息创建
+        // Test client info creation
         val clientInfo = WebSocketServerKernel.ClientInfo(
             id = "client_001",
             remoteAddress = "192.168.1.100:12345",
@@ -67,7 +67,7 @@ class WebSocketServerKernelTest {
 
     @Test
     fun testClientInfoHeartbeatUpdate() {
-        // 测试心跳更新
+        // Test heartbeat update
         val clientInfo = WebSocketServerKernel.ClientInfo(
             id = "client_001",
             remoteAddress = "192.168.1.100:12345",
@@ -83,18 +83,18 @@ class WebSocketServerKernelTest {
 
     @Test
     fun testGetClientCountInitially() {
-        // 测试初始客户端数量
+        // Test initial client count
         assertEquals(0, serverKernel.getClientCount())
     }
 
     @Test
     fun testGetClientsInitially() {
-        // 测试初始客户端列表
+        // Test initial client list
         val clients = serverKernel.getClients()
         assertTrue(clients.isEmpty())
     }
 
-    // 注意：以下测试需要实际的 WebSocket 连接，通常在集成测试中进行
+    // Note: The following tests require actual WebSocket connections, usually performed in integration tests
     
     /*
     @Test
