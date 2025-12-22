@@ -343,4 +343,15 @@ class ReconnectManager(
     fun getDeviceServiceInfo(deviceId: String): ConnectionPersistence.DeviceServiceInfo? {
         return connectionPersistence.getDeviceServiceInfo(deviceId)
     }
+
+    /**
+     * Get Android context
+     *
+     * Used for cable protocol detection and other context-dependent operations
+     *
+     * @return Android context
+     */
+    fun getContext(): Context {
+        return context
+    }
 }

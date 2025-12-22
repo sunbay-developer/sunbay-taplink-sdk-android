@@ -1,67 +1,84 @@
 package com.sunmi.tapro.taplink.sdk.util
 
+import android.content.Context
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
+import com.sunmi.tapro.taplink.sdk.persistence.ConnectionPersistence
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
+import com.sunmi.tapro.taplink.communication.util.LogUtil
+import kotlinx.coroutines.runBlocking
 
 /**
- * 协议构建工具类
+ * Protocol builder utility class
  *
- * 负责根据 ConnectionConfig 和 TaplinkConfig 构建协议字符串
+ * Responsible for building protocol strings based on ConnectionConfig and TaplinkConfig
+ * Supports automatic cable protocol detection when no specific protocol is specified
  *
  * @author TaPro Team
  * @since 2025-12-17
  */
 object ProtocolBuilder {
 
+    private val TAG = "ProtocolBuilder"
+
     /**
-     * 根据配置构建协议字符串
+     * Build protocol string based on configuration
      *
-     * @param connectionConfig 连接配置
-     * @param taplinkConfig Taplink 配置
-     * @return 协议字符串
+     * @param connectionConfig Connection configuration
+     * @param taplinkConfig Taplink configuration
+     * @param context Android context (required for cable protocol detection)
+     * @return Pair of protocol string and connection mode name
      */
     fun buildProtocol(
         connectionConfig: ConnectionConfig?,
-        taplinkConfig: TaplinkConfig
+        taplinkConfig: TaplinkConfig,
+        context: Context? = null
     ): Pair<String, String?> {
-        // 检查 connectionConfig 是否为空或空对象
+        // Check if connectionConfig is null or empty
         if (connectionConfig == null || isEmptyConnectionConfig(connectionConfig)) {
-            // 使用 TaplinkConfig 中的 connectionMode
-            return buildProtocolFromConnectionMode(taplinkConfig.connectionMode)
+            // Use connectionMode from TaplinkConfig
+            return buildProtocolFromConnectionMode(taplinkConfig.connectionMode, context)
         }
 
-        // 线缆模式
+        // Cable mode with specific protocol
         connectionConfig.cableProtocol?.let { protocol ->
-            return buildProtocolFromCableProtocol(protocol)
+            return buildProtocolFromCableProtocol(protocol, context)
         }
 
-        // 局域网模式
+        // LAN mode
         connectionConfig.host?.let { host ->
             val port = connectionConfig.port ?: 8443
             val protocolString = ProtocolManager.buildLanProtocol(host, port, secure = true)
             return Pair(protocolString, ConnectionMode.LAN.name)
         }
 
-        // 默认：应用间模式
+        // Default: APP_TO_APP mode
         return Pair(ProtocolManager.buildLocalProtocol(), ConnectionMode.APP_TO_APP.name)
     }
 
     /**
-     * 根据 ConnectionMode 构建协议
+     * Build protocol from ConnectionMode
      */
-    private fun buildProtocolFromConnectionMode(mode: ConnectionMode?): Pair<String, String?> {
+    private fun buildProtocolFromConnectionMode(
+        mode: ConnectionMode?,
+        context: Context?
+    ): Pair<String, String?> {
         return when (mode) {
             ConnectionMode.CABLE -> {
-                //TODO 需要检查
-                Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
-
+                // Cable mode without specific protocol - need auto-detection
+                if (context != null) {
+                    detectAndBuildCableProtocol(context)
+                } else {
+                    // Fallback to default AOA if no context available
+                    LogUtil.w(TAG, "No context available for cable protocol detection, using default AOA")
+                    Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                }
             }
 
             ConnectionMode.LAN -> {
-                // 局域网模式需要 host 和 port，这里返回默认值
+                // LAN mode needs host and port, return default placeholder
                 Pair("wss://", ConnectionMode.LAN.name)
             }
 
@@ -70,17 +87,31 @@ object ProtocolBuilder {
             }
 
             else -> {
-                // 默认为 APP_TO_APP
+                // Default to APP_TO_APP
                 Pair(ProtocolManager.buildLocalProtocol(), ConnectionMode.APP_TO_APP.name)
             }
         }
     }
 
     /**
-     * 根据 CableProtocol 构建协议
+     * Build protocol from CableProtocol
      */
-    private fun buildProtocolFromCableProtocol(protocol: CableProtocol): Pair<String, String?> {
+    private fun buildProtocolFromCableProtocol(
+        protocol: CableProtocol,
+        context: Context?
+    ): Pair<String, String?> {
         return when (protocol) {
+            CableProtocol.AUTO -> {
+                // Auto-detection mode
+                if (context != null) {
+                    detectAndBuildCableProtocol(context)
+                } else {
+                    // Fallback to default AOA if no context available
+                    LogUtil.w(TAG, "No context available for cable protocol detection, using default AOA")
+                    Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                }
+            }
+
             CableProtocol.USB_AOA -> {
                 Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
             }
@@ -92,15 +123,79 @@ object ProtocolBuilder {
             CableProtocol.RS232 -> {
                 Pair(ProtocolManager.buildRs232Protocol("/dev/ttyS0", 9600), CableProtocol.RS232.name)
             }
-
-            CableProtocol.AUTO -> {
-                Pair("auto://", null)
-            }
         }
     }
 
     /**
-     * 判断 ConnectionConfig 是否为空对象
+     * Detect cable protocol and build appropriate protocol string
+     */
+    private fun detectAndBuildCableProtocol(context: Context): Pair<String, String?> {
+        return try {
+            LogUtil.i(TAG, "Starting cable protocol auto-detection...")
+
+            val persistence = ConnectionPersistence(context)
+
+            // Check if we have a recent detection result
+            val cachedProtocol = persistence.getDetectedCableProtocol()
+            if (cachedProtocol != null && cachedProtocol != CableProtocol.AUTO) {
+                LogUtil.i(TAG, "Using cached cable protocol detection: $cachedProtocol")
+                return buildProtocolFromCableProtocol(cachedProtocol, context)
+            }
+
+            // Check if we have a previous successful connection configuration
+            val lastConfig = persistence.getLastConnectionConfig()
+            if (lastConfig?.cableProtocol != null && lastConfig.cableProtocol != CableProtocol.AUTO) {
+                LogUtil.i(TAG, "Using previous successful cable protocol: ${lastConfig.cableProtocol}")
+                return buildProtocolFromCableProtocol(lastConfig.cableProtocol!!, context)
+            }
+
+            // Perform auto-detection
+            val detector = CableProtocolDetector(context)
+            val detectionResult = runBlocking {
+                detector.detectProtocol()
+            }
+
+            LogUtil.i(
+                TAG,
+                "Cable protocol detection completed: ${detectionResult.protocol} (confidence: ${detectionResult.confidence})"
+            )
+            LogUtil.d(TAG, "Detection details: ${detectionResult.deviceInfo}")
+
+            // Save detection result for future use
+            persistence.saveDetectedCableProtocol(detectionResult.protocol, detectionResult.deviceInfo)
+
+            // Build protocol based on detection result
+            when (detectionResult.protocol) {
+                CableProtocol.USB_AOA -> {
+                    Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                }
+
+                CableProtocol.USB_VSP -> {
+                    Pair(ProtocolManager.buildVspProtocol(), CableProtocol.USB_VSP.name)
+                }
+
+                CableProtocol.RS232 -> {
+                    Pair(ProtocolManager.buildRs232Protocol("/dev/ttyS0", 9600), CableProtocol.RS232.name)
+                }
+
+                CableProtocol.AUTO -> {
+                    // Should not happen, but fallback to AOA
+                    LogUtil.w(TAG, "Detection returned AUTO, falling back to USB AOA")
+                    Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                }
+            }
+
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Cable protocol detection failed: ${e.message}")
+            LogUtil.w(TAG, "Falling back to default USB AOA protocol")
+
+            // Fallback to default AOA
+            Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+        }
+    }
+
+    /**
+     * Check if ConnectionConfig is empty
      */
     private fun isEmptyConnectionConfig(config: ConnectionConfig): Boolean {
         return config.cableProtocol == null &&

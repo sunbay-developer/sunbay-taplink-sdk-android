@@ -72,6 +72,55 @@ class ConnectionPersistence(private val context: Context) {
             LogUtil.e(TAG, "Failed to save connection config: ${e.message}")
         }
     }
+
+    /**
+     * Save detected cable protocol for future use
+     * 
+     * @param protocol Detected cable protocol
+     * @param deviceInfo Device information from detection
+     */
+    fun saveDetectedCableProtocol(protocol: com.sunmi.tapro.taplink.sdk.enums.CableProtocol, deviceInfo: String?) {
+        try {
+            val editor = prefs.edit()
+            editor.putString("detected_cable_protocol", protocol.name)
+            if (deviceInfo != null) {
+                editor.putString("detected_cable_device_info", deviceInfo)
+            }
+            editor.putLong("detected_cable_protocol_timestamp", System.currentTimeMillis())
+            editor.apply()
+            
+            LogUtil.d(TAG, "Saved detected cable protocol: $protocol, deviceInfo: $deviceInfo")
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to save detected cable protocol: ${e.message}")
+        }
+    }
+
+    /**
+     * Get last detected cable protocol
+     * 
+     * @return Detected cable protocol or null if not found or expired
+     */
+    fun getDetectedCableProtocol(): com.sunmi.tapro.taplink.sdk.enums.CableProtocol? {
+        return try {
+            val protocolName = prefs.getString("detected_cable_protocol", null)
+            val timestamp = prefs.getLong("detected_cable_protocol_timestamp", 0)
+            
+            // Check if detection is recent (within 5 minutes)
+            val isRecent = (System.currentTimeMillis() - timestamp) < 5 * 60 * 1000
+            
+            if (protocolName != null && isRecent) {
+                val protocol = com.sunmi.tapro.taplink.sdk.enums.CableProtocol.valueOf(protocolName)
+                LogUtil.d(TAG, "Retrieved detected cable protocol: $protocol")
+                protocol
+            } else {
+                LogUtil.d(TAG, "No recent cable protocol detection found")
+                null
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to retrieve detected cable protocol: ${e.message}")
+            null
+        }
+    }
     
     /**
      * Get last connection configuration

@@ -82,11 +82,15 @@ class LocalServiceKernel constructor(
         val packageName = localProtocol.packageName
         val action = localProtocol.action
 
-        // 本地服务连接逻辑
-        LogUtil.d(TAG, "Connecting to local service: packageName=$packageName, action=$action")
+        LogUtil.d(TAG, "=== APP TO APP Service Binding Debug ===")
+        LogUtil.d(TAG, "Target package: $packageName")
+        LogUtil.d(TAG, "Target action: $action")
+        LogUtil.d(TAG, "AppId: $appId")
+        LogUtil.d(TAG, "SecretKey length: ${appSecretKey.length}")
 
         val context = TaplinkServiceKernel.getInstance()?.getContext()
         if (context == null) {
+            LogUtil.e(TAG, "Application context is null")
             notifyConnectionError("Application context is null", InnerErrorCode.C20)
             return
         }
@@ -97,20 +101,57 @@ class LocalServiceKernel constructor(
         intent.putExtra("app_id", appId)
         intent.putExtra("secret_key", appSecretKey)
 
+        LogUtil.d(TAG, "Created intent: $intent")
+        LogUtil.d(TAG, "Intent extras: app_id=$appId, secret_key=***")
+
+        // 检查目标应用是否安装
+        try {
+            val packageInfo = context.packageManager.getPackageInfo(packageName, 0)
+            LogUtil.d(TAG, "Target app installed: version=${packageInfo.versionName}, versionCode=${packageInfo.versionCode}")
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Target app not installed: ${e.message}")
+            notifyConnectionError("Target app not installed: $packageName", InnerErrorCode.C22)
+            return
+        }
+
         // 检查服务是否存在
         val resolveInfoList = context.packageManager.queryIntentServices(intent, 0)
         LogUtil.d(TAG, "Query intent services result: ${resolveInfoList.size}")
+
+        resolveInfoList.forEachIndexed { index, resolveInfo ->
+            LogUtil.d(TAG, "Service $index: ${resolveInfo.serviceInfo.name}")
+            LogUtil.d(TAG, "  - Package: ${resolveInfo.serviceInfo.packageName}")
+            LogUtil.d(TAG, "  - Exported: ${resolveInfo.serviceInfo.exported}")
+            LogUtil.d(TAG, "  - Enabled: ${resolveInfo.serviceInfo.enabled}")
+        }
 
         val matchService = resolveInfoList.find {
             it.serviceInfo.packageName == packageName
         }
 
         if (matchService == null) {
+            LogUtil.e(TAG, "No matching service found for package: $packageName, action: $action")
             notifyConnectionError(
                 "Service not found: packageName=$packageName, action=$action",
                 InnerErrorCode.C22
             )
             return
+        }
+
+        LogUtil.d(TAG, "Found matching service: ${matchService.serviceInfo.name}")
+
+        // 检查目标进程状态
+        try {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val runningProcesses = activityManager.runningAppProcesses ?: emptyList()
+            val targetProcess = runningProcesses.find { it.processName == packageName }
+            if (targetProcess != null) {
+                LogUtil.d(TAG, "Target process is running: pid=${targetProcess.pid}, importance=${targetProcess.importance}")
+            } else {
+                LogUtil.d(TAG, "Target process is not running (will be started by bindService)")
+            }
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Failed to check process status: ${e.message}")
         }
 
         // 保存当前Intent
@@ -122,60 +163,40 @@ class LocalServiceKernel constructor(
         // Android 14+ 兼容性：先启动服务，再绑定
         // 在 Android 14 中，如果服务没有运行，仅使用 bindService 可能无法启动服务
         try {
-            // 先尝试启动服务（如果服务未运行，这会启动它）
-            val startResult = try {
-                val component = context.startService(intent)
-                component != null
-            } catch (e: SecurityException) {
-                // 如果服务不允许启动（例如需要前台服务权限），记录日志但继续尝试绑定
-                LogUtil.w(TAG, "Cannot start service directly (may require foreground service): ${e.message}")
-                false
-            } catch (e: IllegalStateException) {
-                // Android 14+ 可能抛出此异常，如果服务需要前台服务类型
-                LogUtil.w(TAG, "Cannot start service (may require foreground service type): ${e.message}")
-                false
-            } catch (e: Exception) {
-                LogUtil.w(TAG, "Failed to start service: ${e.message}")
-                false
-            }
+            LogUtil.d(TAG, "=== Starting Service Binding Process ===")
 
-            if (startResult) {
-                isServiceStarted = true
-                LogUtil.d(TAG, "Service started successfully")
-            }
+            // 使用推荐的标志组合
+            val bindFlags = Context.BIND_AUTO_CREATE or
+                    Context.BIND_IMPORTANT or
+                    Context.BIND_ABOVE_CLIENT
+            LogUtil.d(TAG, "Binding with flags: 0x${bindFlags.toString(16)}")
+            LogUtil.d(TAG, "  - BIND_AUTO_CREATE: ${(bindFlags and Context.BIND_AUTO_CREATE) != 0}")
+            LogUtil.d(TAG, "  - BIND_IMPORTANT: ${(bindFlags and Context.BIND_IMPORTANT) != 0}")
+            LogUtil.d(TAG, "  - BIND_ABOVE_CLIENT: ${(bindFlags and Context.BIND_ABOVE_CLIENT) != 0}")
 
             // 然后绑定服务
             val bindResult = context.bindService(
                 intent,
                 serviceConnection!!,
-                Context.BIND_AUTO_CREATE
+                bindFlags
             )
             LogUtil.d(TAG, "Bind service result: $bindResult")
 
             if (!bindResult) {
-                // 如果绑定失败且服务已启动，尝试停止服务
-                if (isServiceStarted) {
-                    try {
-                        context.stopService(intent)
-                        isServiceStarted = false
-                    } catch (e: Exception) {
-                        LogUtil.e(TAG, "Failed to stop service after bind failure: ${e.message}")
-                    }
-                }
+                LogUtil.e(TAG, "bindService returned false - binding failed immediately")
                 notifyConnectionError("Bind service result:$bindResult", InnerErrorCode.C25)
+            } else {
+                LogUtil.d(TAG, "bindService returned true - waiting for ServiceConnection callbacks...")
+                LogUtil.d(TAG, "Expected callbacks:")
+                LogUtil.d(TAG, "  - onServiceConnected: if binding succeeds")
+                LogUtil.d(TAG, "  - onBindingDied: if target process crashes")
+                LogUtil.d(TAG, "  - onNullBinding: if service returns null binder")
             }
             // 绑定成功会在ServiceConnection的onServiceConnected中处理
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to bind service: ${e.message}")
-            // 如果启动成功但绑定失败，尝试停止服务
-            if (isServiceStarted && currentIntent != null) {
-                try {
-                    context.stopService(currentIntent)
-                    isServiceStarted = false
-                } catch (stopException: Exception) {
-                    LogUtil.e(TAG, "Failed to stop service after exception: ${stopException.message}")
-                }
-            }
+            LogUtil.e(TAG, "Exception during bindService: ${e.message}")
+            LogUtil.e(TAG, "Exception type: ${e.javaClass.simpleName}")
+            e.printStackTrace()
             notifyConnectionError("Exception: ${e.message}", InnerErrorCode.C25)
         }
     }
@@ -197,9 +218,11 @@ class LocalServiceKernel constructor(
             override fun callback(responseData: String?) {
                 val response = responseData ?: "SUCCESS"
 
-                // 通过 dataReceiver 传递响应（供 TaplinkApiImpl 使用）
-                // 这样可以通过 processReceivedResponse 统一管理回调的调用和移除
-                dataReceiver?.invoke(response.toByteArray(Charsets.UTF_8))
+                callback?.onResponse(response)
+//                // 通过 dataReceiver 传递响应（供 TaplinkApiImpl 使用）
+//                // 这样可以通过 processReceivedResponse 统一管理回调的调用和移除
+//                dataReceiver?.invoke(response.toByteArray(Charsets.UTF_8))
+
             }
 
             override fun onError(code: String?, msg: String?) {
@@ -212,8 +235,10 @@ class LocalServiceKernel constructor(
                     "ERROR: $errorCode - $errorMsg"
                 }
 
+                callback?.onError(errorCode, errorResponse)
+
                 // 错误信息也通过 dataReceiver 传递
-                dataReceiver?.invoke(errorResponse.toByteArray(Charsets.UTF_8))
+//                dataReceiver?.invoke(errorResponse.toByteArray(Charsets.UTF_8))
             }
         }
 
@@ -262,19 +287,36 @@ class LocalServiceKernel constructor(
     private fun createServiceConnection(connectionCallback: ConnectionCallback): ServiceConnection {
         return object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                LogUtil.d(TAG, "=== ServiceConnection.onServiceConnected ===")
                 LogUtil.d(TAG, "Service connected: $name")
+                LogUtil.d(TAG, "Binder: $binder")
                 isServiceBound = true
 
                 if (binder != null) {
                     try {
+                        LogUtil.d(TAG, "Converting binder to ITransaction interface...")
                         // 将binder转换为ITransaction接口
                         iTransaction = ITransaction.Stub.asInterface(binder)
                         if (iTransaction != null) {
                             LogUtil.d(TAG, "ITransaction interface obtained successfully")
-                            // 服务绑定成功
-                            notifyConnectionSuccess(iTransaction!!.getExtraInfos())
+
+                            try {
+                                LogUtil.d(TAG, "Calling iTransaction.getExtraInfos()...")
+                                val extraInfos = iTransaction!!.getExtraInfos()
+                                LogUtil.d(TAG, "Extra infos received: $extraInfos")
+
+                                LogUtil.d(TAG, "=== Calling notifyConnectionSuccess ===")
+                                // 服务绑定成功
+                                notifyConnectionSuccess(extraInfos)
+                                LogUtil.d(TAG, "=== notifyConnectionSuccess completed ===")
+                            } catch (e: Exception) {
+                                LogUtil.e(TAG, "Failed to get extra infos: ${e.message}")
+                                e.printStackTrace()
+                                // 即使获取额外信息失败，也认为连接成功
+                                notifyConnectionSuccess(mutableMapOf())
+                            }
                         } else {
-                            LogUtil.e(TAG, "Failed to convert binder to ITransaction")
+                            LogUtil.e(TAG, "Failed to convert binder to ITransaction - interface is null")
                             notifyConnectionError(
                                 "Failed to convert binder to ITransaction",
                                 InnerErrorCode.C25
@@ -282,19 +324,23 @@ class LocalServiceKernel constructor(
                         }
                     } catch (e: Exception) {
                         LogUtil.e(TAG, "Exception while converting binder to ITransaction: ${e.message}")
+                        e.printStackTrace()
                         notifyConnectionError(
                             "Exception while converting binder: ${e.message}",
                             InnerErrorCode.C25
                         )
                     }
                 } else {
+                    LogUtil.e(TAG, "Service binder is null")
                     // 服务绑定失败（binder为null）
                     notifyConnectionError("Service binder is null", InnerErrorCode.C25)
                 }
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
+                LogUtil.d(TAG, "=== ServiceConnection.onServiceDisconnected ===")
                 LogUtil.d(TAG, "Service disconnected: $name")
+                LogUtil.d(TAG, "This usually means the service process crashed or was killed")
                 isServiceBound = false
                 iTransaction = null
 
@@ -304,7 +350,14 @@ class LocalServiceKernel constructor(
             }
 
             override fun onBindingDied(name: ComponentName?) {
+                LogUtil.d(TAG, "=== ServiceConnection.onBindingDied ===")
                 LogUtil.d(TAG, "Service binding died: $name")
+                LogUtil.d(TAG, "This means the target process crashed during or after binding")
+                LogUtil.d(TAG, "Common causes:")
+                LogUtil.d(TAG, "  1. Target service crashed in onCreate() or onBind()")
+                LogUtil.d(TAG, "  2. Target process was killed by system")
+                LogUtil.d(TAG, "  3. AIDL interface mismatch")
+                LogUtil.d(TAG, "  4. Target service returned null from onBind()")
                 isServiceBound = false
                 iTransaction = null
 
@@ -314,7 +367,9 @@ class LocalServiceKernel constructor(
             }
 
             override fun onNullBinding(name: ComponentName?) {
+                LogUtil.d(TAG, "=== ServiceConnection.onNullBinding ===")
                 LogUtil.d(TAG, "Service null binding: $name")
+                LogUtil.d(TAG, "This means the service's onBind() method returned null")
                 isServiceBound = false
                 iTransaction = null
 
