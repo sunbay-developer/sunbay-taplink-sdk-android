@@ -1,22 +1,22 @@
 package com.sunmi.tapro.taplink.sdk.error
 
 /**
- * 连接错误
+ * Connection error
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class ConnectionError(
-    /** 错误码 */
+    /** Error code */
     val code: String,
     
-    /** 错误描述 */
+    /** Error description */
     val message: String,
     
-    /** 设备 ID（如果有） */
+    /** Device ID (if available) */
     val deviceId: String? = null,
     
-    /** 处理建议 */
+    /** Handling suggestion */
     val suggestion: String? = null
 )
 

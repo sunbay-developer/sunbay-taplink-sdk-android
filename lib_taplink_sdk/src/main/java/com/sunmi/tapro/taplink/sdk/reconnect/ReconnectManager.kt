@@ -1,67 +1,77 @@
 package com.sunmi.tapro.taplink.sdk.reconnect
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
+import com.sunmi.tapro.taplink.sdk.persistence.ConnectionPersistence
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
- * 重连管理器
+ * Enhanced reconnect manager with persistence support
  *
- * 负责管理自动重连逻辑，包括：
- * - 重连状态管理
- * - 重试计数
- * - 延迟重连调度
+ * Manages automatic reconnection logic with persistent connection configuration:
+ * - Reconnection state management
+ * - Retry counting
+ * - Delayed reconnection scheduling
+ * - Connection configuration persistence
+ * - Device ID based auto-discovery
  *
  * @author TaPro Team
- * @since 2025-12-11
+ * @since 2025-12-21
  */
 class ReconnectManager(
+    private val context: Context,
     private val config: TaplinkConfig,
     private val reconnectAction: (ConnectionConfig?, ConnectionListener) -> Unit
 ) {
     private val TAG = "ReconnectManager"
 
     /**
-     * 是否为主动断开连接
+     * Connection persistence manager
+     */
+    private val connectionPersistence = ConnectionPersistence(context)
+
+    /**
+     * Whether this is a manual disconnect
      */
     private var isManualDisconnect = false
 
     /**
-     * 当前重试次数
+     * Current retry count
      */
     private var currentRetryCount = 0
 
     /**
-     * 是否正在重连中
+     * Whether currently reconnecting
      */
     private var isReconnecting = false
 
     /**
-     * 上次连接配置（用于重连）
+     * Last connection config (for reconnection)
      */
     private var lastConnectionConfig: ConnectionConfig? = null
 
     /**
-     * 上次连接监听器（用于重连）
+     * Last connection listener (for reconnection)
      */
     private var lastConnectionListener: ConnectionListener? = null
 
     /**
-     * 重连处理器
+     * Reconnection handler
      */
     private val retryHandler = Handler(Looper.getMainLooper())
 
     /**
-     * 准备连接
+     * Prepare connection
      *
-     * 保存连接参数，重置重连状态
-     * 当用户手动调用 connect() 时，会重置所有状态，允许重新开始连接
+     * Save connection parameters, reset reconnection state
+     * When user manually calls connect(), reset all states to allow fresh connection
      *
-     * @param config 连接配置
-     * @param listener 连接监听器
+     * @param config Connection configuration
+     * @param listener Connection listener
      */
     fun prepareConnect(config: ConnectionConfig?, listener: ConnectionListener) {
         LogUtil.d(TAG, "Preparing connection, resetting reconnect state")
@@ -71,34 +81,46 @@ class ReconnectManager(
         currentRetryCount = 0
         isReconnecting = false
 
-        // 取消所有待处理的重连任务
+        // Cancel all pending reconnection tasks
         retryHandler.removeCallbacksAndMessages(null)
     }
 
     /**
-     * 连接成功
+     * Connection successful
      *
-     * 重置重试计数和重连状态
+     * Reset retry count and reconnection state
+     * Save connection configuration for future auto-reconnection
+     *
+     * @param deviceId Connected device ID
      */
-    fun onConnected() {
+    fun onConnected(deviceId: String? = null) {
         currentRetryCount = 0
         isReconnecting = false
         LogUtil.d(TAG, "Connection established, reset reconnect state")
+
+        // Save connection configuration for persistence
+        if (lastConnectionConfig != null) {
+            connectionPersistence.saveConnectionConfig(lastConnectionConfig, deviceId)
+            LogUtil.d(TAG, "Saved connection config for future auto-reconnection")
+        }
+
+        // Enable auto-connect for future app launches
+        connectionPersistence.setAutoConnectEnabled(true)
     }
 
     /**
-     * 连接断开
+     * Connection disconnected
      *
-     * 判断是否需要自动重连
+     * Determine whether to auto-reconnect
      *
-     * @param listener 连接监听器
-     * @return Boolean 是否触发了自动重连
+     * @param listener Connection listener
+     * @return Boolean whether auto-reconnection was triggered
      */
     fun onDisconnected(listener: ConnectionListener): Boolean {
-        // 防止重复触发重连
+        // Prevent duplicate reconnection triggers
         if (isReconnecting) {
             LogUtil.w(TAG, "Already reconnecting, ignoring duplicate onDisconnected call")
-            return true // 返回 true 表示正在处理重连，不需要通知应用层
+            return true // Return true to indicate reconnection is being handled
         }
 
         val shouldAutoReconnect = config.autoReconnect &&
@@ -110,11 +132,11 @@ class ReconnectManager(
             currentRetryCount++
             LogUtil.d(TAG, "Connection lost, attempting reconnect ($currentRetryCount/${config.maxRetryCount})")
 
-            // 通知监听器正在重连
+            // Notify listener of reconnection attempt
             listener.onReconnecting(currentRetryCount, config.maxRetryCount)
             lastConnectionListener?.onReconnecting(currentRetryCount, config.maxRetryCount)
 
-            // 延迟重连
+            // Delayed reconnection
             retryHandler.postDelayed({
                 attemptReconnect()
             }, config.retryDelayMs)
@@ -122,22 +144,22 @@ class ReconnectManager(
             return true
         }
 
-        // 重连次数用完或不需要重连
+        // Retry limit reached or no auto-reconnect needed
         if (!isManualDisconnect && currentRetryCount >= config.maxRetryCount) {
             LogUtil.e(TAG, "Max retry attempts reached ($currentRetryCount/${config.maxRetryCount}), giving up auto-reconnection")
             LogUtil.i(TAG, "User can manually call connect() to reconnect")
         }
 
-        // 重置重连状态，允许用户手动重连
+        // Reset reconnection state, allow manual reconnection
         isReconnecting = false
 
         return false
     }
 
     /**
-     * 主动断开
+     * Manual disconnect
      *
-     * 标记为主动断开，取消所有重试任务
+     * Mark as manual disconnect, cancel all retry tasks
      */
     fun disconnect() {
         LogUtil.d(TAG, "Manual disconnect")
@@ -146,16 +168,20 @@ class ReconnectManager(
         currentRetryCount = 0
         retryHandler.removeCallbacksAndMessages(null)
 
-        // 清空保存的连接参数（主动断开时不保留）
+        // Clear saved connection parameters (manual disconnect doesn't preserve)
         lastConnectionConfig = null
         lastConnectionListener = null
+        
+        // Clear persistent connection data
+        connectionPersistence.clearConnectionData()
+        connectionPersistence.setAutoConnectEnabled(false)
         LogUtil.d(TAG, "Cleared saved connection config due to manual disconnect")
     }
 
     /**
-     * 尝试重新连接
+     * Attempt reconnection
      *
-     * 使用上次保存的连接配置和监听器进行重连
+     * Use last saved connection configuration and listener for reconnection
      */
     private fun attemptReconnect() {
         LogUtil.d(TAG, "Attempting to reconnect...")
@@ -164,15 +190,15 @@ class ReconnectManager(
         val listener = lastConnectionListener
 
         if (listener != null) {
-            // 保存当前重连状态
+            // Save current reconnection state
             val savedRetryCount = currentRetryCount
             val savedManualDisconnect = isManualDisconnect
             val savedReconnecting = isReconnecting
 
-            // 重新连接
+            // Reconnect
             reconnectAction(config, listener)
 
-            // 恢复重连状态（因为 reconnectAction 可能会重置这些值）
+            // Restore reconnection state (because reconnectAction might reset these values)
             currentRetryCount = savedRetryCount
             isManualDisconnect = savedManualDisconnect
             isReconnecting = savedReconnecting
@@ -183,52 +209,138 @@ class ReconnectManager(
     }
 
     /**
-     * 是否为主动断开
+     * Whether this is a manual disconnect
      */
     fun isManualDisconnect(): Boolean = isManualDisconnect
 
     /**
-     * 获取当前重试次数
+     * Get current retry count
      */
     fun getCurrentRetryCount(): Int = currentRetryCount
 
     /**
-     * 获取上次的连接配置
+     * Get last connection configuration
      *
-     * 用于在没有传递 ConnectionConfig 时使用上次的连接参数
+     * Used when no ConnectionConfig is passed to use last connection parameters
+     * First tries in-memory config, then falls back to persistent storage
      *
-     * @return 上次的连接配置，如果没有则返回 null
+     * @return Last connection configuration, or null if none available
      */
-    fun getLastConnectionConfig(): ConnectionConfig? = lastConnectionConfig
+    fun getLastConnectionConfig(): ConnectionConfig? {
+        // First try in-memory config
+        if (lastConnectionConfig != null) {
+            LogUtil.d(TAG, "Using in-memory connection config")
+            return lastConnectionConfig
+        }
+
+        // Fall back to persistent storage
+        val persistentConfig = connectionPersistence.getLastConnectionConfig()
+        if (persistentConfig != null) {
+            LogUtil.d(TAG, "Using persistent connection config")
+            lastConnectionConfig = persistentConfig // Cache for future use
+            return persistentConfig
+        }
+
+        LogUtil.d(TAG, "No connection config available")
+        return null
+    }
 
     /**
-     * 处理服务地址变更
+     * Handle service address change
      *
-     * 当mDNS检测到服务地址变更时，更新连接配置并触发重连
+     * When mDNS detects service address change, update connection config and trigger reconnection
      *
-     * @param newConnectionConfig 新的连接配置
-     * @param listener 连接监听器
+     * @param newConnectionConfig New connection configuration
+     * @param listener Connection listener
      */
     fun onAddressChanged(newConnectionConfig: ConnectionConfig, listener: ConnectionListener) {
-        LogUtil.i(TAG, "Service address changed, updating connection config and reconnecting:config::$newConnectionConfig")
+        LogUtil.i(TAG, "Service address changed, updating connection config and reconnecting: $newConnectionConfig")
 
-        // 更新保存的连接配置
+        // Update saved connection configuration
         lastConnectionConfig = newConnectionConfig
 
-        // 重置重连状态，因为这是地址变更导致的重连，不是失败重试
+        // Update persistent storage
+        val deviceId = connectionPersistence.getLastConnectedDeviceId()
+        connectionPersistence.saveConnectionConfig(newConnectionConfig, deviceId)
+
+        // Reset reconnection state, as this is address change reconnection, not failure retry
         currentRetryCount = 0
         isManualDisconnect = false
         isReconnecting = true
 
-        // 取消现有的重连任务
+        // Cancel existing reconnection tasks
         retryHandler.removeCallbacksAndMessages(null)
 
-        // 通知监听器正在重连（地址变更）
+        // Notify listener of reconnection (address change)
         listener.onReconnecting(0, config.maxRetryCount)
         lastConnectionListener?.onReconnecting(0, config.maxRetryCount)
 
-        // 立即尝试连接到新地址（不延迟）
+        // Immediately attempt connection to new address (no delay)
         LogUtil.d(TAG, "Attempting to connect to new address immediately")
         reconnectAction(newConnectionConfig, listener)
+    }
+
+    /**
+     * Check if auto-connect should be performed on app startup
+     *
+     * @return True if auto-connect should be performed
+     */
+    fun shouldAutoConnect(): Boolean {
+        val enabled = connectionPersistence.isAutoConnectEnabled()
+        val hasConfig = connectionPersistence.getLastConnectionConfig() != null
+        
+        LogUtil.d(TAG, "Auto-connect check: enabled=$enabled, hasConfig=$hasConfig")
+        return enabled && hasConfig
+    }
+
+    /**
+     * Get auto-connect configuration
+     *
+     * @return ConnectionConfig for auto-connect, or null if not available
+     */
+    fun getAutoConnectConfig(): ConnectionConfig? {
+        return if (shouldAutoConnect()) {
+            connectionPersistence.getLastConnectionConfig()
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Get last connected device ID
+     *
+     * @return Last connected device ID, or null if not available
+     */
+    fun getLastConnectedDeviceId(): String? {
+        return connectionPersistence.getLastConnectedDeviceId()
+    }
+
+    /**
+     * Update device service information for mDNS discovery
+     *
+     * @param deviceId Device ID
+     * @param serviceName Service name
+     * @param host Host/IP address
+     * @param port Port number
+     */
+    fun updateDeviceServiceInfo(deviceId: String, serviceName: String, host: String, port: Int) {
+        val deviceServiceInfo = ConnectionPersistence.DeviceServiceInfo(
+            deviceId = deviceId,
+            serviceName = serviceName,
+            host = host,
+            port = port
+        )
+        connectionPersistence.saveDeviceServiceInfo(deviceServiceInfo)
+        LogUtil.d(TAG, "Updated device service info: $deviceServiceInfo")
+    }
+
+    /**
+     * Get device service information
+     *
+     * @param deviceId Device ID
+     * @return Device service information, or null if not found
+     */
+    fun getDeviceServiceInfo(deviceId: String): ConnectionPersistence.DeviceServiceInfo? {
+        return connectionPersistence.getDeviceServiceInfo(deviceId)
     }
 }

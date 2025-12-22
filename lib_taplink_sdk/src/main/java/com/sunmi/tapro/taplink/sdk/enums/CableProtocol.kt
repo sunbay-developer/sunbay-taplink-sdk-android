@@ -1,15 +1,15 @@
 package com.sunmi.tapro.taplink.sdk.enums
 
 /**
- * 线缆协议枚举
+ * Cable protocol enumeration
  * 
- * 用于指定线缆连接时使用的协议类型
+ * Used to specify the protocol type for cable connections
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 enum class CableProtocol {
-    /** 自动检测（默认） */
+    /** Auto-detection (default) */
     AUTO,
     
     /** USB Android Open Accessory 2.0 */
@@ -18,7 +18,7 @@ enum class CableProtocol {
     /** USB Virtual Serial Port (CDC-ACM) */
     USB_VSP,
     
-    /** 标准 RS232 串行通信 */
+    /** Standard RS232 serial communication */
     RS232
 }
 

@@ -3,9 +3,9 @@ package com.sunmi.tapro.taplink.sdk.callback
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 
 /**
- * 连接状态监听器
+ * Connection status listener
  * 
- * 实时监听连接状态变化、断线重连等事件。
+ * Real-time monitoring of connection status changes, disconnection and reconnection events.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -13,37 +13,37 @@ import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 interface ConnectionListener {
     
     /**
-     * 连接成功
+     * Connection successful
      * 
-     * @param deviceId 设备标识
-     * @param taproVersion Tapro 版本号
+     * @param deviceId Device identifier
+     * @param taproVersion Tapro version number
      */
     fun onConnected(deviceId: String, taproVersion: String)
     
     /**
-     * 连接断开
+     * Connection disconnected
      *
-     * @param reason 断开原因
+     * @param reason Disconnection reason
      */
     fun onDisconnected(reason: String)
     
     /**
-     * 连接错误
+     * Connection error
      * 
-     * @param error 错误信息
+     * @param error Error information
      */
     fun onError(error: ConnectionError)
     
     /**
-     * 正在重连（可选实现）
+     * Reconnecting (optional implementation)
      * 
-     * 当启用自动重连时，SDK 会在重连前调用此方法
+     * When auto-reconnection is enabled, SDK will call this method before reconnecting
      * 
-     * @param attempt 当前重试次数
-     * @param maxRetries 最大重试次数
+     * @param attempt Current retry attempt number
+     * @param maxRetries Maximum retry attempts
      */
     fun onReconnecting(attempt: Int, maxRetries: Int) {
-        // 默认空实现，子类可选择性覆盖
+        // Default empty implementation, subclasses can optionally override
     }
     
 }

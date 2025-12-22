@@ -1,7 +1,7 @@
 package com.sunmi.tapro.taplink.sdk.error
 
 /**
- * Taplink SDK异常
+ * Taplink SDK exception
  * 
  * @author TaPro Team
  * @since 2025-01-XX

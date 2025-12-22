@@ -6,10 +6,10 @@ import com.google.gson.annotations.SerializedName
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 
 /**
- * Taplink基础响应参数
+ * Taplink basic response parameters
  *
- * 所有响应都使用此结构
- * 包含通用字段：appSign, version, timeStamp, action, event, bizData
+ * All responses use this structure
+ * Contains common fields: appSign, version, timeStamp, action, event, bizData
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -17,50 +17,50 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 @JsonAdapter(BasicResponseTypeAdapter::class)
 data class BasicResponse(
     /**
-     * 消息签名，使用HMAC-SHA256算法生成
-     * 必填
+     * Message signature, generated using HMAC-SHA256 algorithm
+     * Required
      */
     @SerializedName("appSign")
     val appSign: String,
     
     /**
-     * SDK版本号，格式：x.y.z
-     * 必填
+     * SDK version number, format: x.y.z
+     * Required
      */
     @SerializedName("version")
     val version: String,
     
     /**
-     * 响应时间戳，格式：yyyyMMddHHmmssSSS
-     * 必填
+     * Response timestamp, format: yyyyMMddHHmmssSSS
+     * Required
      */
     @SerializedName("timeStamp")
     val timeStamp: String,
     
     /**
-     * 操作类型标识符
-     * 必填
+     * Operation type identifier
+     * Required
      */
     @SerializedName("action")
     val action: String,
     
     /**
-     * 支付事件，包含事件码和事件信息
-     * 必填
-     * JSON 序列化时会映射为 eventCode 和 eventMsg 字段
+     * Payment event, contains event code and event information
+     * Required
+     * When JSON serialized, maps to eventCode and eventMsg fields
      */
     val event: PaymentEvent,
     
     /**
-     * 业务数据，根据action类型变化
-     * 可选
+     * Business data, varies based on action type
+     * Optional
      */
     @SerializedName("bizData")
     val bizData: JsonObject? = null,
     
     /**
-     * 追踪ID，用于跟踪并发请求，确保响应能返回给对应的callback
-     * 必填，与请求中的traceId保持一致
+     * Trace ID, used to track concurrent requests, ensures response returns to corresponding callback
+     * Required, must match traceId in request
      */
     @SerializedName("traceId")
     val traceId: String

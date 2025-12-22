@@ -8,22 +8,22 @@ import org.junit.Test
 import org.junit.Assert.*
 
 /**
- * 自动重连功能测试
+ * Auto-reconnection feature tests
  * 
- * 测试自动重连配置和行为
+ * Tests auto-reconnection configuration and behavior
  */
 class AutoReconnectTest {
     
     @Test
     fun testDefaultAutoReconnectConfig() {
-        // 测试默认配置
+        // Test default configuration
         val config = TaplinkConfig(
             appId = "test_app_id",
             merchantId = "test_merchant_id",
             secretKey = "test_secret_key"
         )
         
-        // 验证默认值
+        // Verify default values
         assertTrue("Auto reconnect should be enabled by default", config.autoReconnect)
         assertEquals("Default max retry count should be 3", 3, config.maxRetryCount)
         assertEquals("Default retry delay should be 2000ms", 2000L, config.retryDelayMs)
@@ -31,7 +31,7 @@ class AutoReconnectTest {
     
     @Test
     fun testCustomAutoReconnectConfig() {
-        // 测试自定义配置
+        // Test custom configuration
         val config = TaplinkConfig(
             appId = "test_app_id",
             merchantId = "test_merchant_id",
@@ -40,7 +40,7 @@ class AutoReconnectTest {
             .setAutoReconnect(false)
             .setRetryPolicy(maxRetries = 5, delayMs = 3000L)
         
-        // 验证自定义值
+        // Verify custom values
         assertFalse("Auto reconnect should be disabled", config.autoReconnect)
         assertEquals("Max retry count should be 5", 5, config.maxRetryCount)
         assertEquals("Retry delay should be 3000ms", 3000L, config.retryDelayMs)
@@ -48,7 +48,7 @@ class AutoReconnectTest {
     
     @Test
     fun testAutoReconnectWithDifferentConnectionModes() {
-        // 测试不同连接模式的重连配置
+        // Test reconnection configuration for different connection modes
         val modes = listOf(
             ConnectionMode.APP_TO_APP,
             ConnectionMode.CABLE,
@@ -71,7 +71,7 @@ class AutoReconnectTest {
     
     @Test
     fun testConnectionListenerWithReconnecting() {
-        // 测试 ConnectionListener 的 onReconnecting 回调
+        // Test ConnectionListener's onReconnecting callback
         var reconnectingCalled = false
         var reconnectAttempt = 0
         var reconnectMaxRetries = 0
@@ -96,10 +96,10 @@ class AutoReconnectTest {
             }
         }
         
-        // 模拟调用 onReconnecting
+        // Simulate calling onReconnecting
         listener.onReconnecting(2, 5)
         
-        // 验证回调被调用
+        // Verify callback was called
         assertTrue("onReconnecting should be called", reconnectingCalled)
         assertEquals("Attempt should be 2", 2, reconnectAttempt)
         assertEquals("Max retries should be 5", 5, reconnectMaxRetries)
@@ -107,7 +107,7 @@ class AutoReconnectTest {
     
     @Test
     fun testRecommendedRetryPolicyForLAN() {
-        // 测试局域网模式推荐的重试策略
+        // Test recommended retry policy for LAN mode
         val config = TaplinkConfig(
             appId = "test_app_id",
             merchantId = "test_merchant_id",
@@ -122,7 +122,7 @@ class AutoReconnectTest {
     
     @Test
     fun testRecommendedRetryPolicyForAppToApp() {
-        // 测试应用间模式推荐的重试策略
+        // Test recommended retry policy for app-to-app mode
         val config = TaplinkConfig(
             appId = "test_app_id",
             merchantId = "test_merchant_id",
@@ -137,7 +137,7 @@ class AutoReconnectTest {
     
     @Test
     fun testDisableAutoReconnect() {
-        // 测试禁用自动重连
+        // Test disabling auto-reconnection
         val config = TaplinkConfig(
             appId = "test_app_id",
             merchantId = "test_merchant_id",
@@ -150,7 +150,7 @@ class AutoReconnectTest {
     
     @Test
     fun testChainedConfiguration() {
-        // 测试链式配置
+        // Test chained configuration
         val config = TaplinkConfig(
             appId = "test_app_id",
             merchantId = "test_merchant_id",

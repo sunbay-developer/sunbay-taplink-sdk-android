@@ -107,8 +107,8 @@ class TaplinkApiImpl : TaplinkApi {
         LogUtil.d(TAG, "Initializing SDK with appId: ${config.appId}")
         this.config = config
 
-        // 初始化重连管理器
-        reconnectManager = ReconnectManager(config) { connectionConfig, listener ->
+        // 初始化重连管理器（传入 context）
+        reconnectManager = ReconnectManager(context, config) { connectionConfig, listener ->
             connectInternal(connectionConfig, listener)
         }
 
@@ -125,6 +125,51 @@ class TaplinkApiImpl : TaplinkApi {
             }
         } else {
             LogUtil.setLevel(9999)
+        }
+
+        // 检查是否需要自动连接
+        checkAutoConnect(context)
+    }
+
+    /**
+     * 检查并执行自动连接
+     */
+    private fun checkAutoConnect(context: Context) {
+        try {
+            if (reconnectManager?.shouldAutoConnect() == true) {
+                val autoConnectConfig = reconnectManager?.getAutoConnectConfig()
+                if (autoConnectConfig != null) {
+                    LogUtil.i(TAG, "Auto-connect enabled, attempting to connect with saved configuration")
+                    
+                    // 创建一个内部监听器用于自动连接
+                    val autoConnectListener = object : ConnectionListener {
+                        override fun onConnected(deviceId: String, taproVersion: String) {
+                            LogUtil.i(TAG, "Auto-connect successful: deviceId=$deviceId")
+                            connectionListener?.onConnected(deviceId, taproVersion)
+                        }
+                        
+                        override fun onError(error: ConnectionError) {
+                            LogUtil.w(TAG, "Auto-connect failed: ${error.message}")
+                            // 自动连接失败时不通知应用层，让用户手动连接
+                        }
+                        
+                        override fun onDisconnected(reason: String) {
+                            LogUtil.d(TAG, "Auto-connect disconnected: $reason")
+                            connectionListener?.onDisconnected(reason)
+                        }
+                        
+                        override fun onReconnecting(currentAttempt: Int, maxAttempts: Int) {
+                            LogUtil.d(TAG, "Auto-connect reconnecting: $currentAttempt/$maxAttempts")
+                            connectionListener?.onReconnecting(currentAttempt, maxAttempts)
+                        }
+                    }
+                    
+                    // 执行自动连接
+                    connect(autoConnectConfig, autoConnectListener)
+                }
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Auto-connect check failed: ${e.message}")
         }
     }
 
@@ -201,8 +246,8 @@ class TaplinkApiImpl : TaplinkApi {
                     override fun onConnected(extraInfoMap: Map<String, String?>?) {
                         LogUtil.d(TAG, "onConnected, extraInfoMap=${extraInfoMap.toString()}")
 
-                        // 通知重连管理器连接成功
-                        reconnectManager?.onConnected()
+                        // 通知重连管理器连接成功（传入设备ID）
+                        reconnectManager?.onConnected(connectedDeviceId)
 
                         // 注册数据接收器，用于接收响应
                         registerDataReceiver()

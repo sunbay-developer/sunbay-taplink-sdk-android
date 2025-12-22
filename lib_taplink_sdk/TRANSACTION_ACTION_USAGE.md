@@ -1,71 +1,71 @@
-# TransactionAction 枚举使用指南
+# TransactionAction Enum Usage Guide
 
-## 📋 概述
+## 📋 Overview
 
-`TransactionAction` 枚举定义了所有支持的交易类型，替代了之前使用的魔法字符串，提供了类型安全和更好的代码提示。
+The `TransactionAction` enum defines all supported transaction types, replacing the previously used magic strings, providing type safety and better code completion.
 
-## 🎯 为什么使用枚举？
+## 🎯 Why Use Enums?
 
-### 使用字符串的问题 ❌
+### Problems with Using Strings ❌
 
 ```kotlin
-// ❌ 容易拼写错误
+// ❌ Easy to make spelling errors
 val request = PaymentRequest(
-    action = "SAEL",  // 拼写错误！应该是 SALE
+    action = "SAEL",  // Spelling error! Should be SALE
     ...
 )
 
-// ❌ 没有代码提示
+// ❌ No code completion
 val request = PaymentRequest(
-    action = "???",  // 不知道有哪些可用的值
+    action = "???",  // Don't know what values are available
     ...
 )
 
-// ❌ 编译时无法检查
+// ❌ No compile-time checking
 val request = PaymentRequest(
-    action = "INVALID_ACTION",  // 编译通过，运行时才发现错误
+    action = "INVALID_ACTION",  // Compiles but fails at runtime
     ...
 )
 ```
 
-### 使用枚举的优势 ✅
+### Advantages of Using Enums ✅
 
 ```kotlin
-// ✅ 类型安全，编译时检查
+// ✅ Type safe, compile-time checking
 val request = PaymentRequest(
     action = TransactionAction.SALE.value,
     ...
 )
 
-// ✅ IDE 自动提示所有可用值
+// ✅ IDE auto-completion for all available values
 val request = PaymentRequest(
-    action = TransactionAction.  // IDE 会显示所有选项
+    action = TransactionAction.  // IDE shows all options
     ...
 )
 
-// ✅ 重构友好
-// 如果修改枚举名称，IDE 可以自动更新所有引用
+// ✅ Refactoring friendly
+// If enum names are changed, IDE can automatically update all references
 ```
 
-## 📚 支持的交易类型
+## 📚 Supported Transaction Types
 
-| 枚举值 | 字符串值 | 说明 | 使用场景 |
-|--------|---------|------|---------|
-| `INIT` | "INIT" | 初始化连接 | 建立连接后初始化 TaPro 应用 |
-| `SALE` | "SALE" | 销售交易 | 标准的支付交易 |
-| `REFUND` | "REFUND" | 退款交易 | 对已完成的交易进行退款 |
-| `VOID` | "VOID" | 撤销交易 | 撤销当天的交易（当日退款） |
-| `AUTH` | "AUTH" | 预授权 | 冻结资金但不扣款 |
-| `POST_AUTH` | "POST_AUTH" | 预授权完成 | 完成预授权并扣款 |
-| `INCREMENT_AUTH` | "INCREMENT_AUTH" | 预授权追加 | 增加预授权金额 |
-| `FORCED_AUTH` | "FORCED_AUTH" | 强制授权 | 使用授权码强制完成交易 |
-| `TIP_ADJUST` | "TIP_ADJUST" | 小费调整 | 调整已完成交易的小费金额 |
-| `BATCH_CLOSE` | "BATCH_CLOSE" | 批次结算 | 结算当前批次的所有交易 |
-| `QUERY` | "QUERY" | 查询交易 | 查询交易状态 |
+| Enum Value | String Value | Description | Use Case |
+|------------|--------------|-------------|----------|
+| `INIT` | "INIT" | Initialize connection | Initialize TaPro app after establishing connection |
+| `SALE` | "SALE" | Sale transaction | Standard payment transaction |
+| `REFUND` | "REFUND" | Refund transaction | Refund a completed transaction |
+| `VOID` | "VOID" | Void transaction | Cancel a same-day transaction |
+| `AUTH` | "AUTH" | Pre-authorization | Freeze funds without charging |
+| `POST_AUTH` | "POST_AUTH" | Complete pre-authorization | Complete pre-auth and charge |
+| `INCREMENT_AUTH` | "INCREMENT_AUTH" | Increment pre-authorization | Increase pre-auth amount |
+| `FORCED_AUTH` | "FORCED_AUTH" | Forced authorization | Force complete transaction using auth code |
+| `TIP_ADJUST` | "TIP_ADJUST" | Tip adjustment | Adjust tip amount for completed transaction |
+| `BATCH_CLOSE` | "BATCH_CLOSE" | Batch settlement | Settle all transactions in current batch |
+| `QUERY` | "QUERY" | Query transaction | Query transaction status |
 
-## 🔧 使用方法
+## 🔧 Usage Methods
 
-### 方法 1: 直接使用枚举值（推荐）✅
+### Method 1: Direct Enum Usage (Recommended) ✅
 
 ```kotlin
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
@@ -76,7 +76,7 @@ val request = PaymentRequest(
     referenceOrderId = "ORDER001",
     transactionRequestId = "TXN001",
     amount = amountInfo,
-    description = "商品购买"
+    description = "Product purchase"
 )
 ```
 
@@ -89,37 +89,37 @@ PaymentRequest request = PaymentRequest.builder()
     .setReferenceOrderId("ORDER001")
     .setTransactionRequestId("TXN001")
     .setAmount(amountInfo)
-    .setDescription("商品购买")
+    .setDescription("Product purchase")
     .build();
 ```
 
-### 方法 2: 使用 Builder 模式
+### Method 2: Using Builder Pattern
 
 ```kotlin
-// Kotlin - 使用枚举
+// Kotlin - Using enum
 val request = PaymentRequest.builder()
     .setAction(TransactionAction.SALE)
     .setReferenceOrderId("ORDER001")
     .setTransactionRequestId("TXN001")
     .setAmount(amountInfo)
-    .setDescription("商品购买")
+    .setDescription("Product purchase")
     .build()
 ```
 
-### 方法 3: 向后兼容（仍然支持字符串）
+### Method 3: Backward Compatibility (Still supports strings)
 
 ```kotlin
-// 仍然支持字符串，但不推荐
+// Still supports strings, but not recommended
 val request = PaymentRequest(
-    action = "SALE",  // 向后兼容
+    action = "SALE",  // Backward compatible
     referenceOrderId = "ORDER001",
     ...
 )
 ```
 
-## 📖 完整示例
+## 📖 Complete Examples
 
-### 示例 1: 销售交易
+### Example 1: Sale Transaction
 
 ```kotlin
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
@@ -127,7 +127,7 @@ import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import java.math.BigDecimal
 
-// 创建销售请求
+// Create sale request
 val saleRequest = PaymentRequest(
     action = TransactionAction.SALE.value,
     referenceOrderId = "ORDER${System.currentTimeMillis()}",
@@ -136,66 +136,66 @@ val saleRequest = PaymentRequest(
         totalAmount = BigDecimal("100.00"),
         currency = "USD"
     ),
-    description = "购买商品"
+    description = "Purchase product"
 )
 
-// 执行交易
+// Execute transaction
 TaplinkSDK.execute(saleRequest, object : PaymentCallback {
     override fun onSuccess(result: PaymentResult) {
-        println("交易成功: ${result.transactionId}")
+        println("Transaction successful: ${result.transactionId}")
     }
     
     override fun onFailure(error: PaymentError) {
-        println("交易失败: ${error.message}")
+        println("Transaction failed: ${error.message}")
     }
     
     override fun onProgress(event: PaymentEvent) {
-        println("交易进行中: ${event.eventMsg}")
+        println("Transaction in progress: ${event.eventMsg}")
     }
 })
 ```
 
-### 示例 2: 退款交易
+### Example 2: Refund Transaction
 
 ```kotlin
-// 创建退款请求
+// Create refund request
 val refundRequest = PaymentRequest(
     action = TransactionAction.REFUND.value,
     referenceOrderId = "ORDER${System.currentTimeMillis()}",
     transactionRequestId = "REFUND${System.currentTimeMillis()}",
-    originalTransactionId = "原始交易ID",
+    originalTransactionId = "Original transaction ID",
     amount = AmountInfo(
         totalAmount = BigDecimal("50.00"),
         currency = "USD"
     ),
-    description = "退款",
-    reason = "客户要求退款"
+    description = "Refund",
+    reason = "Customer requested refund"
 )
 
 TaplinkSDK.execute(refundRequest, callback)
 ```
 
-### 示例 3: 查询交易
+### Example 3: Query Transaction
 
 ```kotlin
-// 方式 1: 使用 QueryRequest（推荐）
-val queryRequest = QueryRequest.byTransactionId("交易ID")
+// Method 1: Using QueryRequest (Recommended)
+val queryRequest = QueryRequest.byTransactionId("Transaction ID")
 TaplinkSDK.query(queryRequest, callback)
 
-// 方式 2: 使用 PaymentRequest
+// Method 2: Using PaymentRequest
 val queryRequest = PaymentRequest(
     action = TransactionAction.QUERY.value,
     transactionRequestId = "QUERY${System.currentTimeMillis()}",
-    originalTransactionId = "要查询的交易ID",
-    description = "查询交易状态"
+    originalTransactionId = "Transaction ID to query",
+    description = "Query transaction status"
 )
 TaplinkSDK.execute(queryRequest, callback)
 ```
 
-### 示例 4: 预授权流程
+### Example 4: Pre-authorization Flow
 
 ```kotlin
-// 1. 预授权
+// 1. Pre-authorization
 val authRequest = PaymentRequest(
     action = TransactionAction.AUTH.value,
     referenceOrderId = "ORDER001",
@@ -204,65 +204,65 @@ val authRequest = PaymentRequest(
         totalAmount = BigDecimal("200.00"),
         currency = "USD"
     ),
-    description = "预授权"
+    description = "Pre-authorization"
 )
 
-// 2. 预授权完成
+// 2. Complete pre-authorization
 val postAuthRequest = PaymentRequest(
     action = TransactionAction.POST_AUTH.value,
     referenceOrderId = "ORDER001",
     transactionRequestId = "POST_AUTH001",
-    originalTransactionId = "预授权交易ID",
+    originalTransactionId = "Pre-auth transaction ID",
     amount = AmountInfo(
-        totalAmount = BigDecimal("180.00"),  // 可以小于预授权金额
+        totalAmount = BigDecimal("180.00"),  // Can be less than pre-auth amount
         currency = "USD"
     ),
-    description = "预授权完成"
+    description = "Complete pre-authorization"
 )
 ```
 
-### 示例 5: 小费调整
+### Example 5: Tip Adjustment
 
 ```kotlin
 val tipAdjustRequest = PaymentRequest(
     action = TransactionAction.TIP_ADJUST.value,
     referenceOrderId = "ORDER001",
     transactionRequestId = "TIP001",
-    originalTransactionId = "原始交易ID",
+    originalTransactionId = "Original transaction ID",
     tipAmount = BigDecimal("10.00"),
-    description = "添加小费"
+    description = "Add tip"
 )
 ```
 
-## 🔍 枚举工具方法
+## 🔍 Enum Utility Methods
 
-### 从字符串转换为枚举
+### Convert from String to Enum
 
 ```kotlin
-// 方法 1: 安全转换（返回 null 如果不存在）
+// Method 1: Safe conversion (returns null if not found)
 val action = TransactionAction.fromValue("SALE")
 if (action != null) {
-    println("找到交易类型: ${action.value}")
+    println("Found transaction type: ${action.value}")
 }
 
-// 方法 2: 强制转换（抛出异常如果不存在）
+// Method 2: Force conversion (throws exception if not found)
 try {
     val action = TransactionAction.valueOf("SALE")
-    println("交易类型: ${action.value}")
+    println("Transaction type: ${action.value}")
 } catch (e: IllegalArgumentException) {
-    println("未知的交易类型")
+    println("Unknown transaction type")
 }
 ```
 
-### 获取所有支持的交易类型
+### Get All Supported Transaction Types
 
 ```kotlin
 val allActions = TransactionAction.getAllValues()
-println("支持的交易类型: $allActions")
-// 输出: [INIT, SALE, REFUND, VOID, AUTH, POST_AUTH, ...]
+println("Supported transaction types: $allActions")
+// Output: [INIT, SALE, REFUND, VOID, AUTH, POST_AUTH, ...]
 ```
 
-### 从 PaymentRequest 获取枚举
+### Get Enum from PaymentRequest
 
 ```kotlin
 val request = PaymentRequest(
@@ -270,27 +270,27 @@ val request = PaymentRequest(
     ...
 )
 
-// 获取枚举
+// Get enum
 val actionEnum = request.getActionEnum()
 when (actionEnum) {
-    TransactionAction.SALE -> println("这是销售交易")
-    TransactionAction.REFUND -> println("这是退款交易")
-    else -> println("其他交易类型")
+    TransactionAction.SALE -> println("This is a sale transaction")
+    TransactionAction.REFUND -> println("This is a refund transaction")
+    else -> println("Other transaction type")
 }
 ```
 
-## 🎨 最佳实践
+## 🎨 Best Practices
 
-### ✅ 推荐做法
+### ✅ Recommended Practices
 
 ```kotlin
-// 1. 使用枚举常量
+// 1. Use enum constants
 val request = PaymentRequest(
     action = TransactionAction.SALE.value,
     ...
 )
 
-// 2. 使用 when 表达式处理不同类型
+// 2. Use when expression to handle different types
 when (request.getActionEnum()) {
     TransactionAction.SALE -> handleSale()
     TransactionAction.REFUND -> handleRefund()
@@ -298,132 +298,132 @@ when (request.getActionEnum()) {
     else -> handleOther()
 }
 
-// 3. 在日志中使用枚举
+// 3. Use enum in logging
 LogUtil.d(TAG, "Processing ${TransactionAction.SALE} transaction")
 ```
 
-### ❌ 避免的做法
+### ❌ Practices to Avoid
 
 ```kotlin
-// 1. 避免硬编码字符串
+// 1. Avoid hardcoded strings
 val request = PaymentRequest(
-    action = "SALE",  // ❌ 不推荐
+    action = "SALE",  // ❌ Not recommended
     ...
 )
 
-// 2. 避免字符串比较
-if (request.action == "SALE") {  // ❌ 不推荐
+// 2. Avoid string comparison
+if (request.action == "SALE") {  // ❌ Not recommended
     handleSale()
 }
 
-// 推荐使用枚举比较
-if (request.getActionEnum() == TransactionAction.SALE) {  // ✅ 推荐
+// Recommend using enum comparison
+if (request.getActionEnum() == TransactionAction.SALE) {  // ✅ Recommended
     handleSale()
 }
 ```
 
-## 🔄 迁移指南
+## 🔄 Migration Guide
 
-### 从字符串迁移到枚举
+### Migrating from Strings to Enums
 
-**步骤 1: 导入枚举**
+**Step 1: Import enum**
 
 ```kotlin
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 ```
 
-**步骤 2: 替换字符串**
+**Step 2: Replace strings**
 
 ```kotlin
-// 之前
+// Before
 val request = PaymentRequest(
     action = "SALE",
     ...
 )
 
-// 之后
+// After
 val request = PaymentRequest(
     action = TransactionAction.SALE.value,
     ...
 )
 ```
 
-**步骤 3: 更新条件判断**
+**Step 3: Update conditional checks**
 
 ```kotlin
-// 之前
+// Before
 if (request.action == "SALE") {
     ...
 }
 
-// 之后
+// After
 if (request.getActionEnum() == TransactionAction.SALE) {
     ...
 }
 ```
 
-## 📊 对比总结
+## 📊 Comparison Summary
 
-| 特性 | 字符串方式 | 枚举方式 |
-|------|-----------|---------|
-| 类型安全 | ❌ 无 | ✅ 有 |
-| 编译时检查 | ❌ 无 | ✅ 有 |
-| IDE 提示 | ❌ 无 | ✅ 有 |
-| 拼写错误 | ❌ 运行时才发现 | ✅ 编译时发现 |
-| 重构支持 | ❌ 困难 | ✅ 容易 |
-| 代码可读性 | ⚠️ 一般 | ✅ 好 |
-| 向后兼容 | ✅ 是 | ✅ 是 |
+| Feature | String Approach | Enum Approach |
+|---------|----------------|---------------|
+| Type Safety | ❌ No | ✅ Yes |
+| Compile-time Check | ❌ No | ✅ Yes |
+| IDE Completion | ❌ No | ✅ Yes |
+| Spelling Errors | ❌ Found at runtime | ✅ Found at compile time |
+| Refactoring Support | ❌ Difficult | ✅ Easy |
+| Code Readability | ⚠️ Average | ✅ Good |
+| Backward Compatibility | ✅ Yes | ✅ Yes |
 
-## ❓ 常见问题
+## ❓ FAQ
 
-### Q1: 是否必须使用枚举？
+### Q1: Is using enums mandatory?
 
-**A:** 不是必须的。为了向后兼容，仍然支持字符串方式。但强烈推荐使用枚举，因为它提供了类型安全和更好的开发体验。
+**A:** No, it's not mandatory. For backward compatibility, string approach is still supported. However, using enums is strongly recommended for type safety and better development experience.
 
-### Q2: 如何在 Java 中使用？
+### Q2: How to use in Java?
 
-**A:** Java 中使用更简单：
+**A:** Usage in Java is simpler:
 
 ```java
 PaymentRequest request = PaymentRequest.builder()
-    .setAction(TransactionAction.SALE)  // 直接传枚举
+    .setAction(TransactionAction.SALE)  // Pass enum directly
     .setReferenceOrderId("ORDER001")
     .build();
 ```
 
-### Q3: 旧代码会受影响吗？
+### Q3: Will old code be affected?
 
-**A:** 不会。所有旧代码仍然可以正常工作，因为我们保留了字符串参数的支持。
+**A:** No. All old code will continue to work because we maintain support for string parameters.
 
-### Q4: 如何添加新的交易类型？
+### Q4: How to add new transaction types?
 
-**A:** 在 `TransactionAction` 枚举中添加新的枚举值即可：
+**A:** Simply add new enum values to the `TransactionAction` enum:
 
 ```kotlin
 enum class TransactionAction(val value: String) {
-    // 现有的...
+    // Existing ones...
     SALE("SALE"),
     
-    // 添加新的
+    // Add new ones
     NEW_ACTION("NEW_ACTION");
 }
 ```
 
-## 🎉 总结
+## 🎉 Summary
 
-使用 `TransactionAction` 枚举的优势：
+Advantages of using `TransactionAction` enum:
 
-1. ✅ **类型安全** - 编译时检查，避免拼写错误
-2. ✅ **代码提示** - IDE 自动提示所有可用值
-3. ✅ **易于维护** - 集中管理所有交易类型
-4. ✅ **重构友好** - IDE 可以自动更新所有引用
-5. ✅ **向后兼容** - 不影响现有代码
-6. ✅ **文档清晰** - 每个枚举值都有详细说明
+1. ✅ **Type Safety** - Compile-time checking, avoid spelling errors
+2. ✅ **Code Completion** - IDE auto-suggests all available values
+3. ✅ **Easy Maintenance** - Centralized management of all transaction types
+4. ✅ **Refactoring Friendly** - IDE can automatically update all references
+5. ✅ **Backward Compatible** - Doesn't affect existing code
+6. ✅ **Clear Documentation** - Each enum value has detailed description
 
-**推荐在所有新代码中使用枚举方式！**
+**Recommended to use enum approach in all new code!**
 
 ---
 
-**创建日期**: 2025-12-12  
-**作者**: TaPro Team  
-**版本**: 1.0.0
+**Created**: 2025-12-12  
+**Author**: TaPro Team  
+**Version**: 1.0.0

@@ -5,7 +5,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 
 /**
- * 支付回调接口
+ * Payment callback interface
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -13,23 +13,23 @@ import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 interface PaymentCallback {
     
     /**
-     * 交易进度更新
+     * Transaction progress update
      * 
-     * @param event 进度事件
+     * @param event Progress event
      */
     fun onProgress(event: PaymentEvent)
     
     /**
-     * 交易成功
+     * Transaction success
      * 
-     * @param result 交易结果
+     * @param result Transaction result
      */
     fun onSuccess(result: PaymentResult)
     
     /**
-     * 交易失败
+     * Transaction failure
      * 
-     * @param error 错误信息
+     * @param error Error information
      */
     fun onFailure(error: PaymentError)
     
