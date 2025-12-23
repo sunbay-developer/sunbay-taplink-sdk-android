@@ -173,7 +173,7 @@ class ReconnectManager(
         lastConnectionListener = null
 
         // Clear persistent connection data
-        connectionPersistence.clearConnectionData()
+//        connectionPersistence.clearConnectionData()
         connectionPersistence.setAutoConnectEnabled(false)
         LogUtil.d(TAG, "Cleared saved connection config due to manual disconnect")
     }

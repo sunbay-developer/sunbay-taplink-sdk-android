@@ -57,7 +57,8 @@ class WebSocketClientKernel constructor(
 
         // NSD配置
         private const val NSD_SERVICE_TYPE = "_taplink._tcp"
-        private const val NSD_DISCOVERY_TIMEOUT = 10_000L
+        private const val NSD_DISCOVERY_TIMEOUT = 30_000L // 增加到30秒以提高发现成功率
+        private const val NSD_RESOLUTION_TIMEOUT = 5_000L // 服务解析超时时间
     }
 
     override fun getTag(): String = TAG
@@ -126,6 +127,12 @@ class WebSocketClientKernel constructor(
      * NSD 发现的服务列表
      */
     private val discoveredServices = mutableListOf<ServiceInfo>()
+
+    /**
+     * 服务解析计数器（用于同步）
+     */
+    private var pendingResolutions = 0
+    private val resolutionMutex = Mutex()
 
     /**
      * 当前连接的服务信息
@@ -279,6 +286,7 @@ class WebSocketClientKernel constructor(
             // 初始化 NSD Manager
             nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
             discoveredServices.clear()
+            pendingResolutions = 0
 
             // 创建发现监听器
             discoveryListener = object : NsdManager.DiscoveryListener {
@@ -304,10 +312,25 @@ class WebSocketClientKernel constructor(
 
                 override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                     LogUtil.d(TAG, "NSD service found: ${serviceInfo.serviceName}")
+                    
+                    // 增加待解析计数
+                    scope.launch {
+                        resolutionMutex.withLock {
+                            pendingResolutions++
+                        }
+                    }
+                    
                     // 解析服务信息
                     nsdManager?.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                             LogUtil.e(TAG, "NSD resolve failed: ${serviceInfo.serviceName}, errorCode: $errorCode")
+                            
+                            // 减少待解析计数
+                            scope.launch {
+                                resolutionMutex.withLock {
+                                    pendingResolutions--
+                                }
+                            }
                         }
 
                         override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
@@ -321,8 +344,22 @@ class WebSocketClientKernel constructor(
                                     host = host,
                                     port = port
                                 )
-                                discoveredServices.add(service)
+                                
+                                synchronized(discoveredServices) {
+                                    discoveredServices.add(service)
+                                }
+                                
                                 LogUtil.d(TAG, "Added discovered service: $service")
+                                
+                                // 记录服务属性（用于调试）
+                                logServiceAttributes(serviceInfo)
+                            }
+                            
+                            // 减少待解析计数
+                            scope.launch {
+                                resolutionMutex.withLock {
+                                    pendingResolutions--
+                                }
                             }
                         }
                     })
@@ -332,8 +369,10 @@ class WebSocketClientKernel constructor(
                     LogUtil.d(TAG, "NSD service lost: ${serviceInfo.serviceName}")
 
                     // 从发现的服务列表中移除丢失的服务
-                    val removedServices = discoveredServices.removeAll { service ->
-                        service.name == serviceInfo.serviceName
+                    val removedServices = synchronized(discoveredServices) {
+                        discoveredServices.removeAll { service ->
+                            service.name == serviceInfo.serviceName
+                        }
                     }
 
                     if (removedServices) {
@@ -345,8 +384,28 @@ class WebSocketClientKernel constructor(
             // 开始服务发现
             nsdManager?.discoverServices(NSD_SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
 
-            // 等待发现服务
-            delay(NSD_DISCOVERY_TIMEOUT)
+            // 等待发现服务，但要考虑服务解析时间
+            val discoveryStartTime = System.currentTimeMillis()
+            var discoveryComplete = false
+            
+            while (!discoveryComplete && (System.currentTimeMillis() - discoveryStartTime) < NSD_DISCOVERY_TIMEOUT) {
+                delay(1000) // 每秒检查一次
+                
+                val currentTime = System.currentTimeMillis()
+                val elapsedTime = currentTime - discoveryStartTime
+                
+                // 检查是否有服务被发现
+                val serviceCount = synchronized(discoveredServices) { discoveredServices.size }
+                val pendingCount = resolutionMutex.withLock { pendingResolutions }
+                
+                LogUtil.d(TAG, "Discovery progress: ${elapsedTime}ms elapsed, $serviceCount services found, $pendingCount pending resolutions")
+                
+                // 如果发现了服务且没有待解析的服务，可以提前结束
+                if (serviceCount > 0 && pendingCount == 0 && elapsedTime > 5000) { // 至少等待5秒
+                    LogUtil.d(TAG, "Early discovery completion: found $serviceCount services")
+                    discoveryComplete = true
+                }
+            }
 
             // 停止服务发现
             try {
@@ -355,45 +414,59 @@ class WebSocketClientKernel constructor(
                 LogUtil.e(TAG, "Error stopping NSD discovery: ${e.message}")
             }
 
-            // 尝试连接发现的服务
-//            for (service in discoveredServices) {
-//                if (service.host.isNotEmpty() && service.port > 0) {
-//                    val uri = URI("ws://${service.host}:${service.port}")
-//                    LogUtil.d(TAG, "Trying discovered service: $uri")
+            // 等待剩余的服务解析完成
+            val maxWaitForResolution = 5000L
+            val resolutionStartTime = System.currentTimeMillis()
+            while (resolutionMutex.withLock { pendingResolutions } > 0 && 
+                   (System.currentTimeMillis() - resolutionStartTime) < maxWaitForResolution) {
+                delay(100)
+            }
+
+            val finalServiceCount = synchronized(discoveredServices) { discoveredServices.size }
+            LogUtil.d(TAG, "Discovery completed with $finalServiceCount services")
+
+//            // 尝试连接发现的服务
+            if (finalServiceCount > 0) {
+                val servicesCopy = synchronized(discoveredServices) { discoveredServices.toList() }
 //
-//                    if (connectToUri(uri, connectionCallback)) {
-//                        LogUtil.d(TAG, "Successfully connected to discovered service: $uri")
-//                        return
+//                for (service in servicesCopy) {
+//                    if (service.host.isNotEmpty() && service.port > 0) {
+//                        LogUtil.d(TAG, "Attempting to connect to discovered service: ${service.host}:${service.port}")
+//
+//                        val uri = URI("ws://${service.host}:${service.port}")
+//                        if (connectToUri(uri, connectionCallback)) {
+//                            LogUtil.d(TAG, "Successfully connected to discovered service: $uri")
+//                            return
+//                        } else {
+//                            LogUtil.w(TAG, "Failed to connect to discovered service: $uri")
+//                        }
 //                    }
 //                }
-//            }
-
-
-            for (service in discoveredServices) {
-                if (service.host.isNotEmpty() && service.port > 0) {
-                    val result = connectionCallback.onServiceAddressChanged(
-                        service.name,
-                        service.host,
-                        service.port,
-                        currentServiceInfo?.host ?: "",
-                        currentServiceInfo?.port ?: -1
-                    )
-                    LogUtil.d(
-                        TAG, "result(nameService:${service.name}," +
-                                "newHost:${service.host}," +
-                                "newPort:${service.port}," +
-                                "oldHost:${currentServiceInfo?.host ?: ""}," +
-                                "oldPort:${currentServiceInfo?.port ?: -1}): $result"
-                    )
-                    if (result) {
-                        return
+                
+                // 如果直接连接都失败了，尝试通过回调通知上层
+                LogUtil.d(TAG, "Direct connections failed, notifying upper layer via callback")
+                for (service in servicesCopy) {
+                    if (service.host.isNotEmpty() && service.port > 0) {
+                        val result = connectionCallback.onServiceAddressChanged(
+                            service.name,
+                            service.host,
+                            service.port,
+                            currentServiceInfo?.host ?: "",
+                            currentServiceInfo?.port ?: -1
+                        )
+                        LogUtil.d(
+                            TAG, "Callback result for service ${service.name} (${service.host}:${service.port}): $result"
+                        )
+                        if (result) {
+                            return
+                        }
                     }
                 }
             }
 
             // 没有找到可用的服务
             handleConnectionError(
-                "No available Taplink services found via NSD",
+                "No available Taplink services found via NSD (discovered: $finalServiceCount services)",
                 connectionCallback,
                 InnerErrorCode.C35.code
             )
@@ -915,6 +988,26 @@ class WebSocketClientKernel constructor(
             discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error stopping service monitoring: ${e.message}")
+        }
+    }
+
+    /**
+     * 记录服务属性（用于调试）
+     */
+    private fun logServiceAttributes(serviceInfo: NsdServiceInfo) {
+        try {
+            val attributes = serviceInfo.attributes
+            if (attributes != null && attributes.isNotEmpty()) {
+                LogUtil.d(TAG, "Service ${serviceInfo.serviceName} attributes:")
+                for ((key, value) in attributes) {
+                    val valueStr = if (value != null) String(value, Charsets.UTF_8) else "null"
+                    LogUtil.d(TAG, "  $key = $valueStr")
+                }
+            } else {
+                LogUtil.d(TAG, "Service ${serviceInfo.serviceName} has no attributes")
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Error logging service attributes: ${e.message}")
         }
     }
 
