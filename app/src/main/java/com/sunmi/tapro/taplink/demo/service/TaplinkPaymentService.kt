@@ -981,7 +981,6 @@ class TaplinkPaymentService : PaymentService {
         transactionRequestId: String,
         amount: BigDecimal,
         currency: String,
-        authCode: String,
         description: String,
         tipAmount: BigDecimal?,
         taxAmount: BigDecimal?,
@@ -994,7 +993,7 @@ class TaplinkPaymentService : PaymentService {
 
         Log.d(
             TAG,
-            "Executing FORCED_AUTH transaction - OrderId: $referenceOrderId, AuthCode: $authCode"
+            "Executing FORCED_AUTH transaction - OrderId: $referenceOrderId"
         )
 
         // Create AmountInfo with all amounts
@@ -1009,7 +1008,6 @@ class TaplinkPaymentService : PaymentService {
             .setReferenceOrderId(referenceOrderId)
             .setTransactionRequestId(transactionRequestId)
             .setAmount(amountInfo)
-            .setForcedAuthCode(authCode)
             .setDescription(description)
 
         Log.d(TAG, "=== FORCED_AUTH Request ===")

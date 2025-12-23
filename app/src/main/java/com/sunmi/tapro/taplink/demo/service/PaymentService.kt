@@ -128,7 +128,6 @@ interface PaymentService {
         transactionRequestId: String,
         amount: BigDecimal,
         currency: String,
-        authCode: String,
         description: String,
         tipAmount: BigDecimal? = null,
         taxAmount: BigDecimal? = null,
