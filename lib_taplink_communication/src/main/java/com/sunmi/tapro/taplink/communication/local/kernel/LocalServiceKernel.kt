@@ -218,11 +218,10 @@ class LocalServiceKernel constructor(
             override fun callback(responseData: String?) {
                 val response = responseData ?: "SUCCESS"
 
-                callback?.onResponse(response)
+//                callback?.onResponse(response)
 //                // 通过 dataReceiver 传递响应（供 TaplinkApiImpl 使用）
 //                // 这样可以通过 processReceivedResponse 统一管理回调的调用和移除
-//                dataReceiver?.invoke(response.toByteArray(Charsets.UTF_8))
-
+                dataReceiver?.invoke(response.toByteArray(Charsets.UTF_8))
             }
 
             override fun onError(code: String?, msg: String?) {
@@ -235,10 +234,10 @@ class LocalServiceKernel constructor(
                     "ERROR: $errorCode - $errorMsg"
                 }
 
-                callback?.onError(errorCode, errorResponse)
+//                callback?.onError(errorCode, errorResponse)
 
                 // 错误信息也通过 dataReceiver 传递
-//                dataReceiver?.invoke(errorResponse.toByteArray(Charsets.UTF_8))
+                dataReceiver?.invoke(errorResponse.toByteArray(Charsets.UTF_8))
             }
         }
 

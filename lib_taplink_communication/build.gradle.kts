@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gson)
     implementation(libs.java.websocket)
+    implementation(libs.androidx.lifecycle.process)
     // TODO: 添加 mDNS 依赖或使用 Android NSD API
     // implementation(libs.jmdns)
 //    embed(libs.sunmiprotocolsdk)

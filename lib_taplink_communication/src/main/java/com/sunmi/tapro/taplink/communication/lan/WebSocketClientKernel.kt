@@ -9,6 +9,8 @@ import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.utils.SmartHeartbeatConfig
+import com.sunmi.tapro.taplink.communication.utils.NetworkQualityMonitor
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -41,19 +43,21 @@ class WebSocketClientKernel constructor(
     private val appId: String,
     private val appSecretKey: String,
     private val context: Context
-) : BaseServiceKernel() {
+) : BaseServiceKernel(), 
+    SmartHeartbeatConfig.HeartbeatConfigChangeListener,
+    NetworkQualityMonitor.NetworkQualityChangeListener {
 
     companion object {
         private const val TAG = "WebSocketClientKernel"
 
-        // 心跳配置
-        private const val HEARTBEAT_INTERVAL = 30_000L // 30秒心跳间隔
-        private const val HEARTBEAT_TIMEOUT = 10_000L // 10秒心跳超时
+        // 默认心跳配置（作为后备）
+        private const val DEFAULT_HEARTBEAT_INTERVAL = 30_000L
+        private const val DEFAULT_HEARTBEAT_TIMEOUT = 10_000L
         private const val HEARTBEAT_MESSAGE = "{\"type\":\"ping\"}"
 
         // NSD配置
-        private const val NSD_SERVICE_TYPE = "_taplink._tcp" // Taplink服务类型
-        private const val NSD_DISCOVERY_TIMEOUT = 10_000L // NSD发现超时10秒
+        private const val NSD_SERVICE_TYPE = "_taplink._tcp"
+        private const val NSD_DISCOVERY_TIMEOUT = 10_000L
     }
 
     override fun getTag(): String = TAG
@@ -67,6 +71,16 @@ class WebSocketClientKernel constructor(
      * 发送数据互斥锁
      */
     private val sendMutex = Mutex()
+
+    /**
+     * 智能心跳配置管理器
+     */
+    private val smartHeartbeatConfig = SmartHeartbeatConfig.getInstance()
+    
+    /**
+     * 网络质量监测器
+     */
+    private val networkQualityMonitor = NetworkQualityMonitor.getInstance(context)
 
     /**
      * 当前WebSocket客户端连接实例
@@ -92,6 +106,11 @@ class WebSocketClientKernel constructor(
      * 最后一次心跳响应时间
      */
     private var lastHeartbeatResponse = 0L
+    
+    /**
+     * 心跳失败计数器
+     */
+    private var heartbeatFailureCount = 0
 
     /**
      * NSD Manager 实例
@@ -136,11 +155,12 @@ class WebSocketClientKernel constructor(
 
         try {
             LogUtil.d(TAG, "Starting connection with protocol: $protocol")
+            
+            // 初始化智能心跳系统
+            initializeSmartHeartbeat()
+            
             updateStatus(InnerConnectionStatus.CONNECTING)
             connectionCallback.onWaitingConnect()
-
-            // 无需重置状态，由 SDK 层管理
-
             // 保存连接回调
             currentConnectionCallback = connectionCallback
 
@@ -256,7 +276,6 @@ class WebSocketClientKernel constructor(
     private suspend fun discoverAndConnect(connectionCallback: ConnectionCallback) {
         try {
             LogUtil.d(TAG, "Starting NSD service discovery")
-
             // 初始化 NSD Manager
             nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
             discoveredServices.clear()
@@ -265,6 +284,10 @@ class WebSocketClientKernel constructor(
             discoveryListener = object : NsdManager.DiscoveryListener {
                 override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                     LogUtil.e(TAG, "NSD discovery start failed: $serviceType, errorCode: $errorCode")
+                    connectionCallback.onDisconnected(
+                        InnerErrorCode.C35.code,
+                        "${InnerErrorCode.C35.description}:(serviceType:$serviceType,errorCode:$errorCode)"
+                    )
                 }
 
                 override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -281,7 +304,6 @@ class WebSocketClientKernel constructor(
 
                 override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                     LogUtil.d(TAG, "NSD service found: ${serviceInfo.serviceName}")
-
                     // 解析服务信息
                     nsdManager?.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -308,6 +330,15 @@ class WebSocketClientKernel constructor(
 
                 override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                     LogUtil.d(TAG, "NSD service lost: ${serviceInfo.serviceName}")
+
+                    // 从发现的服务列表中移除丢失的服务
+                    val removedServices = discoveredServices.removeAll { service ->
+                        service.name == serviceInfo.serviceName
+                    }
+
+                    if (removedServices) {
+                        LogUtil.d(TAG, "Removed lost service from discovered list: ${serviceInfo.serviceName}")
+                    }
                 }
             }
 
@@ -325,13 +356,36 @@ class WebSocketClientKernel constructor(
             }
 
             // 尝试连接发现的服务
+//            for (service in discoveredServices) {
+//                if (service.host.isNotEmpty() && service.port > 0) {
+//                    val uri = URI("ws://${service.host}:${service.port}")
+//                    LogUtil.d(TAG, "Trying discovered service: $uri")
+//
+//                    if (connectToUri(uri, connectionCallback)) {
+//                        LogUtil.d(TAG, "Successfully connected to discovered service: $uri")
+//                        return
+//                    }
+//                }
+//            }
+
+
             for (service in discoveredServices) {
                 if (service.host.isNotEmpty() && service.port > 0) {
-                    val uri = URI("ws://${service.host}:${service.port}")
-                    LogUtil.d(TAG, "Trying discovered service: $uri")
-
-                    if (connectToUri(uri, connectionCallback)) {
-                        LogUtil.d(TAG, "Successfully connected to discovered service: $uri")
+                    val result = connectionCallback.onServiceAddressChanged(
+                        service.name,
+                        service.host,
+                        service.port,
+                        currentServiceInfo?.host ?: "",
+                        currentServiceInfo?.port ?: -1
+                    )
+                    LogUtil.d(
+                        TAG, "result(nameService:${service.name}," +
+                                "newHost:${service.host}," +
+                                "newPort:${service.port}," +
+                                "oldHost:${currentServiceInfo?.host ?: ""}," +
+                                "oldPort:${currentServiceInfo?.port ?: -1}): $result"
+                    )
+                    if (result) {
                         return
                     }
                 }
@@ -446,6 +500,9 @@ class WebSocketClientKernel constructor(
         // 停止服务监听
         stopServiceMonitoring()
 
+        // 清理智能心跳系统
+        cleanupSmartHeartbeat()
+
         // 清理服务信息
         currentServiceInfo = null
 
@@ -462,36 +519,86 @@ class WebSocketClientKernel constructor(
     }
 
     /**
-     * 启动心跳机制
+     * 初始化智能心跳系统
+     */
+    private fun initializeSmartHeartbeat() {
+        // 注册心跳配置变化监听
+        smartHeartbeatConfig.addConfigChangeListener(this)
+        
+        // 启动网络质量监测
+        networkQualityMonitor.addQualityChangeListener(this)
+        networkQualityMonitor.startMonitoring()
+        
+        // 重置心跳失败计数
+        heartbeatFailureCount = 0
+        
+        LogUtil.d(TAG, "Smart heartbeat system initialized")
+    }
+    
+    /**
+     * 清理智能心跳系统
+     */
+    private fun cleanupSmartHeartbeat() {
+        smartHeartbeatConfig.removeConfigChangeListener(this)
+        networkQualityMonitor.removeQualityChangeListener(this)
+        networkQualityMonitor.stopMonitoring()
+        
+        LogUtil.d(TAG, "Smart heartbeat system cleaned up")
+    }
+
+    /**
+     * 启动智能心跳机制
      */
     private fun startHeartbeat() {
         stopHeartbeat() // 先停止现有的心跳
 
         heartbeatJob = scope.launch {
-            LogUtil.d(TAG, "Starting heartbeat mechanism")
+            LogUtil.d(TAG, "Starting smart heartbeat mechanism")
             lastHeartbeatResponse = System.currentTimeMillis()
+            heartbeatFailureCount = 0
 
             while (isActive && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
                 try {
-                    delay(HEARTBEAT_INTERVAL)
+                    // 使用智能心跳配置获取当前间隔
+                    val currentInterval = smartHeartbeatConfig.getCurrentInterval()
+                    val currentTimeout = smartHeartbeatConfig.getCurrentConfig().timeout
+                    val maxRetryCount = smartHeartbeatConfig.getCurrentConfig().maxRetryCount
+                    
+                    delay(currentInterval)
 
                     // 检查上次心跳响应时间
                     val now = System.currentTimeMillis()
-                    if (now - lastHeartbeatResponse > HEARTBEAT_INTERVAL + HEARTBEAT_TIMEOUT) {
-                        LogUtil.w(TAG, "Heartbeat timeout detected, connection may be lost")
-                        handleConnectionLost()
-                        break
+                    if (now - lastHeartbeatResponse > currentInterval + currentTimeout) {
+                        heartbeatFailureCount++
+                        LogUtil.w(TAG, "Heartbeat timeout detected (${heartbeatFailureCount}/$maxRetryCount), connection may be lost")
+                        
+                        if (heartbeatFailureCount >= maxRetryCount) {
+                            LogUtil.e(TAG, "Max heartbeat failures reached, treating as connection lost")
+                            handleConnectionLost()
+                            break
+                        } else {
+                            // 继续尝试，但记录失败次数
+                            LogUtil.d(TAG, "Heartbeat timeout, but within retry limit, continuing...")
+                        }
                     }
 
                     // 发送心跳
-                    client?.send(HEARTBEAT_MESSAGE)
-                    // WebSocket 发送是异步的，这里假设发送成功
-                    if (client != null) {
-                        LogUtil.d(TAG, "Heartbeat sent")
+                    val heartbeatSent = sendHeartbeat()
+                    if (!heartbeatSent) {
+                        heartbeatFailureCount++
+                        LogUtil.w(TAG, "Failed to send heartbeat (${heartbeatFailureCount}/$maxRetryCount)")
+                        
+                        if (heartbeatFailureCount >= maxRetryCount) {
+                            LogUtil.e(TAG, "Max heartbeat send failures reached")
+                            handleConnectionLost()
+                            break
+                        }
                     } else {
-                        LogUtil.w(TAG, "Failed to send heartbeat")
-                        handleConnectionLost()
-                        break
+                        // 发送成功，重置失败计数
+                        if (heartbeatFailureCount > 0) {
+                            LogUtil.d(TAG, "Heartbeat sent successfully, reset failure count")
+                            heartbeatFailureCount = 0
+                        }
                     }
 
                 } catch (e: Exception) {
@@ -502,6 +609,23 @@ class WebSocketClientKernel constructor(
                     break
                 }
             }
+        }
+    }
+    
+    /**
+     * 发送心跳消息
+     */
+    private fun sendHeartbeat(): Boolean {
+        return try {
+            client?.send(HEARTBEAT_MESSAGE)
+            val success = client != null
+            if (success) {
+                LogUtil.d(TAG, "Heartbeat sent (interval: ${smartHeartbeatConfig.getCurrentInterval()}ms)")
+            }
+            success
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Error sending heartbeat: ${e.message}")
+            false
         }
     }
 
@@ -535,7 +659,36 @@ class WebSocketClientKernel constructor(
      */
     private fun handleHeartbeatResponse() {
         lastHeartbeatResponse = System.currentTimeMillis()
-        LogUtil.d(TAG, "Heartbeat response received")
+        
+        // 重置心跳失败计数
+        if (heartbeatFailureCount > 0) {
+            LogUtil.d(TAG, "Heartbeat response received, reset failure count from $heartbeatFailureCount to 0")
+            heartbeatFailureCount = 0
+        } else {
+            LogUtil.d(TAG, "Heartbeat response received")
+        }
+    }
+    
+    // SmartHeartbeatConfig.HeartbeatConfigChangeListener 实现
+    override fun onHeartbeatConfigChanged(newConfig: SmartHeartbeatConfig.HeartbeatConfig) {
+        LogUtil.d(TAG, "Heartbeat config changed: interval=${smartHeartbeatConfig.getCurrentInterval()}ms, timeout=${newConfig.timeout}ms")
+        
+        // 如果心跳正在运行，重启以应用新配置
+        if (heartbeatJob?.isActive == true && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
+            LogUtil.d(TAG, "Restarting heartbeat with new configuration")
+            startHeartbeat()
+        }
+    }
+    
+    // NetworkQualityMonitor.NetworkQualityChangeListener 实现
+    override fun onNetworkQualityChanged(
+        oldQuality: SmartHeartbeatConfig.NetworkQuality,
+        newQuality: SmartHeartbeatConfig.NetworkQuality
+    ) {
+        LogUtil.d(TAG, "Network quality changed: $oldQuality -> $newQuality")
+        
+        // 根据网络质量调整心跳配置
+        smartHeartbeatConfig.adjustForNetworkQuality(newQuality)
     }
 
     /**
@@ -671,20 +824,36 @@ class WebSocketClientKernel constructor(
                             }
 
                             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                                val serviceName = serviceInfo.serviceName
                                 val host = serviceInfo.host?.hostAddress ?: ""
                                 val port = serviceInfo.port
-
                                 LogUtil.d(TAG, "Service monitoring resolved: ${serviceInfo.serviceName}, $host:$port")
 
                                 // 检查是否是当前连接的服务，且 IP/端口发生变化
-                                checkAndHandleServiceChange(host, port)
+                                checkAndHandleServiceChange(serviceName, host, port)
                             }
                         })
                     }
 
                     override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                         LogUtil.w(TAG, "Service monitoring lost: ${serviceInfo.serviceName}")
-                        // 服务丢失，可能需要重新发现
+
+                        // 从发现的服务列表中移除丢失的服务
+                        val removedServices = discoveredServices.removeAll { service ->
+                            service.name == serviceInfo.serviceName
+                        }
+
+                        if (removedServices) {
+                            LogUtil.d(TAG, "Removed lost service from monitoring list: ${serviceInfo.serviceName}")
+                        }
+
+                        // 检查是否是当前连接的服务丢失
+                        val currentService = currentServiceInfo
+                        if (currentService != null && currentService.name == serviceInfo.serviceName) {
+                            LogUtil.w(TAG, "Current connected service lost: ${serviceInfo.serviceName}")
+                            // 可以选择通知上层服务丢失，让SDK层决定是否需要重连
+                            // currentConnectionCallback?.onDisconnected("SERVICE_LOST", "Connected service lost")
+                        }
                     }
                 }
 
@@ -701,7 +870,7 @@ class WebSocketClientKernel constructor(
     /**
      * 检查并处理服务变化
      */
-    private fun checkAndHandleServiceChange(newHost: String, newPort: Int) {
+    private fun checkAndHandleServiceChange(newServiceName: String, newHost: String, newPort: Int) {
         val currentService = currentServiceInfo
         if (currentService == null) {
             LogUtil.d(TAG, "No current service info, ignoring service change")
@@ -714,6 +883,7 @@ class WebSocketClientKernel constructor(
 
             // 通知SDK层地址发生变更，让SDK层决定是否重连
             currentConnectionCallback?.onServiceAddressChanged(
+                nameService = newServiceName,
                 newHost = newHost,
                 newPort = newPort,
                 oldHost = currentService.host,

@@ -171,7 +171,7 @@ class ReconnectManager(
         // Clear saved connection parameters (manual disconnect doesn't preserve)
         lastConnectionConfig = null
         lastConnectionListener = null
-        
+
         // Clear persistent connection data
         connectionPersistence.clearConnectionData()
         connectionPersistence.setAutoConnectEnabled(false)
@@ -288,7 +288,7 @@ class ReconnectManager(
     fun shouldAutoConnect(): Boolean {
         val enabled = connectionPersistence.isAutoConnectEnabled()
         val hasConfig = connectionPersistence.getLastConnectionConfig() != null
-        
+
         LogUtil.d(TAG, "Auto-connect check: enabled=$enabled, hasConfig=$hasConfig")
         return enabled && hasConfig
     }
