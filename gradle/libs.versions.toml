@@ -54,6 +54,8 @@ constraintlayoutCompose ="1.1.1"
 camerax_version = "1.4.2"
 lottieCompose = "6.3.0"
 billing = "1.1.0"
+javaWebSocket = "1.5.3"
+
 [libraries]
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistSystemuicontroller" }
 accompanist-systemuicontroller = { module = "com.google.accompanist:accompanist-systemuicontroller", version.ref = "accompanistSystemuicontroller" }
@@ -120,6 +122,7 @@ camerax-view  = { module = "androidx.camera:camera-view",version.ref="camerax_ve
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "lottieCompose" }
 billing = { group = "com.google.androidbrowserhelper", name = "billing", version.ref = "billing" }
+java-websocket = { module = "org.java-websocket:Java-WebSocket", version.ref = "javaWebSocket" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

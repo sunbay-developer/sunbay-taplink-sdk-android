@@ -273,6 +273,21 @@ interface PaymentService {
         description: String,
         callback: PaymentCallback
     )
+    
+    /**
+     * Execute ABORT transaction (Abort current transaction)
+     * 
+     * @param referenceOrderId Reference order ID
+     * @param transactionRequestId Transaction request ID
+     * @param description Transaction description
+     * @param callback Payment callback
+     */
+    fun executeAbort(
+        referenceOrderId: String,
+        transactionRequestId: String,
+        description: String,
+        callback: PaymentCallback
+    )
 }
 
 /**

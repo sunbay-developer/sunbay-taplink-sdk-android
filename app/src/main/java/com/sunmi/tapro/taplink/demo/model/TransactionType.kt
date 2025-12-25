@@ -54,5 +54,10 @@ enum class TransactionType {
     /**
      * Batch close - Settle all transactions of the day
      */
-    BATCH_CLOSE
+    BATCH_CLOSE,
+    
+    /**
+     * Abort - Cancel current transaction in progress
+     */
+    ABORT
 }

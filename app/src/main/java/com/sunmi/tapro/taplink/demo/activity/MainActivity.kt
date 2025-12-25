@@ -57,6 +57,7 @@ class MainActivity : Activity() {
     private lateinit var btnSale: Button
     private lateinit var btnAuth: Button
     private lateinit var btnForcedAuth: Button
+    private lateinit var btnAbort: Button
     private lateinit var tvPaymentStatus: TextView
 
     // Payment service instance
@@ -145,6 +146,7 @@ class MainActivity : Activity() {
             btnSale = findViewById(R.id.btn_sale)
             btnAuth = findViewById(R.id.btn_auth)
             btnForcedAuth = findViewById(R.id.btn_forced_auth)
+            btnAbort = findViewById(R.id.btn_abort)
 
             // Payment status display
             tvPaymentStatus = findViewById(R.id.tv_payment_status)
@@ -228,6 +230,10 @@ class MainActivity : Activity() {
         btnForcedAuth.setOnClickListener {
             startPayment(TransactionType.FORCED_AUTH)
         }
+
+        btnAbort.setOnClickListener {
+            startPayment(TransactionType.ABORT)
+        }
     }
 
     /**
@@ -250,6 +256,8 @@ class MainActivity : Activity() {
     private fun connectToPaymentService() {
         paymentService.connect(object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
+                selectedAmount=10.0
+                startSalePayment(null,null,null,null,null)
                 runOnUiThread {
                     Log.d(TAG, "Connected - Device ID: $deviceId, Version: $taproVersion")
                     updateConnectionStatus("Connected (v$taproVersion)", true)
@@ -360,6 +368,7 @@ class MainActivity : Activity() {
                 btnSale.isEnabled = false
                 btnAuth.isEnabled = false
                 btnForcedAuth.isEnabled = false
+                btnAbort.isEnabled = false
                 return
             }
 
@@ -370,6 +379,8 @@ class MainActivity : Activity() {
             btnSale.isEnabled = enabled
             btnAuth.isEnabled = enabled
             btnForcedAuth.isEnabled = enabled
+            // ABORT button is enabled when connected, regardless of amount
+            btnAbort.isEnabled = connected
 
             Log.d(
                 TAG,
@@ -380,6 +391,7 @@ class MainActivity : Activity() {
             btnSale.isEnabled = false
             btnAuth.isEnabled = false
             btnForcedAuth.isEnabled = false
+            btnAbort.isEnabled = false
         }
     }
 
@@ -443,7 +455,7 @@ class MainActivity : Activity() {
         Log.d(TAG, "Transaction added to repository: $added")
 
         // Show payment progress dialog
-        showPaymentProgressDialog()
+        // showPaymentProgressDialog()
 
         // Prompt user to launch Tapro app
         showToast("Launch Tapro app for payment")
@@ -501,7 +513,8 @@ class MainActivity : Activity() {
 //            return
 //        }
 
-        if (selectedAmount <= 0) {
+        // ABORT transaction doesn't require amount
+        if (transactionType != TransactionType.ABORT && selectedAmount <= 0) {
             showToast("Please select payment amount")
             return
         }
@@ -522,12 +535,14 @@ class MainActivity : Activity() {
         )
 
         // Create transaction record (initial status is PROCESSING)
+        // For ABORT, use amount 0.0
+        val transactionAmount = if (transactionType == TransactionType.ABORT) 0.0 else selectedAmount
         val transaction = Transaction(
             transactionRequestId = transactionRequestId,
             transactionId = null,
             referenceOrderId = referenceOrderId,
             type = transactionType,
-            amount = selectedAmount,
+            amount = transactionAmount,
             currency = "USD",
             status = TransactionStatus.PROCESSING,
             timestamp = timestamp
@@ -538,10 +553,15 @@ class MainActivity : Activity() {
         Log.d(TAG, "Transaction added to repository: $added")
 
         // Show payment progress dialog
-        showPaymentProgressDialog()
+        // showPaymentProgressDialog()
 
-        // Prompt user to launch Tapro app
-        showToast("Launch Tapro app for payment")
+        // For ABORT, show different message
+        if (transactionType == TransactionType.ABORT) {
+            showToast("Aborting current transaction")
+        } else {
+            // Prompt user to launch Tapro app
+            showToast("Launch Tapro app for payment")
+        }
 
         // Execute payment method based on transaction type
         val callback = object : PaymentCallback {
@@ -610,9 +630,18 @@ class MainActivity : Activity() {
                 showForcedAuthDialog(referenceOrderId, transactionRequestId, callback)
             }
 
+            TransactionType.ABORT -> {
+                paymentService.executeAbort(
+                    referenceOrderId = referenceOrderId,
+                    transactionRequestId = transactionRequestId,
+                    description = "Demo ABORT Transaction",
+                    callback = callback
+                )
+            }
+
             else -> {
                 showToast("Unsupported transaction type: $transactionType")
-                hidePaymentProgressDialog()
+                // hidePaymentProgressDialog()
             }
         }
     }
@@ -696,7 +725,7 @@ class MainActivity : Activity() {
                 )
             }
             .setNegativeButton("Cancel") { _, _ ->
-                hidePaymentProgressDialog()
+                // hidePaymentProgressDialog()
             }
             .setNeutralButton("Skip") { _, _ ->
                 // Show dialog for authorization code without additional amounts
@@ -751,7 +780,7 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Cancel") { dialog, _ ->
                 dialog.dismiss()
-                hidePaymentProgressDialog()
+                // hidePaymentProgressDialog()
             }
             .setCancelable(false)
             .show()
@@ -801,7 +830,7 @@ class MainActivity : Activity() {
      */
     private fun updatePaymentProgress(message: String) {
         // Update progress dialog (if still visible)
-        paymentProgressDialog?.setMessage(message)
+        // paymentProgressDialog?.setMessage(message)
 
         // Update status text (visible when user returns)
         tvPaymentStatus.text = message
@@ -814,7 +843,7 @@ class MainActivity : Activity() {
         if (message.contains("Processing...", ignoreCase = true)) {
             // Delay hiding progress dialog because Tapro app is about to launch
             tvPaymentStatus.postDelayed({
-                hidePaymentProgressDialog()
+                // hidePaymentProgressDialog()
             }, 1500) // Hide after 1.5 seconds
         }
     }
@@ -823,6 +852,7 @@ class MainActivity : Activity() {
      * Handle payment success
      */
     private fun handlePaymentSuccess(result: PaymentResult) {
+
         Log.d(TAG, "Result: $result")
         Log.d(
             TAG,
@@ -831,7 +861,7 @@ class MainActivity : Activity() {
         Log.d(TAG, "Result transactionRequestId: ${result.transactionRequestId}")
 
         // Hide payment progress dialog
-        hidePaymentProgressDialog()
+        // hidePaymentProgressDialog()
 
         // Determine transaction status based on transactionStatus field
         val transactionStatus = when (result.transactionStatus) {
@@ -985,7 +1015,7 @@ class MainActivity : Activity() {
         Log.d(TAG, "Failed transactionRequestId: $transactionRequestId")
 
         // Ensure payment progress dialog is hidden before showing error dialog
-        hidePaymentProgressDialog()
+        // hidePaymentProgressDialog()
 
         // Update transaction record status
         val updated = TransactionRepository.updateTransactionStatus(
@@ -1069,7 +1099,7 @@ class MainActivity : Activity() {
                 val lastFailedTransaction = failedTransactions.first()
 
                 // Show retry progress
-                showPaymentProgressDialog()
+                // showPaymentProgressDialog()
 
                 // Execute payment with same transaction request ID
                 executePaymentWithId(
@@ -1329,9 +1359,18 @@ class MainActivity : Activity() {
                 showForcedAuthDialog(referenceOrderId, transactionRequestId, callback)
             }
 
+            TransactionType.ABORT -> {
+                paymentService.executeAbort(
+                    referenceOrderId = referenceOrderId,
+                    transactionRequestId = transactionRequestId,
+                    description = "Demo ABORT Transaction (Retry)",
+                    callback = callback
+                )
+            }
+
             else -> {
                 showToast("Unsupported transaction type for retry: $transactionType")
-                hidePaymentProgressDialog()
+                // hidePaymentProgressDialog()
             }
         }
     }
@@ -1387,7 +1426,10 @@ class MainActivity : Activity() {
      * Show Toast message
      */
     private fun showToast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        runOnUiThread {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+
     }
 
     override fun onResume() {

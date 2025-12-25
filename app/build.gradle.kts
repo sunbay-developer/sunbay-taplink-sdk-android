@@ -53,8 +53,10 @@ android {
 
 dependencies {
     // Taplink SDK
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.1-SNAPSHOT")
-    
+//    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.6.2-SNAPSHOT")
+    implementation(files("libs/sunbay-taplink-sdk-android-1.0.6.6-debug.aar")) // 假设你的JAR文件在项目的libs目录下
+    implementation(libs.java.websocket)
+
     // JSON processing
     implementation("com.google.code.gson:gson:2.13.1")
     

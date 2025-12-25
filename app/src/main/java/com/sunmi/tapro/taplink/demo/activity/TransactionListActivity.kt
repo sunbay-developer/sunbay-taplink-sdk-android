@@ -284,6 +284,7 @@ class TransactionListActivity : AppCompatActivity() {
                 "VOID" -> TransactionType.VOID
                 "TIP_ADJUST" -> TransactionType.TIP_ADJUST
                 "BATCH_CLOSE" -> TransactionType.BATCH_CLOSE
+                "ABORT" -> TransactionType.ABORT
                 else -> TransactionType.SALE // Default to SALE if unknown
             }
             

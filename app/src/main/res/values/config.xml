@@ -4,7 +4,8 @@
     <!-- Note: These are sample values, please replace with real configuration when using -->
 
     <!-- Application identifier - Assigned by Taplink platform -->
-    <string name="taplink_app_id">test_sm6par3xf4d3tkum</string>
+<!--    <string name="taplink_app_id">test_sm6par3xf4d3tkum</string>-->
+    <string name="taplink_app_id">sm6par3xf4d3tkum</string>
 
     <!-- Merchant identifier - Assigned by Taplink platform -->
     <string name="taplink_merchant_id">M1254947005</string>

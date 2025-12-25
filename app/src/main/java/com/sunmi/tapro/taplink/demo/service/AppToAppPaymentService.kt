@@ -72,19 +72,30 @@ class AppToAppPaymentService : PaymentService {
      * SDK has been initialized in TaplinkDemoApplication, only need to call connect here
      */
     override fun connect(listener: ConnectionListener) {
+        // Default to App-to-App mode
+        connect(listener, null)
+    }
+    
+    /**
+     * Connect to payment terminal with specific configuration
+     * 
+     * @param listener Connection listener
+     * @param connectionConfig Connection configuration (null for App-to-App mode)
+     */
+    fun connect(listener: ConnectionListener, connectionConfig: ConnectionConfig?) {
         this.connectionListener = listener
         
         Log.d(TAG, "=== Taplink SDK Connection Started ===")
-
-        val connectionConfig = ConnectionConfig()
+        
+        val config = connectionConfig ?: ConnectionConfig()
         
         Log.d(TAG, "=== Connection Request Parameters ===")
-        Log.d(TAG, "Connection Config: $connectionConfig")
+        Log.d(TAG, "Connection Config: $config")
         
         Log.d(TAG, "=== Calling TaplinkSDK.connect() ===")
         
-        // App-to-App mode: Pass null, SDK will use APP_TO_APP mode specified during initialization
-        TaplinkSDK.connect(null, object : SdkConnectionListener {
+        // Pass connection config to SDK
+        TaplinkSDK.connect(config, object : SdkConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
                 Log.d(TAG, "=== SDK Connection Callback: onConnected ===")
                 Log.d(TAG, "Device ID: $deviceId")
@@ -1041,6 +1052,58 @@ class AppToAppPaymentService : PaymentService {
                     eventStr.contains("CANCEL", ignoreCase = true) -> "Transaction cancelled"
                     
                     else -> "BATCH_CLOSE transaction processing..."
+                }
+                
+                callback.onProgress("PROCESSING", progressMessage)
+            }
+        })
+    }
+    
+    /**
+     * Execute ABORT transaction (abort current transaction)
+     */
+    override fun executeAbort(
+        referenceOrderId: String,
+        transactionRequestId: String,
+        description: String,
+        callback: PaymentCallback
+    ) {
+        if (!connected) {
+            callback.onFailure("C30", "Tapro payment terminal not connected")
+            return
+        }
+        
+        Log.d(TAG, "Executing ABORT transaction")
+        
+        val request = PaymentRequest("ABORT")
+            .setReferenceOrderId(referenceOrderId)
+            .setTransactionRequestId(transactionRequestId)
+            .setDescription(description)
+        
+        Log.d(TAG, "=== ABORT Request ===")
+        Log.d(TAG, "Request: $request")
+        
+        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+            override fun onSuccess(result: SdkPaymentResult) {
+                handlePaymentResult(result, callback)
+            }
+            
+            override fun onFailure(error: SdkPaymentError) {
+                handlePaymentFailure("ABORT", error, callback)
+            }
+            
+            override fun onProgress(event: SdkPaymentEvent) {
+                // Convert SDK returned status code to user-friendly message
+                val eventStr = event.eventMsg
+                Log.d(TAG, "ABORT transaction progress - Event: $eventStr")
+                
+                // Provide specific progress feedback based on event type
+                val progressMessage = when {
+                    eventStr.contains("PROCESSING", ignoreCase = true) -> "Aborting transaction"
+                    eventStr.contains("CANCEL", ignoreCase = true) -> "Transaction cancelled"
+                    eventStr.contains("COMPLETED", ignoreCase = true) -> "Transaction aborted successfully"
+                    
+                    else -> "ABORT transaction processing..."
                 }
                 
                 callback.onProgress("PROCESSING", progressMessage)

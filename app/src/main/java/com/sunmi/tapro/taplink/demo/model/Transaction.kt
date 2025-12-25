@@ -125,6 +125,7 @@ data class Transaction(
             TransactionType.TIP_ADJUST -> "TIP ADJUST"
             TransactionType.QUERY -> "QUERY"
             TransactionType.BATCH_CLOSE -> "BATCH CLOSE"
+            TransactionType.ABORT -> "ABORT"
         }
     }
     

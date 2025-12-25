@@ -90,7 +90,7 @@
                         android:textSize="16sp"
                         android:textColor="#999999"
                         android:padding="16dp"
-                        android:enabled="false" />
+                        android:enabled="true" />
 
                     <View
                         android:layout_width="match_parent"
@@ -315,7 +315,7 @@
                     android:padding="12dp"
                     android:background="@android:color/white"
                     android:layout_marginBottom="16dp"
-                    android:enabled="false" />
+                     />
 
                 <!-- Port Number Settings -->
                 <TextView
@@ -336,7 +336,7 @@
                     android:padding="12dp"
                     android:background="@android:color/white"
                     android:layout_marginBottom="16dp"
-                    android:enabled="false" />
+                     />
 
                 <!-- TLS Switch -->
                 <LinearLayout

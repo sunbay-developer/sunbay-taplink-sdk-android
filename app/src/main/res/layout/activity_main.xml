@@ -333,6 +333,20 @@
             android:elevation="4dp"
             android:layout_marginBottom="12dp" />
 
+        <!-- ABORT Button -->
+        <Button
+            android:id="@+id/btn_abort"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="ABORT"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="#FF5722"
+            android:enabled="false"
+            android:elevation="4dp"
+            android:layout_marginBottom="12dp" />
+
         <!-- Payment Status Display -->
         <TextView
             android:id="@+id/tv_payment_status"
