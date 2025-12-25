@@ -41,7 +41,7 @@ class PaymentManager(
      * Callback manager for managing multiple async request callbacks
      */
     private val callbackManager = LocalCallbackManager<InnerCallback?>(
-        timeoutMillis = 60_000L, // 60 seconds timeout
+        timeoutMillis = (if (config.connectionTimeout <= 0) 60 else config.connectionTimeout) * 1000L, // 30 seconds timeout for INIT command
         tag = TAG
     )
     

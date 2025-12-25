@@ -20,6 +20,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback as ServiceConnectionCallback
 import com.google.gson.Gson
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
+import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 
 /**
  * Connection management class
@@ -83,8 +84,8 @@ class ConnectionManager(
      * Callback manager for managing INIT command callbacks
      */
     private val callbackManager =
-        com.sunmi.tapro.taplink.communication.util.LocalCallbackManager<com.sunmi.tapro.taplink.communication.interfaces.InnerCallback?>(
-            timeoutMillis = 30_000L, // 30 seconds timeout for INIT command
+        com.sunmi.tapro.taplink.communication.util.LocalCallbackManager<InnerCallback?>(
+            timeoutMillis = (if (config.connectionTimeout <= 0) 60 else config.connectionTimeout) * 1000L, // 30 seconds timeout for INIT command
             tag = TAG
         )
 
@@ -197,6 +198,7 @@ class ConnectionManager(
                             LogUtil.d(TAG, "INIT errorMsg: $errorMsg")
                             LogUtil.d(TAG, "INIT deviceId: $deviceId")
                             LogUtil.d(TAG, "INIT taproVersion: $taproVersion")
+
 
                             if (success) {
                                 LogUtil.d(TAG, "INIT command completed successfully, notifying connection listeners")
@@ -487,6 +489,7 @@ class ConnectionManager(
                         var message: String? = basicResponse.event.eventMsg
                         var deviceId: String? = null
                         var taproVersion: String? = null
+                        var transactionResultCode: String? = null
 
                         if (basicResponse.bizData != null) {
                             try {
@@ -495,13 +498,16 @@ class ConnectionManager(
                                 message = bizDataJson.get("message")?.asString
                                 deviceId = bizDataJson.get("deviceId")?.asString
                                 taproVersion = bizDataJson.get("taproVersion")?.asString
+                                transactionResultCode = bizDataJson.get("transactionResultCode")?.asString
                             } catch (e: Exception) {
                                 LogUtil.w(TAG, "Failed to parse bizData as JSON: ${e.message}")
                             }
                         }
 
                         // Determine success
-                        if (code == SUCCESS_CODE && basicResponse.event is com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent.Completed) {
+                        if (code == SUCCESS_CODE && basicResponse.event is PaymentEvent.Completed
+                            && (transactionResultCode == "0" || transactionResultCode == "000")
+                        ) {
                             LogUtil.d(TAG, "INIT command completed successfully")
                             LogUtil.d(TAG, "Device info: deviceId=$deviceId, taproVersion=$taproVersion")
                             onComplete(true, null, null, deviceId, taproVersion)

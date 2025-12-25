@@ -1000,8 +1000,21 @@ class WebSocketClientKernel constructor(
             if (attributes != null && attributes.isNotEmpty()) {
                 LogUtil.d(TAG, "Service ${serviceInfo.serviceName} attributes:")
                 for ((key, value) in attributes) {
-                    val valueStr = if (value != null) String(value, Charsets.UTF_8) else "null"
-                    LogUtil.d(TAG, "  $key = $valueStr")
+                    // 安全处理空键名和空值
+                    if (key != null && key.isNotEmpty()) {
+                        val valueStr = if (value != null) {
+                            try {
+                                String(value, Charsets.UTF_8)
+                            } catch (e: Exception) {
+                                "decode_error:${e.message}"
+                            }
+                        } else {
+                            "null"
+                        }
+                        LogUtil.d(TAG, "  '$key' = '$valueStr'")
+                    } else {
+                        LogUtil.w(TAG, "  [INVALID] empty/null key with value: ${if (value != null) "non-null" else "null"}")
+                    }
                 }
             } else {
                 LogUtil.d(TAG, "Service ${serviceInfo.serviceName} has no attributes")

@@ -82,6 +82,7 @@ sealed class InnerErrorCode(
     object C39 : InnerErrorCode("C39")
     object C40 : InnerErrorCode("C40")
     object C41 : InnerErrorCode("C41")
+    object C42 : InnerErrorCode("C42")
 
     // ==================== 商户配置错误（M 系列） ====================
     object M01 : InnerErrorCode("M01")
@@ -184,7 +185,8 @@ sealed class InnerErrorCode(
                 "C39" -> C39
                 "C40" -> C40
                 "C41" -> C41
-                
+                "C42" -> C42
+
                 // 商户配置错误（M 系列）
                 "M01" -> M01
                 "M02" -> M02

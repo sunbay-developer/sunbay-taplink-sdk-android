@@ -1,5 +1,7 @@
 package com.sunmi.tapro.taplink.communication.util
 
+import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
+import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -29,7 +31,7 @@ class LocalCallbackManager<T>(
      * Key: 请求ID，Value: 回调包装对象
      */
     private val callbackMap = ConcurrentHashMap<Long, CallbackWrapper<T>>()
-    
+
     /**
      * 追踪ID到回调的映射表（线程安全）
      * Key: traceId（String），Value: 回调包装对象
@@ -40,7 +42,7 @@ class LocalCallbackManager<T>(
      * 协程作用域
      */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    
+
     /**
      * 添加回调（通过traceId）
      *
@@ -53,10 +55,10 @@ class LocalCallbackManager<T>(
             LogUtil.i(tag, "TraceId is blank, skip adding callback")
             return false
         }
-        
+
         val wrapper = CallbackWrapper(callback, System.currentTimeMillis())
         val existing = traceIdCallbackMap.putIfAbsent(traceId, wrapper)
-        
+
         if (existing != null) {
             LogUtil.i(tag, "Callback with traceId=$traceId already exists, overwriting")
             traceIdCallbackMap[traceId] = wrapper
@@ -64,13 +66,13 @@ class LocalCallbackManager<T>(
         }
 
         LogUtil.d(tag, "Callback added by traceId: $traceId")
-        
+
         // 启动超时清理任务
         startTimeoutTaskForTraceId(traceId)
-        
+
         return true
     }
-    
+
     /**
      * 获取回调（通过traceId，不移除）
      *
@@ -81,7 +83,7 @@ class LocalCallbackManager<T>(
         if (traceId.isBlank()) {
             return null
         }
-        
+
         val wrapper = traceIdCallbackMap[traceId]
         if (wrapper != null) {
             // 检查是否超时
@@ -94,7 +96,7 @@ class LocalCallbackManager<T>(
         }
         return null
     }
-    
+
     /**
      * 获取并移除回调（通过traceId）
      *
@@ -105,7 +107,7 @@ class LocalCallbackManager<T>(
         if (traceId.isBlank()) {
             return null
         }
-        
+
         val wrapper = traceIdCallbackMap.remove(traceId)
         if (wrapper != null) {
             LogUtil.d(tag, "Callback retrieved and removed by traceId: $traceId")
@@ -114,7 +116,7 @@ class LocalCallbackManager<T>(
         LogUtil.d(tag, "Callback not found by traceId: $traceId")
         return null
     }
-    
+
     /**
      * 移除回调（通过traceId）
      *
@@ -125,14 +127,14 @@ class LocalCallbackManager<T>(
         if (traceId.isBlank()) {
             return false
         }
-        
+
         val removed = traceIdCallbackMap.remove(traceId) != null
         if (removed) {
             LogUtil.d(tag, "Callback removed by traceId: $traceId")
         }
         return removed
     }
-    
+
     /**
      * 清理所有回调
      */
@@ -154,13 +156,13 @@ class LocalCallbackManager<T>(
         val expiredIds = callbackMap.entries
             .filter { (_, wrapper) -> now - wrapper.timestamp > timeoutMillis }
             .map { it.key }
-        
+
         expiredIds.forEach { callbackMap.remove(it) }
-        
+
         if (expiredIds.isNotEmpty()) {
             LogUtil.d(tag, "Cleared ${expiredIds.size} expired callbacks")
         }
-        
+
         return expiredIds.size
     }
 
@@ -192,7 +194,7 @@ class LocalCallbackManager<T>(
             }
         }
     }
-    
+
     /**
      * 启动超时清理任务（通过traceId）
      *
@@ -206,8 +208,9 @@ class LocalCallbackManager<T>(
             if (wrapper != null) {
                 val elapsed = System.currentTimeMillis() - wrapper.timestamp
                 if (elapsed >= timeoutMillis) {
-                    traceIdCallbackMap.remove(traceId)
+                    val removedCallback = traceIdCallbackMap.remove(traceId)
                     LogUtil.i(tag, "Callback timeout and removed by traceId: $traceId, elapsed=${elapsed}ms")
+                    (removedCallback?.callback as InnerCallback).onError(InnerErrorCode.Timeout.code, "Callback timeout")
                 }
             }
         }

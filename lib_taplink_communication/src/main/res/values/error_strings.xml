@@ -105,6 +105,8 @@
     
     <string name="error_c41_description">Protocol data is invalid or parsing failed</string>
 
+    <string name="error_c42_description">Declined</string>
+
     <!-- Merchant Configuration Errors (M Series) -->
     <string name="error_m01_description">Insufficient interface call permissions or not activated</string>
     
@@ -135,4 +137,5 @@
     <!-- Unknown Error -->
     <string name="error_unknown_description">Unknown error code</string>
     <string name="error_empty_description">Error code is empty</string>
+
 </resources>
