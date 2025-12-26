@@ -106,6 +106,8 @@
     <string name="error_c41_description">Protocol data is invalid or parsing failed</string>
 
     <string name="error_c42_description">Declined</string>
+    
+    <string name="error_c43_description">Invalid amount</string>
 
     <!-- Merchant Configuration Errors (M Series) -->
     <string name="error_m01_description">Insufficient interface call permissions or not activated</string>

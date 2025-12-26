@@ -105,6 +105,8 @@
     
     <string name="error_c41_description">Protocol data is invalid or parsing failed</string>
 
+    <string name="error_c42_description">Declined</string>
+
     <!-- 商户配置错误（M 系列） -->
     <string name="error_m01_description">接口调用权限不足或未激活</string>
     

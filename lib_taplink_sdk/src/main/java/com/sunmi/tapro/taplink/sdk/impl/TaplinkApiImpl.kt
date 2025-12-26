@@ -63,7 +63,10 @@ class TaplinkApiImpl : TaplinkApi {
         // Initialize specialized managers
         connectionManager = ConnectionManager(config, context)
         responseProcessor = ResponseProcessor()
-        paymentManager = PaymentManager(config, connectionManager!!, responseProcessor!!)
+        paymentManager = PaymentManager(config, connectionManager!!, responseProcessor!!, context)
+        
+        // Set payment manager reference in connection manager for connection loss notifications
+        connectionManager?.setPaymentManager(paymentManager!!)
 
         // Initialize ServiceKernel
         TaplinkServiceKernel.getInstance(context)

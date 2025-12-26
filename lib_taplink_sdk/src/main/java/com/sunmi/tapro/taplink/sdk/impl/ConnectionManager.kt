@@ -71,6 +71,12 @@ class ConnectionManager(
     private var reconnectManager: ReconnectManager? = null
 
     /**
+     * Payment manager reference (optional, set after initialization)
+     * Used to notify pending transactions when connection is lost
+     */
+    private var paymentManager: PaymentManager? = null
+
+    /**
      * Gson instance for JSON serialization
      */
     private val gson = Gson()
@@ -184,7 +190,6 @@ class ConnectionManager(
                         LogUtil.d(TAG, "Connection status before INIT: $connectionStatus")
 
                         // Notify reconnect manager of successful connection
-                        reconnectManager?.onConnected(connectedDeviceId)
 
                         // Register data receiver
                         registerDataReceiver()
@@ -211,6 +216,8 @@ class ConnectionManager(
                                     "Device info from INIT response: deviceId=$connectedDeviceId, taproVersion=${connectedTaproVersion}"
                                 )
                                 LogUtil.d(TAG, "=== Calling onConnected Callbacks ===")
+                                // 在 INIT 成功后保存连接信息（包含正确的 deviceId）
+                                reconnectManager?.onConnected(connectedDeviceId)
                                 updateConnectionStatus(
                                     ConnectionStatus.CONNECTED,
                                     deviceId = connectedDeviceId,
@@ -258,6 +265,9 @@ class ConnectionManager(
 
                         if (isConnectionError) {
                             LogUtil.e(TAG, "Treating as connection error: $reason")
+
+                            // 立即触发所有待处理的交易回调（目标进程崩溃时）
+                            paymentManager?.failAllPendingTransactions(code, msg)
 
                             // 创建连接错误对象
                             val connectionError = ConnectionError(code, msg)
@@ -633,6 +643,14 @@ class ConnectionManager(
      */
     fun getAutoConnectConfig(): ConnectionConfig? {
         return reconnectManager?.getAutoConnectConfig()
+    }
+
+    /**
+     * Set payment manager reference
+     * Called after PaymentManager is created to enable connection loss notifications
+     */
+    fun setPaymentManager(paymentManager: PaymentManager) {
+        this.paymentManager = paymentManager
     }
 
     /**

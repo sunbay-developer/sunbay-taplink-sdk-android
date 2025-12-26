@@ -1,6 +1,8 @@
 package com.sunmi.tapro.taplink.sdk.impl
 
+import android.content.Context
 import com.google.gson.Gson
+import com.sunmi.tapro.taplink.sdk.R
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
@@ -9,34 +11,37 @@ import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import com.sunmi.tapro.taplink.sdk.util.RequestConverter
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
+import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import java.math.BigDecimal
 
 /**
  * Payment management class
- * 
+ *
  * Handles all payment-related operations including:
  * - Payment request execution
  * - Transaction queries
  * - Request/response processing
  * - Callback management
- * 
+ *
  * @author TaPro Team
  * @since 2025-12-22
  */
 class PaymentManager(
     private val config: TaplinkConfig,
     private val connectionManager: ConnectionManager,
-    private val responseProcessor: ResponseProcessor
+    private val responseProcessor: ResponseProcessor,
+    private val context: Context
 ) {
     private val TAG = "PaymentManager"
-    
+
     /**
      * Gson instance for JSON serialization
      */
     private val gson = Gson()
-    
+
     /**
      * Callback manager for managing multiple async request callbacks
      */
@@ -44,24 +49,25 @@ class PaymentManager(
         timeoutMillis = (if (config.connectionTimeout <= 0) 60 else config.connectionTimeout) * 1000L, // 30 seconds timeout for INIT command
         tag = TAG
     )
-    
+
     init {
         LogUtil.d(TAG, "PaymentManager initialized")
-        
+
         // Set up data receiver for processing responses
         connectionManager.setDataReceiver { data ->
             processReceivedResponse(String(data, Charsets.UTF_8))
         }
     }
-    
+
     /**
      * Execute payment request
      */
     fun execute(request: PaymentRequest, callback: PaymentCallback) {
         LogUtil.d(TAG, "Executing payment request: action=${request.action}, referenceOrderId=${request.referenceOrderId}")
+
         sendPaymentRequest(request, callback)
     }
-    
+
     /**
      * Execute query request
      */
@@ -70,11 +76,11 @@ class PaymentManager(
             TAG,
             "Querying transaction: transactionId=${request.transactionId}, transactionRequestId=${request.transactionRequestId}"
         )
-        
+
         try {
             // Convert QueryRequest to PaymentRequest
             val paymentRequest = convertQueryRequestToPaymentRequest(request)
-            
+
             // Call sendPaymentRequest to send request
             sendPaymentRequest(paymentRequest, callback)
         } catch (e: Exception) {
@@ -82,7 +88,7 @@ class PaymentManager(
             callback.onFailure(PaymentError("REQUEST_ERROR", e.message ?: "Failed to convert query request"))
         }
     }
-    
+
     /**
      * Send payment request
      */
@@ -90,7 +96,10 @@ class PaymentManager(
         try {
             // Validate preconditions
             if (!validateConnection(callback)) return
-            
+
+            // Validate amount (must be integer, no decimal)
+            if (!validateAmount(request, callback)) return
+
             // Convert PaymentRequest to BasicRequest
             val basicRequest = RequestConverter.convertToBasicRequest(
                 request = request,
@@ -98,18 +107,18 @@ class PaymentManager(
                 config.appId,
                 secretKey = config.secretKey
             )
-            
+
             // Convert BasicRequest to JSON string
             val requestJson = gson.toJson(basicRequest)
             LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
-            
+
             // Create internal callback for receiving raw response
             val internalCallback = createInternalCallback(callback, request, basicRequest.traceId)
-            
+
             // Add callback to LocalCallbackManager before sending
             callbackManager.addCallbackByTraceId(basicRequest.traceId, internalCallback)
             LogUtil.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}")
-            
+
             // Send data through TaplinkServiceKernel
             val serviceKernel = TaplinkServiceKernel.getInstance()
             if (serviceKernel == null) {
@@ -118,7 +127,7 @@ class PaymentManager(
                 callback.onFailure(PaymentError("NOT_CONNECTED", "Service kernel not available"))
                 return
             }
-            
+
             // Send data
             try {
                 serviceKernel.sendData(
@@ -137,7 +146,7 @@ class PaymentManager(
             callback.onFailure(PaymentError("REQUEST_ERROR", e.message ?: "Unknown error"))
         }
     }
-    
+
     /**
      * Convert QueryRequest to PaymentRequest
      */
@@ -146,16 +155,16 @@ class PaymentManager(
         if (queryRequest.transactionId == null && queryRequest.transactionRequestId == null) {
             throw IllegalArgumentException("Either transactionId or transactionRequestId must be provided")
         }
-        
+
         val transactionRequestId = queryRequest.transactionRequestId
-        
+
         // Build query description
         val description = when {
             queryRequest.transactionId != null -> "Query transaction by transactionId: ${queryRequest.transactionId}"
             queryRequest.transactionRequestId != null -> "Query transaction by transactionRequestId: ${queryRequest.transactionRequestId}"
             else -> "Query transaction"
         }
-        
+
         // Build PaymentRequest with action as QUERY
         return PaymentRequest(
             action = TransactionAction.QUERY.value,
@@ -169,7 +178,7 @@ class PaymentManager(
             deviceInfo = config.defaultDeviceInfo
         )
     }
-    
+
     /**
      * Create internal callback object
      */
@@ -183,13 +192,13 @@ class PaymentManager(
                 LogUtil.e(TAG, "Received error: code=$code, msg=$msg, traceId=$traceId")
                 callback.onFailure(PaymentError(code, msg))
             }
-            
+
             override fun onResponse(responseData: String) {
                 responseProcessor.handleResponse(responseData, callback, request)
             }
         }
     }
-    
+
     /**
      * Process received response data
      */
@@ -198,13 +207,13 @@ class PaymentManager(
             if (responseJson.isBlank()) {
                 return
             }
-            
+
             responseProcessor.processResponse(responseJson, callbackManager)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to process received response: ${e.message}")
         }
     }
-    
+
     /**
      * Validate connection status
      */
@@ -216,11 +225,101 @@ class PaymentManager(
         }
         return true
     }
-    
+
+    /**
+     * Validate amount fields - all amounts must be integers (no decimal)
+     */
+    private fun validateAmount(request: PaymentRequest, callback: PaymentCallback): Boolean {
+        // Validate AmountInfo fields
+        request.amount?.let { amountInfo ->
+            if (!isInteger(amountInfo.orderAmount)) {
+                LogUtil.e(TAG, "orderAmount must be an integer, got: ${amountInfo.orderAmount}")
+                callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_order)}"))
+                return false
+            }
+
+            amountInfo.tipAmount?.let {
+                if (!isInteger(it)) {
+                    LogUtil.e(TAG, "tipAmount must be an integer, got: $it")
+                    callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tip)}"))
+                    return false
+                }
+            }
+
+            amountInfo.taxAmount?.let {
+                if (!isInteger(it)) {
+                    LogUtil.e(TAG, "taxAmount must be an integer, got: $it")
+                    callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tax)}"))
+                    return false
+                }
+            }
+
+            amountInfo.surchargeAmount?.let {
+                if (!isInteger(it)) {
+                    LogUtil.e(TAG, "surchargeAmount must be an integer, got: $it")
+                    callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_surcharge)}"))
+                    return false
+                }
+            }
+
+            amountInfo.cashbackAmount?.let {
+                if (!isInteger(it)) {
+                    LogUtil.e(TAG, "cashbackAmount must be an integer, got: $it")
+                    callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_cashback)}"))
+                    return false
+                }
+            }
+
+            amountInfo.serviceFee?.let {
+                if (!isInteger(it)) {
+                    LogUtil.e(TAG, "serviceFee must be an integer, got: $it")
+                    callback.onFailure(
+                        PaymentError(
+                            InnerErrorCode.C43.code,
+                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_service_fee)}"
+                        )
+                    )
+                    return false
+                }
+            }
+        }
+
+        // Validate PaymentRequest tipAmount field
+        request.tipAmount?.let {
+            if (!isInteger(it)) {
+                LogUtil.e(TAG, "PaymentRequest tipAmount must be an integer, got: $it")
+                callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tip)}"))
+                return false
+            }
+        }
+
+        return true
+    }
+
+    /**
+     * Check if a BigDecimal value is an integer (no decimal part)
+     */
+    private fun isInteger(amount: BigDecimal): Boolean {
+        // Check if the remainder when divided by 1 is zero
+        return amount.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) == 0
+    }
+
     /**
      * Clear all pending callbacks
      */
     fun clearAllCallbacks() {
         callbackManager.clearAll()
+    }
+
+    /**
+     * Immediately fail all pending transaction callbacks
+     * Used when connection is lost or target process crashes
+     *
+     * @param errorCode Error code
+     * @param errorMessage Error message
+     */
+    fun failAllPendingTransactions(errorCode: String, errorMessage: String) {
+        LogUtil.w(TAG, "Failing all pending transactions: $errorCode - $errorMessage")
+        callbackManager.failAllCallbacks(errorCode, errorMessage)
     }
 }

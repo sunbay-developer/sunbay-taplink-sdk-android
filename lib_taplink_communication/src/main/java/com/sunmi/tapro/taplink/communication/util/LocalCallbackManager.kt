@@ -147,6 +147,30 @@ class LocalCallbackManager<T>(
     }
 
     /**
+     * 立即触发所有待处理回调的错误
+     * 用于连接断开或进程崩溃时立即通知应用层
+     *
+     * @param errorCode 错误码
+     * @param errorMessage 错误消息
+     */
+    fun failAllCallbacks(errorCode: String, errorMessage: String) {
+        val callbacks = traceIdCallbackMap.values.toList()
+        traceIdCallbackMap.clear()
+        callbackMap.clear()
+
+        if (callbacks.isNotEmpty()) {
+            LogUtil.w(tag, "Failing ${callbacks.size} pending callbacks due to connection loss: $errorCode")
+            callbacks.forEach { wrapper ->
+                try {
+                    (wrapper.callback as? InnerCallback)?.onError(errorCode, errorMessage)
+                } catch (e: Exception) {
+                    LogUtil.e(tag, "Failed to trigger callback error: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /**
      * 清理超时的回调
      *
      * @return Int 清理的回调数量
