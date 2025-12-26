@@ -77,6 +77,24 @@ class ConnectionManager(
     private var paymentManager: PaymentManager? = null
 
     /**
+     * Connection status change listener for PaymentManager
+     * Called when connection status changes to CONNECTED
+     */
+    private var connectionStatusListener: (() -> Unit)? = null
+
+    /**
+     * Connection error listener for PaymentManager
+     * Called when connection fails (ERROR status)
+     */
+    private var connectionErrorListener: ((ConnectionError) -> Unit)? = null
+
+    /**
+     * Connection disconnected listener for PaymentManager
+     * Called when connection status changes to DISCONNECTED
+     */
+    private var connectionDisconnectedListener: (() -> Unit)? = null
+
+    /**
      * Gson instance for JSON serialization
      */
     private val gson = Gson()
@@ -85,6 +103,12 @@ class ConnectionManager(
      * Data receiver callback
      */
     private var dataReceiver: ((ByteArray) -> Unit)? = null
+
+    /**
+     * List of connection listeners waiting for connection completion
+     * Used when user calls connect() while connection is already in progress
+     */
+    private val pendingConnectionListeners = mutableListOf<ConnectionListener>()
 
     /**
      * Callback manager for managing INIT command callbacks
@@ -119,16 +143,37 @@ class ConnectionManager(
         // If still no config, create default based on TaplinkConfig connection mode
         if (actualConfig == null) {
             actualConfig = createDefaultConnectionConfig()
-            LogUtil.d(
-                TAG,
-                "No connection config provided, created default config based on connection mode: ${this.config.connectionMode}"
-            )
-        } else {
-            LogUtil.d(TAG, "Using connection config: ${if (config != null) "provided" else "previous"}")
         }
 
-        // Prepare reconnect manager
-        reconnectManager?.prepareConnect(actualConfig, listener)
+        // Check if currently reconnecting
+        val reconnectManager = this.reconnectManager
+        if (reconnectManager?.isReconnecting() == true) {
+            val reconnectingConfig = reconnectManager.getReconnectingConfig()
+
+            if (reconnectingConfig == null || !actualConfig.isEquivalentTo(reconnectingConfig)) {
+                if (connectionStatus == ConnectionStatus.CONNECTING ||
+                    connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
+                    connectionStatus == ConnectionStatus.CONNECTED
+                ) {
+                    disconnect()
+                }
+                reconnectManager.prepareConnect(actualConfig, listener)
+            } else {
+                reconnectManager.addReconnectionListener(listener)
+                return
+            }
+        } else {
+            // Not reconnecting, check if already connecting
+            if (connectionStatus == ConnectionStatus.CONNECTING ||
+                connectionStatus == ConnectionStatus.WAIT_CONNECTING) {
+                LogUtil.w(TAG, "Connection already in progress, adding listener to queue")
+                pendingConnectionListeners.add(listener)
+                LogUtil.d(TAG, "Added listener to pending connection queue, total: ${pendingConnectionListeners.size}")
+                return
+            }
+            // Prepare reconnect manager for new connection
+            reconnectManager?.prepareConnect(actualConfig, listener)
+        }
 
         // Execute actual connection
         connectInternal(actualConfig, listener)
@@ -138,16 +183,15 @@ class ConnectionManager(
      * Internal connection method
      */
     private fun connectInternal(config: ConnectionConfig?, listener: ConnectionListener) {
-        LogUtil.d(TAG, "=== APP TO APP Connection Debug ===")
-        LogUtil.d(
-            TAG,
-            "Connecting with config: cableProtocol=${config?.cableProtocol}, host=${config?.host}, port=${config?.port}"
-        )
-        LogUtil.d(TAG, "Connection mode: ${this.config.connectionMode}")
-        LogUtil.d(TAG, "AppId: ${this.config.appId}")
-        LogUtil.d(TAG, "SecretKey length: ${this.config.secretKey.length}")
+        // Set connection status immediately to prevent concurrent connections
+        if (connectionStatus != ConnectionStatus.CONNECTING &&
+            connectionStatus != ConnectionStatus.WAIT_CONNECTING) {
+            updateConnectionStatus(ConnectionStatus.CONNECTING, listener = listener)
+        }
 
         if (this.config.appId.isBlank() || this.config.secretKey.isBlank()) {
+            // Reset status on error
+            updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
                     "C20",
@@ -164,10 +208,11 @@ class ConnectionManager(
             reconnectManager?.getContext()
         )
         currentConnectionMode = connectionMode
-        LogUtil.d(TAG, "Built protocol string: $protocol, connectionMode: $connectionMode")
 
         // Validate protocol format
         if (!ProtocolManager.isValidProtocol(protocol)) {
+            // Reset status on error
+            updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
                     "C41",
@@ -185,53 +230,33 @@ class ConnectionManager(
                 this.config.secretKey,
                 object : ServiceConnectionCallback {
                     override fun onConnected(extraInfoMap: Map<String, String?>?) {
-                        LogUtil.d(TAG, "=== Service Connection Success ===")
-                        LogUtil.d(TAG, "onConnected, extraInfoMap=${extraInfoMap.toString()}")
-                        LogUtil.d(TAG, "Connection status before INIT: $connectionStatus")
-
-                        // Notify reconnect manager of successful connection
-
                         // Register data receiver
                         registerDataReceiver()
 
-                        LogUtil.d(TAG, "Starting INIT command to initialize tapro application...")
                         // Send INIT command to initialize tapro application
                         sendInitCommand { success, errorCode, errorMsg, deviceId, taproVersion ->
-                            LogUtil.d(TAG, "=== INIT Command Result ===")
-                            LogUtil.d(TAG, "INIT success: $success")
-                            LogUtil.d(TAG, "INIT errorCode: $errorCode")
-                            LogUtil.d(TAG, "INIT errorMsg: $errorMsg")
-                            LogUtil.d(TAG, "INIT deviceId: $deviceId")
-                            LogUtil.d(TAG, "INIT taproVersion: $taproVersion")
-
-
                             if (success) {
-                                LogUtil.d(TAG, "INIT command completed successfully, notifying connection listeners")
-
                                 // Get device info from INIT response
                                 connectedDeviceId = deviceId ?: "unknown"
                                 connectedTaproVersion = taproVersion ?: "unknown"
-                                LogUtil.d(
-                                    TAG,
-                                    "Device info from INIT response: deviceId=$connectedDeviceId, taproVersion=${connectedTaproVersion}"
-                                )
-                                LogUtil.d(TAG, "=== Calling onConnected Callbacks ===")
+
                                 // 在 INIT 成功后保存连接信息（包含正确的 deviceId）
-                                reconnectManager?.onConnected(connectedDeviceId)
+                                reconnectManager?.onConnected(connectedDeviceId, connectedTaproVersion)
                                 updateConnectionStatus(
                                     ConnectionStatus.CONNECTED,
                                     deviceId = connectedDeviceId,
                                     taproVersion = connectedTaproVersion,
                                     listener = listener
                                 )
-                                LogUtil.d(TAG, "=== All onConnected Callbacks Completed ===")
                             } else {
-                                LogUtil.e(TAG, "INIT command failed: code=$errorCode, msg=$errorMsg")
                                 val error = ConnectionError(
                                     errorCode ?: "INIT_FAILED",
                                     errorMsg ?: "Failed to initialize tapro application"
                                 )
-                                LogUtil.d(TAG, "=== Calling onError Callbacks ===")
+
+                                // Notify pending reconnection listeners
+                                reconnectManager?.notifyPendingListenersError(error)
+
                                 updateConnectionStatus(
                                     ConnectionStatus.ERROR,
                                     null,
@@ -240,7 +265,6 @@ class ConnectionManager(
                                     null,
                                     listener
                                 )
-                                LogUtil.d(TAG, "=== All onError Callbacks Completed ===")
                             }
                         }
                     }
@@ -252,39 +276,28 @@ class ConnectionManager(
                     }
 
                     override fun onDisconnected(code: String, msg: String) {
-                        LogUtil.d(TAG, "=== Service Connection Disconnected ===")
-                        LogUtil.d(TAG, "Disconnect code: $code")
-                        LogUtil.d(TAG, "Disconnect message: $msg")
-                        LogUtil.d(TAG, "Connection status before handling: $connectionStatus")
-
                         val reason = "Code: $code, Message: $msg"
-                        LogUtil.d(TAG, "ConnectionManager:onDisconnected:code$code,msg:$msg")
 
                         // 判断是连接错误还是正常断开
                         val isConnectionError = isConnectionError(code, msg)
 
                         if (isConnectionError) {
-                            LogUtil.e(TAG, "Treating as connection error: $reason")
-
                             // 立即触发所有待处理的交易回调（目标进程崩溃时）
                             paymentManager?.failAllPendingTransactions(code, msg)
 
                             // 创建连接错误对象
                             val connectionError = ConnectionError(code, msg)
-                            LogUtil.d(TAG, "=== Calling onError Callbacks ===")
                             updateConnectionStatus(
                                 ConnectionStatus.ERROR,
                                 errorCode = connectionError,
                                 listener = listener
                             )
-                            LogUtil.d(TAG, "=== All onError Callbacks Completed ===")
 
                             // 清理资源
                             connectedDeviceId = null
                             connectedTaproVersion = null
                             currentConnectionMode = null
                         } else {
-                            LogUtil.d(TAG, "Treating as normal disconnection: $reason")
                             updateConnectionStatus(
                                 ConnectionStatus.DISCONNECTED,
                                 reason = reason,
@@ -296,10 +309,8 @@ class ConnectionManager(
 
                             if (!reconnected) {
                                 // Not reconnecting, notify application layer and clean up resources
-                                LogUtil.d(TAG, "=== Calling onDisconnected Callbacks ===")
                                 listener.onDisconnected(reason)
                                 connectionListener?.onDisconnected(reason)
-                                LogUtil.d(TAG, "=== All onDisconnected Callbacks Completed ===")
 
                                 // Clean up resources (only when not reconnecting)
                                 connectedDeviceId = null
@@ -351,6 +362,15 @@ class ConnectionManager(
         // Notify reconnect manager of manual disconnect
         reconnectManager?.disconnect()
 
+        // Clear pending connection listeners
+        if (pendingConnectionListeners.isNotEmpty()) {
+            val error = ConnectionError(
+                "C38",
+                "Connection cancelled due to manual disconnect"
+            )
+            notifyPendingConnectionListenersError(error)
+        }
+
         updateConnectionStatus(ConnectionStatus.DISCONNECTED, reason = "Manual disconnect")
         TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
         connectedDeviceId = null
@@ -365,6 +385,15 @@ class ConnectionManager(
      */
     fun isConnected(): Boolean {
         return connectionStatus == ConnectionStatus.CONNECTED
+    }
+
+    /**
+     * Check if connection is in progress (connecting or reconnecting)
+     */
+    fun isConnecting(): Boolean {
+        return connectionStatus == ConnectionStatus.CONNECTING ||
+               connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
+               (reconnectManager?.isReconnecting() == true)
     }
 
     /**
@@ -607,19 +636,31 @@ class ConnectionManager(
 
         when (connectionStatus) {
             ConnectionStatus.CONNECTED -> {
+                // Notify connection status listener (for PaymentManager to process pending transaction)
+                connectionStatusListener?.invoke()
                 listener?.onConnected(deviceId!!, taproVersion!!)
                 connectionListener?.onConnected(deviceId!!, taproVersion!!)
+                
+                // Notify all pending connection listeners
+                notifyPendingConnectionListenersSuccess(deviceId!!, taproVersion!!)
             }
 
             ConnectionStatus.ERROR -> {
                 errorCode?.let {
+                    // Notify connection error listener (for PaymentManager to handle pending transaction)
+                    connectionErrorListener?.invoke(it)
                     listener?.onError(it)
                     connectionListener?.onError(it)
+                    
+                    // Notify all pending connection listeners
+                    notifyPendingConnectionListenersError(it)
                 }
             }
 
             ConnectionStatus.DISCONNECTED -> {
                 reason?.let {
+                    // Notify connection disconnected listener (for PaymentManager to clear auto-connect flag)
+                    connectionDisconnectedListener?.invoke()
                     listener?.onDisconnected(it)
                     connectionListener?.onDisconnected(it)
                 }
@@ -627,6 +668,53 @@ class ConnectionManager(
 
             else -> {
                 LogUtil.i(TAG, "do not need callback")
+            }
+        }
+    }
+
+    /**
+     * Notify all pending connection listeners of connection success
+     *
+     * @param deviceId Connected device ID
+     * @param taproVersion Tapro version
+     */
+    private fun notifyPendingConnectionListenersSuccess(deviceId: String, taproVersion: String) {
+        if (pendingConnectionListeners.isEmpty()) {
+            return
+        }
+
+        LogUtil.d(TAG, "Notifying ${pendingConnectionListeners.size} pending connection listeners of connection success")
+        val listeners = pendingConnectionListeners.toList()
+        pendingConnectionListeners.clear()
+
+        listeners.forEach { listener ->
+            try {
+                listener.onConnected(deviceId, taproVersion)
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error notifying pending connection listener: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Notify all pending connection listeners of connection error
+     *
+     * @param error Connection error
+     */
+    private fun notifyPendingConnectionListenersError(error: ConnectionError) {
+        if (pendingConnectionListeners.isEmpty()) {
+            return
+        }
+
+        LogUtil.d(TAG, "Notifying ${pendingConnectionListeners.size} pending connection listeners of connection error")
+        val listeners = pendingConnectionListeners.toList()
+        pendingConnectionListeners.clear()
+
+        listeners.forEach { listener ->
+            try {
+                listener.onError(error)
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error notifying pending connection listener: ${e.message}")
             }
         }
     }
@@ -651,6 +739,30 @@ class ConnectionManager(
      */
     fun setPaymentManager(paymentManager: PaymentManager) {
         this.paymentManager = paymentManager
+    }
+
+    /**
+     * Set connection status listener
+     * Called when connection status changes to CONNECTED
+     */
+    fun setConnectionStatusListener(listener: (() -> Unit)?) {
+        this.connectionStatusListener = listener
+    }
+
+    /**
+     * Set connection error listener
+     * Called when connection fails (ERROR status)
+     */
+    fun setConnectionErrorListener(listener: ((ConnectionError) -> Unit)?) {
+        this.connectionErrorListener = listener
+    }
+
+    /**
+     * Set connection disconnected listener
+     * Called when connection status changes to DISCONNECTED
+     */
+    fun setConnectionDisconnectedListener(listener: (() -> Unit)?) {
+        this.connectionDisconnectedListener = listener
     }
 
     /**

@@ -6,6 +6,7 @@ import android.os.Looper
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
+import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 import com.sunmi.tapro.taplink.sdk.persistence.ConnectionPersistence
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
@@ -60,6 +61,12 @@ class ReconnectManager(
     private var lastConnectionListener: ConnectionListener? = null
 
     /**
+     * List of connection listeners waiting for reconnection
+     * Used when user calls connect() with same config while reconnecting
+     */
+    private val pendingReconnectionListeners = mutableListOf<ConnectionListener>()
+
+    /**
      * Reconnection handler
      */
     private val retryHandler = Handler(Looper.getMainLooper())
@@ -81,6 +88,9 @@ class ReconnectManager(
         currentRetryCount = 0
         isReconnecting = false
 
+        // Clear pending listeners
+        pendingReconnectionListeners.clear()
+
         // Cancel all pending reconnection tasks
         retryHandler.removeCallbacksAndMessages(null)
     }
@@ -90,10 +100,12 @@ class ReconnectManager(
      *
      * Reset retry count and reconnection state
      * Save connection configuration for future auto-reconnection
+     * Notify all pending listeners
      *
      * @param deviceId Connected device ID
+     * @param taproVersion Tapro version (optional)
      */
-    fun onConnected(deviceId: String? = null) {
+    fun onConnected(deviceId: String? = null, taproVersion: String? = null) {
         currentRetryCount = 0
         isReconnecting = false
         LogUtil.d(TAG, "Connection established, reset reconnect state")
@@ -106,6 +118,13 @@ class ReconnectManager(
 
         // Enable auto-connect for future app launches
         connectionPersistence.setAutoConnectEnabled(true)
+
+        // Notify all pending listeners
+        if (pendingReconnectionListeners.isNotEmpty()) {
+            val deviceIdStr = deviceId ?: "unknown"
+            val taproVersionStr = taproVersion ?: "unknown"
+            notifyPendingListenersSuccess(deviceIdStr, taproVersionStr)
+        }
     }
 
     /**
@@ -172,6 +191,9 @@ class ReconnectManager(
         lastConnectionConfig = null
         lastConnectionListener = null
 
+        // Clear pending listeners
+        pendingReconnectionListeners.clear()
+
         // Clear persistent connection data
 //        connectionPersistence.clearConnectionData()
         connectionPersistence.setAutoConnectEnabled(false)
@@ -217,6 +239,91 @@ class ReconnectManager(
      * Get current retry count
      */
     fun getCurrentRetryCount(): Int = currentRetryCount
+
+    /**
+     * Check if currently reconnecting
+     *
+     * @return Boolean true if currently reconnecting, false otherwise
+     */
+    fun isReconnecting(): Boolean {
+        return isReconnecting
+    }
+
+    /**
+     * Get the connection config being used for reconnection
+     *
+     * @return ConnectionConfig being used for reconnection, or null if not reconnecting
+     */
+    fun getReconnectingConfig(): ConnectionConfig? {
+        return if (isReconnecting) {
+            lastConnectionConfig
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Add a connection listener to be notified when reconnection completes
+     *
+     * This is used when user calls connect() with same config while reconnecting
+     *
+     * @param listener Connection listener to add
+     */
+    fun addReconnectionListener(listener: ConnectionListener) {
+        if (isReconnecting) {
+            pendingReconnectionListeners.add(listener)
+            LogUtil.d(TAG, "Added listener to pending reconnection listeners, total: ${pendingReconnectionListeners.size}")
+        } else {
+            LogUtil.w(TAG, "Not reconnecting, cannot add reconnection listener")
+        }
+    }
+
+    /**
+     * Notify all pending listeners of connection success
+     *
+     * @param deviceId Connected device ID
+     * @param taproVersion Tapro version
+     */
+    private fun notifyPendingListenersSuccess(deviceId: String, taproVersion: String) {
+        if (pendingReconnectionListeners.isEmpty()) {
+            return
+        }
+
+        LogUtil.d(TAG, "Notifying ${pendingReconnectionListeners.size} pending listeners of connection success")
+        val listeners = pendingReconnectionListeners.toList()
+        pendingReconnectionListeners.clear()
+
+        listeners.forEach { listener ->
+            try {
+                listener.onConnected(deviceId, taproVersion)
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error notifying pending listener: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Notify all pending listeners of connection error
+     *
+     * @param error Connection error
+     */
+    fun notifyPendingListenersError(error: ConnectionError) {
+        if (pendingReconnectionListeners.isEmpty()) {
+            return
+        }
+
+        LogUtil.d(TAG, "Notifying ${pendingReconnectionListeners.size} pending listeners of connection error")
+        val listeners = pendingReconnectionListeners.toList()
+        pendingReconnectionListeners.clear()
+
+        listeners.forEach { listener ->
+            try {
+                listener.onError(error)
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error notifying pending listener: ${e.message}")
+            }
+        }
+    }
 
     /**
      * Get last connection configuration

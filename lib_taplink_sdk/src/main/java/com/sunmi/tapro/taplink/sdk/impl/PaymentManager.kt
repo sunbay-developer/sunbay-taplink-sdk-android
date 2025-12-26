@@ -3,9 +3,12 @@ package com.sunmi.tapro.taplink.sdk.impl
 import android.content.Context
 import com.google.gson.Gson
 import com.sunmi.tapro.taplink.sdk.R
+import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
+import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
+import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
@@ -50,12 +53,42 @@ class PaymentManager(
         tag = TAG
     )
 
+    /**
+     * Flag to track if there's a pending transaction waiting for auto-connect
+     * Used to distinguish between auto-connect from execute/query and normal reconnection
+     */
+    private var hasPendingAutoConnectTransaction = false
+
+    /**
+     * Pending transaction waiting for connection (only one at a time)
+     * Used when connection is in progress but no auto-connect transaction is pending
+     */
+    private var pendingTransaction: Pair<PaymentRequest, PaymentCallback>? = null
+
     init {
         LogUtil.d(TAG, "PaymentManager initialized")
 
         // Set up data receiver for processing responses
         connectionManager.setDataReceiver { data ->
             processReceivedResponse(String(data, Charsets.UTF_8))
+        }
+
+        // Set up connection status listener to process pending transaction when connected
+        connectionManager.setConnectionStatusListener {
+            processPendingTransaction()
+        }
+
+        // Set up connection error listener to handle pending transaction when connection fails
+        connectionManager.setConnectionErrorListener { error ->
+            handlePendingTransactionError(error)
+        }
+
+        // Set up connection disconnected listener to clear auto-connect flag when disconnected
+        connectionManager.setConnectionDisconnectedListener {
+            if (hasPendingAutoConnectTransaction) {
+                LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
+                hasPendingAutoConnectTransaction = false
+            }
         }
     }
 
@@ -65,7 +98,31 @@ class PaymentManager(
     fun execute(request: PaymentRequest, callback: PaymentCallback) {
         LogUtil.d(TAG, "Executing payment request: action=${request.action}, referenceOrderId=${request.referenceOrderId}")
 
-        sendPaymentRequest(request, callback)
+        // Check connection status
+        if (connectionManager.isConnected()) {
+            // Already connected, execute directly
+            sendPaymentRequest(request, callback)
+        } else if (connectionManager.isConnecting()) {
+            // Connection in progress
+            if (hasPendingAutoConnectTransaction) {
+                // There's already a transaction waiting for auto-connect, reject this one
+                LogUtil.w(TAG, "Connection in progress with pending transaction, rejecting new transaction")
+                callback.onFailure(
+                    PaymentError(
+                        "CONNECTION_IN_PROGRESS",
+                        "Connection is in progress with pending transaction, please wait for connection to complete"
+                    )
+                )
+            } else {
+                // No pending transaction, wait for connection to complete
+                LogUtil.d(TAG, "Connection in progress, waiting for connection to complete before executing transaction")
+                pendingTransaction = Pair(request, callback)
+            }
+        } else {
+            // Not connected, auto-connect first
+            LogUtil.d(TAG, "Not connected, attempting auto-connect before executing transaction")
+            autoConnectAndExecute(request, callback)
+        }
     }
 
     /**
@@ -81,8 +138,31 @@ class PaymentManager(
             // Convert QueryRequest to PaymentRequest
             val paymentRequest = convertQueryRequestToPaymentRequest(request)
 
-            // Call sendPaymentRequest to send request
-            sendPaymentRequest(paymentRequest, callback)
+            // Check connection status
+            if (connectionManager.isConnected()) {
+                // Already connected, execute directly
+                sendPaymentRequest(paymentRequest, callback)
+            } else if (connectionManager.isConnecting()) {
+                // Connection in progress
+                if (hasPendingAutoConnectTransaction) {
+                    // There's already a transaction waiting for auto-connect, reject this one
+                    LogUtil.w(TAG, "Connection in progress with pending transaction, rejecting new query")
+                    callback.onFailure(
+                        PaymentError(
+                            "CONNECTION_IN_PROGRESS",
+                            "Connection is in progress with pending transaction, please wait for connection to complete"
+                        )
+                    )
+                } else {
+                    // No pending transaction, wait for connection to complete
+                    LogUtil.d(TAG, "Connection in progress, waiting for connection to complete before querying")
+                    pendingTransaction = Pair(paymentRequest, callback)
+                }
+            } else {
+                // Not connected, auto-connect first
+                LogUtil.d(TAG, "Not connected, attempting auto-connect before querying transaction")
+                autoConnectAndExecute(paymentRequest, callback)
+            }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error converting QueryRequest to PaymentRequest: ${e.message}")
             callback.onFailure(PaymentError("REQUEST_ERROR", e.message ?: "Failed to convert query request"))
@@ -320,6 +400,100 @@ class PaymentManager(
      */
     fun failAllPendingTransactions(errorCode: String, errorMessage: String) {
         LogUtil.w(TAG, "Failing all pending transactions: $errorCode - $errorMessage")
+        // Clear auto-connect flag when connection is lost
+        hasPendingAutoConnectTransaction = false
         callbackManager.failAllCallbacks(errorCode, errorMessage)
+    }
+
+    /**
+     * Auto-connect and execute payment request
+     * 
+     * If not connected, automatically connect first, then execute the transaction
+     * 
+     * @param request Payment request
+     * @param callback Payment callback
+     */
+    private fun autoConnectAndExecute(request: PaymentRequest, callback: PaymentCallback) {
+        // Set flag to indicate there's a pending transaction waiting for auto-connect
+        hasPendingAutoConnectTransaction = true
+        
+        val autoConnectListener = object : ConnectionListener {
+            override fun onConnected(deviceId: String, taproVersion: String) {
+                LogUtil.d(TAG, "Auto-connect successful, executing payment request")
+                // Clear flag
+                hasPendingAutoConnectTransaction = false
+                // Connection successful, execute transaction
+                sendPaymentRequest(request, callback)
+            }
+
+            override fun onError(error: ConnectionError) {
+                LogUtil.e(TAG, "Auto-connect failed: ${error.message}")
+                // Clear flag
+                hasPendingAutoConnectTransaction = false
+                // Connection failed, notify callback
+                callback.onFailure(
+                    PaymentError(
+                        error.code,
+                        "Auto-connect failed: ${error.message}"
+                    )
+                )
+            }
+
+            override fun onDisconnected(reason: String) {
+                // Clear flag if auto-connect was interrupted
+                if (hasPendingAutoConnectTransaction) {
+                    LogUtil.w(TAG, "Auto-connect disconnected: $reason")
+                    hasPendingAutoConnectTransaction = false
+                    // Notify callback of disconnection
+                    callback.onFailure(
+                        PaymentError(
+                            "CONNECTION_DISCONNECTED",
+                            "Auto-connect disconnected: $reason"
+                        )
+                    )
+                }
+            }
+
+            override fun onReconnecting(currentAttempt: Int, maxAttempts: Int) {
+                LogUtil.d(TAG, "Auto-connect reconnecting: $currentAttempt/$maxAttempts")
+            }
+        }
+
+        // Try to use saved connection config or default config
+        val connectionConfig = connectionManager.getAutoConnectConfig()
+        connectionManager.connect(connectionConfig, autoConnectListener)
+    }
+
+    /**
+     * Process pending transaction after connection established
+     * Called when connection is in progress (reconnecting) and no auto-connect transaction is pending
+     */
+    private fun processPendingTransaction() {
+        val transaction = pendingTransaction
+        if (transaction != null) {
+            pendingTransaction = null
+            val (request, callback) = transaction
+            LogUtil.d(TAG, "Executing pending transaction after connection: action=${request.action}")
+            sendPaymentRequest(request, callback)
+        }
+    }
+
+    /**
+     * Handle pending transaction error when connection fails
+     * Called when connection fails (ERROR status) and there's a pending transaction
+     */
+    private fun handlePendingTransactionError(error: ConnectionError) {
+        val transaction = pendingTransaction
+        if (transaction != null) {
+            pendingTransaction = null
+            val (_, callback) = transaction
+            LogUtil.e(TAG, "Connection failed, notifying pending transaction: ${error.message}")
+            callback.onFailure(
+                PaymentError(
+                    error.code,
+                    "Connection failed: ${error.message}"
+                )
+            )
+        }
     }
 }

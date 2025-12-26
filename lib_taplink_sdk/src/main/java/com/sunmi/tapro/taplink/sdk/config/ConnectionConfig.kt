@@ -67,6 +67,22 @@ class ConnectionConfig {
         return this
     }
     
+    /**
+     * Check if this config is equivalent to another config
+     * 
+     * Two configs are considered equivalent if they have the same connection parameters
+     * 
+     * @param other The other config to compare
+     * @return Boolean true if configs are equivalent, false otherwise
+     */
+    fun isEquivalentTo(other: ConnectionConfig?): Boolean {
+        if (other == null) return false
+        
+        return this.cableProtocol == other.cableProtocol &&
+               this.host == other.host &&
+               this.port == other.port
+    }
+    
     companion object {
         /**
          * 创建默认连接配置
