@@ -2,7 +2,6 @@ package com.sunmi.tapro.taplink.demo
 
 import android.app.Application
 import android.util.Log
-import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.sdk.TaplinkSDK
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
@@ -118,25 +117,6 @@ class TaplinkDemoApplication : Application() {
                 // loading: Execute sale immediately after connection success
                 Log.d(TAG, "Connection successful, executing repeated SALE transactions (Loading)")
                 executeSale()
-                // Create new thread to execute sale transaction repeatedly
-//                Thread {
-//                    Log.d(TAG, "Starting repeated SALE transactions in background thread")
-//                    for (index in 0 until 10) {
-//                        Log.d(TAG, "Executing SALE transaction #${index + 1}/10")
-//
-//                        // Wait 50ms before next execution (except for the last one)
-//                        if (index < 9) {
-//                            try {
-//                                Thread.sleep(50)
-//                            } catch (e: InterruptedException) {
-//                                Log.w(TAG, "Thread interrupted during sleep", e)
-//                                Thread.currentThread().interrupt()
-//                                break
-//                            }
-//                        }
-//                    }
-//                    Log.d(TAG, "Completed all 10 SALE transactions")
-//                }.start()
             }
 
             override fun onDisconnected(reason: String) {
@@ -158,7 +138,7 @@ class TaplinkDemoApplication : Application() {
      * Execute SALE transaction (called automatically after connection success)
      */
     private fun executeSale() {
-        Log.d(TAG, "=== Executing SALE Transaction (Loading) ===")
+        Log.d(TAG, "=== Executing SALE Transaction ===")
 
         // Double check connection status
 //        if (!TaplinkSDK.isConnected()) {
@@ -168,7 +148,7 @@ class TaplinkDemoApplication : Application() {
 
         val referenceOrderId = "LAZY_ORDER_${System.currentTimeMillis()}"
         val transactionRequestId = "LAZY_REQ_${System.currentTimeMillis()}"
-        val amount = BigDecimal("10.00")
+        val amount = BigDecimal("1")
         val currency = "USD"
 
         Log.d(TAG, "Order ID: $referenceOrderId")

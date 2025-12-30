@@ -16,6 +16,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import java.math.BigDecimal
+import java.math.RoundingMode
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener as SdkConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback as SdkPaymentCallback
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError as SdkConnectionError
@@ -309,12 +310,19 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Handle payment result - simplified to directly forward SDK response
+     * Handle payment result - converts SDK cents amounts back to dollars for UI display
      * Converts SDK result to internal PaymentResult format
      * Determines success based on transaction result code and status
      */
     private fun handlePaymentResult(sdkResult: SdkPaymentResult, callback: PaymentCallback) {
         Log.d(TAG, "Payment result - Code: ${sdkResult.code}, Status: ${sdkResult.transactionStatus}")
+
+        // Convert cents amounts back to dollars for UI display
+        fun toDollars(centsAmount: BigDecimal?): BigDecimal? {
+            return centsAmount?.let { 
+                it.divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+            }
+        }
 
         // Check if transaction is successful based on result code
         val isSuccessful = sdkResult.transactionResultCode == "000" || 
@@ -331,15 +339,16 @@ class TaplinkPaymentService : PaymentService {
             transactionStatus = sdkResult.transactionStatus,
             transactionType = sdkResult.transactionType,
             amount = sdkResult.amount?.let { amt ->
+                // Convert cents to dollars
                 TransactionAmount(
                     priceCurrency = amt.priceCurrency,
-                    transAmount = amt.transAmount,
-                    orderAmount = amt.orderAmount,
-                    taxAmount = amt.taxAmount,
-                    serviceFee = amt.serviceFee,
-                    surchargeAmount = amt.surchargeAmount,
-                    tipAmount = amt.tipAmount,
-                    cashbackAmount = amt.cashbackAmount
+                    transAmount = toDollars(amt.transAmount), 
+                    orderAmount = toDollars(amt.orderAmount), 
+                    taxAmount = toDollars(amt.taxAmount), 
+                    serviceFee = toDollars(amt.serviceFee), 
+                    surchargeAmount = toDollars(amt.surchargeAmount), 
+                    tipAmount = toDollars(amt.tipAmount), 
+                    cashbackAmount = toDollars(amt.cashbackAmount) 
                 )
             },
             createTime = sdkResult.createTime,
@@ -367,20 +376,20 @@ class TaplinkPaymentService : PaymentService {
             transactionResultMsg = sdkResult.transactionResultMsg,
             description = sdkResult.description,
             attach = sdkResult.attach,
-            tipAmount = sdkResult.tipAmount,
-            totalAuthorizedAmount = sdkResult.totalAuthorizedAmount,
+            tipAmount = toDollars(sdkResult.tipAmount), 
+            totalAuthorizedAmount = toDollars(sdkResult.totalAuthorizedAmount), 
             merchantRefundNo = sdkResult.merchantRefundNo,
             originalTransactionId = sdkResult.originalTransactionId,
             originalTransactionRequestId = sdkResult.originalTransactionRequestId,
             batchCloseInfo = sdkResult.batchCloseInfo?.let { bci ->
                 BatchCloseInfo(
                     totalCount = bci.totalCount ?: 0,
-                    totalAmount = bci.totalAmount ?: BigDecimal.ZERO,
-                    totalTip = bci.totalTip ?: BigDecimal.ZERO,
-                    totalTax = bci.totalTax ?: BigDecimal.ZERO,
-                    totalSurchargeAmount = bci.totalSurchargeAmount ?: BigDecimal.ZERO,
-                    totalServiceFee = bci.totalServiceFee ?: BigDecimal.ZERO,
-                    cashDiscount = bci.cashDiscount ?: BigDecimal.ZERO,
+                    totalAmount = toDollars(bci.totalAmount) ?: BigDecimal.ZERO, 
+                    totalTip = toDollars(bci.totalTip) ?: BigDecimal.ZERO, 
+                    totalTax = toDollars(bci.totalTax) ?: BigDecimal.ZERO, 
+                    totalSurchargeAmount = toDollars(bci.totalSurchargeAmount) ?: BigDecimal.ZERO, 
+                    totalServiceFee = toDollars(bci.totalServiceFee) ?: BigDecimal.ZERO, 
+                    cashDiscount = toDollars(bci.cashDiscount) ?: BigDecimal.ZERO, 
                     closeTime = bci.closeTime ?: ""
                 )
             }
@@ -529,16 +538,33 @@ class TaplinkPaymentService : PaymentService {
             "Executing SALE transaction - OrderId: $referenceOrderId, Amount: $amount $currency"
         )
 
-        // Create AmountInfo with all amounts
-        val amountInfo = AmountInfo(
-            orderAmount = amount,
-            pricingCurrency = currency,
-            tipAmount = tipAmount,
-            taxAmount = taxAmount,
-            surchargeAmount = surchargeAmount,
-            cashbackAmount = cashbackAmount,
-            serviceFee = serviceFee
+        // Convert dollar amounts to cents for SDK
+        fun toCents(dollarAmount: BigDecimal): BigDecimal {
+            return (dollarAmount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+        }
+
+        // Create AmountInfo with main amount converted to cents
+        var amountInfo = AmountInfo(
+            orderAmount = toCents(amount), // Convert main amount to cents
+            pricingCurrency = currency
         )
+        
+        // Set additional amounts if provided, converting each to cents
+        surchargeAmount?.let { 
+            amountInfo = amountInfo.setSurchargeAmount(toCents(it))
+        }
+        tipAmount?.let { 
+            amountInfo = amountInfo.setTipAmount(toCents(it))
+        }
+        taxAmount?.let { 
+            amountInfo = amountInfo.setTaxAmount(toCents(it))
+        }
+        cashbackAmount?.let { 
+            amountInfo = amountInfo.setCashbackAmount(toCents(it))
+        }
+        serviceFee?.let { 
+            amountInfo = amountInfo.setServiceFee(toCents(it))
+        }
 
         val request = PaymentRequest("SALE")
             .setReferenceOrderId(referenceOrderId)
@@ -587,10 +613,13 @@ class TaplinkPaymentService : PaymentService {
             "Executing AUTH transaction - OrderId: $referenceOrderId, Amount: $amount $currency"
         )
 
+        // Convert dollar amount to cents for SDK
+        val amountInCents = (amount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+
         val request = PaymentRequest("AUTH")
             .setReferenceOrderId(referenceOrderId)
             .setTransactionRequestId(transactionRequestId)
-            .setAmount(AmountInfo(amount, currency))
+            .setAmount(AmountInfo(amountInCents, currency))
             .setDescription(description)
 
         Log.d(TAG, "=== AUTH Request ===")
@@ -636,13 +665,24 @@ class TaplinkPaymentService : PaymentService {
             "Executing FORCED_AUTH transaction - OrderId: $referenceOrderId"
         )
 
-        // Create AmountInfo with all amounts
-        val amountInfo = AmountInfo(
-            orderAmount = amount,
-            pricingCurrency = currency,
-            tipAmount = tipAmount,
-            taxAmount = taxAmount
+        // Convert dollar amounts to cents for SDK
+        fun toCents(dollarAmount: BigDecimal): BigDecimal {
+            return (dollarAmount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+        }
+
+        // Create AmountInfo with all amounts converted to cents
+        var amountInfo = AmountInfo(
+            orderAmount = toCents(amount),
+            pricingCurrency = currency
         )
+        
+        // Set additional amounts if provided, converting each to cents
+        tipAmount?.let { 
+            amountInfo = amountInfo.setTipAmount(toCents(it))
+        }
+        taxAmount?.let { 
+            amountInfo = amountInfo.setTaxAmount(toCents(it))
+        }
 
         val request = PaymentRequest("FORCED_AUTH")
             .setReferenceOrderId(referenceOrderId)
@@ -693,20 +733,23 @@ class TaplinkPaymentService : PaymentService {
             "Executing REFUND transaction - OriginalTxnId: $originalTransactionId, Amount: $amount $currency"
         )
 
+        // Convert dollar amount to cents for SDK
+        val amountInCents = (amount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+
         val request = if (originalTransactionId.isNotEmpty()) {
             Log.d(TAG, "Creating REFUND request with originalTransactionId: $originalTransactionId")
             PaymentRequest("REFUND")
                 .setReferenceOrderId(referenceOrderId)
                 .setTransactionRequestId(transactionRequestId)
                 .setOriginalTransactionId(originalTransactionId)
-                .setAmount(AmountInfo(amount, currency))
+                .setAmount(AmountInfo(amountInCents, currency))
                 .setDescription(description)
         } else {
             Log.d(TAG, "Creating standalone REFUND request without originalTransactionId")
             PaymentRequest("REFUND")
                 .setReferenceOrderId(referenceOrderId)
                 .setTransactionRequestId(transactionRequestId)
-                .setAmount(AmountInfo(amount, currency))
+                .setAmount(AmountInfo(amountInCents, currency))
                 .setDescription(description)
         }
 
@@ -809,15 +852,23 @@ class TaplinkPaymentService : PaymentService {
             "Executing POST_AUTH transaction - OriginalTxnId: $originalTransactionId, Amount: $amount $currency"
         )
 
-        // Create AmountInfo with all amounts using builder pattern
-        var amountInfo = AmountInfo(orderAmount = amount, pricingCurrency = currency)
+        // Convert dollar amounts to cents for SDK
+        fun toCents(dollarAmount: BigDecimal): BigDecimal {
+            return (dollarAmount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+        }
 
-        // Set additional amounts if provided
-        // surchargeAmount?.let { amountInfo = amountInfo.setSurchargeAmount(it) }
-        tipAmount?.let { amountInfo = amountInfo.setTipAmount(it) }
-        taxAmount?.let { amountInfo = amountInfo.setTaxAmount(it) }
-        // cashbackAmount?.let { amountInfo = amountInfo.setCashbackAmount(it) }
-        // serviceFee?.let { amountInfo = amountInfo.setServiceFee(it) }
+        // Create AmountInfo with all amounts converted to cents using builder pattern
+        var amountInfo = AmountInfo(
+            orderAmount = toCents(amount), 
+            pricingCurrency = currency
+        )
+
+        // Set additional amounts if provided, converting each to cents
+        // surchargeAmount?.let { amountInfo = amountInfo.setSurchargeAmount(toCents(it)) }
+        tipAmount?.let { amountInfo = amountInfo.setTipAmount(toCents(it)) }
+        taxAmount?.let { amountInfo = amountInfo.setTaxAmount(toCents(it)) }
+        // cashbackAmount?.let { amountInfo = amountInfo.setCashbackAmount(toCents(it)) }
+        // serviceFee?.let { amountInfo = amountInfo.setServiceFee(toCents(it)) }
 
         val request = PaymentRequest("POST_AUTH")
             .setReferenceOrderId(referenceOrderId)
@@ -868,11 +919,14 @@ class TaplinkPaymentService : PaymentService {
             "Executing INCREMENT_AUTH transaction - OriginalTxnId: $originalTransactionId, Amount: $amount $currency"
         )
 
+        // Convert dollar amount to cents for SDK
+        val amountInCents = (amount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+
         val request = PaymentRequest("INCREMENT_AUTH")
             .setReferenceOrderId(referenceOrderId)
             .setTransactionRequestId(transactionRequestId)
             .setOriginalTransactionId(originalTransactionId)
-            .setAmount(AmountInfo(amount, currency))
+            .setAmount(AmountInfo(amountInCents, currency))
             .setDescription(description)
 
         Log.d(TAG, "=== INCREMENT_AUTH Request ===")
@@ -916,11 +970,14 @@ class TaplinkPaymentService : PaymentService {
             "Executing TIP_ADJUST transaction - OriginalTxnId: $originalTransactionId, TipAmount: $tipAmount"
         )
 
+        // Convert dollar tip amount to cents for SDK
+        val tipAmountInCents = (tipAmount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+
         val request = PaymentRequest("TIP_ADJUST")
             .setReferenceOrderId(referenceOrderId)
             .setTransactionRequestId(transactionRequestId)
             .setOriginalTransactionId(originalTransactionId)
-            .setTipAmount(tipAmount)
+            .setTipAmount(tipAmountInCents)
             .setDescription(description)
 
         Log.d(TAG, "=== TIP_ADJUST Request ===")

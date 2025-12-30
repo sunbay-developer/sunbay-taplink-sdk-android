@@ -273,8 +273,6 @@ class MainActivity : Activity() {
      */
     private fun connectToPaymentService() {
         // Temporarily commented out to avoid multiple connect() calls
-        // Only the last connect() call receives callbacks, so this conflicts with Application's connect()
-        /*
         paymentService.connect(object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
                 runOnUiThread {
@@ -300,7 +298,6 @@ class MainActivity : Activity() {
                 }
             }
         })
-        */
         
         // For testing: Assume connection is successful since Application handles it
         runOnUiThread {
