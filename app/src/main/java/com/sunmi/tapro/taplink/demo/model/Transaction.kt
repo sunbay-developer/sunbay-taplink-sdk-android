@@ -30,7 +30,7 @@ import java.math.BigDecimal
 data class Transaction(
     val transactionRequestId: String,
     val transactionId: String? = null,
-    val referenceOrderId: String,
+    val referenceOrderId: String? = null,
     val type: TransactionType,
     val amount: BigDecimal,
     val totalAmount: BigDecimal? = null,

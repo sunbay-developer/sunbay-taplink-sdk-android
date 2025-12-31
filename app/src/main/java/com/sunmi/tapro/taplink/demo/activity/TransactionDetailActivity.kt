@@ -955,7 +955,10 @@ class TransactionDetailActivity : AppCompatActivity() {
         progressDialog.show()
 
         val transactionRequestId = existingTransactionRequestId ?: generateTransactionRequestId()
-        val referenceOrderId = txn.referenceOrderId // Use the same order ID as original transaction
+        var referenceOrderId = txn.referenceOrderId // Use the same order ID as original transaction
+        if (referenceOrderId.isNullOrEmpty()){
+            referenceOrderId = generateOrderId()
+        }
 
         val originalTxnId = txn.transactionId ?: txn.transactionRequestId
 

@@ -117,7 +117,9 @@ class TransactionListActivity : AppCompatActivity() {
         
         // List item click event
         lvTransactions.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
+            Log.d(TAG, "List item clicked at position: $position")
             val transaction = adapter.getItem(position)
+            Log.d(TAG, "Transaction: ${transaction.transactionRequestId}, type: ${transaction.type}")
             openTransactionDetail(transaction)
         }
     }
@@ -508,13 +510,11 @@ class TransactionListActivity : AppCompatActivity() {
         progressDialog.show()
 
         val transactionRequestId = generateTransactionRequestId()
-        val referenceOrderId = generateOrderId()
 
         // Create transaction record
         val newTransaction = Transaction(
             transactionRequestId = transactionRequestId,
             transactionId = null,
-            referenceOrderId = referenceOrderId,
             type = TransactionType.BATCH_CLOSE,
             amount = java.math.BigDecimal.ZERO,
             currency = "USD",
@@ -524,7 +524,6 @@ class TransactionListActivity : AppCompatActivity() {
         TransactionRepository.addTransaction(newTransaction)
 
         paymentService.executeBatchClose(
-            referenceOrderId = referenceOrderId,
             transactionRequestId = transactionRequestId,
             description = "Batch close",
             callback = object : PaymentCallback {
@@ -675,8 +674,16 @@ class TransactionListActivity : AppCompatActivity() {
      * Open transaction detail page
      */
     private fun openTransactionDetail(transaction: Transaction) {
-        val intent = Intent(this, TransactionDetailActivity::class.java)
-        intent.putExtra("transaction_request_id", transaction.transactionRequestId)
-        startActivity(intent)
+        Log.d(TAG, "Opening transaction detail for: ${transaction.transactionRequestId}")
+        try {
+            val intent = Intent(this, TransactionDetailActivity::class.java)
+            intent.putExtra("transaction_request_id", transaction.transactionRequestId)
+            Log.d(TAG, "Starting TransactionDetailActivity with intent")
+            startActivity(intent)
+            Log.d(TAG, "TransactionDetailActivity started successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting TransactionDetailActivity", e)
+            showToast("Error opening transaction detail: ${e.message}")
+        }
     }
 }

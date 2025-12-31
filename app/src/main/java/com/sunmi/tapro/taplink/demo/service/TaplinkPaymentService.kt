@@ -134,7 +134,7 @@ class TaplinkPaymentService : PaymentService {
         this.connectionListener = listener
         
         Log.d(TAG, "=== connect() called ===")
-        Log.d(TAG, "ConnectionListener set: ${listener != null}")
+        Log.d(TAG, "ConnectionListener set: ${true}")
         Log.d(TAG, "Connecting with mode: $currentMode")
 
         // Check network for LAN mode
@@ -1076,7 +1076,6 @@ class TaplinkPaymentService : PaymentService {
      * Execute BATCH_CLOSE transaction (batch close)
      */
     override fun executeBatchClose(
-        referenceOrderId: String,
         transactionRequestId: String,
         description: String,
         callback: PaymentCallback
@@ -1089,7 +1088,6 @@ class TaplinkPaymentService : PaymentService {
         Log.d(TAG, "Executing BATCH_CLOSE transaction")
 
         val request = PaymentRequest("BATCH_CLOSE")
-            .setReferenceOrderId(referenceOrderId)
             .setTransactionRequestId(transactionRequestId)
             .setDescription(description)
 

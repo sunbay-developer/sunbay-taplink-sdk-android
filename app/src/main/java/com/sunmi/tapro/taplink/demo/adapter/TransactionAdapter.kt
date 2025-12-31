@@ -74,6 +74,10 @@ class TransactionAdapter(
         val transaction = getItem(position)
         bindData(holder, transaction)
 
+        // Make sure the root view doesn't intercept clicks
+        view.isClickable = false
+        view.isFocusable = false
+
         return view
     }
 

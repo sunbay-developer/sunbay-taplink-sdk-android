@@ -276,7 +276,6 @@ interface PaymentService {
      * @param callback Payment callback
      */
     fun executeBatchClose(
-        referenceOrderId: String,
         transactionRequestId: String,
         description: String,
         callback: PaymentCallback

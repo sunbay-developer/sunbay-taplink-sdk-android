@@ -3,107 +3,149 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="?android:attr/selectableItemBackground"
-    android:padding="16dp">
+    android:layout_marginBottom="8dp"
+    android:elevation="2dp"
+    android:clickable="false"
+    android:focusable="false"
+    android:background="?android:attr/selectableItemBackground">
 
-    <!-- Transaction Information -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:orientation="vertical"
+        android:background="#FFFFFF"
+        android:padding="20dp"
+        android:clickable="false"
+        android:focusable="false">
 
-        <!-- Transaction Info -->
+        <!-- Header Row: Transaction Type and Amount -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp"
+            android:clickable="false"
+            android:focusable="false">
 
-            <!-- Transaction Type and Amount -->
-            <LinearLayout
-                android:layout_width="match_parent"
+            <!-- Transaction Type Badge -->
+            <TextView
+                android:id="@+id/tv_transaction_type"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:text="SALE"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:background="@color/colorPrimary"
+                android:paddingLeft="12dp"
+                android:paddingRight="12dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:layout_marginEnd="12dp"
+                android:clickable="false"
+                android:focusable="false" />
 
-                <TextView
-                    android:id="@+id/tv_transaction_type"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="SALE"
-                    android:textColor="#333333"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
+            <!-- Spacer -->
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
-                <TextView
-                    android:id="@+id/tv_amount"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="¥100.00"
-                    android:textColor="#333333"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-            </LinearLayout>
-
-            <!-- Order ID and Status -->
-            <LinearLayout
-                android:layout_width="match_parent"
+            <!-- Transaction Amount -->
+            <TextView
+                android:id="@+id/tv_amount"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="4dp">
-                
-                <TextView
-                    android:id="@+id/tv_order_id"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Order: ORD20231201001"
-                    android:textColor="#666666"
-                    android:textSize="14sp" />
-                
-                <TextView
-                    android:id="@+id/tv_status"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Success"
-                    android:textColor="#4CAF50"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:background="@android:drawable/editbox_background"
-                    android:paddingLeft="8dp"
-                    android:paddingRight="8dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp" />
-            </LinearLayout>
+                android:text="¥100.00"
+                android:textColor="#333333"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:clickable="false"
+                android:focusable="false" />
+
+        </LinearLayout>
+
+        <!-- Order Information Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp"
+            android:clickable="false"
+            android:focusable="false">
+
+            <TextView
+                android:id="@+id/tv_order_id"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Order: ORD20231201001"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:clickable="false"
+                android:focusable="false" />
+
+            <!-- Status Badge -->
+            <TextView
+                android:id="@+id/tv_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Success"
+                android:textColor="#4CAF50"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:background="@android:drawable/editbox_background"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:clickable="false"
+                android:focusable="false" />
+
+        </LinearLayout>
+
+        <!-- Bottom Row: Transaction ID and Time -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="false"
+            android:focusable="false">
+
+            <!-- Transaction ID -->
+            <TextView
+                android:id="@+id/tv_transaction_id"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="TXN20231201001"
+                android:textColor="#999999"
+                android:textSize="12sp"
+                android:clickable="false"
+                android:focusable="false" />
 
             <!-- Transaction Time -->
             <TextView
                 android:id="@+id/tv_transaction_time"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="2023-12-01 14:30:25"
-                android:textColor="#666666"
+                android:text="14:30:25"
+                android:textColor="#999999"
                 android:textSize="12sp"
-                android:layout_marginTop="2dp" />
+                android:clickable="false"
+                android:focusable="false" />
 
         </LinearLayout>
 
-
-
     </LinearLayout>
 
-    <!-- Transaction ID -->
-    <TextView
-        android:id="@+id/tv_transaction_id"
+    <!-- Bottom Border -->
+    <View
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Transaction ID: TXN20231201001"
-        android:textColor="#999999"
-        android:textSize="11sp"
-        android:layout_marginTop="8dp" />
+        android:layout_height="1dp"
+        android:background="#F0F0F0" />
 
 </LinearLayout>

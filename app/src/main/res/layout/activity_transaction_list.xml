@@ -5,16 +5,21 @@
     android:orientation="vertical"
     android:background="#f5f5f5">
 
+    <!-- Header Card -->
+
     <!-- Transaction History List -->
     <ListView
         android:id="@+id/lv_transactions"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:divider="#E0E0E0"
-        android:dividerHeight="1dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp" />
+        android:divider="@android:color/transparent"
+        android:dividerHeight="8dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:clipToPadding="false" />
 
     <!-- Empty State -->
     <LinearLayout
@@ -24,53 +29,72 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:gravity="center"
-        android:visibility="gone">
+        android:visibility="gone"
+        android:padding="40dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📋"
+            android:textSize="48sp"
+            android:layout_marginBottom="16dp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="No transactions yet"
             android:textColor="#999999"
-            android:textSize="16sp"
-            android:layout_marginTop="16dp" />
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start processing payments to see transaction history"
+            android:textColor="#CCCCCC"
+            android:textSize="14sp"
+            android:gravity="center" />
 
     </LinearLayout>
 
-    <!-- Bottom Button Bar -->
+    <!-- Bottom Action Panel -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp"
         android:background="#FFFFFF"
-        android:elevation="4dp">
+        android:padding="20dp"
+        android:elevation="8dp">
 
         <!-- First Row: Query and Batch Close -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
 
             <Button
                 android:id="@+id/btn_query_transaction"
                 android:layout_width="0dp"
-                android:layout_height="48dp"
+                android:layout_height="56dp"
                 android:layout_weight="1"
                 android:text="Query Transaction"
                 android:textColor="#FFFFFF"
-                android:textSize="16sp"
+                android:textSize="14sp"
+                android:textStyle="bold"
                 android:background="@color/colorPrimary"
                 android:layout_marginEnd="8dp" />
 
             <Button
                 android:id="@+id/btn_batch_close"
                 android:layout_width="0dp"
-                android:layout_height="48dp"
+                android:layout_height="56dp"
                 android:layout_weight="1"
                 android:text="Batch Close"
                 android:textColor="#FFFFFF"
-                android:textSize="16sp"
+                android:textSize="14sp"
+                android:textStyle="bold"
                 android:background="@color/colorAccent"
                 android:layout_marginStart="8dp" />
 
@@ -80,10 +104,11 @@
         <Button
             android:id="@+id/btn_standalone_refund"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="56dp"
             android:text="@string/refund_without_reference"
             android:textColor="#FFFFFF"
             android:textSize="16sp"
+            android:textStyle="bold"
             android:background="#FF6B35" />
 
     </LinearLayout>
