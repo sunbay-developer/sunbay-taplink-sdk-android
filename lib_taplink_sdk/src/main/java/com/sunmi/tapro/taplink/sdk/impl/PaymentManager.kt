@@ -18,6 +18,7 @@ import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import java.math.BigDecimal
 
 /**
@@ -49,7 +50,7 @@ class PaymentManager(
      * Callback manager for managing multiple async request callbacks
      */
     private val callbackManager = LocalCallbackManager<InnerCallback?>(
-        timeoutMillis = (if (config.connectionTimeout <= 0) 60 else config.connectionTimeout) * 1000L, // 30 seconds timeout for INIT command
+        timeoutMillis = (if (config.timeout <= 0) Int.MAX_VALUE else config.timeout) * 1000L, // 180 seconds timeout for INIT command
         tag = TAG
     )
 
@@ -196,7 +197,11 @@ class PaymentManager(
             val internalCallback = createInternalCallback(callback, request, basicRequest.traceId)
 
             // Add callback to LocalCallbackManager before sending
-            callbackManager.addCallbackByTraceId(basicRequest.traceId, internalCallback)
+            callbackManager.addCallbackByTraceId(
+                basicRequest.traceId,
+                internalCallback,
+                connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
+            )
             LogUtil.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}")
 
             // Send data through TaplinkServiceKernel
@@ -287,7 +292,6 @@ class PaymentManager(
             if (responseJson.isBlank()) {
                 return
             }
-
             responseProcessor.processResponse(responseJson, callbackManager)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to process received response: ${e.message}")
@@ -314,14 +318,24 @@ class PaymentManager(
         request.amount?.let { amountInfo ->
             if (!isInteger(amountInfo.orderAmount)) {
                 LogUtil.e(TAG, "orderAmount must be an integer, got: ${amountInfo.orderAmount}")
-                callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_order)}"))
+                callback.onFailure(
+                    PaymentError(
+                        InnerErrorCode.C43.code,
+                        "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_order)}"
+                    )
+                )
                 return false
             }
 
             amountInfo.tipAmount?.let {
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "tipAmount must be an integer, got: $it")
-                    callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tip)}"))
+                    callback.onFailure(
+                        PaymentError(
+                            InnerErrorCode.C43.code,
+                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tip)}"
+                        )
+                    )
                     return false
                 }
             }
@@ -329,7 +343,12 @@ class PaymentManager(
             amountInfo.taxAmount?.let {
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "taxAmount must be an integer, got: $it")
-                    callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tax)}"))
+                    callback.onFailure(
+                        PaymentError(
+                            InnerErrorCode.C43.code,
+                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tax)}"
+                        )
+                    )
                     return false
                 }
             }
@@ -337,7 +356,12 @@ class PaymentManager(
             amountInfo.surchargeAmount?.let {
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "surchargeAmount must be an integer, got: $it")
-                    callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_surcharge)}"))
+                    callback.onFailure(
+                        PaymentError(
+                            InnerErrorCode.C43.code,
+                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_surcharge)}"
+                        )
+                    )
                     return false
                 }
             }
@@ -345,7 +369,12 @@ class PaymentManager(
             amountInfo.cashbackAmount?.let {
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "cashbackAmount must be an integer, got: $it")
-                    callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_cashback)}"))
+                    callback.onFailure(
+                        PaymentError(
+                            InnerErrorCode.C43.code,
+                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_cashback)}"
+                        )
+                    )
                     return false
                 }
             }
@@ -368,7 +397,12 @@ class PaymentManager(
         request.tipAmount?.let {
             if (!isInteger(it)) {
                 LogUtil.e(TAG, "PaymentRequest tipAmount must be an integer, got: $it")
-                callback.onFailure(PaymentError(InnerErrorCode.C43.code, "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tip)}"))
+                callback.onFailure(
+                    PaymentError(
+                        InnerErrorCode.C43.code,
+                        "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tip)}"
+                    )
+                )
                 return false
             }
         }
@@ -407,16 +441,16 @@ class PaymentManager(
 
     /**
      * Auto-connect and execute payment request
-     * 
+     *
      * If not connected, automatically connect first, then execute the transaction
-     * 
+     *
      * @param request Payment request
      * @param callback Payment callback
      */
     private fun autoConnectAndExecute(request: PaymentRequest, callback: PaymentCallback) {
         // Set flag to indicate there's a pending transaction waiting for auto-connect
         hasPendingAutoConnectTransaction = true
-        
+
         val autoConnectListener = object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
                 LogUtil.d(TAG, "Auto-connect successful, executing payment request")

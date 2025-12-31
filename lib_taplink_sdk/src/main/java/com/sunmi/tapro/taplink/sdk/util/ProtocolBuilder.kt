@@ -73,7 +73,7 @@ object ProtocolBuilder {
                 } else {
                     // Fallback to default AOA if no context available
                     LogUtil.w(TAG, "No context available for cable protocol detection, using default AOA")
-                    Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                    Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
                 }
             }
 
@@ -108,12 +108,12 @@ object ProtocolBuilder {
                 } else {
                     // Fallback to default AOA if no context available
                     LogUtil.w(TAG, "No context available for cable protocol detection, using default AOA")
-                    Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                    Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
                 }
             }
 
             CableProtocol.USB_AOA -> {
-                Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
             }
 
             CableProtocol.USB_VSP -> {
@@ -167,7 +167,7 @@ object ProtocolBuilder {
             // Build protocol based on detection result
             when (detectionResult.protocol) {
                 CableProtocol.USB_AOA -> {
-                    Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                    Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
                 }
 
                 CableProtocol.USB_VSP -> {
@@ -181,7 +181,7 @@ object ProtocolBuilder {
                 CableProtocol.AUTO -> {
                     // Should not happen, but fallback to AOA
                     LogUtil.w(TAG, "Detection returned AUTO, falling back to USB AOA")
-                    Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+                    Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
                 }
             }
 
@@ -190,7 +190,7 @@ object ProtocolBuilder {
             LogUtil.w(TAG, "Falling back to default USB AOA protocol")
 
             // Fallback to default AOA
-            Pair(ProtocolManager.buildUsbAccessoryProtocol(), CableProtocol.USB_AOA.name)
+            Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
         }
     }
 

@@ -1,9 +1,9 @@
 package com.sunmi.tapro.taplink.communication
 
 import android.content.Context
-import com.sunmi.tapro.taplink.communication.utils.AppStateMonitor
-import com.sunmi.tapro.taplink.communication.utils.SmartHeartbeatConfig
-import com.sunmi.tapro.taplink.communication.utils.NetworkQualityMonitor
+import com.sunmi.tapro.taplink.communication.util.AppStateMonitor
+import com.sunmi.tapro.taplink.communication.util.SmartHeartbeatConfig
+import com.sunmi.tapro.taplink.communication.util.NetworkQualityMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Before

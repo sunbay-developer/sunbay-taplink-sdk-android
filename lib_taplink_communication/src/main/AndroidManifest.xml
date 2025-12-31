@@ -5,6 +5,7 @@
     <!-- USB权限 -->
     <uses-feature android:name="android.hardware.usb.host" />
     <uses-feature android:name="android.hardware.usb.accessory" />
+    <uses-permission android:name="android.hardware.usb.accessory" />
     <uses-permission android:name="android.permission.USB_PERMISSION" />
     
     <!-- 网络权限（WebSocket） -->

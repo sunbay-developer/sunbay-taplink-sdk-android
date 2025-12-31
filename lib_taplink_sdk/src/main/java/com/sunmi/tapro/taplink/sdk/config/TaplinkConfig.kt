@@ -92,7 +92,7 @@ data class TaplinkConfig(
     /**
      * 默认超时时间（秒），默认 60
      */
-    val timeout: Int = 60,
+    val timeout: Int = 180,
 
     // ========== 自动重连配置 ==========
 

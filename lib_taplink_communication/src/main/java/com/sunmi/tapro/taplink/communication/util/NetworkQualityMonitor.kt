@@ -1,4 +1,4 @@
-package com.sunmi.tapro.taplink.communication.utils
+package com.sunmi.tapro.taplink.communication.util
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -270,3 +270,8 @@ class NetworkQualityMonitor private constructor(private val context: Context) {
         )
     }
 }
+
+
+
+
+

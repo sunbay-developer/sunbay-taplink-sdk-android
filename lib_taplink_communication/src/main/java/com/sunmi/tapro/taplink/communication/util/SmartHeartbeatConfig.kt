@@ -1,4 +1,4 @@
-package com.sunmi.tapro.taplink.communication.utils
+package com.sunmi.tapro.taplink.communication.util
 
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
@@ -180,3 +180,8 @@ class SmartHeartbeatConfig private constructor() : AppStateMonitor.AppStateChang
         fun onHeartbeatConfigChanged(newConfig: HeartbeatConfig)
     }
 }
+
+
+
+
+

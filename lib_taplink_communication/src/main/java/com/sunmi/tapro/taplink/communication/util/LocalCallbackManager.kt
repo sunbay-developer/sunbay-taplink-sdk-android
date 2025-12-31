@@ -50,13 +50,13 @@ class LocalCallbackManager<T>(
      * @param callback 回调对象
      * @return Boolean 是否添加成功
      */
-    fun addCallbackByTraceId(traceId: String, callback: T): Boolean {
+    fun addCallbackByTraceId(traceId: String, callback: T, app2app: Boolean): Boolean {
         if (traceId.isBlank()) {
             LogUtil.i(tag, "TraceId is blank, skip adding callback")
             return false
         }
 
-        val wrapper = CallbackWrapper(callback, System.currentTimeMillis())
+        val wrapper = CallbackWrapper(callback, if (app2app) -1 else System.currentTimeMillis())
         val existing = traceIdCallbackMap.putIfAbsent(traceId, wrapper)
 
         if (existing != null) {
@@ -87,7 +87,7 @@ class LocalCallbackManager<T>(
         val wrapper = traceIdCallbackMap[traceId]
         if (wrapper != null) {
             // 检查是否超时
-            if (System.currentTimeMillis() - wrapper.timestamp > timeoutMillis) {
+            if (wrapper.timestamp != -1L && System.currentTimeMillis() - wrapper.timestamp > timeoutMillis) {
                 LogUtil.i(tag, "Callback expired by traceId: $traceId")
                 traceIdCallbackMap.remove(traceId)
                 return null
@@ -230,6 +230,7 @@ class LocalCallbackManager<T>(
             // 检查回调是否仍然存在且未使用
             val wrapper = traceIdCallbackMap[traceId]
             if (wrapper != null) {
+                if (wrapper.timestamp == -1L) return@launch
                 val elapsed = System.currentTimeMillis() - wrapper.timestamp
                 if (elapsed >= timeoutMillis) {
                     val removedCallback = traceIdCallbackMap.remove(traceId)

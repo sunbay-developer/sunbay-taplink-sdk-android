@@ -45,6 +45,7 @@ abstract class AsyncServiceKernel(
      * Implement IServiceKernel interface: connect to service
      */
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
+        LogUtil.i("tag", "=======AsyncServiceKernel:::connect:protocol:$protocol")
         if (!canConnect()) {
             handleConnectionError(
                 "Service is already connected or connecting. Current status: $currentInnerConnectionStatus",

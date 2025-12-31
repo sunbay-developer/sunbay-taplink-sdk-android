@@ -165,7 +165,8 @@ class ConnectionManager(
         } else {
             // Not reconnecting, check if already connecting
             if (connectionStatus == ConnectionStatus.CONNECTING ||
-                connectionStatus == ConnectionStatus.WAIT_CONNECTING) {
+                connectionStatus == ConnectionStatus.WAIT_CONNECTING
+            ) {
                 LogUtil.w(TAG, "Connection already in progress, adding listener to queue")
                 pendingConnectionListeners.add(listener)
                 LogUtil.d(TAG, "Added listener to pending connection queue, total: ${pendingConnectionListeners.size}")
@@ -185,7 +186,8 @@ class ConnectionManager(
     private fun connectInternal(config: ConnectionConfig?, listener: ConnectionListener) {
         // Set connection status immediately to prevent concurrent connections
         if (connectionStatus != ConnectionStatus.CONNECTING &&
-            connectionStatus != ConnectionStatus.WAIT_CONNECTING) {
+            connectionStatus != ConnectionStatus.WAIT_CONNECTING
+        ) {
             updateConnectionStatus(ConnectionStatus.CONNECTING, listener = listener)
         }
 
@@ -392,8 +394,8 @@ class ConnectionManager(
      */
     fun isConnecting(): Boolean {
         return connectionStatus == ConnectionStatus.CONNECTING ||
-               connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
-               (reconnectManager?.isReconnecting() == true)
+                connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
+                (reconnectManager?.isReconnecting() == true)
     }
 
     /**
@@ -562,7 +564,10 @@ class ConnectionManager(
             }
 
             // Add callback to callbackManager BEFORE sending
-            val added = callbackManager.addCallbackByTraceId(basicRequest.traceId, initCallback)
+            val added = callbackManager.addCallbackByTraceId(
+                basicRequest.traceId, initCallback, app2app =
+                    getConnectionMode() == ConnectionMode.APP_TO_APP.name
+            )
             if (!added) {
                 LogUtil.w(TAG, "Failed to add INIT callback to manager, but continuing...")
             }
@@ -631,6 +636,7 @@ class ConnectionManager(
         if (connectionStatus != newStatus) {
             val oldStatus = connectionStatus
             connectionStatus = newStatus
+
             LogUtil.d(TAG, "Connection status changed: $oldStatus -> $newStatus")
         }
 
@@ -640,7 +646,7 @@ class ConnectionManager(
                 connectionStatusListener?.invoke()
                 listener?.onConnected(deviceId!!, taproVersion!!)
                 connectionListener?.onConnected(deviceId!!, taproVersion!!)
-                
+
                 // Notify all pending connection listeners
                 notifyPendingConnectionListenersSuccess(deviceId!!, taproVersion!!)
             }
@@ -651,7 +657,7 @@ class ConnectionManager(
                     connectionErrorListener?.invoke(it)
                     listener?.onError(it)
                     connectionListener?.onError(it)
-                    
+
                     // Notify all pending connection listeners
                     notifyPendingConnectionListenersError(it)
                 }

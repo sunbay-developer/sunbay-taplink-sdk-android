@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.communication
 
 import android.content.Context
+import com.sunmi.tapro.taplink.communication.cable.aoa.host.UsbStandardHostKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
@@ -8,11 +9,12 @@ import com.sunmi.tapro.taplink.communication.interfaces.IServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.lan.WebSocketClientKernel
 import com.sunmi.tapro.taplink.communication.local.kernel.LocalServiceKernel
-import com.sunmi.tapro.taplink.communication.serial.SerialServiceKernel
-import com.sunmi.tapro.taplink.communication.usb.UsbServiceKernel
+import com.sunmi.tapro.taplink.communication.cable.serial.SerialServiceKernel
+import com.sunmi.tapro.taplink.communication.cable.vsp.VspServiceKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
+import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
 
 /**
  * Taplink服务内核类
@@ -128,9 +130,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
             is ProtocolParseResult.LanProtocol -> SERVICE_KEY_LAN
 
             is ProtocolParseResult.UsbProtocol -> SERVICE_KEY_USB
-            is ProtocolParseResult.SerialProtocol,
-            is ProtocolParseResult.VspProtocol -> SERVICE_KEY_SERIAL
-
+            is ProtocolParseResult.SerialProtocol -> SERVICE_KEY_SERIAL
+            is ProtocolParseResult.VspProtocol -> SERVICE_KEY_VSP
             is ProtocolParseResult.LocalProtocol -> SERVICE_KEY_LOCAL
             else -> return null
         }
@@ -160,8 +161,9 @@ class TaplinkServiceKernel private constructor(context: Context) {
     private fun isServiceKernelOfType(kernel: IServiceKernel, serviceKey: String): Boolean {
         return when (serviceKey) {
             SERVICE_KEY_LAN -> kernel is WebSocketClientKernel
-            SERVICE_KEY_USB -> kernel is UsbServiceKernel
+            SERVICE_KEY_USB -> kernel is UsbStandardHostKernel
             SERVICE_KEY_SERIAL -> kernel is SerialServiceKernel
+            SERVICE_KEY_VSP -> kernel is VspServiceKernel
             SERVICE_KEY_LOCAL -> kernel is LocalServiceKernel
             else -> false
         }
@@ -185,12 +187,22 @@ class TaplinkServiceKernel private constructor(context: Context) {
 
             SERVICE_KEY_USB -> {
                 LogUtil.d(TAG, "Creating USB service")
-                UsbServiceKernel(mContext)
+                UsbStandardHostKernel(
+                    appId, appSecretKey, mContext,
+                    UsbStandardProtocol.UsbStandardInfo(),
+                    UsbStandardHostKernel.ACTION_USB_STANDARD_HOST_KERNEL,
+                    UsbStandardHostKernel.createRequestPermissionPendingIntent(mContext)
+                )
             }
 
             SERVICE_KEY_SERIAL -> {
-                LogUtil.d(TAG, "Creating Serial service")
-                SerialServiceKernel(mContext)
+                LogUtil.d(TAG, "Creating Serial service (RS232)")
+                SerialServiceKernel(appId, appSecretKey, mContext)
+            }
+
+            SERVICE_KEY_VSP -> {
+                LogUtil.d(TAG, "Creating VSP service")
+                VspServiceKernel(appId, appSecretKey, mContext)
             }
 
             SERVICE_KEY_LOCAL -> {
@@ -280,6 +292,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         private const val SERVICE_KEY_LAN = "lan"
         private const val SERVICE_KEY_USB = "usb"
         private const val SERVICE_KEY_SERIAL = "serial"
+        private const val SERVICE_KEY_VSP = "vsp"
         private const val SERVICE_KEY_LOCAL = "local"
 
         @Volatile

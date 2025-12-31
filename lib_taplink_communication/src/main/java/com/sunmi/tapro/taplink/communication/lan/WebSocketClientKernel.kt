@@ -9,8 +9,8 @@ import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
-import com.sunmi.tapro.taplink.communication.utils.SmartHeartbeatConfig
-import com.sunmi.tapro.taplink.communication.utils.NetworkQualityMonitor
+import com.sunmi.tapro.taplink.communication.util.SmartHeartbeatConfig
+import com.sunmi.tapro.taplink.communication.util.NetworkQualityMonitor
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

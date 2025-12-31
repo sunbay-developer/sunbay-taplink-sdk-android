@@ -1,4 +1,4 @@
-package com.sunmi.tapro.taplink.communication.utils
+package com.sunmi.tapro.taplink.communication.util
 
 import android.app.Application
 import android.content.ComponentCallbacks2
@@ -144,3 +144,8 @@ class AppStateMonitor private constructor() : DefaultLifecycleObserver, Componen
         fun onAppStateChanged(newState: AppState)
     }
 }
+
+
+
+
+

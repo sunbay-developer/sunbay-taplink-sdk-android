@@ -258,6 +258,7 @@ class LocalServiceKernel constructor(
 
             override fun onServiceDisconnected(name: ComponentName?) {
                 LogUtil.w(TAG, "Service disconnected: $name (process crashed)")
+                safeUnbind()
                 isServiceBound = false
                 iTransaction = null
 
@@ -270,6 +271,7 @@ class LocalServiceKernel constructor(
 
             override fun onBindingDied(name: ComponentName?) {
                 LogUtil.w(TAG, "Service binding died: $name (target process crashed)")
+                safeUnbind()
                 isServiceBound = false
                 iTransaction = null
 
@@ -290,6 +292,14 @@ class LocalServiceKernel constructor(
                 notifyConnectionError("Service returned null binding", InnerErrorCode.C36)
             }
         }
+    }
+
+    private fun safeUnbind() {
+        try {
+            TaplinkServiceKernel.getInstance()?.getContext()?.unbindService(serviceConnection!!)
+        } catch (_: IllegalArgumentException) {
+            // already unbound / not registered
+        } catch (_: Exception) {}
     }
 }
 
