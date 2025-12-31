@@ -144,8 +144,8 @@ app/src/main/res/
   - 直接安装即可体验完整功能
 
 #### Tapro 支付终端应用
-- **Tapro应用APK**: [Tapro [standalone] - preview_uat_v1.0.0.97(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_uat_v1.0.0.97%28develop%29.apk)
-  - 版本: v1.0.0.97 (develop)
+- **Tapro应用APK**: [Tapro [standalone] - preview_uat_v1.0.0.99(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_uat_v1.0.0.99%28develop%29.apk)
+  - 版本: v1.0.0.99 (develop)
   - **重要**: 使用 App-to-App 模式必须安装此应用
   - 安装后需要将设备 SN 绑定到 SUNBAY 平台
   - 负责处理实际的支付交易操作
@@ -294,7 +294,7 @@ sdk.dir=/path/to/your/Android/sdk
 
 1. **安装必要的APK文件**:
    - 下载并安装 [TaplinkDemo-debug-1.0.0.apk](app/debug/TaplinkDemo-debug-1.0.0.apk) - 演示应用
-   - 下载并安装 [Tapro [standalone] - preview_uat_v1.0.0.97(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_uat_v1.0.0.97%28develop%29.apk) - Tapro支付终端应用
+   - 下载并安装 [Tapro [standalone] - preview_uat_v1.0.0.99(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_uat_v1.0.0.99%28develop%29.apk) - Tapro支付终端应用
 
 2. **设备绑定**: 将您的设备 SN 绑定到 SUNBAY 平台（联系技术支持获取绑定方法）
 
@@ -573,7 +573,7 @@ A:
 ### Q: 连接失败，错误代码 "C22"？
 A: 
 - 错误 C22 表示 Tapro 应用未安装
-- 下载并安装 [Tapro [standalone] - preview_uat_v1.0.0.97(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_uat_v1.0.0.97%28develop%29.apk)
+- 下载并安装 [Tapro [standalone] - preview_uat_v1.0.0.99(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_uat_v1.0.0.99%28develop%29.apk)
 - 确保设备 SN 已绑定到 SUNBAY 平台
 - 确保两个应用使用兼容的证书签名
 

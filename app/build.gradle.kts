@@ -53,7 +53,7 @@ android {
 
 dependencies {
     // Taplink SDK
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.7.2-SNAPSHOT")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.7.4-SNAPSHOT")
     
     // JSON processing
     implementation("com.google.code.gson:gson:2.13.1")
