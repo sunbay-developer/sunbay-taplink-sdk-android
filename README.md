@@ -17,8 +17,8 @@ TaplinkDemo 是由商米提供的支付 SDK 集成示例应用，演示如何使
   - 包含完整的支付功能演示
   - 支持 App-to-App 模式连接
 
-- **[Tapro [standalone] - preview_uat_v1.0.0.85(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_uat_v1.0.0.85%28develop%29.apk)** - Tapro 支付终端应用
-  - 版本: v1.0.0.85 (develop)
+- **[Tapro [standalone] - preview_uat_v1.0.0.99(develop).apk](Tapro%20%5Bstandalone%5D%20-%20preview_uat_v1.0.0.99%28develop%29.apk)** - Tapro 支付终端应用
+  - 版本: v1.0.0.99 (develop)
   - **必须安装**: App-to-App 模式需要Tapro应用处理支付
   - 需要将设备 SN 绑定到 SUNBAY 平台才能正常使用
   - 与 TaplinkDemo 配合使用完成支付交易
