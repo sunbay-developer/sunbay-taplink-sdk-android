@@ -101,9 +101,9 @@ object ProtocolManager {
      * @return String 协议字符串
      */
     fun buildVspProtocol(
-        baudRate: Int = 9600,
+        baudRate: Int = 115200,
         dataBits: Int = 8,
-        parity: String = "N",
+        parity: String = "n",
         stopBits: Int = 1
     ): String {
         return ProtocolConstants.buildVspProtocol(baudRate, dataBits, parity, stopBits)

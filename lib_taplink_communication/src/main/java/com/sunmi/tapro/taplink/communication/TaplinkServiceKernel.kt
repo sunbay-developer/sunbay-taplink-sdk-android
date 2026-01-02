@@ -10,7 +10,7 @@ import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.lan.WebSocketClientKernel
 import com.sunmi.tapro.taplink.communication.local.kernel.LocalServiceKernel
 import com.sunmi.tapro.taplink.communication.cable.serial.SerialServiceKernel
-import com.sunmi.tapro.taplink.communication.cable.vsp.VspServiceKernel
+import com.sunmi.tapro.taplink.communication.cable.vsp.VSPClientKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
@@ -163,7 +163,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
             SERVICE_KEY_LAN -> kernel is WebSocketClientKernel
             SERVICE_KEY_USB -> kernel is UsbStandardHostKernel
             SERVICE_KEY_SERIAL -> kernel is SerialServiceKernel
-            SERVICE_KEY_VSP -> kernel is VspServiceKernel
+            SERVICE_KEY_VSP -> kernel is VSPClientKernel
             SERVICE_KEY_LOCAL -> kernel is LocalServiceKernel
             else -> false
         }
@@ -202,7 +202,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
 
             SERVICE_KEY_VSP -> {
                 LogUtil.d(TAG, "Creating VSP service")
-                VspServiceKernel(appId, appSecretKey, mContext)
+                VSPClientKernel(appId, appSecretKey, mContext)
             }
 
             SERVICE_KEY_LOCAL -> {

@@ -56,24 +56,24 @@ class UsbStandardHostKernel(
      */
     override fun performDisconnect() {
         LogUtil.d(TAG, "=== AOA Host Disconnect Started ===")
-        
+
         try {
             // 重置AOA连接标志
             aoaConnectionInProgress = false
-            
+
             // 清理待处理的权限请求
             synchronized(this) {
                 pendingDevice = null
             }
-            
+
             // 调用基类的断开连接逻辑
             super.performDisconnect()
-            
+
             LogUtil.d(TAG, "AOA Host disconnect completed successfully")
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error during AOA Host disconnect: ${e.message}")
         }
-        
+
         LogUtil.d(TAG, "=== AOA Host Disconnect Finished ===")
     }
 
@@ -92,13 +92,14 @@ class UsbStandardHostKernel(
         LogUtil.d(TAG, "Device attached: ${device.deviceName}")
         LogUtil.d(TAG, "VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)}")
         LogUtil.d(TAG, "Current status: $currentInnerConnectionStatus")
-        
+
         // 检查是否是AOA设备
         if (UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)) {
             LogUtil.d(TAG, "AOA device attached via broadcast: ${device.deviceName}")
             // 只在等待状态时尝试连接，避免与waitForAoaAccessory重复处理
             if (currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT ||
-                currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
+                currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING
+            ) {
                 LogUtil.d(TAG, "Host is waiting for AOA device, but waitForAoaAccessory will handle this")
                 // 不在这里处理连接，让waitForAoaAccessory方法来处理
                 // 这样避免重复的权限请求
@@ -118,12 +119,12 @@ class UsbStandardHostKernel(
         LogUtil.d(TAG, "=== USB DEVICE DETACHED ===")
         LogUtil.d(TAG, "Device detached: ${device.deviceName}")
         LogUtil.d(TAG, "VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)}")
-        
+
         // 基础的断开逻辑已经在BaseUsbHostKernel.deviceReceiver中处理了
         // 这里只需要添加AOA特定的日志和处理
         if (UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)) {
             LogUtil.d(TAG, "AOA device detached")
-            
+
             // 如果正在等待连接，记录状态
             if (currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT) {
                 LogUtil.w(TAG, "AOA device detached while waiting for connection")
@@ -260,14 +261,14 @@ class UsbStandardHostKernel(
                 handleConnectionError("Failed to send START command", connectionCallback)
                 return
             }
-
+            // 关闭设备连接
+            connection.close()
             LogUtil.d(TAG, "AOA protocol completed successfully")
             LogUtil.d(TAG, "Device will now re-enumerate as AOA Accessory...")
             LogUtil.d(TAG, "Expected AOA device VID/PID: 0x18D1/0x2D00-0x2D05")
             LogUtil.i(TAG, "Note: A second permission dialog will appear for the AOA accessory device")
 
-            // 关闭设备连接
-            connection.close()
+
             this.usbDeviceConnection = null
             this.connectedDevice = null
 
@@ -335,7 +336,10 @@ class UsbStandardHostKernel(
                     } else if (!aoaPermissionRequested) {
                         // 只请求一次AOA设备权限
                         LogUtil.d(TAG, "Requesting permission for AOA device")
-                        LogUtil.i(TAG, "Note: This is the second permission request - AOA protocol requires separate permissions for:")
+                        LogUtil.i(
+                            TAG,
+                            "Note: This is the second permission request - AOA protocol requires separate permissions for:"
+                        )
                         LogUtil.i(TAG, "  1. Original device (for AOA protocol setup)")
                         LogUtil.i(TAG, "  2. AOA accessory device (for data communication)")
                         aoaPermissionRequested = true
@@ -359,7 +363,7 @@ class UsbStandardHostKernel(
 
         // 超时处理
         aoaConnectionInProgress = false // 重置标志
-        
+
         val finalAoaDevice = usbManager.deviceList.values.find { device ->
             UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)
         }
@@ -542,7 +546,7 @@ class UsbStandardHostKernel(
     override fun startDataReceive() {
         dataReceiveJob?.cancel()
         dataReceiveJob = scope.launch {
-            val buffer = ByteArray(16384) // 16KB buffer
+            val buffer = ByteArray(512) // 16KB buffer
 
             LogUtil.d(TAG, "Starting AOA data receive loop (Host端 Bulk传输)...")
 
@@ -567,18 +571,39 @@ class UsbStandardHostKernel(
                         }
 
                         bytesRead == -1 -> {
-                            // 传输错误
-                            LogUtil.w(TAG, "AOA bulk transfer error, stopping receive loop")
+                            // 传输错误，应该停止接收循环
+                            LogUtil.w(TAG, "AOA bulk transfer error (result=-1), device may be disconnected")
+                            LogUtil.w(TAG, "Stopping receive loop due to bulk transfer error")
+                            
+                            // 检查设备是否仍然连接
+                            val isDeviceStillConnected = connectedDevice?.let { device ->
+                                usbManager.deviceList.values.any { it.deviceName == device.deviceName }
+                            } ?: false
+                            
+                            if (!isDeviceStillConnected) {
+                                LogUtil.w(TAG, "AOA device is no longer in device list, device disconnected")
+                                updateStatus(InnerConnectionStatus.DISCONNECTED)
+                            } else {
+                                LogUtil.w(TAG, "AOA device still in device list but bulk transfer failed")
+                                updateStatus(InnerConnectionStatus.ERROR)
+                            }
                             break
                         }
 
                         else -> {
                             LogUtil.w(TAG, "Unexpected bulk transfer result: $bytesRead")
+                            // 对于其他异常结果，也应该停止循环
+                            if (bytesRead < -1) {
+                                LogUtil.w(TAG, "Negative bulk transfer result ($bytesRead), stopping receive loop")
+                                updateStatus(InnerConnectionStatus.ERROR)
+                                break
+                            }
                         }
                     }
                 } catch (e: Exception) {
-                    LogUtil.e(TAG, "Error receiving AOA data (Host端): ${e.message}")
-                    
+                    LogUtil.e(TAG, "Exception during AOA data receive (Host端): ${e.message}")
+                    LogUtil.e(TAG, "Exception type: ${e.javaClass.simpleName}")
+
                     // 检查是否是因为断开连接导致的异常
                     if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
                         LogUtil.w(TAG, "Data receive error while connected, updating status to ERROR")
@@ -589,7 +614,6 @@ class UsbStandardHostKernel(
                     break
                 }
             }
-
             LogUtil.d(TAG, "AOA data receive loop ended (Host端)")
         }
     }
@@ -799,23 +823,23 @@ class UsbStandardHostKernel(
      */
     override fun release() {
         LogUtil.d(TAG, "=== AOA Host Release Started ===")
-        
+
         try {
             // 先断开连接
             disconnect()
-            
+
             // 重置AOA连接标志
             aoaConnectionInProgress = false
-            
+
             // 调用基类的清理逻辑
             super.release()
-            
+
             LogUtil.d(TAG, "AOA Host resources released successfully")
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error during AOA Host release: ${e.message}")
             e.printStackTrace()
         }
-        
+
         LogUtil.d(TAG, "=== AOA Host Release Finished ===")
     }
 
