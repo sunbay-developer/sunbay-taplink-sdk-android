@@ -1,4 +1,4 @@
-package com.sunmi.tapro.taplink.communication.cable.aoa
+package com.sunmi.tapro.taplink.communication.cable.aoa.core
 
 import android.app.PendingIntent
 import android.content.Context

@@ -121,7 +121,7 @@ object ProtocolBuilder {
             }
 
             CableProtocol.RS232 -> {
-                Pair(ProtocolManager.buildRs232Protocol("/dev/ttyS0", 9600), CableProtocol.RS232.name)
+                Pair(ProtocolManager.buildRs232Protocol(), CableProtocol.RS232.name)
             }
         }
     }
@@ -175,7 +175,7 @@ object ProtocolBuilder {
                 }
 
                 CableProtocol.RS232 -> {
-                    Pair(ProtocolManager.buildRs232Protocol("/dev/ttyS0", 9600), CableProtocol.RS232.name)
+                    Pair(ProtocolManager.buildRs232Protocol(), CableProtocol.RS232.name)
                 }
 
                 CableProtocol.AUTO -> {

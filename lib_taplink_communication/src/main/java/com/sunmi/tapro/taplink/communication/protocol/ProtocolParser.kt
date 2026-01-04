@@ -47,11 +47,13 @@ sealed class ProtocolParseResult {
     ) : ProtocolParseResult()
 
     /**
-     * 串口协议解析结果（兼容旧格式）
+     * 串口协议解析结果
      */
     data class SerialProtocol(
-        val devicePath: String,
-        val baudRate: Int
+        val baudRate: Int,
+        val dataBits: Int,
+        val parity: String,
+        val stopBits: Int
     ) : ProtocolParseResult()
 
     /**
@@ -71,6 +73,7 @@ sealed class ProtocolParseResult {
  * - usb://accessory - USB Accessory模式
  * - usb://deviceName 或 usb://deviceId - USB设备（默认Host模式，兼容旧格式）
  * - serial://devicePath:baudRate - 串口（兼容格式）
+ * - rs232://baudRate/dataBits/parity/stopBits - RS232串口（十六进制传输）
  * - ws:// 或 wss:// - WebSocket
  *
  * @author TaPro Team
@@ -96,7 +99,7 @@ object ProtocolParser {
             protocol.startsWith(ProtocolConstants.LAN_WS_PROTOCOL_PREFIX) -> parseLanProtocol(protocol)
             protocol.startsWith(ProtocolConstants.VSP_PROTOCOL_PREFIX) -> parseVspProtocol(protocol)
             protocol.startsWith(ProtocolConstants.USB_PROTOCOL_PREFIX) -> parseUsbProtocol(protocol)
-            protocol.startsWith(ProtocolConstants.SERIAL_PROTOCOL_PREFIX) -> parseSerialProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.SERIAL_PROTOCOL_PREFIX) -> parseVspProtocol(protocol)
             protocol.startsWith(ProtocolConstants.RS232_PROTOCOL_PREFIX) -> parseRs232Protocol(protocol)
             protocol.startsWith(ProtocolConstants.AUTO_PROTOCOL_PREFIX) -> parseAutoProtocol(protocol)
             else -> ProtocolParseResult.Error("Unsupported protocol format: $protocol")
@@ -294,43 +297,7 @@ object ProtocolParser {
     }
 
     /**
-     * 解析串口协议：serial://devicePath:baudRate（兼容旧格式）
-     *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult.SerialProtocol 或 Error
-     */
-    private fun parseSerialProtocol(protocol: String): ProtocolParseResult {
-        try {
-            val content = protocol.removePrefix(ProtocolConstants.SERIAL_PROTOCOL_PREFIX)
-            if (content.isEmpty()) {
-                return ProtocolParseResult.Error("Serial protocol content is empty")
-            }
-
-            val parts = content.split(":")
-            if (parts.size != 2) {
-                return ProtocolParseResult.Error("Invalid serial protocol format, expected: serial://devicePath:baudRate")
-            }
-
-            val devicePath = parts[0]
-            val baudRate = parts[1].toIntOrNull()
-
-            if (devicePath.isEmpty()) {
-                return ProtocolParseResult.Error("Device path is empty in serial protocol")
-            }
-
-            if (baudRate == null || baudRate <= 0) {
-                return ProtocolParseResult.Error("Invalid baud rate: ${parts[1]}")
-            }
-
-            return ProtocolParseResult.SerialProtocol(devicePath, baudRate)
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to parse serial protocol: $protocol\n${e.stackTraceToString()}")
-            return ProtocolParseResult.Error("Failed to parse serial protocol: ${e.message}")
-        }
-    }
-
-    /**
-     * 解析 RS232 协议：rs232://devicePath:baudRate
+     * 解析 RS232 协议：rs232://baudRate/dataBits/parity/stopBits
      *
      * @param protocol 协议字符串
      * @return ProtocolParseResult.SerialProtocol 或 Error
@@ -342,23 +309,40 @@ object ProtocolParser {
                 return ProtocolParseResult.Error("RS232 protocol content is empty")
             }
 
-            val parts = content.split(":")
-            if (parts.size != 2) {
-                return ProtocolParseResult.Error("Invalid RS232 protocol format, expected: rs232://devicePath:baudRate")
+            // 分离主要参数和查询参数（忽略查询参数，因为现在统一使用十六进制）
+            val mainPart = if (content.contains("?")) {
+                content.split("?", limit = 2)[0]
+            } else {
+                content
             }
 
-            val devicePath = parts[0]
-            val baudRate = parts[1].toIntOrNull()
-
-            if (devicePath.isEmpty()) {
-                return ProtocolParseResult.Error("Device path is empty in RS232 protocol")
+            val parts = mainPart.split("/")
+            if (parts.size < 4) {
+                return ProtocolParseResult.Error("Invalid RS232 protocol format, expected: rs232://baudRate/dataBits/parity/stopBits")
             }
+
+            val baudRate = parts[0].toIntOrNull()
+            val dataBits = parts[1].toIntOrNull()
+            val parity = parts[2]
+            val stopBits = parts[3].toIntOrNull()
 
             if (baudRate == null || baudRate <= 0) {
-                return ProtocolParseResult.Error("Invalid baud rate: ${parts[1]}")
+                return ProtocolParseResult.Error("Invalid baud rate: ${parts[0]}")
             }
 
-            return ProtocolParseResult.SerialProtocol(devicePath, baudRate)
+            if (dataBits == null || dataBits <= 0) {
+                return ProtocolParseResult.Error("Invalid data bits: ${parts[1]}")
+            }
+
+            if (parity.isEmpty()) {
+                return ProtocolParseResult.Error("Parity is empty")
+            }
+
+            if (stopBits == null || stopBits <= 0) {
+                return ProtocolParseResult.Error("Invalid stop bits: ${parts[3]}")
+            }
+
+            return ProtocolParseResult.SerialProtocol(baudRate, dataBits, parity, stopBits)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to parse RS232 protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse RS232 protocol: ${e.message}")

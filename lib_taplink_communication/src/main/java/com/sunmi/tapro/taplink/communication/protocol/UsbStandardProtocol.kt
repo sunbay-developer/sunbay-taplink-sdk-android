@@ -94,5 +94,114 @@ object UsbStandardProtocol {
         return vendorId == GOOGLE_VENDOR_ID &&
                 productId in AOA_PRODUCT_ID_ACCESSORY..AOA_PRODUCT_ID_ACCESSORY_AUDIO_ADB
     }
+
+    /**
+     * 创建默认的AOA设备信息
+     */
+    fun createDefaultAoaDeviceInfo(): UsbStandardInfo {
+        return UsbStandardInfo()
+    }
+
+    /**
+     * 发送完整的AOA协议序列
+     */
+    fun sendAoaProtocolSequence(connection: android.hardware.usb.UsbDeviceConnection, deviceInfo: UsbStandardInfo): Boolean {
+        return try {
+            // 1. 发送GET_PROTOCOL命令
+            val protocolVersion = sendGetProtocol(connection)
+            if (protocolVersion <= 0) {
+                return false
+            }
+            
+            // 2. 发送SEND_STRING命令序列
+            val strings = listOf(
+                Pair(AOA_STRING_MANUFACTURER, deviceInfo.manufacturer),
+                Pair(AOA_STRING_MODEL, deviceInfo.model),
+                Pair(AOA_STRING_DESCRIPTION, deviceInfo.description),
+                Pair(AOA_STRING_VERSION, deviceInfo.version),
+                Pair(AOA_STRING_URI, deviceInfo.uri),
+                Pair(AOA_STRING_SERIAL, deviceInfo.serial)
+            )
+            
+            for ((index, string) in strings) {
+                if (!sendString(connection, index, string)) {
+                    return false
+                }
+                Thread.sleep(50)
+            }
+            
+            // 3. 发送START命令
+            sendStart(connection)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 发送GET_PROTOCOL命令
+     */
+    private fun sendGetProtocol(connection: android.hardware.usb.UsbDeviceConnection): Int {
+        return try {
+            val buffer = ByteArray(2)
+            val result = connection.controlTransfer(
+                USB_DIR_IN or USB_TYPE_VENDOR,
+                AOA_GET_PROTOCOL,
+                0,
+                0,
+                buffer,
+                buffer.size,
+                1000
+            )
+
+            if (result == 2) {
+                (buffer[0].toInt() and 0xFF) or ((buffer[1].toInt() and 0xFF) shl 8)
+            } else {
+                0
+            }
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    /**
+     * 发送SEND_STRING命令
+     */
+    private fun sendString(connection: android.hardware.usb.UsbDeviceConnection, index: Int, string: String): Boolean {
+        return try {
+            val data = buildSendStringCommand(index, string)
+            val result = connection.controlTransfer(
+                USB_DIR_OUT or USB_TYPE_VENDOR,
+                AOA_SEND_STRING,
+                0,
+                index,
+                data,
+                data.size,
+                1000
+            )
+            result == data.size
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 发送START命令
+     */
+    private fun sendStart(connection: android.hardware.usb.UsbDeviceConnection): Boolean {
+        return try {
+            val result = connection.controlTransfer(
+                USB_DIR_OUT or USB_TYPE_VENDOR,
+                AOA_START,
+                0,
+                0,
+                null,
+                0,
+                1000
+            )
+            result >= 0
+        } catch (e: Exception) {
+            false
+        }
+    }
 }
 

@@ -2,6 +2,7 @@ package com.sunmi.tapro.taplink.communication
 
 import android.content.Context
 import com.sunmi.tapro.taplink.communication.cable.aoa.host.UsbStandardHostKernel
+import com.sunmi.tapro.taplink.communication.cable.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
@@ -9,7 +10,6 @@ import com.sunmi.tapro.taplink.communication.interfaces.IServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.lan.WebSocketClientKernel
 import com.sunmi.tapro.taplink.communication.local.kernel.LocalServiceKernel
-import com.sunmi.tapro.taplink.communication.cable.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.communication.cable.vsp.VSPClientKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
@@ -128,7 +128,6 @@ class TaplinkServiceKernel private constructor(context: Context) {
     ): IServiceKernel? {
         val serviceKey = when (parseResult) {
             is ProtocolParseResult.LanProtocol -> SERVICE_KEY_LAN
-
             is ProtocolParseResult.UsbProtocol -> SERVICE_KEY_USB
             is ProtocolParseResult.SerialProtocol -> SERVICE_KEY_SERIAL
             is ProtocolParseResult.VspProtocol -> SERVICE_KEY_VSP
@@ -196,7 +195,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
             }
 
             SERVICE_KEY_SERIAL -> {
-                LogUtil.d(TAG, "Creating Serial service (RS232)")
+                LogUtil.d(TAG, "Creating Serial service (RS232 Hex mode)")
                 SerialServiceKernel(appId, appSecretKey, mContext)
             }
 

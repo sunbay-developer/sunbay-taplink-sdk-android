@@ -11,12 +11,13 @@ import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import androidx.core.content.ContextCompat
-import com.sunmi.tapro.taplink.communication.cable.aoa.BaseUsbAoaKernel
+import com.sunmi.tapro.taplink.communication.cable.aoa.core.BaseUsbAoaKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -41,11 +42,11 @@ abstract class BaseUsbHostKernel(
 ) : BaseUsbAoaKernel(appId, appSecretKey, context, usbStandardInfo, permissionAction, permissionPendingIntent) {
 
     // USB设备连接相关
-    protected var connectedDevice: UsbDevice? = null
-    protected var usbDeviceConnection: UsbDeviceConnection? = null
+    var connectedDevice: UsbDevice? = null
+    var usbDeviceConnection: UsbDeviceConnection? = null
     protected var usbInterface: UsbInterface? = null
     protected var usbEndpointIn: UsbEndpoint? = null
-    protected var usbEndpointOut: UsbEndpoint? = null
+    var usbEndpointOut: UsbEndpoint? = null
 
     // 权限请求相关
     protected var pendingDevice: UsbDevice? = null
@@ -141,10 +142,34 @@ abstract class BaseUsbHostKernel(
                     val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     device?.let {
                         LogUtil.d(TAG, "USB device detached: ${it.deviceName}")
+                        
+                        // 添加智能断开检测，避免误判临时断开
                         if (it == connectedDevice) {
-                            disconnectInternal()
-                            updateStatus(InnerConnectionStatus.DISCONNECTED)
+                            LogUtil.w(TAG, "Connected device detached, starting delayed disconnect check")
+                            
+                            // 延迟检查，避免因为临时USB信号问题导致的误断开
+                            scope.launch {
+                                delay(300) // 等待300ms
+                                
+                                // 再次检查设备是否真的断开
+                                val stillExists = try {
+                                    usbManager.deviceList.values.any { dev ->
+                                        dev.deviceName == it.deviceName
+                                    }
+                                } catch (e: Exception) {
+                                    false
+                                }
+                                
+                                if (!stillExists) {
+                                    LogUtil.d(TAG, "Device confirmed disconnected after delay check")
+                                    disconnectInternal()
+                                    updateStatus(InnerConnectionStatus.DISCONNECTED)
+                                } else {
+                                    LogUtil.d(TAG, "Device still exists, ignoring detach event (possible temporary signal issue)")
+                                }
+                            }
                         }
+                        
                         if (it == pendingDevice) {
                             pendingDevice = null
                             currentConnectionCallback?.let { callback ->
@@ -324,5 +349,3 @@ abstract class BaseUsbHostKernel(
         }
     }
 }
-
-

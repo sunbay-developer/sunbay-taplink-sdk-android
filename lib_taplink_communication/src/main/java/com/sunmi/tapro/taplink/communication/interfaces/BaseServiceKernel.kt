@@ -16,7 +16,7 @@ abstract class BaseServiceKernel : IServiceKernel {
      * 当前连接状态
      */
     @Volatile
-    protected var currentInnerConnectionStatus: InnerConnectionStatus = InnerConnectionStatus.DISCONNECTED
+    var currentInnerConnectionStatus: InnerConnectionStatus = InnerConnectionStatus.DISCONNECTED
 
     /**
      * 状态变化监听器
