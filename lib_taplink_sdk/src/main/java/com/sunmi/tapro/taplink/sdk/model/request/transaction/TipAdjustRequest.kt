@@ -11,6 +11,7 @@ import java.math.BigDecimal
  * @param originalTransactionRequestId 原始交易请求ID（与originalTransactionId二选一）
  * @param tipAmount 小费金额（必需，非负数，使用基本货币单位）
  * @param attach 附加信息（可选）
+ * @param requestTimeout 请求超时时间（可选，单位：秒）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -19,7 +20,8 @@ data class TipAdjustRequest(
     val originalTransactionId: String? = null,
     val originalTransactionRequestId: String? = null,
     val tipAmount: BigDecimal,
-    val attach: String? = null
+    val attach: String? = null,
+    val requestTimeout: Long? = null
 ) : BaseTransactionRequest() {
 
     init {
@@ -64,6 +66,7 @@ data class TipAdjustRequest(
         private var originalTransactionRequestId: String? = null
         private var tipAmount: BigDecimal? = null
         private var attach: String? = null
+        private var requestTimeout: Long? = null
 
         /**
          * 设置原始交易ID
@@ -98,6 +101,14 @@ data class TipAdjustRequest(
         }
 
         /**
+         * 设置请求超时时间
+         */
+        fun setRequestTimeout(requestTimeout: Long): Builder {
+            this.requestTimeout = requestTimeout
+            return this
+        }
+
+        /**
          * 构建TipAdjustRequest实例
          * 
          * @throws TransactionRequestValidationException 如果验证失败
@@ -107,7 +118,8 @@ data class TipAdjustRequest(
                 originalTransactionId = originalTransactionId,
                 originalTransactionRequestId = originalTransactionRequestId,
                 tipAmount = requireNotNull(tipAmount) { "tipAmount is required" },
-                attach = attach
+                attach = attach,
+                requestTimeout = requestTimeout
             )
 
             val validationResult = request.validate()

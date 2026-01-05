@@ -11,9 +11,10 @@ import java.math.BigDecimal
  * @param originalTransactionRequestId 原始预授权交易请求ID（与originalTransactionId二选一）
  * @param transactionRequestId 交易请求ID（必需）
  * @param amount 增量授权金额信息（必需，只包含金额和币种）
- * @param description 交易描述（必需，最多128字符）
+ * @param description 交易描述（可选，最多128字符）
  * @param attach 附加信息（可选）
  * @param notifyUrl 通知URL（可选）
+ * @param requestTimeout 请求超时时间（可选，单位：秒）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -23,9 +24,10 @@ data class IncrementalAuthRequest(
     val originalTransactionRequestId: String? = null,
     val transactionRequestId: String,
     val amount: AuthAmountInfo,
-    val description: String,
+    val description: String? = null,
     val attach: String? = null,
-    val notifyUrl: String? = null
+    val notifyUrl: String? = null,
+    val requestTimeout: Long? = null
 ) : BaseTransactionRequest() {
 
     init {
@@ -44,8 +46,7 @@ data class IncrementalAuthRequest(
                 originalTransactionRequestId
             ),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            validateIncrementAmount(amount),
-            TransactionRequestValidator.validateDescription(description)
+            validateIncrementAmount(amount)
         )
     }
 
@@ -77,6 +78,7 @@ data class IncrementalAuthRequest(
         private var description: String? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
+        private var requestTimeout: Long? = null
 
         /**
          * 设置原始预授权交易ID
@@ -113,7 +115,7 @@ data class IncrementalAuthRequest(
         /**
          * 设置交易描述
          */
-        fun setDescription(description: String): Builder {
+        fun setDescription(description: String?): Builder {
             this.description = description
             return this
         }
@@ -135,6 +137,14 @@ data class IncrementalAuthRequest(
         }
 
         /**
+         * 设置请求超时时间
+         */
+        fun setRequestTimeout(requestTimeout: Long): Builder {
+            this.requestTimeout = requestTimeout
+            return this
+        }
+
+        /**
          * 构建IncrementalAuthRequest实例
          * 
          * @throws TransactionRequestValidationException 如果验证失败
@@ -145,9 +155,10 @@ data class IncrementalAuthRequest(
                 originalTransactionRequestId = originalTransactionRequestId,
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
                 amount = requireNotNull(amount) { "amount is required" },
-                description = requireNotNull(description) { "description is required" },
+                description = description,
                 attach = attach,
-                notifyUrl = notifyUrl
+                notifyUrl = notifyUrl,
+                requestTimeout = requestTimeout
             )
 
             val validationResult = request.validate()

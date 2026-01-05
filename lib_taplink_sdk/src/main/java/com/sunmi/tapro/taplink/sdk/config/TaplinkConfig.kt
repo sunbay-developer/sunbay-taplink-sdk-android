@@ -90,7 +90,6 @@ data class TaplinkConfig(
     fun setSecretKey(secretKey: String): TaplinkConfig = copy(secretKey = secretKey)
 
 
-
     // ========== 日志配置的链式调用方法 ==========
 
     /**
@@ -116,16 +115,6 @@ data class TaplinkConfig(
      * 设置后，PaymentRequest 可以省略 deviceInfo 参数
      */
     fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
-
-    /**
-     * 链式调用：设置 SDK 版本
-     */
-    fun setVersion(version: String): TaplinkConfig = copy(version = version)
-
-    /**
-     * 链式调用：设置默认超时时间
-     */
-    fun setTimeout(timeout: Int): TaplinkConfig = copy(timeout = timeout)
 
     companion object {
         /**

@@ -11,23 +11,17 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
  * 用于关闭当前批次，完成结算流程
  *
  * @param transactionRequestId 交易请求ID（必需）
- * @param channelCode 渠道代码（必需，非空）
  * @param description 关闭描述（可选，最多128字符）
+ * @param requestTimeout 请求超时时间（可选，单位：秒）
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class BatchCloseRequest(
     val transactionRequestId: String,
-    val channelCode: String,
-    val description: String? = null
+    val description: String? = null,
+    val requestTimeout: Long? = null
 ) : BaseTransactionRequest() {
-
-    init {
-        require(channelCode.isNotEmpty()) {
-            "channelCode is required"
-        }
-    }
 
     override fun validate(): ValidationResult {
         val descriptionValidation = if (description != null) {
@@ -38,7 +32,6 @@ data class BatchCloseRequest(
 
         return TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            TransactionRequestValidator.validateChannelCode(channelCode),
             descriptionValidation
         )
     }
@@ -55,8 +48,8 @@ data class BatchCloseRequest(
      */
     class Builder {
         private var transactionRequestId: String? = null
-        private var channelCode: String? = null
         private var description: String? = null
+        private var requestTimeout: Long? = null
 
         /**
          * 设置交易请求ID
@@ -67,18 +60,18 @@ data class BatchCloseRequest(
         }
 
         /**
-         * 设置渠道代码
+         * 设置关闭描述
          */
-        fun setChannelCode(channelCode: String): Builder {
-            this.channelCode = channelCode
+        fun setDescription(description: String?): Builder {
+            this.description = description
             return this
         }
 
         /**
-         * 设置关闭描述
+         * 设置请求超时时间
          */
-        fun setDescription(description: String): Builder {
-            this.description = description
+        fun setRequestTimeout(requestTimeout: Long): Builder {
+            this.requestTimeout = requestTimeout
             return this
         }
 
@@ -90,8 +83,8 @@ data class BatchCloseRequest(
         fun build(): BatchCloseRequest {
             val request = BatchCloseRequest(
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
-                channelCode = requireNotNull(channelCode) { "channelCode is required" },
-                description = description
+                description = description,
+                requestTimeout = requestTimeout
             )
 
             val validationResult = request.validate()

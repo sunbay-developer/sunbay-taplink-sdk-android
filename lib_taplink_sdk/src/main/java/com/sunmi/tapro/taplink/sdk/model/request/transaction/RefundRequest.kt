@@ -12,14 +12,14 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
  *
  * @param transactionRequestId 交易请求ID（必需）
  * @param amount 退款金额信息（必需）
- * @param description 交易描述（必需，最多128字符）
+ * @param description 交易描述（可选，最多128字符）
  * @param originalTransactionId 原始交易ID（引用退款时使用）
  * @param originalTransactionRequestId 原始交易请求ID（引用退款时使用）
  * @param referenceOrderId 参考订单号（非引用退款时使用，6-32字符）
  * @param paymentMethod 支付方式信息（非引用退款时可选）
  * @param attach 附加信息（可选）
  * @param notifyUrl 通知URL（可选）
- * @param timeExpire 过期时间（可选）
+ * @param requestTimeout 请求超时时间（可选，单位：秒）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -27,7 +27,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 data class RefundRequest(
     val transactionRequestId: String,
     val amount: AmountInfo,
-    val description: String,
+    val description: String? = null,
     // 引用退款字段
     val originalTransactionId: String? = null,
     val originalTransactionRequestId: String? = null,
@@ -37,7 +37,7 @@ data class RefundRequest(
     // 通用可选字段
     val attach: String? = null,
     val notifyUrl: String? = null,
-    val timeExpire: String? = null
+    val requestTimeout: Long? = null
 ) : BaseTransactionRequest() {
 
     init {
@@ -64,8 +64,7 @@ data class RefundRequest(
     override fun validate(): ValidationResult {
         val baseValidation = TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            TransactionRequestValidator.validateAmount(amount),
-            TransactionRequestValidator.validateDescription(description)
+            TransactionRequestValidator.validateAmount(amount)
         )
 
         val modeValidation = if (isReferencedRefund()) {
@@ -102,7 +101,7 @@ data class RefundRequest(
         private var originalTransactionRequestId: String? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
-        private var timeExpire: String? = null
+        private var requestTimeout: Long? = null
 
         fun setTransactionRequestId(transactionRequestId: String): ReferencedBuilder {
             this.transactionRequestId = transactionRequestId
@@ -114,7 +113,7 @@ data class RefundRequest(
             return this
         }
 
-        fun setDescription(description: String): ReferencedBuilder {
+        fun setDescription(description: String?): ReferencedBuilder {
             this.description = description
             return this
         }
@@ -139,8 +138,8 @@ data class RefundRequest(
             return this
         }
 
-        fun setTimeExpire(timeExpire: String): ReferencedBuilder {
-            this.timeExpire = timeExpire
+        fun setRequestTimeout(requestTimeout: Long): ReferencedBuilder {
+            this.requestTimeout = requestTimeout
             return this
         }
 
@@ -152,12 +151,12 @@ data class RefundRequest(
             val request = RefundRequest(
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
                 amount = requireNotNull(amount) { "amount is required" },
-                description = requireNotNull(description) { "description is required" },
+                description = description,
                 originalTransactionId = originalTransactionId,
                 originalTransactionRequestId = originalTransactionRequestId,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                timeExpire = timeExpire
+                requestTimeout = requestTimeout
             )
 
             val validationResult = request.validate()
@@ -180,7 +179,7 @@ data class RefundRequest(
         private var paymentMethod: PaymentMethodInfo? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
-        private var timeExpire: String? = null
+        private var requestTimeout: Long? = null
 
         fun setTransactionRequestId(transactionRequestId: String): NonReferencedBuilder {
             this.transactionRequestId = transactionRequestId
@@ -192,7 +191,7 @@ data class RefundRequest(
             return this
         }
 
-        fun setDescription(description: String): NonReferencedBuilder {
+        fun setDescription(description: String?): NonReferencedBuilder {
             this.description = description
             return this
         }
@@ -217,8 +216,8 @@ data class RefundRequest(
             return this
         }
 
-        fun setTimeExpire(timeExpire: String): NonReferencedBuilder {
-            this.timeExpire = timeExpire
+        fun setRequestTimeout(requestTimeout: Long): NonReferencedBuilder {
+            this.requestTimeout = requestTimeout
             return this
         }
 
@@ -226,12 +225,12 @@ data class RefundRequest(
             val request = RefundRequest(
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
                 amount = requireNotNull(amount) { "amount is required" },
-                description = requireNotNull(description) { "description is required" },
+                description = description,
                 referenceOrderId = requireNotNull(referenceOrderId) { "referenceOrderId is required for non-referenced refund" },
                 paymentMethod = paymentMethod,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                timeExpire = timeExpire
+                requestTimeout = requestTimeout
             )
 
             val validationResult = request.validate()

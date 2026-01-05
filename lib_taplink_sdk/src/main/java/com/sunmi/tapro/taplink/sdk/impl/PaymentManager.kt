@@ -50,7 +50,7 @@ class PaymentManager(
      * Callback manager for managing multiple async request callbacks
      */
     private val callbackManager = LocalCallbackManager<InnerCallback?>(
-        defaultTimeoutMillis = (if (config.timeout <= 0) Int.MAX_VALUE else config.timeout) * 1000L, // Use config timeout as default
+        defaultTimeoutMillis = Int.MAX_VALUE * 1L, // Use config timeout as default
         tag = TAG
     )
 

@@ -10,11 +10,11 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
  * @param referenceOrderId 参考订单号（必需，6-32字符）
  * @param transactionRequestId 交易请求ID（必需）
  * @param amount 预授权金额信息（必需，只包含金额和币种）
- * @param description 交易描述（必需，最多128字符）
+ * @param description 交易描述（可选，最多128字符）
  * @param paymentMethod 支付方式信息（可选）
  * @param attach 附加信息（可选）
  * @param notifyUrl 通知URL（可选）
- * @param timeExpire 过期时间（可选）
+ * @param requestTimeout 请求超时时间（可选，单位：秒）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -23,19 +23,18 @@ data class ForcedAuthRequest(
     val referenceOrderId: String,
     val transactionRequestId: String,
     val amount: AuthAmountInfo,
-    val description: String,
+    val description: String? = null,
     val paymentMethod: PaymentMethodInfo? = null,
     val attach: String? = null,
     val notifyUrl: String? = null,
-    val timeExpire: String? = null
+    val requestTimeout: Long? = null
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
         return TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateReferenceOrderId(referenceOrderId),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            validateAuthAmount(amount),
-            TransactionRequestValidator.validateDescription(description)
+            validateAuthAmount(amount)
         )
     }
 
@@ -65,7 +64,7 @@ data class ForcedAuthRequest(
         private var paymentMethod: PaymentMethodInfo? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
-        private var timeExpire: String? = null
+        private var requestTimeout: Long? = null
 
         /**
          * 设置参考订单号
@@ -94,7 +93,7 @@ data class ForcedAuthRequest(
         /**
          * 设置交易描述
          */
-        fun setDescription(description: String): Builder {
+        fun setDescription(description: String?): Builder {
             this.description = description
             return this
         }
@@ -124,10 +123,10 @@ data class ForcedAuthRequest(
         }
 
         /**
-         * 设置过期时间
+         * 设置请求超时时间
          */
-        fun setTimeExpire(timeExpire: String): Builder {
-            this.timeExpire = timeExpire
+        fun setRequestTimeout(requestTimeout: Long): Builder {
+            this.requestTimeout = requestTimeout
             return this
         }
 
@@ -141,11 +140,11 @@ data class ForcedAuthRequest(
                 referenceOrderId = requireNotNull(referenceOrderId) { "referenceOrderId is required" },
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
                 amount = requireNotNull(amount) { "amount is required" },
-                description = requireNotNull(description) { "description is required" },
+                description = description,
                 paymentMethod = paymentMethod,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                timeExpire = timeExpire
+                requestTimeout = requestTimeout
             )
 
             val validationResult = request.validate()

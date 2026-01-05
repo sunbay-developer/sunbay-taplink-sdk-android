@@ -110,20 +110,6 @@ object TransactionRequestValidator {
     }
     
     /**
-     * 验证渠道代码
-     * 
-     * @param channelCode 渠道代码
-     * @return ValidationResult 验证结果
-     */
-    fun validateChannelCode(channelCode: String?): ValidationResult {
-        return if (channelCode.isNullOrBlank()) {
-            ValidationResult.failure(ValidationError.InvalidChannelCode)
-        } else {
-            ValidationResult.success()
-        }
-    }
-    
-    /**
      * 合并多个验证结果
      * 
      * @param results 验证结果列表

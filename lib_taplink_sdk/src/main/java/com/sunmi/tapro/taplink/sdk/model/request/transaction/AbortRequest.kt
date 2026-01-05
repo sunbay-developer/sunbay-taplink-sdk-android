@@ -9,6 +9,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
  * @param originalTransactionRequestId 原始交易请求ID（与originalTransactionId二选一）
  * @param description 中止原因描述（可选，最多128字符）
  * @param attach 附加信息（可选）
+ * @param requestTimeout 请求超时时间（可选，单位：秒）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -17,7 +18,8 @@ data class AbortRequest(
     val originalTransactionId: String? = null,
     val originalTransactionRequestId: String? = null,
     val description: String? = null,
-    val attach: String? = null
+    val attach: String? = null,
+    val requestTimeout: Long? = null
 ) : BaseTransactionRequest() {
 
     init {
@@ -59,6 +61,7 @@ data class AbortRequest(
         private var originalTransactionRequestId: String? = null
         private var description: String? = null
         private var attach: String? = null
+        private var requestTimeout: Long? = null
 
         /**
          * 设置原始交易ID
@@ -79,7 +82,7 @@ data class AbortRequest(
         /**
          * 设置中止原因描述
          */
-        fun setDescription(description: String): Builder {
+        fun setDescription(description: String?): Builder {
             this.description = description
             return this
         }
@@ -93,6 +96,14 @@ data class AbortRequest(
         }
 
         /**
+         * 设置请求超时时间
+         */
+        fun setRequestTimeout(requestTimeout: Long): Builder {
+            this.requestTimeout = requestTimeout
+            return this
+        }
+
+        /**
          * 构建AbortRequest实例
          * 
          * @throws TransactionRequestValidationException 如果验证失败
@@ -102,7 +113,8 @@ data class AbortRequest(
                 originalTransactionId = originalTransactionId,
                 originalTransactionRequestId = originalTransactionRequestId,
                 description = description,
-                attach = attach
+                attach = attach,
+                requestTimeout = requestTimeout
             )
 
             val validationResult = request.validate()

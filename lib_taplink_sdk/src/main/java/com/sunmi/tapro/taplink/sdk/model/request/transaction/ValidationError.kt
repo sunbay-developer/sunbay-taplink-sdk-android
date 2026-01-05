@@ -28,9 +28,6 @@ sealed class ValidationError(val message: String) {
     // 退款模式验证错误
     object InvalidRefundMode : ValidationError("Refund must be either referenced or non-referenced, not both")
     
-    // 批次相关验证错误
-    object InvalidChannelCode : ValidationError("channelCode is required and must not be empty")
-    
     // 自定义验证错误
     data class CustomError(val customMessage: String) : ValidationError(customMessage)
 }

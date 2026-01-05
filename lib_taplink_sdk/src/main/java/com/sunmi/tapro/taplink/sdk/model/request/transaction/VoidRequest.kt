@@ -8,7 +8,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
  * @param originalTransactionId 原始交易ID（与originalTransactionRequestId二选一）
  * @param originalTransactionRequestId 原始交易请求ID（与originalTransactionId二选一）
  * @param transactionRequestId 交易请求ID（必需）
- * @param description 交易描述（必需，最多128字符）
+ * @param description 交易描述（可选，最多128字符）
  * @param attach 附加信息（可选）
  * @param notifyUrl 通知URL（可选）
  *
@@ -19,7 +19,7 @@ data class VoidRequest(
     val originalTransactionId: String? = null,
     val originalTransactionRequestId: String? = null,
     val transactionRequestId: String,
-    val description: String,
+    val description: String? = null,
     val attach: String? = null,
     val notifyUrl: String? = null
 ) : BaseTransactionRequest() {
@@ -36,8 +36,7 @@ data class VoidRequest(
                 originalTransactionId, 
                 originalTransactionRequestId
             ),
-            TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            TransactionRequestValidator.validateDescription(description)
+            TransactionRequestValidator.validateTransactionRequestId(transactionRequestId)
         )
     }
 
@@ -86,7 +85,7 @@ data class VoidRequest(
         /**
          * 设置交易描述
          */
-        fun setDescription(description: String): Builder {
+        fun setDescription(description: String?): Builder {
             this.description = description
             return this
         }
@@ -117,7 +116,7 @@ data class VoidRequest(
                 originalTransactionId = originalTransactionId,
                 originalTransactionRequestId = originalTransactionRequestId,
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
-                description = requireNotNull(description) { "description is required" },
+                description = description,
                 attach = attach,
                 notifyUrl = notifyUrl
             )
