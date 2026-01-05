@@ -41,8 +41,7 @@ android {
 }
 
 dependencies {
-    implementation(platform(libs.kotlin.stdlib))
-//    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
@@ -50,12 +49,12 @@ dependencies {
     implementation(libs.java.websocket)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.usb.serial.android)
-//    implementation(fileTree("libs") { include("*.jar") })
+    implementation(fileTree("libs") { include("*.jar") })
     // TODO: 添加 mDNS 依赖或使用 Android NSD API
     // implementation(libs.jmdns)
 //    embed(libs.sunmiprotocolsdk)
     testImplementation(libs.junit)
-//    androidTestImplementation(libs.androidx.junit.v112)
+    androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
 }
 

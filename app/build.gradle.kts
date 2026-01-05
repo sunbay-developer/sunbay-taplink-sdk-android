@@ -5,12 +5,14 @@ plugins {
 
 android {
     namespace = "com.sunmi.tapro.taplink.sdk.demo"
-    compileSdk = libs.versions.compileSdk.get().toInt()
+    compileSdk {
+        version = release(36)
+    }
 
     defaultConfig {
         applicationId = "com.sunmi.tapro.taplink.sdk.demo"
-        minSdk = libs.versions.minSdk.get().toInt()
-        targetSdk = libs.versions.compileSdk.get().toInt()
+        minSdk = 25
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -24,11 +26,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "11"
     }
 }
 
