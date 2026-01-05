@@ -52,13 +52,9 @@ android {
 }
 
 dependencies {
-    // Kotlin standard library
-    implementation(platform(libs.kotlin.stdlib))
-
     // Taplink SDK
-    // implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.7.6-SNAPSHOT")
-    api(fileTree("libs") { include("*.aar") })
-
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.7.6-SNAPSHOT")
+    
     // JSON processing
     implementation("com.google.code.gson:gson:2.13.1")
     implementation("org.java-websocket:Java-WebSocket:1.5.3")
