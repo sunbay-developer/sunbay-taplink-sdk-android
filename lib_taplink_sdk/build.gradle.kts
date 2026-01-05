@@ -63,6 +63,7 @@ android {
 }
 
 dependencies {
+    implementation(platform(libs.kotlin.stdlib))
     // AndroidX核心库
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
