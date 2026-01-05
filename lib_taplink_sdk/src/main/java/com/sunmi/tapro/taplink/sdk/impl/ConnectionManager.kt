@@ -115,7 +115,7 @@ class ConnectionManager(
      */
     private val callbackManager =
         com.sunmi.tapro.taplink.communication.util.LocalCallbackManager<InnerCallback?>(
-            timeoutMillis = (if (config.connectionTimeout <= 0) 60 else config.connectionTimeout) * 1000L, // 30 seconds timeout for INIT command
+            defaultTimeoutMillis = 60 * 1000L, // 60 seconds default timeout
             tag = TAG
         )
 
@@ -128,7 +128,7 @@ class ConnectionManager(
         LogUtil.d(TAG, "ConnectionManager initialized")
 
         // Initialize reconnect manager
-        reconnectManager = ReconnectManager(context, config) { connectionConfig, listener ->
+        reconnectManager = ReconnectManager(context) { connectionConfig, listener ->
             connectInternal(connectionConfig, listener)
         }
     }
@@ -196,8 +196,8 @@ class ConnectionManager(
             updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
-                    "C20",
-                    "SDK not initialized, please call init() first"
+                    InnerErrorCode.C20.code,
+                    InnerErrorCode.C20.description
                 )
             )
             return
@@ -206,7 +206,6 @@ class ConnectionManager(
         // Build protocol string based on ConnectionConfig
         val (protocol, connectionMode) = ProtocolBuilder.buildProtocol(
             config,
-            this.config,
             reconnectManager?.getContext()
         )
         currentConnectionMode = connectionMode
@@ -217,8 +216,8 @@ class ConnectionManager(
             updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
-                    "C41",
-                    "Invalid protocol format: $protocol"
+                    InnerErrorCode.C41.code,
+                    "${InnerErrorCode.C41.description}:$protocol"
                 )
             )
             return
@@ -252,8 +251,8 @@ class ConnectionManager(
                                 )
                             } else {
                                 val error = ConnectionError(
-                                    errorCode ?: "INIT_FAILED",
-                                    errorMsg ?: "Failed to initialize tapro application"
+                                    errorCode ?: InnerErrorCode.C44.code,
+                                    errorMsg ?: InnerErrorCode.C44.description
                                 )
 
                                 // Notify pending reconnection listeners
@@ -367,8 +366,8 @@ class ConnectionManager(
         // Clear pending connection listeners
         if (pendingConnectionListeners.isNotEmpty()) {
             val error = ConnectionError(
-                "C38",
-                "Connection cancelled due to manual disconnect"
+                InnerErrorCode.C45.code,
+                InnerErrorCode.C45.description
             )
             notifyPendingConnectionListenersError(error)
         }
@@ -464,27 +463,10 @@ class ConnectionManager(
      * Create default connection configuration based on TaplinkConfig connection mode
      */
     private fun createDefaultConnectionConfig(): ConnectionConfig {
-        return when (config.connectionMode) {
-            ConnectionMode.APP_TO_APP -> {
-                LogUtil.d(TAG, "Creating default APP_TO_APP connection config")
-                ConnectionConfig.createDefault()
-            }
-
-            ConnectionMode.CABLE -> {
-                LogUtil.d(TAG, "Creating default CABLE connection config with AUTO protocol")
-                ConnectionConfig().setCableProtocol(CableProtocol.AUTO)
-            }
-
-            ConnectionMode.LAN -> {
-                LogUtil.d(TAG, "Creating default LAN connection config (requires manual host/port configuration)")
-                ConnectionConfig.createDefault()
-            }
-
-            else -> {
-                LogUtil.w(TAG, "Connection mode is NONE, creating default APP_TO_APP config")
-                ConnectionConfig.createDefault()
-            }
-        }
+        // Since connectionMode was moved to ConnectionConfig, create a default config
+        // The SDK will auto-detect the connection mode
+        LogUtil.d(TAG, "Creating default connection config with auto-detection")
+        return ConnectionConfig.createDefault()
     }
 
     /**
@@ -564,9 +546,11 @@ class ConnectionManager(
             }
 
             // Add callback to callbackManager BEFORE sending
-            val added = callbackManager.addCallbackByTraceId(
-                basicRequest.traceId, initCallback, app2app =
-                    getConnectionMode() == ConnectionMode.APP_TO_APP.name
+            val added = callbackManager.addInitCallback(
+                basicRequest.traceId, initCallback,
+                app2app =
+                    getConnectionMode() == ConnectionMode.APP_TO_APP.name,
+                initRequest.requestTimeout
             )
             if (!added) {
                 LogUtil.w(TAG, "Failed to add INIT callback to manager, but continuing...")

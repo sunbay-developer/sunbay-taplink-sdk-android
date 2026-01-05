@@ -25,7 +25,6 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  */
 class ReconnectManager(
     private val context: Context,
-    private val config: TaplinkConfig,
     private val reconnectAction: (ConnectionConfig?, ConnectionListener) -> Unit
 ) {
     private val TAG = "ReconnectManager"
@@ -142,30 +141,36 @@ class ReconnectManager(
             return true // Return true to indicate reconnection is being handled
         }
 
-        val shouldAutoReconnect = config.autoReconnect &&
+        val shouldAutoReconnect = lastConnectionConfig?.autoReconnect == true &&
                 !isManualDisconnect &&
-                currentRetryCount < config.maxRetryCount
+                currentRetryCount < (lastConnectionConfig?.maxRetryCount ?: 3)
 
         if (shouldAutoReconnect) {
             isReconnecting = true
             currentRetryCount++
-            LogUtil.d(TAG, "Connection lost, attempting reconnect ($currentRetryCount/${config.maxRetryCount})")
+            LogUtil.d(
+                TAG,
+                "Connection lost, attempting reconnect ($currentRetryCount/${lastConnectionConfig?.maxRetryCount ?: 3})"
+            )
 
             // Notify listener of reconnection attempt
-            listener.onReconnecting(currentRetryCount, config.maxRetryCount)
-            lastConnectionListener?.onReconnecting(currentRetryCount, config.maxRetryCount)
+            listener.onReconnecting(currentRetryCount, lastConnectionConfig?.maxRetryCount ?: 3)
+            lastConnectionListener?.onReconnecting(currentRetryCount, lastConnectionConfig?.maxRetryCount ?: 3)
 
             // Delayed reconnection
             retryHandler.postDelayed({
                 attemptReconnect()
-            }, config.retryDelayMs)
+            }, lastConnectionConfig?.retryDelayMs ?: 2000L)
 
             return true
         }
 
         // Retry limit reached or no auto-reconnect needed
-        if (!isManualDisconnect && currentRetryCount >= config.maxRetryCount) {
-            LogUtil.e(TAG, "Max retry attempts reached ($currentRetryCount/${config.maxRetryCount}), giving up auto-reconnection")
+        if (!isManualDisconnect && currentRetryCount >= (lastConnectionConfig?.maxRetryCount ?: 3)) {
+            LogUtil.e(
+                TAG,
+                "Max retry attempts reached ($currentRetryCount/${lastConnectionConfig?.maxRetryCount ?: 3}), giving up auto-reconnection"
+            )
             LogUtil.i(TAG, "User can manually call connect() to reconnect")
         }
 
@@ -379,8 +384,8 @@ class ReconnectManager(
         retryHandler.removeCallbacksAndMessages(null)
 
         // Notify listener of reconnection (address change)
-        listener.onReconnecting(0, config.maxRetryCount)
-        lastConnectionListener?.onReconnecting(0, config.maxRetryCount)
+        listener.onReconnecting(0, lastConnectionConfig?.maxRetryCount ?: 3)
+        lastConnectionListener?.onReconnecting(0, lastConnectionConfig?.maxRetryCount ?: 3)
 
         // Immediately attempt connection to new address (no delay)
         LogUtil.d(TAG, "Attempting to connect to new address immediately")

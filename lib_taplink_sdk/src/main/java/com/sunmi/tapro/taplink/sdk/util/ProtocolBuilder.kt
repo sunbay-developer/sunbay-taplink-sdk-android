@@ -33,13 +33,12 @@ object ProtocolBuilder {
      */
     fun buildProtocol(
         connectionConfig: ConnectionConfig?,
-        taplinkConfig: TaplinkConfig,
         context: Context? = null
     ): Pair<String, String?> {
         // Check if connectionConfig is null or empty
         if (connectionConfig == null || isEmptyConnectionConfig(connectionConfig)) {
-            // Use connectionMode from TaplinkConfig
-            return buildProtocolFromConnectionMode(taplinkConfig.connectionMode, context)
+            // Use default auto-detection when no config provided
+            return buildProtocolFromConnectionMode(null, context)
         }
 
         // Cable mode with specific protocol

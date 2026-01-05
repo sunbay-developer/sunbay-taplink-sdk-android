@@ -50,7 +50,7 @@ class PaymentManager(
      * Callback manager for managing multiple async request callbacks
      */
     private val callbackManager = LocalCallbackManager<InnerCallback?>(
-        timeoutMillis = (if (config.timeout <= 0) Int.MAX_VALUE else config.timeout) * 1000L, // 180 seconds timeout for INIT command
+        defaultTimeoutMillis = (if (config.timeout <= 0) Int.MAX_VALUE else config.timeout) * 1000L, // Use config timeout as default
         tag = TAG
     )
 
@@ -197,12 +197,27 @@ class PaymentManager(
             val internalCallback = createInternalCallback(callback, request, basicRequest.traceId)
 
             // Add callback to LocalCallbackManager before sending
-            callbackManager.addCallbackByTraceId(
-                basicRequest.traceId,
-                internalCallback,
-                connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
-            )
-            LogUtil.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}")
+            val isApp2App = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
+            val added = when (request.action) {
+                "QUERY" -> callbackManager.addQueryCallback(
+                    basicRequest.traceId,
+                    internalCallback,
+                    isApp2App,
+                    request.requestTimeout
+                )
+
+                else -> callbackManager.addTransactionCallback(
+                    basicRequest.traceId,
+                    internalCallback,
+                    isApp2App,
+                    request.requestTimeout
+                )
+            }
+
+            if (!added) {
+                LogUtil.w(TAG, "Failed to add callback to manager for traceId: ${basicRequest.traceId}")
+            }
+            LogUtil.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}, action: ${request.action}")
 
             // Send data through TaplinkServiceKernel
             val serviceKernel = TaplinkServiceKernel.getInstance()

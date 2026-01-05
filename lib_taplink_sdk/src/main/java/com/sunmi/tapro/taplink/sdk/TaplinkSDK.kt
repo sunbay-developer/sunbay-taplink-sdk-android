@@ -6,23 +6,48 @@ import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
-import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
-import com.sunmi.tapro.taplink.sdk.error.TaplinkException
 import com.sunmi.tapro.taplink.sdk.impl.TaplinkApiImpl
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
-import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 import kotlin.jvm.JvmStatic
 
 /**
  * Taplink SDK 主类
  *
- * 提供统一的SDK入口，实现TaplinkApi接口
- * 内部通过代理类TaplinkApiImpl实现具体功能
+ * 提供SDK的基础功能：初始化、连接管理、版本信息等
+ * 主要职责：
+ * - SDK初始化和配置
+ * - 连接管理（连接、断开、状态查询）
+ * - 版本信息管理
+ * - 设备信息管理
+ * - 提供TaplinkClient实例进行交易操作
  *
- * 使用方式：
- * - 静态方法调用：TaplinkSDK.init(context, config)
- * - 单例模式：TaplinkSDK.getInstance().init(context, config)
+ * 推荐使用方式：
+ * ```kotlin
+ * // 1. 初始化SDK
+ * val config = TaplinkConfig.create(appId, merchantId, secretKey)
+ * TaplinkSDK.init(context, config)
+ * 
+ * // 2. 建立连接
+ * TaplinkSDK.connect(connectionConfig) { connected ->
+ *     if (connected) {
+ *         // 3. 获取客户端进行交易
+ *         val client = TaplinkSDK.getClient()
+ *         client.quickSale(
+ *             totalAmount = BigDecimal("10.00"),
+ *             orderId = "ORDER001",
+ *             callback = paymentCallback
+ *         )
+ *     }
+ * }
+ * 
+ * // 4. 断开连接
+ * TaplinkSDK.disconnect()
+ * ```
+ * 
+ * 职责分工：
+ * - **TaplinkSDK**: 初始化、连接、断开、状态管理、版本信息
+ * - **TaplinkClient**: 专注交易操作（sale、refund、void等）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -33,6 +58,11 @@ class TaplinkSDK private constructor() : TaplinkApi {
      * 内部代理类，实现具体的接口功能
      */
     private val apiImpl: TaplinkApiImpl = TaplinkApiImpl()
+    
+    /**
+     * TaplinkClient 实例（懒加载）
+     */
+    private val clientInstance: TaplinkClient by lazy { TaplinkClient(apiImpl) }
 
     companion object {
         @Volatile
@@ -50,7 +80,7 @@ class TaplinkSDK private constructor() : TaplinkApi {
             }
         }
 
-        // ==================== 初始化（静态方法） ====================
+        // ==================== 初始化功能 ====================
 
         /**
          * 初始化SDK
@@ -66,10 +96,10 @@ class TaplinkSDK private constructor() : TaplinkApi {
             getInstance().init(context, config)
         }
 
-        // ==================== 连接管理（静态方法） ====================
+        // ==================== 连接管理功能 ====================
 
         /**
-         * 建立连接（统一连接方法）
+         * 建立连接
          *
          * 支持所有连接模式：
          * - 应用间模式：使用空配置，SDK自动检测
@@ -108,6 +138,32 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
+         * 设置连接状态监听器
+         *
+         * 设置连接状态监听器，实时监听连接状态变化、断线重连等事件。
+         *
+         * @param listener 连接状态监听器，null表示移除监听器
+         */
+        @JvmStatic
+        @JvmName("setSDKConnectionListener")
+        fun setConnectionListener(listener: ConnectionListener?) {
+            getInstance().setConnectionListener(listener)
+        }
+
+        /**
+         * 移除连接状态监听器
+         *
+         * 移除之前设置的连接状态监听器。
+         */
+        @JvmStatic
+        @JvmName("removeSDKConnectionListener")
+        fun removeConnectionListener() {
+            getInstance().removeConnectionListener()
+        }
+
+        // ==================== 设备和版本信息 ====================
+
+        /**
          * 获取已连接设备ID
          *
          * @return String 设备ID，如果未连接返回null
@@ -143,68 +199,6 @@ class TaplinkSDK private constructor() : TaplinkApi {
             return getInstance().getTaproVersion()
         }
 
-        // ==================== 交易执行（静态方法） ====================
-
-        /**
-         * 异步执行交易（推荐）
-         *
-         * 非阻塞调用，立即返回。交易结果通过回调方法传递。
-         * 推荐用于跨设备场景和需要进度反馈的场景。
-         *
-         * @param request 支付请求对象
-         * @param callback 支付回调接口
-         */
-        @JvmStatic
-        @JvmName("executeSDK")
-        fun execute(request: PaymentRequest, callback: PaymentCallback) {
-            getInstance().execute(request, callback)
-        }
-
-        // ==================== 交易查询（静态方法） ====================
-
-        /**
-         * 异步查询交易状态
-         *
-         * 查询交易状态，特别适用于超时场景。
-         * 可以通过交易ID或交易请求ID查询。
-         *
-         * @param request 查询请求对象
-         * @param callback 支付回调接口
-         */
-        @JvmStatic
-        @JvmName("querySDK")
-        fun query(request: QueryRequest, callback: PaymentCallback) {
-            getInstance().query(request, callback)
-        }
-
-        // ==================== 监听器管理（静态方法） ====================
-
-        /**
-         * 设置连接状态监听器
-         *
-         * 设置连接状态监听器，实时监听连接状态变化、断线重连等事件。
-         *
-         * @param listener 连接状态监听器，null表示移除监听器
-         */
-        @JvmStatic
-        @JvmName("setSDKConnectionListener")
-        fun setConnectionListener(listener: ConnectionListener?) {
-            getInstance().setConnectionListener(listener)
-        }
-
-        /**
-         * 移除连接状态监听器
-         *
-         * 移除之前设置的连接状态监听器。
-         */
-        @JvmStatic
-        @JvmName("removeSDKConnectionListener")
-        fun removeConnectionListener() {
-            getInstance().removeConnectionListener()
-        }
-
-        // ==================== 实用方法（静态方法） ====================
-
         /**
          * 获取SDK版本
          *
@@ -226,15 +220,61 @@ class TaplinkSDK private constructor() : TaplinkApi {
         fun clearDeviceCache() {
             getInstance().clearDeviceCache()
         }
+
+        // ==================== 获取交易客户端 ====================
+
+        /**
+         * 获取TaplinkClient实例
+         * 
+         * 用于执行交易操作，需要先建立连接
+         *
+         * @return TaplinkClient 交易客户端实例
+         */
+        @JvmStatic
+        fun getClient(): TaplinkClient {
+            return getInstance().clientInstance
+        }
+
+        // ==================== 向后兼容接口（已弃用） ====================
+
+        /**
+         * 异步执行交易（推荐）
+         *
+         * @deprecated 推荐使用 TaplinkSDK.getClient() 的具体交易方法代替
+         */
+        @Deprecated(
+            message = "推荐使用 TaplinkSDK.getClient() 的具体交易方法代替",
+            replaceWith = ReplaceWith("TaplinkSDK.getClient().sale() 或其他具体交易方法")
+        )
+        @JvmStatic
+        @JvmName("executeSDK")
+        fun execute(request: PaymentRequest, callback: PaymentCallback) {
+            getInstance().execute(request, callback)
+        }
+
+        /**
+         * 异步查询交易状态
+         *
+         * @deprecated 推荐使用 TaplinkSDK.getClient().query() 代替
+         */
+        @Deprecated(
+            message = "推荐使用 TaplinkSDK.getClient().query() 代替",
+            replaceWith = ReplaceWith("TaplinkSDK.getClient().query(request, callback)")
+        )
+        @JvmStatic
+        @JvmName("querySDK")
+        fun query(request: QueryRequest, callback: PaymentCallback) {
+            getInstance().query(request, callback)
+        }
     }
 
-    // ==================== 初始化（实例方法） ====================
+    // ==================== 初始化功能（实例方法） ====================
 
     override fun init(context: Context, config: TaplinkConfig) {
         apiImpl.init(context, config)
     }
 
-    // ==================== 连接管理（实例方法） ====================
+    // ==================== 连接管理功能（实例方法） ====================
 
     override fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
         apiImpl.connect(config, listener)
@@ -248,6 +288,16 @@ class TaplinkSDK private constructor() : TaplinkApi {
         return apiImpl.isConnected()
     }
 
+    override fun setConnectionListener(listener: ConnectionListener?) {
+        apiImpl.setConnectionListener(listener)
+    }
+
+    override fun removeConnectionListener() {
+        apiImpl.removeConnectionListener()
+    }
+
+    // ==================== 设备和版本信息（实例方法） ====================
+
     override fun getConnectedDeviceId(): String? {
         return apiImpl.getConnectedDeviceId()
     }
@@ -260,35 +310,21 @@ class TaplinkSDK private constructor() : TaplinkApi {
         return apiImpl.getTaproVersion()
     }
 
-    // ==================== 交易执行（实例方法） ====================
-
-    override fun execute(request: PaymentRequest, callback: PaymentCallback) {
-        apiImpl.execute(request, callback)
-    }
-
-    // ==================== 交易查询（实例方法） ====================
-
-    override fun query(request: QueryRequest, callback: PaymentCallback) {
-        apiImpl.query(request, callback)
-    }
-
-    // ==================== 监听器管理（实例方法） ====================
-
-    override fun setConnectionListener(listener: ConnectionListener?) {
-        apiImpl.setConnectionListener(listener)
-    }
-
-    override fun removeConnectionListener() {
-        apiImpl.removeConnectionListener()
-    }
-
-    // ==================== 实用方法（实例方法） ====================
-
     override fun getVersion(): String {
         return apiImpl.getVersion()
     }
 
     override fun clearDeviceCache() {
         apiImpl.clearDeviceCache()
+    }
+
+    // ==================== 向后兼容接口（实例方法，已弃用） ====================
+
+    override fun execute(request: PaymentRequest, callback: PaymentCallback) {
+        apiImpl.execute(request, callback)
+    }
+
+    override fun query(request: QueryRequest, callback: PaymentCallback) {
+        apiImpl.query(request, callback)
     }
 }

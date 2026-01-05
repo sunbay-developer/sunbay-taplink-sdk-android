@@ -50,7 +50,7 @@ data class PaymentRequest(
     /**
      * 交易类型（必需）
      * 推荐使用 TransactionAction 枚举，也支持字符串（向后兼容）
-     * 
+     *
      * 支持的类型：
      * - SALE: 销售交易
      * - REFUND: 退款交易
@@ -188,10 +188,9 @@ data class PaymentRequest(
     val notifyUrl: String? = null,
 
     /**
-     * 交易过期时间（可选，ISO 8601 格式）
-     * 交易过期时间（如 "2024-11-24T10:30:00+08:00"）
+     * 请求超时时间(单位:秒)
      */
-    val timeExpire: String? = null
+    val requestTimeout: Long? = null
 ) {
     // ========== 基本交易字段的链式调用方法 ==========
 
@@ -312,11 +311,11 @@ data class PaymentRequest(
     /**
      * 链式调用：设置交易过期时间
      */
-    fun setTimeExpire(timeExpire: String): PaymentRequest = copy(timeExpire = timeExpire)
+    fun setRequestTimeout(requestTimeout: Long): PaymentRequest = copy(requestTimeout = requestTimeout)
 
     /**
      * 获取交易类型枚举
-     * 
+     *
      * @return TransactionAction? 对应的枚举，如果无法识别则返回 null
      */
     fun getActionEnum(): TransactionAction? = TransactionAction.fromValue(action)
@@ -362,7 +361,7 @@ data class PaymentRequest(
         private var reason: String? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
-        private var timeExpire: String? = null
+        private var requestTimeout: Long? = null
 
         /**
          * 设置交易类型（使用枚举，推荐）
@@ -390,7 +389,7 @@ data class PaymentRequest(
         fun setReason(reason: String) = apply { this.reason = reason }
         fun setAttach(attach: String) = apply { this.attach = attach }
         fun setNotifyUrl(notifyUrl: String) = apply { this.notifyUrl = notifyUrl }
-        fun setTimeExpire(timeExpire: String) = apply { this.timeExpire = timeExpire }
+        fun setRequestTimeout(requestTimeout: Long) = apply { this.requestTimeout = requestTimeout }
 
         /**
          * 构建 PaymentRequest 对象
@@ -417,7 +416,7 @@ data class PaymentRequest(
                 reason = reason,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                timeExpire = timeExpire
+                requestTimeout = requestTimeout
             )
         }
     }

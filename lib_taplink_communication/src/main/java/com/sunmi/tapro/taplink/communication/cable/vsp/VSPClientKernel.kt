@@ -183,7 +183,7 @@ class VSPClientKernel(
     override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!isVspReady()) {
             LogUtil.e(TAG, "VSP client not ready")
-            callback?.onError("NOT_CONNECTED", "VSP client not connected")
+            callback?.onError(InnerErrorCode.C66.code, InnerErrorCode.C66.description)
             return
         }
 
@@ -197,13 +197,13 @@ class VSPClientKernel(
 
         } catch (e: IOException) {
             LogUtil.e(TAG, "Failed to send VSP client data: ${e.message}")
-            callback?.onError("SEND_FAILED", e.message ?: "Unknown error")
+            callback?.onError(InnerErrorCode.C62.code, e.message ?: InnerErrorCode.C62.description)
             
             // 发送失败可能表示连接断开
             handleConnectionError()
         } catch (e: Exception) {
             LogUtil.e(TAG, "Unexpected error sending VSP client data: ${e.message}")
-            callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
+            callback?.onError(InnerErrorCode.C63.code, e.message ?: InnerErrorCode.C63.description)
         }
     }
 

@@ -43,7 +43,7 @@ class WebSocketClientKernel constructor(
     private val appId: String,
     private val appSecretKey: String,
     private val context: Context
-) : BaseServiceKernel(), 
+) : BaseServiceKernel(),
     SmartHeartbeatConfig.HeartbeatConfigChangeListener,
     NetworkQualityMonitor.NetworkQualityChangeListener {
 
@@ -77,7 +77,7 @@ class WebSocketClientKernel constructor(
      * 智能心跳配置管理器
      */
     private val smartHeartbeatConfig = SmartHeartbeatConfig.getInstance()
-    
+
     /**
      * 网络质量监测器
      */
@@ -107,7 +107,7 @@ class WebSocketClientKernel constructor(
      * 最后一次心跳响应时间
      */
     private var lastHeartbeatResponse = 0L
-    
+
     /**
      * 心跳失败计数器
      */
@@ -153,19 +153,19 @@ class WebSocketClientKernel constructor(
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
         if (!canConnect()) {
             handleConnectionError(
-                "WebSocket client is already connected or connecting. Current status: $currentInnerConnectionStatus",
+                InnerErrorCode.C57.description + ": Current status: $currentInnerConnectionStatus",
                 connectionCallback,
-                InnerErrorCode.C33.code
+                InnerErrorCode.C57.code
             )
             return
         }
 
         try {
             LogUtil.d(TAG, "Starting connection with protocol: $protocol")
-            
+
             // 初始化智能心跳系统
             initializeSmartHeartbeat()
-            
+
             updateStatus(InnerConnectionStatus.CONNECTING)
             connectionCallback.onWaitingConnect()
             // 保存连接回调
@@ -177,7 +177,7 @@ class WebSocketClientKernel constructor(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to start connection: ${e.message}")
             handleConnectionError(
-                "Failed to start connection: ${e.message}",
+                "${InnerErrorCode.C33.description}: ${e.message}",
                 connectionCallback,
                 InnerErrorCode.C33.code
             )
@@ -194,7 +194,7 @@ class WebSocketClientKernel constructor(
                 val parseResult = ProtocolManager.parseProtocol(protocol)
                 if (parseResult is ProtocolParseResult.Error) {
                     handleConnectionError(
-                        parseResult.message, connectionCallback,
+                        "${InnerErrorCode.C58.description}:${parseResult.message}", connectionCallback,
                         InnerErrorCode.C41.code
                     )
                     return@launch
@@ -202,9 +202,9 @@ class WebSocketClientKernel constructor(
 
                 if (parseResult !is ProtocolParseResult.LanProtocol) {
                     handleConnectionError(
-                        "Protocol type mismatch, expected websocket or lan protocol",
+                        InnerErrorCode.C58.description + ", expected websocket or lan protocol",
                         connectionCallback,
-                        InnerErrorCode.C41.code
+                        InnerErrorCode.C58.code
                     )
                     return@launch
                 }
@@ -213,9 +213,9 @@ class WebSocketClientKernel constructor(
                 val uri = ProtocolManager.lanProtocolToWebSocketUri(protocol)
                 if (uri == null) {
                     handleConnectionError(
-                        "Failed to convert protocol to WebSocket URI: $protocol",
+                        InnerErrorCode.C59.description + ": $protocol",
                         connectionCallback,
-                        InnerErrorCode.C41.code
+                        InnerErrorCode.C59.code
                     )
                     return@launch
                 }
@@ -232,7 +232,7 @@ class WebSocketClientKernel constructor(
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Error in connectWithProtocol: ${e.message}")
                 handleConnectionError(
-                    "Connection error: ${e.message}",
+                    "${InnerErrorCode.C33.description}:${e.message}",
                     connectionCallback,
                     InnerErrorCode.C33.code
                 )
@@ -312,19 +312,19 @@ class WebSocketClientKernel constructor(
 
                 override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                     LogUtil.d(TAG, "NSD service found: ${serviceInfo.serviceName}")
-                    
+
                     // 增加待解析计数
                     scope.launch {
                         resolutionMutex.withLock {
                             pendingResolutions++
                         }
                     }
-                    
+
                     // 解析服务信息
                     nsdManager?.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                             LogUtil.e(TAG, "NSD resolve failed: ${serviceInfo.serviceName}, errorCode: $errorCode")
-                            
+
                             // 减少待解析计数
                             scope.launch {
                                 resolutionMutex.withLock {
@@ -344,17 +344,17 @@ class WebSocketClientKernel constructor(
                                     host = host,
                                     port = port
                                 )
-                                
+
                                 synchronized(discoveredServices) {
                                     discoveredServices.add(service)
                                 }
-                                
+
                                 LogUtil.d(TAG, "Added discovered service: $service")
-                                
+
                                 // 记录服务属性（用于调试）
                                 logServiceAttributes(serviceInfo)
                             }
-                            
+
                             // 减少待解析计数
                             scope.launch {
                                 resolutionMutex.withLock {
@@ -387,19 +387,22 @@ class WebSocketClientKernel constructor(
             // 等待发现服务，但要考虑服务解析时间
             val discoveryStartTime = System.currentTimeMillis()
             var discoveryComplete = false
-            
+
             while (!discoveryComplete && (System.currentTimeMillis() - discoveryStartTime) < NSD_DISCOVERY_TIMEOUT) {
                 delay(1000) // 每秒检查一次
-                
+
                 val currentTime = System.currentTimeMillis()
                 val elapsedTime = currentTime - discoveryStartTime
-                
+
                 // 检查是否有服务被发现
                 val serviceCount = synchronized(discoveredServices) { discoveredServices.size }
                 val pendingCount = resolutionMutex.withLock { pendingResolutions }
-                
-                LogUtil.d(TAG, "Discovery progress: ${elapsedTime}ms elapsed, $serviceCount services found, $pendingCount pending resolutions")
-                
+
+                LogUtil.d(
+                    TAG,
+                    "Discovery progress: ${elapsedTime}ms elapsed, $serviceCount services found, $pendingCount pending resolutions"
+                )
+
                 // 如果发现了服务且没有待解析的服务，可以提前结束
                 if (serviceCount > 0 && pendingCount == 0 && elapsedTime > 5000) { // 至少等待5秒
                     LogUtil.d(TAG, "Early discovery completion: found $serviceCount services")
@@ -417,8 +420,8 @@ class WebSocketClientKernel constructor(
             // 等待剩余的服务解析完成
             val maxWaitForResolution = 5000L
             val resolutionStartTime = System.currentTimeMillis()
-            while (resolutionMutex.withLock { pendingResolutions } > 0 && 
-                   (System.currentTimeMillis() - resolutionStartTime) < maxWaitForResolution) {
+            while (resolutionMutex.withLock { pendingResolutions } > 0 &&
+                (System.currentTimeMillis() - resolutionStartTime) < maxWaitForResolution) {
                 delay(100)
             }
 
@@ -442,7 +445,7 @@ class WebSocketClientKernel constructor(
 //                        }
 //                    }
 //                }
-                
+
                 // 如果直接连接都失败了，尝试通过回调通知上层
                 LogUtil.d(TAG, "Direct connections failed, notifying upper layer via callback")
                 for (service in servicesCopy) {
@@ -466,15 +469,15 @@ class WebSocketClientKernel constructor(
 
             // 没有找到可用的服务
             handleConnectionError(
-                "No available Taplink services found via NSD (discovered: $finalServiceCount services)",
+                InnerErrorCode.C60.description + " (discovered: $finalServiceCount services)",
                 connectionCallback,
-                InnerErrorCode.C35.code
+                InnerErrorCode.C60.code
             )
 
         } catch (e: Exception) {
             LogUtil.e(TAG, "NSD discovery failed: ${e.message}")
             handleConnectionError(
-                "NSD discovery failed: ${e.message}",
+                "${InnerErrorCode.C35.description}: ${e.message}",
                 connectionCallback,
                 InnerErrorCode.C35.code
             )
@@ -496,13 +499,13 @@ class WebSocketClientKernel constructor(
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
             LogUtil.d(TAG, "Cannot send data, not connected. Status: $currentInnerConnectionStatus")
-            callback?.onError("NOT_CONNECTED", "WebSocket client not connected")
+            callback?.onError(InnerErrorCode.C61.code, InnerErrorCode.C61.description)
             return
         }
 
         if (client == null) {
             LogUtil.e(TAG, "WebSocket client is null, cannot send data")
-            callback?.onError("WEBSOCKET_NULL", "WebSocket client interface is null")
+            callback?.onError(InnerErrorCode.C64.code, InnerErrorCode.C64.description)
             return
         }
 
@@ -515,7 +518,7 @@ class WebSocketClientKernel constructor(
                     client?.send(data)
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Failed to send data via WebSocket: traceId=$traceId, error=${e.message}")
-                    callback?.onError("SEND_FAILED", e.message ?: "Unknown error")
+                    callback?.onError(InnerErrorCode.C62.code, e.message ?: InnerErrorCode.C62.description)
                 }
             }
         }
@@ -597,17 +600,17 @@ class WebSocketClientKernel constructor(
     private fun initializeSmartHeartbeat() {
         // 注册心跳配置变化监听
         smartHeartbeatConfig.addConfigChangeListener(this)
-        
+
         // 启动网络质量监测
         networkQualityMonitor.addQualityChangeListener(this)
         networkQualityMonitor.startMonitoring()
-        
+
         // 重置心跳失败计数
         heartbeatFailureCount = 0
-        
+
         LogUtil.d(TAG, "Smart heartbeat system initialized")
     }
-    
+
     /**
      * 清理智能心跳系统
      */
@@ -615,7 +618,7 @@ class WebSocketClientKernel constructor(
         smartHeartbeatConfig.removeConfigChangeListener(this)
         networkQualityMonitor.removeQualityChangeListener(this)
         networkQualityMonitor.stopMonitoring()
-        
+
         LogUtil.d(TAG, "Smart heartbeat system cleaned up")
     }
 
@@ -636,15 +639,18 @@ class WebSocketClientKernel constructor(
                     val currentInterval = smartHeartbeatConfig.getCurrentInterval()
                     val currentTimeout = smartHeartbeatConfig.getCurrentConfig().timeout
                     val maxRetryCount = smartHeartbeatConfig.getCurrentConfig().maxRetryCount
-                    
+
                     delay(currentInterval)
 
                     // 检查上次心跳响应时间
                     val now = System.currentTimeMillis()
                     if (now - lastHeartbeatResponse > currentInterval + currentTimeout) {
                         heartbeatFailureCount++
-                        LogUtil.w(TAG, "Heartbeat timeout detected (${heartbeatFailureCount}/$maxRetryCount), connection may be lost")
-                        
+                        LogUtil.w(
+                            TAG,
+                            "Heartbeat timeout detected (${heartbeatFailureCount}/$maxRetryCount), connection may be lost"
+                        )
+
                         if (heartbeatFailureCount >= maxRetryCount) {
                             LogUtil.e(TAG, "Max heartbeat failures reached, treating as connection lost")
                             handleConnectionLost()
@@ -660,7 +666,7 @@ class WebSocketClientKernel constructor(
                     if (!heartbeatSent) {
                         heartbeatFailureCount++
                         LogUtil.w(TAG, "Failed to send heartbeat (${heartbeatFailureCount}/$maxRetryCount)")
-                        
+
                         if (heartbeatFailureCount >= maxRetryCount) {
                             LogUtil.e(TAG, "Max heartbeat send failures reached")
                             handleConnectionLost()
@@ -684,7 +690,7 @@ class WebSocketClientKernel constructor(
             }
         }
     }
-    
+
     /**
      * 发送心跳消息
      */
@@ -732,7 +738,7 @@ class WebSocketClientKernel constructor(
      */
     private fun handleHeartbeatResponse() {
         lastHeartbeatResponse = System.currentTimeMillis()
-        
+
         // 重置心跳失败计数
         if (heartbeatFailureCount > 0) {
             LogUtil.d(TAG, "Heartbeat response received, reset failure count from $heartbeatFailureCount to 0")
@@ -741,25 +747,28 @@ class WebSocketClientKernel constructor(
             LogUtil.d(TAG, "Heartbeat response received")
         }
     }
-    
+
     // SmartHeartbeatConfig.HeartbeatConfigChangeListener 实现
     override fun onHeartbeatConfigChanged(newConfig: SmartHeartbeatConfig.HeartbeatConfig) {
-        LogUtil.d(TAG, "Heartbeat config changed: interval=${smartHeartbeatConfig.getCurrentInterval()}ms, timeout=${newConfig.timeout}ms")
-        
+        LogUtil.d(
+            TAG,
+            "Heartbeat config changed: interval=${smartHeartbeatConfig.getCurrentInterval()}ms, timeout=${newConfig.timeout}ms"
+        )
+
         // 如果心跳正在运行，重启以应用新配置
         if (heartbeatJob?.isActive == true && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
             LogUtil.d(TAG, "Restarting heartbeat with new configuration")
             startHeartbeat()
         }
     }
-    
+
     // NetworkQualityMonitor.NetworkQualityChangeListener 实现
     override fun onNetworkQualityChanged(
         oldQuality: SmartHeartbeatConfig.NetworkQuality,
         newQuality: SmartHeartbeatConfig.NetworkQuality
     ) {
         LogUtil.d(TAG, "Network quality changed: $oldQuality -> $newQuality")
-        
+
         // 根据网络质量调整心跳配置
         smartHeartbeatConfig.adjustForNetworkQuality(newQuality)
     }
@@ -828,7 +837,7 @@ class WebSocketClientKernel constructor(
             if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
                 // 连接阶段的错误
                 handleConnectionError(
-                    ex.message ?: "Connection error",
+                    "${InnerErrorCode.C33.description}:${ex.message ?: "Connection error"}",
                     connectionCallback,
                     InnerErrorCode.C33.code
                 )

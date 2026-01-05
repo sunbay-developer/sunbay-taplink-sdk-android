@@ -3,6 +3,7 @@ package com.sunmi.tapro.taplink.communication.cable.aoa.core
 import android.app.PendingIntent
 import android.content.Context
 import android.hardware.usb.UsbManager
+import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
@@ -66,7 +67,7 @@ abstract class BaseUsbAoaKernel(
      */
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
         if (parseResult !is ProtocolParseResult.UsbProtocol) {
-            handleConnectionError("Invalid protocol type", connectionCallback)
+            handleConnectionError(InnerErrorCode.C48.description, connectionCallback, InnerErrorCode.C48.code)
             return
         }
 

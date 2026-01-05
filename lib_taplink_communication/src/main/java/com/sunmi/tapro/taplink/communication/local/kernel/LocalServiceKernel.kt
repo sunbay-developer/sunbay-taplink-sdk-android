@@ -103,7 +103,7 @@ class LocalServiceKernel constructor(
             context.packageManager.getPackageInfo(packageName, 0)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Target app not installed: ${e.message}")
-            notifyConnectionError("Target app not installed: $packageName", InnerErrorCode.C22)
+            notifyConnectionError("packageName=$packageName", InnerErrorCode.C22)
             return
         }
 
@@ -117,7 +117,7 @@ class LocalServiceKernel constructor(
         if (matchService == null) {
             LogUtil.e(TAG, "No matching service found for package: $packageName, action: $action")
             notifyConnectionError(
-                "Service not found: packageName=$packageName, action=$action",
+                "Service not found packageName=$packageName, action=$action",
                 InnerErrorCode.C22
             )
             return
@@ -139,18 +139,18 @@ class LocalServiceKernel constructor(
             val bindResult = context.bindService(intent, serviceConnection!!, bindFlags)
             if (!bindResult) {
                 LogUtil.e(TAG, "bindService failed")
-                notifyConnectionError("Bind service result:$bindResult", InnerErrorCode.C25)
+                notifyConnectionError("Bind service result false", InnerErrorCode.C25)
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Exception during bindService: ${e.message}")
-            notifyConnectionError("Exception: ${e.message}", InnerErrorCode.C25)
+            notifyConnectionError("${e.message}", InnerErrorCode.C25)
         }
     }
 
     override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (iTransaction == null) {
             LogUtil.e(TAG, "ITransaction is null, cannot send data")
-            callback?.onError("ITRANSACTION_NULL", "ITransaction interface is null")
+            callback?.onError(InnerErrorCode.C67.code, InnerErrorCode.C67.description)
             return
         }
 
@@ -299,7 +299,8 @@ class LocalServiceKernel constructor(
             TaplinkServiceKernel.getInstance()?.getContext()?.unbindService(serviceConnection!!)
         } catch (_: IllegalArgumentException) {
             // already unbound / not registered
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 }
 

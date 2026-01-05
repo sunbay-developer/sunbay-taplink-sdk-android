@@ -4,9 +4,7 @@ package com.sunmi.tapro.taplink.sdk.model.request
  * 查询请求类
  * 
  * 用于查询交易状态
- * 可以通过交易ID或交易请求ID查询
- * 
- * 注意：transactionId 和 transactionRequestId 必须提供其中一个，且不能同时提供
+ * 可以通过交易ID、交易请求ID或订单ID查询
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -14,17 +12,24 @@ package com.sunmi.tapro.taplink.sdk.model.request
 class QueryRequest {
     
     /**
-     * 交易ID（与 transactionRequestId 二选一）
+     * 交易ID
      * Nexus（SUNBAY支付网关）交易ID
      */
     var transactionId: String? = null
         private set
     
     /**
-     * 交易请求ID（与 transactionId 二选一）
+     * 交易请求ID
      * 商户系统分配的交易请求ID
      */
     var transactionRequestId: String? = null
+        private set
+    
+    /**
+     * 订单ID/参考订单号
+     * 商户系统中的订单标识
+     */
+    var referenceOrderId: String? = null
         private set
     
     /**
@@ -35,7 +40,6 @@ class QueryRequest {
      */
     fun setTransactionId(transactionId: String): QueryRequest {
         this.transactionId = transactionId
-        this.transactionRequestId = null
         return this
     }
     
@@ -46,12 +50,29 @@ class QueryRequest {
      * @return QueryRequest 当前对象，支持链式调用
      */
     fun setTransactionRequestId(transactionRequestId: String): QueryRequest {
-        this.transactionId = null
         this.transactionRequestId = transactionRequestId
         return this
     }
     
+    /**
+     * 链式调用：设置订单ID
+     * 
+     * @param referenceOrderId 订单ID
+     * @return QueryRequest 当前对象，支持链式调用
+     */
+    fun setReferenceOrderId(referenceOrderId: String): QueryRequest {
+        this.referenceOrderId = referenceOrderId
+        return this
+    }
+    
     companion object {
+        /**
+         * 创建查询请求构建器
+         * 
+         * @return Builder 构建器对象
+         */
+        fun builder(): Builder = Builder()
+        
         /**
          * 创建通过交易ID查询的请求
          * 
@@ -70,6 +91,37 @@ class QueryRequest {
          */
         fun byTransactionRequestId(transactionRequestId: String): QueryRequest {
             return QueryRequest().setTransactionRequestId(transactionRequestId)
+        }
+        
+        /**
+         * 创建通过订单ID查询的请求
+         * 
+         * @param referenceOrderId 订单ID
+         * @return QueryRequest 查询请求对象
+         */
+        fun byReferenceOrderId(referenceOrderId: String): QueryRequest {
+            return QueryRequest().setReferenceOrderId(referenceOrderId)
+        }
+    }
+    
+    /**
+     * QueryRequest 构建器
+     */
+    class Builder {
+        private var transactionId: String? = null
+        private var transactionRequestId: String? = null
+        private var referenceOrderId: String? = null
+        
+        fun setTransactionId(transactionId: String) = apply { this.transactionId = transactionId }
+        fun setTransactionRequestId(transactionRequestId: String) = apply { this.transactionRequestId = transactionRequestId }
+        fun setReferenceOrderId(referenceOrderId: String) = apply { this.referenceOrderId = referenceOrderId }
+        
+        fun build(): QueryRequest {
+            val request = QueryRequest()
+            transactionId?.let { request.setTransactionId(it) }
+            transactionRequestId?.let { request.setTransactionRequestId(it) }
+            referenceOrderId?.let { request.setReferenceOrderId(it) }
+            return request
         }
     }
 }

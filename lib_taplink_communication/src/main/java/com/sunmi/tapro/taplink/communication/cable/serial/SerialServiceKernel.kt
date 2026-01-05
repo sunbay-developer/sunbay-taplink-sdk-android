@@ -255,7 +255,7 @@ open class SerialServiceKernel(
     override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!isSerialReady()) {
             LogUtil.e(TAG, "Serial device not ready")
-            callback?.onError("NOT_CONNECTED", "Serial device not connected")
+            callback?.onError(InnerErrorCode.C65.code, InnerErrorCode.C65.description)
             return
         }
 
@@ -284,13 +284,13 @@ open class SerialServiceKernel(
 
         } catch (e: IOException) {
             LogUtil.e(TAG, "Failed to send serial hex data: ${e.message}")
-            callback?.onError("SEND_FAILED", e.message ?: "Unknown error")
+            callback?.onError(InnerErrorCode.C62.code, e.message ?: InnerErrorCode.C62.description)
 
             // 发送失败可能表示连接断开
             handleConnectionError()
         } catch (e: Exception) {
             LogUtil.e(TAG, "Unexpected error sending serial hex data: ${e.message}")
-            callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
+            callback?.onError(InnerErrorCode.C63.code, e.message ?: InnerErrorCode.C63.description)
         }
     }
 

@@ -4,10 +4,10 @@ import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 
 /**
  * 错误码定义
- * 
+ *
  * 根据 Taplink SDK 文档定义的所有错误码及其说明
  * 支持多语言本地化，错误描述和解决方案从资源文件中获取
- * 
+ *
  * @author TaPro Team
  * @since 2025-01-XX
  */
@@ -84,6 +84,30 @@ sealed class InnerErrorCode(
     object C41 : InnerErrorCode("C41")
     object C42 : InnerErrorCode("C42")
     object C43 : InnerErrorCode("C43")
+    object C44 : InnerErrorCode("C44")
+    object C45 : InnerErrorCode("C45")
+    object C46 : InnerErrorCode("C46")
+    object C47 : InnerErrorCode("C47")
+    object C48 : InnerErrorCode("C48")
+    object C49 : InnerErrorCode("C49")
+    object C50 : InnerErrorCode("C50")
+    object C51 : InnerErrorCode("C51")
+    object C52 : InnerErrorCode("C52")
+    object C53 : InnerErrorCode("C53")
+    object C54 : InnerErrorCode("C54")
+    object C55 : InnerErrorCode("C55")
+    object C56 : InnerErrorCode("C56")
+    object C57 : InnerErrorCode("C57")
+    object C58 : InnerErrorCode("C58")
+    object C59 : InnerErrorCode("C59")
+    object C60 : InnerErrorCode("C60")
+    object C61 : InnerErrorCode("C61")
+    object C62 : InnerErrorCode("C62")
+    object C63 : InnerErrorCode("C63")
+    object C64 : InnerErrorCode("C64")
+    object C65 : InnerErrorCode("C65")
+    object C66 : InnerErrorCode("C66")
+    object C67 : InnerErrorCode("C67")
 
     // ==================== 商户配置错误（M 系列） ====================
     object M01 : InnerErrorCode("M01")
@@ -111,7 +135,7 @@ sealed class InnerErrorCode(
         errorCode: String,
         private val customDescription: String? = null
     ) : InnerErrorCode(errorCode) {
-        
+
         override fun getDescriptionForCode(code: String): String {
             return customDescription ?: ErrorStringHelper.getDescription("unknown")
         }
@@ -120,7 +144,7 @@ sealed class InnerErrorCode(
     companion object {
         /**
          * 根据错误码字符串获取对应的 ErrorCode 对象
-         * 
+         *
          * @param code 错误码字符串
          * @return ErrorCode 对象，如果未找到则返回 Unknown
          */
@@ -128,11 +152,11 @@ sealed class InnerErrorCode(
             if (code.isNullOrBlank()) {
                 return Unknown("", ErrorStringHelper.getDescription(""))
             }
-            
+
             return when (code.uppercase()) {
                 // 成功响应
                 "0" -> Success
-                
+
                 // 安全限制错误（S 系列）
                 "S01" -> S01
                 "S02" -> S02
@@ -143,7 +167,7 @@ sealed class InnerErrorCode(
                 "S07" -> S07
                 "S08" -> S08
                 "S09" -> S09
-                
+
                 // 客户端错误（C 系列）
                 "C01" -> C01
                 "C02" -> C02
@@ -188,28 +212,52 @@ sealed class InnerErrorCode(
                 "C41" -> C41
                 "C42" -> C42
                 "C43" -> C43
+                "C44" -> C44
+                "C45" -> C45
+                "C46" -> C46
+                "C47" -> C47
+                "C48" -> C48
+                "C49" -> C49
+                "C50" -> C50
+                "C51" -> C51
+                "C52" -> C52
+                "C53" -> C53
+                "C54" -> C54
+                "C55" -> C55
+                "C56" -> C56
+                "C57" -> C57
+                "C58" -> C58
+                "C59" -> C59
+                "C60" -> C60
+                "C61" -> C61
+                "C62" -> C62
+                "C63" -> C63
+                "C64" -> C64
+                "C65" -> C65
+                "C66" -> C66
+                "C67" -> C67
 
                 // 商户配置错误（M 系列）
                 "M01" -> M01
                 "M02" -> M02
                 "M03" -> M03
                 "M04" -> M04
-                
+
                 // 支付渠道错误（P 系列）
                 "P01" -> P01
-                
+
                 // 系统错误（E 系列）
                 "E01" -> E01
                 "E02" -> E02
                 "E03" -> E03
                 "E04" -> Exception
-                
+
                 // 风控拦截（R 系列）
                 "R01" -> R01
-                
+
                 // 其他错误码
                 "996" -> Timeout
-                
+
                 // 未知错误码
                 else -> Unknown(code)
             }
@@ -217,7 +265,7 @@ sealed class InnerErrorCode(
 
         /**
          * 获取所有预定义的错误码列表
-         * 
+         *
          * @return 所有预定义的错误码列表
          */
         fun getAllErrorCodes(): List<InnerErrorCode> {
@@ -227,7 +275,10 @@ sealed class InnerErrorCode(
                 C01, C02, C03, C04, C05, C06, C07, C08, C09, C10,
                 C11, C12, C13, C14, C15, C16, C17, C18, C19, C20,
                 C21, C22, C23, C24, C25, C26, C27, C28, C29, C30,
-                C31, C32, C33, C34, C35, C36, C37, C38, C39, C40, C41, C42, C43,
+                C31, C32, C33, C34, C35, C36, C37, C38, C39, C40,
+                C41, C42, C43, C44, C45, C46, C47, C48, C49, C50,
+                C51, C52, C53, C54, C55, C56, C57, C58, C59, C60,
+                C61, C62, C63, C64, C65, C66, C67,
                 M01, M02, M03, M04,
                 P01,
                 E01, E02, E03, Exception,
