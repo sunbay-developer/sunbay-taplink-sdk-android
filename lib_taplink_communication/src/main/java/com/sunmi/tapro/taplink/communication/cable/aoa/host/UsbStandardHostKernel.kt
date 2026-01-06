@@ -16,6 +16,8 @@ import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
+import com.sunmi.tapro.taplink.communication.protocol.HexFrameProtocol
+import com.sunmi.tapro.taplink.communication.protocol.HexFrameBuffer
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -57,6 +59,9 @@ class UsbStandardHostKernel(
     // 集成AOA错误处理器（重连由SDK层统一管理）
     private val aoaErrorHandler = AoaErrorHandler()
 
+    // 集成16进制协议处理
+    private var hexFrameBuffer: HexFrameBuffer? = null
+
     /**
      * 重写断开连接方法，添加Host特有的清理逻辑
      */
@@ -64,6 +69,10 @@ class UsbStandardHostKernel(
         LogUtil.d(TAG, "=== AOA Host Disconnect Started ===")
 
         try {
+            // 停止16进制协议缓冲区
+            hexFrameBuffer?.stop()
+            hexFrameBuffer = null
+
             // 重置AOA连接标志
             aoaConnectionInProgress = false
 
@@ -547,7 +556,7 @@ class UsbStandardHostKernel(
 
             // 启动数据接收（如果有输入端点）
             if (inEndpoint != null) {
-                LogUtil.d(TAG, "Starting data receive...")
+                LogUtil.d(TAG, "Starting data receive with HexFrame protocol...")
                 startDataReceive()
             } else {
                 LogUtil.w(TAG, "No IN endpoint found, data receive not available")
@@ -641,14 +650,26 @@ class UsbStandardHostKernel(
 
     /**
      * 重写数据接收方法 - Host端使用Bulk传输接收数据
-     * 集成AoaErrorHandler进行智能错误处理
+     * 集成16进制协议处理和AoaErrorHandler进行智能错误处理
      */
     override fun startDataReceive() {
         dataReceiveJob?.cancel()
+
+        // 初始化16进制协议缓冲区
+        hexFrameBuffer = HexFrameBuffer(
+            scope = scope,
+            onFrameReceived = { frameData ->
+                LogUtil.d(TAG, "AOA HexFrame received: ${String(frameData)} (${frameData.size} bytes)")
+                dataReceiver?.invoke(frameData)
+            },
+            maxBufferSize = 128 * 1024, // 128KB
+            messageTimeoutMs = 5000L // 5秒超时
+        )
+
         dataReceiveJob = scope.launch {
             val buffer = ByteArray(16384) // 增大缓冲区到16KB
 
-            LogUtil.d(TAG, "Starting AOA data receive loop (Host端 Bulk传输)...")
+            LogUtil.d(TAG, "Starting AOA data receive loop with HexFrame protocol (Host端 Bulk传输)...")
             LogUtil.d(TAG, "Current status: $currentInnerConnectionStatus")
 
             while (isActive &&
@@ -673,8 +694,10 @@ class UsbStandardHostKernel(
                             // 成功接收数据，重置错误计数
                             aoaErrorHandler.resetErrorCount()
                             val data = buffer.copyOf(bytesRead)
-                            LogUtil.d(TAG, "AOA data received (Host端): $bytesRead bytes")
-                            dataReceiver?.invoke(data)
+                            LogUtil.d(TAG, "AOA raw data received (Host端): $bytesRead bytes")
+                            
+                            // 将接收到的数据添加到16进制协议缓冲区处理
+                            hexFrameBuffer?.addData(data)
                         }
 
                         bytesRead <= 0 -> {
@@ -760,6 +783,9 @@ class UsbStandardHostKernel(
             LogUtil.d(TAG, "AOA data receive loop ended (Host端)")
             LogUtil.d(TAG, "Final status: $currentInnerConnectionStatus")
             LogUtil.d(TAG, "Final error stats: ${aoaErrorHandler.getErrorStats()}")
+            
+            // 停止16进制协议缓冲区
+            hexFrameBuffer?.stop()
         }
     }
 
@@ -860,10 +886,10 @@ class UsbStandardHostKernel(
     }
 
     /**
-     * 实现Host端数据发送 - 使用Bulk传输发送数据到AOA设备
+     * 实现Host端数据发送 - 使用16进制协议和Bulk传输发送数据到AOA设备
      */
     override fun sendDataToDevice(data: ByteArray): Boolean {
-        return sendDataToAoaDevice(data)
+        return sendDataToAoaDeviceWithHexFrame(data)
     }
 
     /**
@@ -899,10 +925,10 @@ class UsbStandardHostKernel(
     }
 
     /**
-     * 发送数据到AOA设备（使用Bulk传输）
+     * 发送数据到AOA设备（使用16进制协议和Bulk传输）
      * 集成AoaErrorHandler进行智能错误处理和重试
      */
-    private fun sendDataToAoaDevice(data: ByteArray): Boolean {
+    private fun sendDataToAoaDeviceWithHexFrame(data: ByteArray): Boolean {
         // 发送前检查连接健康状态
         if (!isConnectionHealthy()) {
             LogUtil.e(TAG, "Connection not healthy, aborting data send")
@@ -926,6 +952,11 @@ class UsbStandardHostKernel(
                 return false
             }
 
+            // 使用16进制协议编码数据
+            val encodedData = HexFrameProtocol.encode(data)
+            LogUtil.d(TAG, "Original data: ${String(data)} (${data.size} bytes)")
+            LogUtil.d(TAG, "Encoded HexFrame: ${String(encodedData)} (${encodedData.size} bytes)")
+
             // 检查设备连接状态
             val deviceList = usbManager.deviceList
             val isDeviceStillConnected = deviceList.values.any {
@@ -940,9 +971,10 @@ class UsbStandardHostKernel(
             }
 
             // 检查端点信息
-            LogUtil.d(TAG, "Sending data to AOA device:")
+            LogUtil.d(TAG, "Sending HexFrame data to AOA device:")
             LogUtil.d(TAG, "  Device: ${connectedDevice!!.deviceName}")
-            LogUtil.d(TAG, "  Data size: ${data.size} bytes")
+            LogUtil.d(TAG, "  Original data size: ${data.size} bytes")
+            LogUtil.d(TAG, "  Encoded frame size: ${encodedData.size} bytes")
             LogUtil.d(
                 TAG,
                 "  Endpoint: ${
@@ -975,15 +1007,15 @@ class UsbStandardHostKernel(
 
             repeat(maxRetries) { attempt ->
                 try {
-                    // 执行bulk传输
+                    // 执行bulk传输发送编码后的16进制帧
                     val result = usbDeviceConnection!!.bulkTransfer(
-                        usbEndpointOut, data, data.size, 5000 // 5秒超时
+                        usbEndpointOut, encodedData, encodedData.size, 5000 // 5秒超时
                     )
 
-                    if (result == data.size) {
+                    if (result == encodedData.size) {
                         // 发送成功，重置错误计数
                         aoaErrorHandler.resetErrorCount()
-                        LogUtil.d(TAG, "AOA data sent successfully: ${data.size} bytes (attempt ${attempt + 1})")
+                        LogUtil.d(TAG, "AOA HexFrame data sent successfully: ${encodedData.size} bytes (attempt ${attempt + 1})")
 
                         // 添加发送后稳定延迟，避免立即断开
                         try {
@@ -1000,7 +1032,7 @@ class UsbStandardHostKernel(
                         }
 
                         val errorResult = aoaErrorHandler.handleSendError(
-                            result, data.size, attempt, maxRetries, currentDeviceConnected
+                            result, encodedData.size, attempt, maxRetries, currentDeviceConnected
                         )
 
                         LogUtil.w(
@@ -1032,7 +1064,7 @@ class UsbStandardHostKernel(
                     }
 
                 } catch (e: Exception) {
-                    LogUtil.e(TAG, "Exception during data send (attempt ${attempt + 1}): ${e.message}")
+                    LogUtil.e(TAG, "Exception during HexFrame data send (attempt ${attempt + 1}): ${e.message}")
 
                     // 最后一次尝试时抛出异常
                     if (attempt == maxRetries - 1) {
@@ -1044,12 +1076,12 @@ class UsbStandardHostKernel(
                 }
             }
 
-            LogUtil.e(TAG, "Failed to send data after $maxRetries attempts")
+            LogUtil.e(TAG, "Failed to send HexFrame data after $maxRetries attempts")
             LogUtil.e(TAG, "Final error stats: ${aoaErrorHandler.getErrorStats()}")
             false
 
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Error sending data to AOA device: ${e.message}")
+            LogUtil.e(TAG, "Error sending HexFrame data to AOA device: ${e.message}")
             LogUtil.e(TAG, "Exception type: ${e.javaClass.simpleName}")
             LogUtil.e(TAG, "Error stats: ${aoaErrorHandler.getErrorStats()}")
             e.printStackTrace()
@@ -1066,6 +1098,10 @@ class UsbStandardHostKernel(
         try {
             // 先断开连接
             disconnect()
+
+            // 停止16进制协议缓冲区
+            hexFrameBuffer?.stop()
+            hexFrameBuffer = null
 
             // 重置AOA连接标志
             aoaConnectionInProgress = false
