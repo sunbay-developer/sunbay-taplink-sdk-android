@@ -12,6 +12,7 @@ import android.hardware.usb.UsbInterface
 import com.sunmi.tapro.taplink.communication.cable.aoa.manager.AoaErrorHandler
 import com.sunmi.tapro.taplink.communication.cable.aoa.util.AoaDeviceUtils
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
@@ -52,7 +53,7 @@ class UsbStandardHostKernel(
 
     // 添加标志防止重复处理AOA设备连接
     private var aoaConnectionInProgress = false
-    
+
     // 集成AOA错误处理器（重连由SDK层统一管理）
     private val aoaErrorHandler = AoaErrorHandler()
 
@@ -165,7 +166,7 @@ class UsbStandardHostKernel(
             }
 
             if (device == null) {
-                handleConnectionError("USB device not found", connectionCallback)
+                handleConnectionError(InnerErrorCode.C52.description, connectionCallback, InnerErrorCode.C52.code)
                 return
             }
 
@@ -180,7 +181,11 @@ class UsbStandardHostKernel(
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to connect USB AOA host device: ${e.message}")
-            handleConnectionError(e.message ?: "Unknown error", connectionCallback)
+            handleConnectionError(
+                "${InnerErrorCode.C37.description}:${e.message ?: "Unknown error"}",
+                connectionCallback,
+                InnerErrorCode.C37.code
+            )
         }
     }
 
@@ -191,7 +196,7 @@ class UsbStandardHostKernel(
         try {
             if (!usbManager.hasPermission(device)) {
                 LogUtil.e(TAG, "No permission for USB device: ${device.deviceName}")
-                handleConnectionError("No permission for USB device", connectionCallback)
+                handleConnectionError(InnerErrorCode.C53.description, connectionCallback, InnerErrorCode.C53.code)
                 return
             }
 
@@ -220,7 +225,7 @@ class UsbStandardHostKernel(
             // 打开设备连接
             val connection = usbManager.openDevice(device) ?: run {
                 LogUtil.e(TAG, "Failed to open USB device")
-                handleConnectionError("Failed to open USB device", connectionCallback)
+                handleConnectionError(InnerErrorCode.C54.description, connectionCallback, InnerErrorCode.C54.code)
                 return
             }
 
@@ -230,12 +235,12 @@ class UsbStandardHostKernel(
 
             // 创建AOA设备信息
             val aoaDeviceInfo = UsbStandardProtocol.createDefaultAoaDeviceInfo()
-            
+
             // 发送AOA协议序列
             if (!UsbStandardProtocol.sendAoaProtocolSequence(connection, aoaDeviceInfo)) {
                 LogUtil.e(TAG, "Failed to send AOA protocol sequence")
                 disconnectInternal()
-                handleConnectionError("Failed to send AOA protocol sequence", connectionCallback)
+                handleConnectionError(InnerErrorCode.C55.description, connectionCallback, InnerErrorCode.C55.code)
                 return
             }
             // 关闭设备连接
@@ -259,7 +264,11 @@ class UsbStandardHostKernel(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to start AOA protocol: ${e.message}")
             disconnectInternal()
-            handleConnectionError(e.message ?: "Unknown error", connectionCallback)
+            handleConnectionError(
+                "${InnerErrorCode.C55.description}:${e.message ?: "Unknown error"}",
+                connectionCallback,
+                InnerErrorCode.C55.code
+            )
         }
     }
 
@@ -363,7 +372,7 @@ class UsbStandardHostKernel(
         }
 
         updateStatus(InnerConnectionStatus.DISCONNECTED)
-        handleConnectionError("AOA connection timeout", connectionCallback)
+        handleConnectionError(InnerErrorCode.C56.description, connectionCallback, InnerErrorCode.C56.code)
     }
 
     /**
@@ -429,19 +438,21 @@ class UsbStandardHostKernel(
                 }
 
                 // 优先选择AOA标准接口 (class=255, subclass=66, protocol=1)
-                if (usbInterface.interfaceClass == 255 && 
-                    usbInterface.interfaceSubclass == 66 && 
+                if (usbInterface.interfaceClass == 255 &&
+                    usbInterface.interfaceSubclass == 66 &&
                     usbInterface.interfaceProtocol == 1 &&
-                    usbInterface.endpointCount >= 2) {
+                    usbInterface.endpointCount >= 2
+                ) {
                     aoaInterface = usbInterface
                     LogUtil.d(TAG, "Selected AOA standard interface[$i] (class=255, subclass=66, protocol=1)")
                     break // 找到标准接口就停止搜索
                 }
-                
+
                 // 如果没有找到标准接口，使用第一个Vendor Specific接口作为备选
-                if (aoaInterface == null && 
+                if (aoaInterface == null &&
                     usbInterface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC &&
-                    usbInterface.endpointCount >= 2) {
+                    usbInterface.endpointCount >= 2
+                ) {
                     aoaInterface = usbInterface
                     LogUtil.d(TAG, "Selected fallback interface[$i] for AOA communication")
                 }
@@ -475,22 +486,38 @@ class UsbStandardHostKernel(
                     if (endpoint.direction == UsbConstants.USB_DIR_IN) {
                         inEndpoint = endpoint
                         LogUtil.d(TAG, "Found IN endpoint: ${String.format("0x%02X", endpoint.address)}")
-                        
+
                         // 验证IN端点地址是否为AOA标准地址
                         if (endpoint.address == 0x82) {
                             LogUtil.d(TAG, "✓ IN endpoint matches AOA standard (0x82)")
                         } else {
-                            LogUtil.w(TAG, "⚠ IN endpoint address ${String.format("0x%02X", endpoint.address)} differs from AOA standard (0x82)")
+                            LogUtil.w(
+                                TAG,
+                                "⚠ IN endpoint address ${
+                                    String.format(
+                                        "0x%02X",
+                                        endpoint.address
+                                    )
+                                } differs from AOA standard (0x82)"
+                            )
                         }
                     } else if (endpoint.direction == UsbConstants.USB_DIR_OUT) {
                         outEndpoint = endpoint
                         LogUtil.d(TAG, "Found OUT endpoint: ${String.format("0x%02X", endpoint.address)}")
-                        
+
                         // 验证OUT端点地址是否为AOA标准地址
                         if (endpoint.address == 0x02) {
                             LogUtil.d(TAG, "✓ OUT endpoint matches AOA standard (0x02)")
                         } else {
-                            LogUtil.w(TAG, "⚠ OUT endpoint address ${String.format("0x%02X", endpoint.address)} differs from AOA standard (0x02)")
+                            LogUtil.w(
+                                TAG,
+                                "⚠ OUT endpoint address ${
+                                    String.format(
+                                        "0x%02X",
+                                        endpoint.address
+                                    )
+                                } differs from AOA standard (0x02)"
+                            )
                         }
                     }
                 }
@@ -529,11 +556,11 @@ class UsbStandardHostKernel(
             // 连接成功 - 添加连接验证
             LogUtil.d(TAG, "Calling connection success callback...")
             aoaConnectionInProgress = false // 重置标志
-            
+
             // 添加连接验证延迟，确保Accessory端准备就绪
             scope.launch {
                 delay(1000) // 等待1秒让Accessory端稳定
-                
+
                 // 验证连接状态
                 if (validateConnectionState()) {
                     LogUtil.d(TAG, "Connection validated successfully")
@@ -541,7 +568,7 @@ class UsbStandardHostKernel(
                 } else {
                     LogUtil.e(TAG, "Connection validation failed")
                     disconnectInternal()
-                    connectionCallback?.onDisconnected("CONNECTION_FAILED","Connection validation failed")
+                    connectionCallback?.onDisconnected("CONNECTION_FAILED", "Connection validation failed")
                 }
             }
 
@@ -561,28 +588,28 @@ class UsbStandardHostKernel(
     private fun validateConnectionState(): Boolean {
         return try {
             // 检查设备连接状态
-            val isDeviceConnected = connectedDevice != null && 
-                                  usbDeviceConnection != null && 
-                                  usbInterface != null
-            
+            val isDeviceConnected = connectedDevice != null &&
+                    usbDeviceConnection != null &&
+                    usbInterface != null
+
             // 检查端点配置
             val isEndpointValid = usbEndpointIn != null && usbEndpointOut != null
-            
+
             // 检查端点配置是否符合AOA标准
             val isEndpointConfigValid = validateEndpointConfiguration()
-            
+
             LogUtil.d(TAG, "Connection validation:")
             LogUtil.d(TAG, "  Device connected: $isDeviceConnected")
-            LogUtil.d(TAG, "  Endpoints valid: $isEndpointValid") 
+            LogUtil.d(TAG, "  Endpoints valid: $isEndpointValid")
             LogUtil.d(TAG, "  Endpoint config valid: $isEndpointConfigValid")
-            
+
             isDeviceConnected && isEndpointValid && isEndpointConfigValid
         } catch (e: Exception) {
             LogUtil.e(TAG, "Connection validation error: ${e.message}")
             false
         }
     }
-    
+
     /**
      * 验证端点配置一致性
      */
@@ -592,23 +619,23 @@ class UsbStandardHostKernel(
             LogUtil.w(TAG, "USB interface is null")
             return false
         }
-        
+
         LogUtil.d(TAG, "Validating endpoint configuration:")
         LogUtil.d(TAG, "  Interface class: ${interface1.interfaceClass} (expected: 255)")
         LogUtil.d(TAG, "  Interface subclass: ${interface1.interfaceSubclass} (expected: 66)")
         LogUtil.d(TAG, "  Interface protocol: ${interface1.interfaceProtocol} (expected: 1)")
         LogUtil.d(TAG, "  OUT endpoint: ${String.format("0x%02X", usbEndpointOut?.address ?: 0)} (expected: 0x02)")
         LogUtil.d(TAG, "  IN endpoint: ${String.format("0x%02X", usbEndpointIn?.address ?: 0)} (expected: 0x82)")
-        
+
         // 验证接口配置 (AOA标准接口)
         val isInterfaceValid = interface1.interfaceClass == 255 &&
-                              interface1.interfaceSubclass == 66 &&
-                              interface1.interfaceProtocol == 1
-        
+                interface1.interfaceSubclass == 66 &&
+                interface1.interfaceProtocol == 1
+
         // 验证端点地址
         val isEndpointAddressValid = usbEndpointOut?.address == 0x02 &&
-                                   usbEndpointIn?.address == 0x82
-        
+                usbEndpointIn?.address == 0x82
+
         return isInterfaceValid && isEndpointAddressValid
     }
 
@@ -624,9 +651,9 @@ class UsbStandardHostKernel(
             LogUtil.d(TAG, "Starting AOA data receive loop (Host端 Bulk传输)...")
             LogUtil.d(TAG, "Current status: $currentInnerConnectionStatus")
 
-            while (isActive && 
-                (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED || 
-                 currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT) &&
+            while (isActive &&
+                (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED ||
+                        currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT) &&
                 usbDeviceConnection != null && usbEndpointIn != null
             ) {
                 try {
@@ -653,36 +680,38 @@ class UsbStandardHostKernel(
                         bytesRead <= 0 -> {
                             // 使用AoaErrorHandler处理错误
                             val isDeviceStillConnected = connectedDevice?.let { device ->
-                                usbManager.deviceList.values.any { 
+                                usbManager.deviceList.values.any {
                                     it.deviceName == device.deviceName &&
-                                    it.vendorId == device.vendorId &&
-                                    it.productId == device.productId
+                                            it.vendorId == device.vendorId &&
+                                            it.productId == device.productId
                                 }
                             } ?: false
-                            
+
                             val errorResult = aoaErrorHandler.handleReceiveError(
                                 bytesRead, isDeviceStillConnected, currentInnerConnectionStatus
                             )
-                            
-                            LogUtil.d(TAG, "Error handling result: shouldContinue=${errorResult.shouldContinue}, " +
-                                    "shouldBreak=${errorResult.shouldBreak}, delayMs=${errorResult.delayMs}")
-                            
+
+                            LogUtil.d(
+                                TAG, "Error handling result: shouldContinue=${errorResult.shouldContinue}, " +
+                                        "shouldBreak=${errorResult.shouldBreak}, delayMs=${errorResult.delayMs}"
+                            )
+
                             // 根据错误处理结果更新状态
                             errorResult.newStatus?.let { newStatus ->
                                 updateStatus(newStatus)
                             }
-                            
+
                             // 根据错误处理结果决定是否继续
                             if (errorResult.shouldBreak) {
                                 LogUtil.w(TAG, "Breaking receive loop due to error handling result")
                                 break
                             }
-                            
+
                             if (!errorResult.shouldContinue) {
                                 LogUtil.w(TAG, "Stopping receive loop due to error handling result")
                                 break
                             }
-                            
+
                             // 应用延迟
                             if (errorResult.delayMs > 0) {
                                 delay(errorResult.delayMs)
@@ -692,34 +721,36 @@ class UsbStandardHostKernel(
                 } catch (e: Exception) {
                     // 使用AoaErrorHandler处理异常
                     val isDeviceStillConnected = connectedDevice?.let { device ->
-                        usbManager.deviceList.values.any { 
-                            it.deviceName == device.deviceName 
+                        usbManager.deviceList.values.any {
+                            it.deviceName == device.deviceName
                         }
                     } ?: false
-                    
+
                     val errorResult = aoaErrorHandler.handleException(
                         e, currentInnerConnectionStatus, isDeviceStillConnected
                     )
-                    
-                    LogUtil.e(TAG, "Exception handling result: shouldContinue=${errorResult.shouldContinue}, " +
-                            "shouldBreak=${errorResult.shouldBreak}, delayMs=${errorResult.delayMs}")
-                    
+
+                    LogUtil.e(
+                        TAG, "Exception handling result: shouldContinue=${errorResult.shouldContinue}, " +
+                                "shouldBreak=${errorResult.shouldBreak}, delayMs=${errorResult.delayMs}"
+                    )
+
                     // 根据异常处理结果更新状态
                     errorResult.newStatus?.let { newStatus ->
                         updateStatus(newStatus)
                     }
-                    
+
                     // 根据异常处理结果决定是否继续
                     if (errorResult.shouldBreak) {
                         LogUtil.w(TAG, "Breaking receive loop due to exception handling result")
                         break
                     }
-                    
+
                     if (!errorResult.shouldContinue) {
                         LogUtil.w(TAG, "Stopping receive loop due to exception handling result")
                         break
                     }
-                    
+
                     // 应用延迟
                     if (errorResult.delayMs > 0) {
                         delay(errorResult.delayMs)
@@ -841,16 +872,16 @@ class UsbStandardHostKernel(
     private fun isConnectionHealthy(): Boolean {
         return try {
             // 检查基本连接状态
-            val basicCheck = connectedDevice != null && 
-                           usbDeviceConnection != null && 
-                           usbInterface != null &&
-                           usbEndpointOut != null
-            
+            val basicCheck = connectedDevice != null &&
+                    usbDeviceConnection != null &&
+                    usbInterface != null &&
+                    usbEndpointOut != null
+
             if (!basicCheck) {
                 LogUtil.w(TAG, "Basic connection check failed")
                 return false
             }
-            
+
             // 检查设备是否仍在设备列表中
             val deviceExists = try {
                 usbManager.deviceList.values.any { it.deviceName == connectedDevice!!.deviceName }
@@ -858,7 +889,7 @@ class UsbStandardHostKernel(
                 LogUtil.w(TAG, "Device list check failed: ${e.message}")
                 false
             }
-            
+
             LogUtil.d(TAG, "Connection health check: basic=$basicCheck, deviceExists=$deviceExists")
             return basicCheck && deviceExists
         } catch (e: Exception) {
@@ -877,7 +908,7 @@ class UsbStandardHostKernel(
             LogUtil.e(TAG, "Connection not healthy, aborting data send")
             return false
         }
-        
+
         return try {
             // 详细检查连接状态
             if (usbDeviceConnection == null) {
@@ -897,10 +928,10 @@ class UsbStandardHostKernel(
 
             // 检查设备连接状态
             val deviceList = usbManager.deviceList
-            val isDeviceStillConnected = deviceList.values.any { 
+            val isDeviceStillConnected = deviceList.values.any {
                 it.deviceName == connectedDevice!!.deviceName &&
-                it.vendorId == connectedDevice!!.vendorId &&
-                it.productId == connectedDevice!!.productId
+                        it.vendorId == connectedDevice!!.vendorId &&
+                        it.productId == connectedDevice!!.productId
             }
 
             if (!isDeviceStillConnected) {
@@ -912,7 +943,15 @@ class UsbStandardHostKernel(
             LogUtil.d(TAG, "Sending data to AOA device:")
             LogUtil.d(TAG, "  Device: ${connectedDevice!!.deviceName}")
             LogUtil.d(TAG, "  Data size: ${data.size} bytes")
-            LogUtil.d(TAG, "  Endpoint: ${String.format("0x%02X", usbEndpointOut!!.address)} (maxPacketSize: ${usbEndpointOut!!.maxPacketSize})")
+            LogUtil.d(
+                TAG,
+                "  Endpoint: ${
+                    String.format(
+                        "0x%02X",
+                        usbEndpointOut!!.address
+                    )
+                } (maxPacketSize: ${usbEndpointOut!!.maxPacketSize})"
+            )
             LogUtil.d(TAG, "  Interface: ${usbInterface?.id}")
 
             // 检查接口是否仍然被声明
@@ -933,7 +972,7 @@ class UsbStandardHostKernel(
 
             // 使用AoaErrorHandler进行智能重试
             val maxRetries = 3
-            
+
             repeat(maxRetries) { attempt ->
                 try {
                     // 执行bulk传输
@@ -945,68 +984,70 @@ class UsbStandardHostKernel(
                         // 发送成功，重置错误计数
                         aoaErrorHandler.resetErrorCount()
                         LogUtil.d(TAG, "AOA data sent successfully: ${data.size} bytes (attempt ${attempt + 1})")
-                        
+
                         // 添加发送后稳定延迟，避免立即断开
                         try {
                             Thread.sleep(50) // 50ms稳定延迟
                         } catch (e: InterruptedException) {
                             LogUtil.w(TAG, "Send stabilization delay interrupted")
                         }
-                        
+
                         return true
                     } else {
                         // 使用AoaErrorHandler处理发送错误
-                        val currentDeviceConnected = deviceList.values.any { 
-                            it.deviceName == connectedDevice!!.deviceName 
+                        val currentDeviceConnected = deviceList.values.any {
+                            it.deviceName == connectedDevice!!.deviceName
                         }
-                        
+
                         val errorResult = aoaErrorHandler.handleSendError(
                             result, data.size, attempt, maxRetries, currentDeviceConnected
                         )
-                        
-                        LogUtil.w(TAG, "Send error handling result (attempt ${attempt + 1}): " +
-                                "shouldContinue=${errorResult.shouldContinue}, " +
-                                "shouldBreak=${errorResult.shouldBreak}, delayMs=${errorResult.delayMs}")
-                        
+
+                        LogUtil.w(
+                            TAG, "Send error handling result (attempt ${attempt + 1}): " +
+                                    "shouldContinue=${errorResult.shouldContinue}, " +
+                                    "shouldBreak=${errorResult.shouldBreak}, delayMs=${errorResult.delayMs}"
+                        )
+
                         // 根据错误处理结果更新状态
                         errorResult.newStatus?.let { newStatus ->
                             updateStatus(newStatus)
                         }
-                        
+
                         // 根据错误处理结果决定是否继续重试
                         if (errorResult.shouldBreak) {
                             LogUtil.w(TAG, "Breaking send retry due to error handling result")
                             return false
                         }
-                        
+
                         if (!errorResult.shouldContinue) {
                             LogUtil.w(TAG, "Stopping send retry due to error handling result")
                             return false
                         }
-                        
+
                         // 应用延迟
                         if (errorResult.delayMs > 0) {
                             Thread.sleep(errorResult.delayMs)
                         }
                     }
-                    
+
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Exception during data send (attempt ${attempt + 1}): ${e.message}")
-                    
+
                     // 最后一次尝试时抛出异常
                     if (attempt == maxRetries - 1) {
                         throw e
                     }
-                    
+
                     // 其他情况下短暂延迟后继续
                     Thread.sleep(100)
                 }
             }
-            
+
             LogUtil.e(TAG, "Failed to send data after $maxRetries attempts")
             LogUtil.e(TAG, "Final error stats: ${aoaErrorHandler.getErrorStats()}")
             false
-            
+
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error sending data to AOA device: ${e.message}")
             LogUtil.e(TAG, "Exception type: ${e.javaClass.simpleName}")
@@ -1048,10 +1089,10 @@ class UsbStandardHostKernel(
     private fun isDeviceConnected(): Boolean {
         return try {
             connectedDevice?.let { device ->
-                usbManager.deviceList.values.any { 
+                usbManager.deviceList.values.any {
                     it.deviceName == device.deviceName &&
-                    it.vendorId == device.vendorId &&
-                    it.productId == device.productId
+                            it.vendorId == device.vendorId &&
+                            it.productId == device.productId
                 }
             } ?: false
         } catch (e: Exception) {

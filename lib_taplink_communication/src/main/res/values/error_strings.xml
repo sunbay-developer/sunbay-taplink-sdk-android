@@ -108,6 +108,30 @@
     <string name="error_c42_description">Declined</string>
     
     <string name="error_c43_description">Invalid amount</string>
+    <string name="error_c44_description">Tapro application initialization failed</string>
+    <string name="error_c45_description">Connection cancelled due to manual disconnect</string>
+    <string name="error_c46_description">No service kernel available, cannot send data</string>
+    <string name="error_c47_description">Failed to send data</string>
+    <string name="error_c48_description">Invalid protocol type</string>
+    <string name="error_c49_description">USB device permission denied</string>
+    <string name="error_c50_description">USB device detached before connection</string>
+    <string name="error_c51_description">Failed to request USB permission</string>
+    <string name="error_c52_description">USB device not found</string>
+    <string name="error_c53_description">No permission for USB device</string>
+    <string name="error_c54_description">Failed to open USB device</string>
+    <string name="error_c55_description">Failed to send AOA protocol sequence</string>
+    <string name="error_c56_description">AOA connection timeout</string>
+    <string name="error_c57_description">Service is already connected or connecting</string>
+    <string name="error_c58_description">Protocol type mismatch</string>
+    <string name="error_c59_description">Failed to convert protocol to WebSocket URI</string>
+    <string name="error_c60_description">No available Taplink services found via NSD</string>
+    <string name="error_c61_description">Service not connected</string>
+    <string name="error_c62_description">Failed to send data</string>
+    <string name="error_c63_description">Send error</string>
+    <string name="error_c64_description">WebSocket client interface is null</string>
+    <string name="error_c65_description">Serial device not connected</string>
+    <string name="error_c66_description">VSP client not connected</string>
+    <string name="error_c67_description">ITransaction interface is null</string>
 
     <!-- Merchant Configuration Errors (M Series) -->
     <string name="error_m01_description">Insufficient interface call permissions or not activated</string>

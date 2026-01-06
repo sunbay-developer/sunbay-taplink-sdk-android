@@ -13,6 +13,7 @@ import android.hardware.usb.UsbManager
 import androidx.core.content.ContextCompat
 import com.sunmi.tapro.taplink.communication.cable.aoa.core.BaseUsbAoaKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
+import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
@@ -112,7 +113,7 @@ abstract class BaseUsbHostKernel(
                             pendingDevice = null
 
                             callback?.let {
-                                handleConnectionError("USB device permission denied", it)
+                                handleConnectionError(InnerErrorCode.C49.description, it, InnerErrorCode.C49.code)
                             }
                         } else {
                             LogUtil.w(TAG, "Permission denied for non-pending device: ${device.deviceName}")
@@ -173,7 +174,7 @@ abstract class BaseUsbHostKernel(
                         if (it == pendingDevice) {
                             pendingDevice = null
                             currentConnectionCallback?.let { callback ->
-                                handleConnectionError("USB device detached before connection", callback)
+                                handleConnectionError(InnerErrorCode.C50.description, callback, InnerErrorCode.C50.code)
                             }
                         }
                         onDeviceDetached(it)
@@ -246,7 +247,7 @@ abstract class BaseUsbHostKernel(
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to request USB permission: ${e.message}")
                 pendingDevice = null
-                handleConnectionError("Failed to request USB permission: ${e.message}", connectionCallback)
+                handleConnectionError("${InnerErrorCode.C51.description}: ${e.message}", connectionCallback, InnerErrorCode.C51.code)
             }
         }
     }
@@ -311,12 +312,12 @@ abstract class BaseUsbHostKernel(
             val success = sendDataToDevice(data)
             if (!success) {
                 updateStatus(InnerConnectionStatus.ERROR)
-                callback?.onError("SEND_FAILED", "Failed to send data via AOA Host")
+                callback?.onError(InnerErrorCode.C62.code, InnerErrorCode.C62.description)
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send data: ${e.message}")
             updateStatus(InnerConnectionStatus.ERROR)
-            callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
+            callback?.onError(InnerErrorCode.C63.code, e.message ?: InnerErrorCode.C63.description)
         }
     }
 

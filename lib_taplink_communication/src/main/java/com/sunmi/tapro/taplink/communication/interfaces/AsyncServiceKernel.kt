@@ -48,9 +48,9 @@ abstract class AsyncServiceKernel(
         LogUtil.i("tag", "=======AsyncServiceKernel:::connect:protocol:$protocol")
         if (!canConnect()) {
             handleConnectionError(
-                "Service is already connected or connecting. Current status: $currentInnerConnectionStatus",
+                InnerErrorCode.C57.description + ": Current status: $currentInnerConnectionStatus",
                 connectionCallback,
-                getConnectionBusyErrorCode()
+                InnerErrorCode.C57.code
             )
             return
         }
@@ -67,7 +67,7 @@ abstract class AsyncServiceKernel(
             val parseResult = ProtocolManager.parseProtocol(protocol)
             if (parseResult is ProtocolParseResult.Error) {
                 handleConnectionError(
-                    parseResult.message, connectionCallback,
+                    "${InnerErrorCode.C41.description}:${parseResult.message}", connectionCallback,
                     InnerErrorCode.C41.code
                 )
                 return
@@ -76,9 +76,9 @@ abstract class AsyncServiceKernel(
             // Validate protocol type
             if (!isValidProtocolType(parseResult)) {
                 handleConnectionError(
-                    "Protocol type mismatch, expected ${getExpectedProtocolType()}",
+                    InnerErrorCode.C58.description + ", expected ${getExpectedProtocolType()}",
                     connectionCallback,
-                    InnerErrorCode.C41.code
+                    InnerErrorCode.C58.code
                 )
                 return
             }
@@ -89,9 +89,9 @@ abstract class AsyncServiceKernel(
         } catch (e: Exception) {
             LogUtil.e(getTag(), "Failed to start connection: ${e.message}")
             handleConnectionError(
-                "Failed to start connection: ${e.message}",
+                "${InnerErrorCode.C37.description}: ${e.message}",
                 connectionCallback,
-                getConnectionFailedErrorCode()
+                InnerErrorCode.C37.code
             )
         }
     }
@@ -102,7 +102,7 @@ abstract class AsyncServiceKernel(
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
             LogUtil.d(getTag(), "Cannot send data, not connected. Status: $currentInnerConnectionStatus")
-            callback?.onError("NOT_CONNECTED", "${getServiceType()} not connected")
+            callback?.onError(InnerErrorCode.C61.code, "${getServiceType()} ${InnerErrorCode.C61.description}")
             return
         }
 
@@ -117,7 +117,7 @@ abstract class AsyncServiceKernel(
 
                 } catch (e: Exception) {
                     LogUtil.e(getTag(), "Failed to send data: traceId=$traceId, error=${e.message}")
-                    callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
+                    callback?.onError(InnerErrorCode.C63.code, e.message ?: InnerErrorCode.C63.description)
                 }
             }
         }
@@ -234,7 +234,7 @@ abstract class AsyncServiceKernel(
      */
     protected fun notifyConnectionError(message: String, error: InnerErrorCode = InnerErrorCode.C25) {
         currentConnectionCallback?.let { callback ->
-            handleConnectionError("${error.description}(${message})", callback, error.code)
+            handleConnectionError("${error.description}:${message}", callback, error.code)
         }
     }
 

@@ -72,8 +72,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
         val serviceKernel = getServiceKernelByProtocol(parseResult, appid, appSecretKey)
         if (serviceKernel == null) {
             connectionCallback.onDisconnected(
-                InnerErrorCode.C41.code,
-                "Unsupported protocol type: ${parseResult::class.simpleName}"
+                InnerErrorCode.C58.code,
+                "${InnerErrorCode.C58.description}: ${parseResult::class.simpleName}"
             )
             return
         }
@@ -237,7 +237,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         val kernel = currentServiceKernel
         if (kernel == null) {
             LogUtil.e(TAG, "No service kernel available, cannot send data")
-            callback?.onError("NO_SERVICE_KERNEL", "No service kernel available")
+            callback?.onError(InnerErrorCode.C46.code, InnerErrorCode.C46.description)
             return
         }
 
@@ -245,7 +245,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
             kernel.sendData(traceId, data, callback)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send data: traceId=$traceId, error=${e.message}")
-            callback?.onError("SEND_ERROR", e.message ?: "Unknown error")
+            callback?.onError(InnerErrorCode.C47.code, "${InnerErrorCode.C47.description}:${e.message}")
         }
     }
 

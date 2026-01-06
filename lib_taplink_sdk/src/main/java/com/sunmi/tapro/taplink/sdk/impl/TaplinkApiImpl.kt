@@ -11,6 +11,8 @@ import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.LogLevel
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
+import com.sunmi.tapro.taplink.sdk.manager.ConnectionManager
+import com.sunmi.tapro.taplink.sdk.manager.PaymentManager
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 

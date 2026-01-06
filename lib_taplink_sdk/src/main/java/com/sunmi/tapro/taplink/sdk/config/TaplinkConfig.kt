@@ -1,7 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.config
 
-import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
-import com.sunmi.tapro.taplink.sdk.enums.Environment
+import com.sunmi.tapro.taplink.sdk.BuildConfig
 import com.sunmi.tapro.taplink.sdk.enums.LogLevel
 import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
@@ -36,27 +35,6 @@ data class TaplinkConfig(
      */
     val secretKey: String,
 
-    // ========== 环境和连接配置 ==========
-
-    /**
-     * 环境配置（可选，默认 PRODUCTION）
-     */
-    val environment: Environment = Environment.PRODUCTION,
-
-    /**
-     * 连接模式（可选）
-     */
-    val connectionMode: ConnectionMode? = null,
-
-    /**
-     * 连接超时时间（可选，默认 10 秒）
-     */
-    val connectionTimeout: Int = 60,
-
-    /**
-     * 信任自签名证书（可选，默认 true）
-     */
-    val trustSelfSignedCert: Boolean = true,
 
     // ========== 日志配置 ==========
 
@@ -87,30 +65,12 @@ data class TaplinkConfig(
     /**
      * SDK版本号，格式：x.y.z，默认 1.0.0
      */
-    val version: String = "1.0.0",
+    val version: String = BuildConfig.VERSION_NAME,
 
     /**
-     * 默认超时时间（秒），默认 60
+     * 默认超时时间（秒），默认 180
      */
-    val timeout: Int = 180,
-
-    // ========== 自动重连配置 ==========
-
-    /**
-     * 是否启用自动重连（可选，默认 true）
-     * 当连接非主动断开时，SDK 会自动尝试重连
-     */
-    val autoReconnect: Boolean = false,
-
-    /**
-     * 最大重试次数（可选，默认 3）
-     */
-    val maxRetryCount: Int = 3,
-
-    /**
-     * 重试延迟时间（毫秒，默认 2000ms）
-     */
-    val retryDelayMs: Long = 2000L
+    val timeout: Int = 180
 ) {
     // ========== 必需配置的链式调用方法 ==========
 
@@ -129,27 +89,6 @@ data class TaplinkConfig(
      */
     fun setSecretKey(secretKey: String): TaplinkConfig = copy(secretKey = secretKey)
 
-    // ========== 环境和连接配置的链式调用方法 ==========
-
-    /**
-     * 链式调用：设置环境
-     */
-    fun setEnvironment(environment: Environment): TaplinkConfig = copy(environment = environment)
-
-    /**
-     * 链式调用：设置连接模式
-     */
-    fun setConnectionMode(mode: ConnectionMode): TaplinkConfig = copy(connectionMode = mode)
-
-    /**
-     * 链式调用：设置连接超时
-     */
-    fun setConnectionTimeout(seconds: Int): TaplinkConfig = copy(connectionTimeout = seconds)
-
-    /**
-     * 链式调用：设置是否信任自签名证书
-     */
-    fun setTrustSelfSignedCert(trust: Boolean): TaplinkConfig = copy(trustSelfSignedCert = trust)
 
     // ========== 日志配置的链式调用方法 ==========
 
@@ -176,32 +115,6 @@ data class TaplinkConfig(
      * 设置后，PaymentRequest 可以省略 deviceInfo 参数
      */
     fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
-
-    /**
-     * 链式调用：设置 SDK 版本
-     */
-    fun setVersion(version: String): TaplinkConfig = copy(version = version)
-
-    /**
-     * 链式调用：设置默认超时时间
-     */
-    fun setTimeout(timeout: Int): TaplinkConfig = copy(timeout = timeout)
-
-    // ========== 自动重连配置的链式调用方法 ==========
-
-    /**
-     * 链式调用：设置是否启用自动重连
-     */
-    fun setAutoReconnect(enabled: Boolean): TaplinkConfig = copy(autoReconnect = enabled)
-
-    /**
-     * 链式调用：设置重试策略
-     *
-     * @param maxRetries 最大重试次数
-     * @param delayMs 重试延迟时间（毫秒）
-     */
-    fun setRetryPolicy(maxRetries: Int, delayMs: Long): TaplinkConfig =
-        copy(maxRetryCount = maxRetries, retryDelayMs = delayMs)
 
     companion object {
         /**
