@@ -44,11 +44,11 @@ TaplinkDemo 是由商米提供的支付 SDK 集成示例应用，演示如何使
 - **退款交易 (REFUND)** - 退款操作
 - **撤销交易 (VOID)** - 交易撤销
 - **预授权完成 (POST_AUTH)** - 预授权完成
-- **增量授权 (INCREMENTAL_AUTH)** - 增量授权
 - **小费调整 (TIP_ADJUST)** - 小费金额调整
 - **查询交易 (QUERY)** - 根据请求ID查询交易状态
 - **批次结算 (BATCH_CLOSE)** - 日终批次结算
 
+[//]: # (- **增量授权 &#40;INCREMENTAL_AUTH&#41;** - 增量授权)
 ### 连接模式
 - **App-to-App 模式** - 同设备集成（已实现）
 - **Cable 模式** - USB线缆连接，支持多种协议（AUTO、USB_AOA、USB_VSP、RS232）

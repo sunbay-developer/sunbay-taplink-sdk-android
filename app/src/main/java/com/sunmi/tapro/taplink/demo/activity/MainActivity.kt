@@ -23,8 +23,8 @@ import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.demo.service.ConnectionListener
 import com.sunmi.tapro.taplink.demo.service.PaymentCallback
 import com.sunmi.tapro.taplink.demo.service.PaymentResult
-
 import com.sunmi.tapro.taplink.demo.util.ConnectionPreferences
+import com.sunmi.tapro.taplink.sdk.TaplinkSDK
 
 import java.math.BigDecimal
 import java.text.DecimalFormat
@@ -88,20 +88,30 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Initialize components in simple sequence
-        initViews()
-        initPaymentService()
+        // Initialize UI components synchronously - no init methods
+        setupUIComponents()
         setupEventListeners()
-        attemptAutoConnection()
         
-        Log.d(TAG, "MainActivity initialization completed")
+        // Get payment service instance (SDK already initialized by Application)
+        paymentService = TaplinkPaymentService.getInstance()
+        
+        // Update initial UI state
+        updateAmountDisplay()
+        updateTransactionButtonsState()
+        
+        Log.d(TAG, "MainActivity UI initialization completed")
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Start connection management after UI is ready
+        startConnectionManagement()
+    }
 
     /**
-     * Initialize UI components
+     * Setup UI components - synchronous initialization only
      */
-    private fun initViews() {
+    private fun setupUIComponents() {
         // Top bar
         layoutTopBar = findViewById(R.id.layout_top_bar)
         statusIndicator = findViewById(R.id.status_indicator)
@@ -129,23 +139,8 @@ class MainActivity : Activity() {
         cardPaymentStatus = findViewById(R.id.card_payment_status)
         progressPayment = findViewById(R.id.progress_payment)
 
-        // Initialize display
-        updateAmountDisplay()
-    }
-
-    /**
-     * Initialize payment service
-     */
-    private fun initPaymentService() {
-        // Get service instance
-        paymentService = TaplinkPaymentService.getInstance()
-        
-        // Set current mode in service (SDK already initialized by Application)
-        // This ensures the service knows the current connection mode for auto-connect
-        paymentService.setCurrentMode(this)
-        
-        // Update transaction buttons state after service initialization
-        updateTransactionButtonsState()
+        // Set initial connection status display
+        updateConnectionStatusDisplay("Not Connected", false)
     }
     
     /**
@@ -195,103 +190,241 @@ class MainActivity : Activity() {
 
     }
 
+    // Connection listener management
+    private var currentConnectionListener: ConnectionListener? = null
+    
+    // SDK Connection management
+    private var isDirectlyConnected = false
+    private var connectedTaproVersion: String? = null
+
+    /**
+     * Start connection management - called after UI is ready
+     */
+    private fun startConnectionManagement() {
+        // Check current connection status first
+        checkCurrentConnectionStatus()
+        
+        // If not connected, attemptSDK connection
+        if (!isSDKConnected()) {
+            connect()
+        } else {
+            // Already connected, register listener for status monitoring
+            registerDirectConnectionListener()
+        }
+    }
+    
+    /**
+     * Check if SDK is directly connected
+     */
+    private fun isSDKConnected(): Boolean {
+        return try {
+            TaplinkSDK.isConnected()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking SDK connection", e)
+            false
+        }
+    }
+    
+    /**
+     * Attempt SDK Connection following official example
+     */
+    private fun connect() {
+        updateConnectionStatusDisplay("Connecting...", false)
+        
+        val savedMode = ConnectionPreferences.getConnectionMode(this)
+        val connectionConfig = createConnectionConfig(savedMode)
+        
+        Log.d(TAG, "=== Attempting SDK Connection ===")
+        Log.d(TAG, "Connection Mode: $savedMode")
+        
+        // SDK Connection as shown in example
+        TaplinkSDK.connect(connectionConfig, object : com.sunmi.tapro.taplink.sdk.callback.ConnectionListener {
+            override fun onConnected(deviceId: String, taproVersion: String) {
+                Log.d(TAG, "=== SDK Connection SUCCESS ===")
+                Log.d(TAG, "Device: $deviceId, Version: $taproVersion")
+                
+                isDirectlyConnected = true
+                connectedTaproVersion = taproVersion
+                
+                runOnUiThread {
+                    updateConnectionStatusDisplay("Connected", true)
+                    Log.d(TAG, "UI updated - connection successful")
+                }
+            }
+            
+            override fun onDisconnected(reason: String) {
+                Log.d(TAG, "=== SDK Connection DISCONNECTED ===")
+                Log.d(TAG, "Reason: $reason")
+                
+                isDirectlyConnected = false
+                connectedTaproVersion = null
+                
+                runOnUiThread {
+                    updateConnectionStatusDisplay("Not Connected", false)
+                    showConnectionExceptionDialog("Connection Lost", "Connection was disconnected: $reason")
+                    Log.w(TAG, "UI updated - connection lost")
+                }
+            }
+            
+            override fun onError(error: com.sunmi.tapro.taplink.sdk.error.ConnectionError) {
+                Log.d(TAG, "=== SDK Connection ERROR ===")
+                Log.d(TAG, "Code: ${error.code}, Message: ${error.message}")
+                
+                isDirectlyConnected = false
+                connectedTaproVersion = null
+                
+                runOnUiThread {
+                    updateConnectionStatusDisplay("Connection Failed", false)
+                    showConnectionExceptionDialog("Connection Error", "Failed to connect: ${error.message}\n\nError Code: ${error.code}")
+                    Log.e(TAG, "UI updated - connection error")
+                }
+            }
+        })
+    }
+    
+    /**
+     * Register direct connection listener for already connected SDK
+     */
+    private fun registerDirectConnectionListener() {
+        Log.d(TAG, "SDK already connected, registering listener for status monitoring")
+        
+        // For already connected SDK, we still need to register a listener
+        // This ensures we get notified of future disconnections
+        val savedMode = ConnectionPreferences.getConnectionMode(this)
+        val connectionConfig = createConnectionConfig(savedMode)
+        
+        TaplinkSDK.connect(connectionConfig, object : com.sunmi.tapro.taplink.sdk.callback.ConnectionListener {
+            override fun onConnected(deviceId: String, taproVersion: String) {
+                Log.d(TAG, "Direct SDK listener registered - already connected")
+                isDirectlyConnected = true
+                connectedTaproVersion = taproVersion
+                runOnUiThread {
+                    updateConnectionStatusDisplay("Connected", true)
+                }
+            }
+            
+            override fun onDisconnected(reason: String) {
+                Log.d(TAG, "===SDK DISCONNECTED (via listener) ===")
+                Log.d(TAG, "Reason: $reason")
+                
+                isDirectlyConnected = false
+                connectedTaproVersion = null
+                
+                runOnUiThread {
+                    updateConnectionStatusDisplay("Not Connected", false)
+                    showConnectionExceptionDialog("Connection Lost", "Connection was disconnected: $reason")
+                }
+            }
+            
+            override fun onError(error: com.sunmi.tapro.taplink.sdk.error.ConnectionError) {
+                Log.d(TAG, "===SDK ERROR (via listener) ===")
+                Log.d(TAG, "Code: ${error.code}, Message: ${error.message}")
+                
+                isDirectlyConnected = false
+                connectedTaproVersion = null
+                
+                runOnUiThread {
+                    updateConnectionStatusDisplay("Connection Failed", false)
+                    showConnectionExceptionDialog("Connection Error", "Connection error: ${error.message}\n\nError Code: ${error.code}")
+                }
+            }
+        })
+    }
+    
+    /**
+     * Check current connection status without triggering new connection
+     * This method performs a comprehensive status check usingSDK
+     */
+    private fun checkCurrentConnectionStatus() {
+        try {
+            val sdkConnected = isSDKConnected()
+            val paymentServiceConnected = paymentService.isConnected()
+            
+            Log.d(TAG, "Connection status check - SDK: $sdkConnected, PaymentService: $paymentServiceConnected")
+            
+            // Use SDK status as the source of truth
+            isDirectlyConnected = sdkConnected
+            
+            // If connected but no version info, we'll show "Connected" until we get version from callback
+            if (sdkConnected && connectedTaproVersion == null) {
+                Log.d(TAG, "Connected but no version info available yet")
+            }
+            
+            val status = if (sdkConnected) "Connected" else "Not Connected"
+            updateConnectionStatusDisplay(status, sdkConnected)
+            
+            Log.d(TAG, "Current connection status: $status (SDK: $sdkConnected, Version: $connectedTaproVersion)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking connection status", e)
+            updateConnectionStatusDisplay("Status Unknown", false)
+        }
+    }
+
     /**
      * Start auto-connection based on saved connection mode
+     * This method is called when we need to establish a new connection
      */
     private fun attemptAutoConnection() {
-        val savedMode = ConnectionPreferences.getConnectionMode(this)
-        updateConnectionStatus("Connecting...", false)
+        // Use SDK Connection instead of PaymentService wrapper
+        connect()
+    }
+    
+    /**
+     * Create connection configuration based on connection mode
+     */
+    private fun createConnectionConfig(mode: ConnectionPreferences.ConnectionMode): com.sunmi.tapro.taplink.sdk.config.ConnectionConfig {
+        val connectionConfig = com.sunmi.tapro.taplink.sdk.config.ConnectionConfig()
         
-        when (savedMode) {
-            ConnectionPreferences.ConnectionMode.APP_TO_APP,
+        when (mode) {
+            ConnectionPreferences.ConnectionMode.APP_TO_APP -> {
+                connectionConfig.setConnectionMode(com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.APP_TO_APP)
+            }
             ConnectionPreferences.ConnectionMode.CABLE -> {
-                connectToPaymentService()
+                connectionConfig.setConnectionMode(com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.CABLE)
+                // Add cable-specific configuration if needed
+                val protocol = ConnectionPreferences.getCableProtocol(this)
+                when (protocol) {
+                    ConnectionPreferences.CableProtocol.AUTO -> {
+                        // Let SDK auto-detect, no additional config needed
+                    }
+                    ConnectionPreferences.CableProtocol.USB_AOA -> {
+                        connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA)
+                    }
+                    ConnectionPreferences.CableProtocol.USB_VSP -> {
+                        connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_VSP)
+                    }
+                    ConnectionPreferences.CableProtocol.RS232 -> {
+                        connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.RS232)
+                    }
+                }
             }
             ConnectionPreferences.ConnectionMode.LAN -> {
-                attemptLanAutoConnection()
-            }
-        }
-    }
-    
-    /**
-     * Attempt LAN auto-connection
-     */
-    private fun attemptLanAutoConnection() {
-        val lanConfig = ConnectionPreferences.getLanConfig(this)
-        val ip = lanConfig.first
-        
-        if (ip.isNullOrEmpty()) {
-            updateConnectionStatus("Configuration Required", false)
-            return
-        }
-        
-        val success = paymentService.attemptAutoConnect(object : ConnectionListener {
-            override fun onConnected(deviceId: String, taproVersion: String) {
-                runOnUiThread {
-                    updateConnectionStatus("Connected", true)
+                connectionConfig.setConnectionMode(com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.LAN)
+                // Add LAN-specific configuration
+                val lanConfig = ConnectionPreferences.getLanConfig(this)
+                val ip = lanConfig.first
+                val port = lanConfig.second
+                
+                if (ip.isNullOrEmpty()) {
+                    // If no IP configured, this will likely fail, but let the SDK handle it
+                    Log.w(TAG, "LAN mode selected but no IP configured")
+                } else {
+                    connectionConfig.setHost(ip).setPort(port)
                 }
             }
-            
-            override fun onDisconnected(reason: String) {
-                runOnUiThread {
-                    updateConnectionStatus("Not Connected", false)
-                }
-            }
-            
-            override fun onError(code: String, message: String) {
-                runOnUiThread {
-                    updateConnectionStatus("Connection Failed", false)
-                    showConnectionFailure(message.ifEmpty { "Auto-connect failed (Code: $code)" })
-                }
-            }
-        })
-        
-        if (!success) {
-            updateConnectionStatus("Configuration Required", false)
         }
+        
+        return connectionConfig
     }
 
 
+
     /**
-     * Connect to payment service
+     * Update connection status display - separated from business logic
      */
-    private fun connectToPaymentService() {
-        // Use attemptAutoConnect which now uses the new connectWithConfig method internally
-        val success = paymentService.attemptAutoConnect(object : ConnectionListener {
-            override fun onConnected(deviceId: String, taproVersion: String) {
-                runOnUiThread {
-                    updateConnectionStatus("Connected", true)
-                }
-            }
-
-            override fun onDisconnected(reason: String) {
-                runOnUiThread {
-                    updateConnectionStatus("Not Connected", false)
-                }
-            }
-
-            override fun onError(code: String, message: String) {
-                runOnUiThread {
-                    updateConnectionStatus("Connection Failed", false)
-                    showConnectionFailure(message.ifEmpty { "Connection failed (Code: $code)" })
-                }
-            }
-        })
+    private fun updateConnectionStatusDisplay(status: String, connected: Boolean) {
+        Log.d(TAG, "updateConnectionStatusDisplay - status: $status, connected: $connected")
         
-        if (!success) {
-            // If auto-connect fails, show configuration required status
-            runOnUiThread {
-                updateConnectionStatus("Configuration Required", false)
-            }
-        }
-    }
-    
-
-
-    /**
-     * Update connection status display
-     */
-    private fun updateConnectionStatus(status: String, connected: Boolean) {
         // Update connection mode display
         val currentMode = ConnectionPreferences.getConnectionMode(this)
         val modeText = when (currentMode) {
@@ -311,18 +444,44 @@ class MainActivity : Activity() {
         
         // Show version code only when connected, otherwise show connection status
         if (connected) {
-            val version = paymentService.getTaproVersion()
+            val version = connectedTaproVersion
             tvConnectionStatus.text = if (version != null && version.isNotEmpty()) {
                 "v$version"
             } else {
-                "v1.0.0"
+                "Connected"
             }
+            Log.d(TAG, "Displaying version: $version")
         } else {
             tvConnectionStatus.text = status
         }
 
-        // Update transaction button state based on connection status
+        // Update transaction button state (only depends on amount, not connection)
         updateTransactionButtonsState()
+    }
+    
+    /**
+     * Show connection exception dialog - unified error handling
+     */
+    private fun showConnectionExceptionDialog(title: String, message: String) {
+        // Dismiss any existing dialog first
+        currentAlertDialog?.dismiss()
+        
+        currentAlertDialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("Retry") { dialog, _ -> 
+                dialog.dismiss()
+                currentAlertDialog = null
+                attemptAutoConnection()
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+                currentAlertDialog = null
+            }
+            .setOnDismissListener {
+                currentAlertDialog = null
+            }
+            .show()
     }
     
 
@@ -351,25 +510,7 @@ class MainActivity : Activity() {
      * Show connection failure dialog with retry option
      */
     private fun showConnectionFailure(message: String) {
-        // Dismiss any existing dialog first
-        currentAlertDialog?.dismiss()
-        
-        currentAlertDialog = AlertDialog.Builder(this)
-            .setTitle("Connection Failed")
-            .setMessage(message)
-            .setPositiveButton("Retry") { dialog, _ -> 
-                dialog.dismiss()
-                currentAlertDialog = null
-                attemptAutoConnection()
-            }
-            .setNegativeButton("Cancel") { dialog, _ ->
-                dialog.dismiss()
-                currentAlertDialog = null
-            }
-            .setOnDismissListener {
-                currentAlertDialog = null
-            }
-            .show()
+        showConnectionExceptionDialog("Connection Failed", message)
     }
 
     /**
@@ -433,20 +574,13 @@ class MainActivity : Activity() {
      * Update transaction buttons state
      */
     private fun updateTransactionButtonsState() {
-//        if (!::paymentService.isInitialized) {
-//            btnSale.isEnabled = false
-//            btnAuth.isEnabled = false
-//            btnForcedAuth.isEnabled = false
-//            return
-//        }
-
-        val connected = paymentService.isConnected()
+        // Allow buttons to be clicked regardless of connection status
+        // Only check if amount is selected
         val hasAmount = selectedAmount > BigDecimal.ZERO
-        val enabled = connected && hasAmount
 
-        btnSale.isEnabled = enabled
-        btnAuth.isEnabled = enabled
-        btnForcedAuth.isEnabled = enabled
+        btnSale.isEnabled = hasAmount
+        btnAuth.isEnabled = hasAmount
+        btnForcedAuth.isEnabled = hasAmount
     }
 
     /**
@@ -472,16 +606,13 @@ class MainActivity : Activity() {
      * Validate payment conditions
      */
     private fun validatePaymentConditions(): Boolean {
-        if (!paymentService.isConnected()) {
-            showToast("Not connected to payment terminal")
-            return false
-        }
-
         if (selectedAmount <= BigDecimal.ZERO) {
             showToast("Please select payment amount")
             return false
         }
 
+        // Remove connection check - allow payment attempts even when not connected
+        // The payment service will handle connection errors appropriately
         return true
     }
 
@@ -597,15 +728,11 @@ class MainActivity : Activity() {
      * Start payment
      */
     private fun startPayment(transactionType: TransactionType) {
-//        if (!paymentService.isConnected()) {
-//            showToast("Not connected to payment terminal")
-//            return
-//        }
-
-//        if (selectedAmount <= BigDecimal.ZERO) {
-//            showToast("Please select payment amount")
-//            return
-//        }
+        // Only check amount, not connection status
+        if (selectedAmount <= BigDecimal.ZERO) {
+            showToast("Please select payment amount")
+            return
+        }
 
         // Generate order ID and transaction request ID
         val timestamp = System.currentTimeMillis()
@@ -697,11 +824,7 @@ class MainActivity : Activity() {
      * Show sale amount dialog for user to enter additional amounts
      */
     private fun showSaleAmountDialog() {
-        if (!paymentService.isConnected()) {
-            showToast("Not connected to payment terminal")
-            return
-        }
-
+        // Only check amount, not connection status
         if (selectedAmount <= BigDecimal.ZERO) {
             showToast("Please select payment amount")
             return
@@ -754,11 +877,7 @@ class MainActivity : Activity() {
         transaction: Transaction,
         callback: PaymentCallback
     ) {
-        if (!paymentService.isConnected()) {
-            showToast("Not connected to payment terminal")
-            return
-        }
-
+        // Only check amount, not connection status
         if (selectedAmount <= BigDecimal.ZERO) {
             showToast("Please select payment amount")
             return
@@ -1058,7 +1177,23 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Handle payment failure
+     * Check if error code indicates a connection problem
+     */
+    private fun isConnectionError(code: String): Boolean {
+        return when (code) {
+            "C36" -> true  // Target application crashed
+            "C01" -> true  // Connection timeout
+            "C02" -> true  // Connection failed
+            "C03" -> true  // Connection lost
+            "C04" -> true  // Service disconnected
+            "C05" -> true  // Service binding failed
+            "E10" -> true  // Transaction timeout (often connection related)
+            else -> code.startsWith("C")  // Most C-codes are connection related
+        }
+    }
+    
+    /**
+     * Handle payment failure with enhanced connection status management
      */
     private fun handlePaymentFailure(transactionRequestId: String, code: String, message: String) {
         // Ensure payment progress dialog is hidden before showing error dialog
@@ -1085,6 +1220,16 @@ class MainActivity : Activity() {
                     errorMessage = message
                 )
             }
+        }
+
+        // Check if this is a connection-related error and update status immediately
+        if (isConnectionError(code)) {
+            Log.w(TAG, "Payment failed due to connection error: $code - $message")
+            // Force connection status update
+            updateConnectionStatusDisplay("Connection Failed", false)
+            
+            // Also trigger a comprehensive status check
+            performConnectionStatusValidation()
         }
 
         // Show simple payment error dialog
@@ -1339,24 +1484,36 @@ class MainActivity : Activity() {
         // Ensure progress dialog is hidden when returning from Tapro app
         hidePaymentProgressDialog()
 
-        // Check connection status when returning to the activity
-        checkConnectionStatus()
+        // Perform comprehensive connection status check when returning to activity
+        performConnectionStatusValidation()
+    }
+    
+    /**
+     * Perform comprehensive connection status validation
+     * This ensures UI reflects the actual connection state
+     */
+    private fun performConnectionStatusValidation() {
+        try {
+            // Check current status
+            checkCurrentConnectionStatus()
+            
+            // If we think we're connected, validate it's actually working
+            if (paymentService.isConnected()) {
+                // The isConnected() method now includes SDK validation
+                Log.d(TAG, "Connection validation completed - status should be accurate")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during connection status validation", e)
+            updateConnectionStatusDisplay("Validation Failed", false)
+        }
     }
 
     /**
      * Check current connection status and update UI accordingly
+     * This method only checks status without triggering new connections
      */
     private fun checkConnectionStatus() {
-        if (::paymentService.isInitialized) {
-            val isConnected = paymentService.isConnected()
-            
-            if (isConnected) {
-                // Connected - show version info
-                updateConnectionStatus("Connected", true)
-            } else {
-                updateConnectionStatus("Not Connected", false)
-            }
-        }
+        checkCurrentConnectionStatus()
     }
 
     override fun onPause() {
@@ -1373,9 +1530,15 @@ class MainActivity : Activity() {
         currentAlertDialog?.dismiss()
         currentAlertDialog = null
         
+        // Clear connection state
+        isDirectlyConnected = false
+        connectedTaproVersion = null
+        
         // Clear any pending callbacks to prevent memory leaks
         tvPaymentStatus.removeCallbacks(null)
         etCustomAmount.removeCallbacks(null)
+        
+        Log.d(TAG, "MainActivity destroyed, connection state cleared")
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -1392,11 +1555,8 @@ class MainActivity : Activity() {
                         showToast(message)
                     }
 
-                    // Re-initialize payment service for the new mode
-                    initPaymentService()
-                    
-                    // Attempt auto-connection with new settings
-                    attemptAutoConnection()
+                    // Restart connection management with new settings usingSDK
+                    startConnectionManagement()
                 }
             }
             REQUEST_CODE_TRANSACTION_LIST -> {

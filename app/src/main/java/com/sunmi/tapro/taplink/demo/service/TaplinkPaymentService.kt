@@ -4,13 +4,9 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import com.sunmi.tapro.taplink.demo.R
-import com.sunmi.tapro.taplink.demo.util.ConnectionPreferences
-import com.sunmi.tapro.taplink.demo.util.NetworkUtils
 import com.sunmi.tapro.taplink.sdk.TaplinkSDK
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
-import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
-import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.LogLevel
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
@@ -62,9 +58,6 @@ class TaplinkPaymentService : PaymentService {
     // Connection Listener
     private var connectionListener: ConnectionListener? = null
 
-    // Current connection mode (will be initialized from preferences in initialize method)
-    private var currentMode: ConnectionPreferences.ConnectionMode? = null
-
     // Context reference for accessing resources and preferences
     private var context: Context? = null
 
@@ -77,18 +70,8 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Set current connection mode from context
-     * Used by MainActivity to set the current mode without reinitializing SDK
-     */
-    fun setCurrentMode(context: Context) {
-        this.context = context
-        currentMode = ConnectionPreferences.getConnectionMode(context)
-        Log.d(TAG, "Current mode set to: $currentMode")
-    }
-
-    /**
      * Initialize SDK with simplified logic
-     * No longer sets ConnectionMode during initialization - ConnectionMode is now set during connect phase
+     * Only performs one-time SDK initialization - connection mode is handled in connect()
      */
     override fun initialize(
         context: Context,
@@ -97,9 +80,8 @@ class TaplinkPaymentService : PaymentService {
         secretKey: String
     ): Boolean {
         this.context = context
-        currentMode = ConnectionPreferences.getConnectionMode(context)
 
-        Log.d(TAG, "Initializing SDK for mode: $currentMode")
+        Log.d(TAG, "Initializing SDK")
 
         // Read configuration from resources
         val actualAppId = context.getString(R.string.taplink_app_id)
@@ -122,7 +104,7 @@ class TaplinkPaymentService : PaymentService {
 
         return try {
             TaplinkSDK.init(context, config)
-            Log.d(TAG, "SDK initialized successfully for mode: $currentMode")
+            Log.d(TAG, "SDK initialized successfully")
             true
         } catch (e: Exception) {
             Log.e(TAG, "SDK initialization failed: ${e.message}", e)
@@ -133,17 +115,36 @@ class TaplinkPaymentService : PaymentService {
     /**
      * Connect to payment terminal with provided ConnectionConfig
      * Main connection method that accepts ConnectionConfig with ConnectionMode already set
+     * 
+     * Important: This method will always attempt to establish a new connection.
+     * If already connected, it will replace the existing connection listener.
      */
     override fun connect(connectionConfig: ConnectionConfig, listener: ConnectionListener) {
         this.connectionListener = listener
         
         Log.d(TAG, "=== connect() called ===")
-        Log.d(TAG, "ConnectionListener set: ${true}")
+        Log.d(TAG, "ConnectionListener set: ${listener != null}")
+        Log.d(TAG, "Current connection status: connected=$connected, connecting=$connecting")
         Log.d(TAG, "Connecting with provided ConnectionConfig: $connectionConfig")
 
-        // Check network for LAN mode if needed
-        // Note: We can't easily determine the mode from ConnectionConfig, so we'll skip this check
-        // The SDK will handle network connectivity internally
+        // If already connected, we still proceed to register the new listener
+        // This allows UI components to receive connection status updates
+        if (connected) {
+            Log.d(TAG, "Already connected, but registering new listener")
+            // Immediately notify the new listener of current connection status
+            connectedDeviceId?.let { deviceId ->
+                taproVersion?.let { version ->
+                    listener.onConnected(deviceId, version)
+                }
+            }
+            return
+        }
+
+        // If currently connecting, don't start another connection
+        if (connecting) {
+            Log.d(TAG, "Already connecting, just updating listener")
+            return
+        }
 
         connecting = true
 
@@ -170,67 +171,7 @@ class TaplinkPaymentService : PaymentService {
         })
     }
 
-    /**
-     * Create connection configuration based on current connection mode
-     * Unified configuration handling for all modes
-     * 
-     * Returns appropriate ConnectionConfig for LAN and Cable modes,
-     * or null for App-to-App mode (uses SDK default behavior)
-     *
-     * @return ConnectionConfig for the current mode, or null for auto-detection
-     */
-    private fun createConnectionConfig(): ConnectionConfig? {
-        return when (currentMode) {
-            ConnectionPreferences.ConnectionMode.LAN -> createLanConfig()
-            ConnectionPreferences.ConnectionMode.CABLE -> createCableConfig()
-            else -> null // App-to-App uses default behavior
-        }
-    }
 
-    /**
-     * Create LAN connection configuration
-     * Validates IP address and port from preferences
-     * Throws IllegalArgumentException for invalid network parameters
-     */
-    private fun createLanConfig(): ConnectionConfig? {
-        val ctx = context ?: return null
-        val ip = ConnectionPreferences.getLanIp(ctx)
-        val port = ConnectionPreferences.getLanPort(ctx)
-
-        if (ip != null && ip.isNotEmpty()) {
-            Log.d(TAG, "LAN config - IP: $ip, Port: $port")
-            
-            if (!NetworkUtils.isValidIpAddress(ip)) {
-                throw IllegalArgumentException("Invalid IP address format: $ip")
-            }
-            if (!NetworkUtils.isPortValid(port)) {
-                throw IllegalArgumentException("Invalid port number: $port")
-            }
-
-            return ConnectionConfig().setHost(ip).setPort(port)
-        } else {
-            Log.d(TAG, "No LAN IP configured, using auto-connect")
-            return null
-        }
-    }
-
-    /**
-     * Create Cable connection configuration with protocol support
-     * Supports AUTO, USB_AOA, USB_VSP, RS232 protocols
-     */
-    private fun createCableConfig(): ConnectionConfig? {
-        val ctx = context ?: return null
-        val protocol = ConnectionPreferences.getCableProtocol(ctx)
-        
-        Log.d(TAG, "Cable config - Protocol: $protocol")
-        
-        return when (protocol) {
-            ConnectionPreferences.CableProtocol.AUTO -> null // Let SDK auto-detect
-            ConnectionPreferences.CableProtocol.USB_AOA -> ConnectionConfig().setCableProtocol(CableProtocol.USB_AOA)
-            ConnectionPreferences.CableProtocol.USB_VSP -> ConnectionConfig().setCableProtocol(CableProtocol.USB_VSP)
-            ConnectionPreferences.CableProtocol.RS232 -> ConnectionConfig().setCableProtocol(CableProtocol.RS232)
-        }
-    }
 
     /**
      * Handle connection success
@@ -272,8 +213,23 @@ class TaplinkPaymentService : PaymentService {
         connectedDeviceId = null
         taproVersion = null
 
+        Log.d(TAG, "=== handleDisconnected called ===")
         Log.d(TAG, "Disconnected - Reason: $reason")
-        connectionListener?.onDisconnected(reason)
+        Log.d(TAG, "connectionListener is null: ${connectionListener == null}")
+        
+        try {
+            connectionListener?.let { listener ->
+                Log.d(TAG, "Calling listener.onDisconnected($reason)")
+                listener.onDisconnected(reason)
+                Log.d(TAG, "listener.onDisconnected call completed successfully")
+            } ?: run {
+                Log.w(TAG, "connectionListener is null, cannot call onDisconnected")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in connectionListener.onDisconnected", e)
+        }
+        
+        Log.d(TAG, "=== handleDisconnected completed ===")
     }
 
     /**
@@ -284,12 +240,33 @@ class TaplinkPaymentService : PaymentService {
         connectedDeviceId = null
         taproVersion = null
 
+        Log.d(TAG, "=== handleConnectionError called ===")
         Log.e(TAG, "Connection error - Code: $code, Message: $message")
-        connectionListener?.onError(code, message)
+        Log.d(TAG, "connectionListener is null: ${connectionListener == null}")
+        Log.d(TAG, "Current thread: ${Thread.currentThread().name}")
+        
+        // Direct call without Handler to test
+        Log.d(TAG, "About to call connectionListener.onError directly")
+        Log.d(TAG, "connectionListener object: $connectionListener")
+        
+        try {
+            connectionListener?.let { listener ->
+                Log.d(TAG, "Calling listener.onError($code, $message)")
+                listener.onError(code, message)
+                Log.d(TAG, "listener.onError call completed successfully")
+            } ?: run {
+                Log.w(TAG, "connectionListener is null, cannot call onError")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in connectionListener.onError", e)
+        }
+        
+        Log.d(TAG, "=== handleConnectionError completed ===")
     }
 
     /**
      * Handle payment failure - directly forward SDK error
+     * Also check if this is a connection-related error and update connection status
      */
     private fun handlePaymentFailure(
         transactionType: String,
@@ -297,7 +274,45 @@ class TaplinkPaymentService : PaymentService {
         callback: PaymentCallback
     ) {
         Log.e(TAG, "$transactionType failed - Code: ${error.code}, Message: ${error.message}")
+        
+        // Check if this is a connection-related error
+        if (isConnectionRelatedError(error.code)) {
+            Log.w(TAG, "Payment failure due to connection error: ${error.code}")
+            // Update connection status immediately
+            handleConnectionLost("Payment error: ${error.message}")
+        }
+        
         callback.onFailure(error.code, error.message)
+    }
+    
+    /**
+     * Handle connection lost - centralized connection state cleanup
+     */
+    private fun handleConnectionLost(reason: String) {
+        if (connected) {
+            Log.w(TAG, "Connection lost detected: $reason")
+            connected = false
+            connectedDeviceId = null
+            taproVersion = null
+            
+            // Notify connection listener about the disconnection
+            connectionListener?.onDisconnected(reason)
+        }
+    }
+    
+    /**
+     * Check if error code indicates a connection problem
+     */
+    private fun isConnectionRelatedError(code: String): Boolean {
+        return when (code) {
+            "C36" -> true  // Target application crashed
+            "C01" -> true  // Connection timeout
+            "C02" -> true  // Connection failed
+            "C03" -> true  // Connection lost
+            "C04" -> true  // Service disconnected
+            "C05" -> true  // Service binding failed
+            else -> code.startsWith("C")  // Most C-codes are connection related
+        }
     }
 
     /**
@@ -408,10 +423,29 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Check connection status
+     * Check connection status - combines internal state with SDK state
      */
     override fun isConnected(): Boolean {
-        return connected
+        // Always check both internal state and SDK state for accuracy
+        val sdkConnected = try {
+            TaplinkSDK.isConnected()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking SDK connection status", e)
+            false
+        }
+        
+        // If SDK says disconnected but we think we're connected, update our state
+        if (!sdkConnected && connected) {
+            Log.w(TAG, "SDK reports disconnected but internal state was connected - updating")
+            connected = false
+            connectedDeviceId = null
+            taproVersion = null
+            
+            // Notify listener about the disconnection
+            connectionListener?.onDisconnected("SDK connection lost")
+        }
+        
+        return connected && sdkConnected
     }
 
     /**
@@ -436,140 +470,6 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Get current connection mode
-     *
-     * @return Current connection mode, or APP_TO_APP as default if not initialized
-     */
-    fun getCurrentConnectionMode(): ConnectionPreferences.ConnectionMode {
-        return currentMode ?: ConnectionPreferences.ConnectionMode.APP_TO_APP
-    }
-
-    /**
-     * Connect with LAN configuration - simplified
-     */
-    fun connectWithLanConfig(
-        ip: String,
-        port: Int = 8443,
-        listener: ConnectionListener
-    ) {
-        // Basic validation
-        if (!NetworkUtils.isValidIpAddress(ip)) {
-            listener.onError("INVALID_IP", "Invalid IP address format: $ip")
-            return
-        }
-        if (!NetworkUtils.isPortValid(port)) {
-            listener.onError("INVALID_PORT", "Invalid port number: $port")
-            return
-        }
-
-        // Save configuration and switch mode
-        context?.let { ctx ->
-            ConnectionPreferences.saveLanConfig(ctx, ip, port)
-            ConnectionPreferences.saveConnectionMode(ctx, ConnectionPreferences.ConnectionMode.LAN)
-            currentMode = ConnectionPreferences.ConnectionMode.LAN
-            Log.d(TAG, "LAN config saved: $ip:$port")
-        }
-
-        // Create ConnectionConfig with LAN mode and parameters
-        val connectionConfig = ConnectionConfig()
-            .setConnectionMode(com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.LAN)
-            .setHost(ip)
-            .setPort(port)
-
-        connect(connectionConfig, listener)
-    }
-
-    /**
-     * Connect with Cable mode - simplified
-     */
-    fun connectWithCableMode(listener: ConnectionListener) {
-        context?.let { ctx ->
-            ConnectionPreferences.saveConnectionMode(ctx, ConnectionPreferences.ConnectionMode.CABLE)
-            currentMode = ConnectionPreferences.ConnectionMode.CABLE
-            Log.d(TAG, "Switched to Cable mode")
-        }
-
-        // Create ConnectionConfig with Cable mode
-        val connectionConfig = ConnectionConfig()
-            .setConnectionMode(com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.CABLE)
-
-        connect(connectionConfig, listener)
-    }
-
-    /**
-     * Attempt auto-connection - simplified
-     */
-    fun attemptAutoConnect(listener: ConnectionListener): Boolean {
-        Log.d(TAG, "Attempting auto-connect with mode: $currentMode")
-        
-        return when (currentMode) {
-            null -> {
-                listener.onError("MODE_NOT_INITIALIZED", "Connection mode not initialized")
-                false
-            }
-            else -> {
-                // Create ConnectionConfig based on current mode
-                val connectionConfig = createConnectionConfigForCurrentMode()
-                connect(connectionConfig, listener)
-                true
-            }
-        }
-    }
-
-    /**
-     * Create ConnectionConfig for current mode
-     */
-    private fun createConnectionConfigForCurrentMode(): ConnectionConfig {
-        val sdkConnectionMode = when (currentMode) {
-            ConnectionPreferences.ConnectionMode.APP_TO_APP -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.APP_TO_APP
-            ConnectionPreferences.ConnectionMode.CABLE -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.CABLE
-            ConnectionPreferences.ConnectionMode.LAN -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.LAN
-            null -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.APP_TO_APP
-        }
-
-        val connectionConfig = ConnectionConfig().setConnectionMode(sdkConnectionMode)
-
-        // Add mode-specific configuration
-        when (currentMode) {
-            ConnectionPreferences.ConnectionMode.LAN -> {
-                val ctx = context
-                if (ctx != null) {
-                    val ip = ConnectionPreferences.getLanIp(ctx)
-                    val port = ConnectionPreferences.getLanPort(ctx)
-                    if (ip != null && ip.isNotEmpty()) {
-                        connectionConfig.setHost(ip).setPort(port)
-                    }
-                }
-            }
-            ConnectionPreferences.ConnectionMode.CABLE -> {
-                val ctx = context
-                if (ctx != null) {
-                    val protocol = ConnectionPreferences.getCableProtocol(ctx)
-                    when (protocol) {
-                        ConnectionPreferences.CableProtocol.USB_AOA -> {
-                            connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA)
-                        }
-                        ConnectionPreferences.CableProtocol.USB_VSP -> {
-                            connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_VSP)
-                        }
-                        ConnectionPreferences.CableProtocol.RS232 -> {
-                            connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.RS232)
-                        }
-                        ConnectionPreferences.CableProtocol.AUTO -> {
-                            // Let SDK auto-detect, no additional config needed
-                        }
-                    }
-                }
-            }
-            ConnectionPreferences.ConnectionMode.APP_TO_APP, null -> {
-                // No additional configuration needed
-            }
-        }
-
-        return connectionConfig
-    }
-
-    /**
      * Execute SALE transaction
      */
     override fun executeSale(
@@ -586,10 +486,6 @@ class TaplinkPaymentService : PaymentService {
         staffInfo: StaffInfo?,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(
             TAG,
@@ -667,10 +563,6 @@ class TaplinkPaymentService : PaymentService {
         description: String,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(
             TAG,
@@ -719,10 +611,6 @@ class TaplinkPaymentService : PaymentService {
         taxAmount: BigDecimal?,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(
             TAG,
@@ -787,10 +675,6 @@ class TaplinkPaymentService : PaymentService {
         reason: String?,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(
             TAG,
@@ -854,10 +738,6 @@ class TaplinkPaymentService : PaymentService {
         reason: String?,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(TAG, "Executing VOID transaction - OriginalTxnId: $originalTransactionId")
 
@@ -906,10 +786,6 @@ class TaplinkPaymentService : PaymentService {
         serviceFee: BigDecimal?,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(
             TAG,
@@ -973,10 +849,6 @@ class TaplinkPaymentService : PaymentService {
         description: String,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(
             TAG,
@@ -1024,10 +896,6 @@ class TaplinkPaymentService : PaymentService {
         description: String,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(
             TAG,
@@ -1071,10 +939,6 @@ class TaplinkPaymentService : PaymentService {
         transactionRequestId: String,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(TAG, "Executing QUERY transaction - TransactionRequestId: $transactionRequestId")
 
@@ -1108,10 +972,6 @@ class TaplinkPaymentService : PaymentService {
         transactionId: String,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(TAG, "Executing QUERY transaction - TransactionId: $transactionId")
 
@@ -1144,10 +1004,6 @@ class TaplinkPaymentService : PaymentService {
         description: String,
         callback: PaymentCallback
     ) {
-        if (!connected) {
-            callback.onFailure("C30", "Tapro payment terminal not connected")
-            return
-        }
 
         Log.d(TAG, "Executing BATCH_CLOSE transaction")
 
