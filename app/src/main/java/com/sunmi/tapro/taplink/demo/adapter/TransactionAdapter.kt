@@ -32,12 +32,12 @@ class TransactionAdapter(
      * ViewHolder pattern, caches view references
      */
     private class ViewHolder {
-        lateinit var tvTransactionType: TextView
-        lateinit var tvAmount: TextView
-        lateinit var tvOrderId: TextView
-        lateinit var tvTransactionTime: TextView
-        lateinit var tvStatus: TextView
-        lateinit var tvTransactionId: TextView
+        lateinit var transactionTypeText: TextView
+        lateinit var amountText: TextView
+        lateinit var orderIdText: TextView
+        lateinit var transactionTimeText: TextView
+        lateinit var statusText: TextView
+        lateinit var transactionIdText: TextView
     }
 
     override fun getCount(): Int = transactions.size
@@ -56,12 +56,12 @@ class TransactionAdapter(
             holder = ViewHolder()
             
             // Bind view references
-            holder.tvTransactionType = view.findViewById(R.id.tv_transaction_type)
-            holder.tvAmount = view.findViewById(R.id.tv_amount)
-            holder.tvOrderId = view.findViewById(R.id.tv_order_id)
-            holder.tvTransactionTime = view.findViewById(R.id.tv_transaction_time)
-            holder.tvStatus = view.findViewById(R.id.tv_status)
-            holder.tvTransactionId = view.findViewById(R.id.tv_transaction_id)
+            holder.transactionTypeText = view.findViewById(R.id.tv_transaction_type)
+            holder.amountText = view.findViewById(R.id.tv_amount)
+            holder.orderIdText = view.findViewById(R.id.tv_order_id)
+            holder.transactionTimeText = view.findViewById(R.id.tv_transaction_time)
+            holder.statusText = view.findViewById(R.id.tv_status)
+            holder.transactionIdText = view.findViewById(R.id.tv_transaction_id)
             
             view.tag = holder
         } else {
@@ -86,7 +86,7 @@ class TransactionAdapter(
      */
     private fun bindData(holder: ViewHolder, transaction: Transaction) {
         // Set transaction type text
-        holder.tvTransactionType.text = transaction.getDisplayName()
+        holder.transactionTypeText.text = transaction.getDisplayName()
         
         // Set amount - for batch close, display batchCloseInfo totalAmount; for others, display total amount (transAmount) if available, otherwise display base amount
         val displayAmount = if (transaction.type == TransactionType.BATCH_CLOSE && transaction.batchCloseInfo != null) {
@@ -94,17 +94,17 @@ class TransactionAdapter(
         } else {
             transaction.totalAmount ?: transaction.amount
         }
-        holder.tvAmount.text = String.format("$%.2f", displayAmount)
+        holder.amountText.text = String.format("$%.2f", displayAmount)
         
         // Set order ID
-        holder.tvOrderId.text = "Order: ${transaction.referenceOrderId}"
+        holder.orderIdText.text = "Order: ${transaction.referenceOrderId}"
         
         // Set transaction time
-        holder.tvTransactionTime.text = dateFormat.format(Date(transaction.timestamp))
+        holder.transactionTimeText.text = dateFormat.format(Date(transaction.timestamp))
         
         // Set transaction status
-        holder.tvStatus.text = transaction.getStatusDisplayName()
-        holder.tvStatus.setTextColor(getStatusColor(transaction.status))
+        holder.statusText.text = transaction.getStatusDisplayName()
+        holder.statusText.setTextColor(getStatusColor(transaction.status))
         
         // Set transaction ID
         val transactionIdText = if (transaction.transactionId != null) {
@@ -112,7 +112,7 @@ class TransactionAdapter(
         } else {
             "Transaction ID: ${transaction.transactionRequestId}"
         }
-        holder.tvTransactionId.text = transactionIdText
+        holder.transactionIdText.text = transactionIdText
     }
 
     /**

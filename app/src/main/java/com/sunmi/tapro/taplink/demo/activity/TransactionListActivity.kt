@@ -22,6 +22,7 @@ import com.sunmi.tapro.taplink.demo.repository.TransactionRepository
 import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.demo.service.PaymentCallback
 import com.sunmi.tapro.taplink.demo.service.PaymentResult
+import com.sunmi.tapro.taplink.demo.util.Constants
 
 
 /**
@@ -39,11 +40,11 @@ class TransactionListActivity : AppCompatActivity() {
         private const val TAG = "TransactionListActivity"
     }
 
-    private lateinit var btnQueryTransaction: Button
-    private lateinit var btnBatchClose: Button
-    private lateinit var btnStandaloneRefund: Button
-    private lateinit var lvTransactions: ListView
-    private lateinit var layoutEmpty: LinearLayout
+    private lateinit var queryTransactionButton: Button
+    private lateinit var batchCloseButton: Button
+    private lateinit var standaloneRefundButton: Button
+    private lateinit var transactionsList: ListView
+    private lateinit var emptyLayout: LinearLayout
     
     private lateinit var adapter: TransactionAdapter
     private var transactions: List<Transaction> = emptyList()
@@ -75,16 +76,16 @@ class TransactionListActivity : AppCompatActivity() {
      * Initialize views
      */
     private fun initViews() {
-        btnQueryTransaction = findViewById(R.id.btn_query_transaction)
-        btnBatchClose = findViewById(R.id.btn_batch_close)
-        btnStandaloneRefund = findViewById(R.id.btn_standalone_refund)
-        lvTransactions = findViewById(R.id.lv_transactions)
-        layoutEmpty = findViewById(R.id.layout_empty)
+        queryTransactionButton = findViewById(R.id.btn_query_transaction)
+        batchCloseButton = findViewById(R.id.btn_batch_close)
+        standaloneRefundButton = findViewById(R.id.btn_standalone_refund)
+        transactionsList = findViewById(R.id.lv_transactions)
+        emptyLayout = findViewById(R.id.layout_empty)
         
 
         // Initialize adapter
         adapter = TransactionAdapter(this, transactions)
-        lvTransactions.adapter = adapter
+        transactionsList.adapter = adapter
     }
 
 
@@ -101,22 +102,22 @@ class TransactionListActivity : AppCompatActivity() {
      */
     private fun initListeners() {
         // Query transaction button
-        btnQueryTransaction.setOnClickListener {
+        queryTransactionButton.setOnClickListener {
             showQueryTransactionDialog()
         }
         
         // Batch close button
-        btnBatchClose.setOnClickListener {
+        batchCloseButton.setOnClickListener {
             showBatchCloseDialog()
         }
 
         // Refund button
-        btnStandaloneRefund.setOnClickListener {
+        standaloneRefundButton.setOnClickListener {
             showRefundDialog()
         }
         
         // List item click event
-        lvTransactions.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
+        transactionsList.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
             Log.d(TAG, "List item clicked at position: $position")
             val transaction = adapter.getItem(position)
             Log.d(TAG, "Transaction: ${transaction.transactionRequestId}, type: ${transaction.type}")
@@ -138,11 +139,11 @@ class TransactionListActivity : AppCompatActivity() {
      */
     private fun updateEmptyState() {
         if (transactions.isEmpty()) {
-            lvTransactions.visibility = View.GONE
-            layoutEmpty.visibility = View.VISIBLE
+            transactionsList.visibility = View.GONE
+            emptyLayout.visibility = View.VISIBLE
         } else {
-            lvTransactions.visibility = View.VISIBLE
-            layoutEmpty.visibility = View.GONE
+            transactionsList.visibility = View.VISIBLE
+            emptyLayout.visibility = View.GONE
         }
     }
 
@@ -320,11 +321,11 @@ class TransactionListActivity : AppCompatActivity() {
             val newTransaction = Transaction(
                 transactionRequestId = queriedRequestId,
                 transactionId = result.transactionId,
-                referenceOrderId = result.referenceOrderId ?: "UNKNOWN_ORDER_${System.currentTimeMillis()}",
+                referenceOrderId = result.referenceOrderId ?: "${Constants.ORDER_ID_PREFIX}UNKNOWN_${System.currentTimeMillis()}",
                 type = transactionType,
                 amount = result.amount?.orderAmount ?: java.math.BigDecimal.ZERO,
                 totalAmount = result.amount?.transAmount,
-                currency = result.amount?.priceCurrency ?: "USD",
+                currency = result.amount?.priceCurrency ?: Constants.getDefaultCurrency(),
                 status = status,
                 timestamp = System.currentTimeMillis(),
                 authCode = result.authCode,
@@ -350,11 +351,6 @@ class TransactionListActivity : AppCompatActivity() {
      * Show batch close confirmation dialog
      */
     private fun showBatchCloseDialog() {
-        if (!paymentService.isConnected()) {
-            showToast("Not connected to payment terminal")
-            return
-        }
-
         AlertDialog.Builder(this)
             .setTitle("Batch Close")
             .setMessage("Are you sure you want to close the current batch? This will settle all transactions of the day.")
@@ -421,7 +417,7 @@ class TransactionListActivity : AppCompatActivity() {
             referenceOrderId = referenceOrderId,
             type = TransactionType.REFUND,
             amount = java.math.BigDecimal.valueOf(amount),
-            currency = "USD",
+            currency = Constants.getDefaultCurrency(),
             status = TransactionStatus.PROCESSING,
             timestamp = System.currentTimeMillis()
         )
@@ -432,7 +428,7 @@ class TransactionListActivity : AppCompatActivity() {
             transactionRequestId = transactionRequestId,
             originalTransactionId = "", // Refund without reference, no original transaction ID set
             amount = java.math.BigDecimal.valueOf(amount),
-            currency = "USD",
+            currency = Constants.getDefaultCurrency(),
             description = "Refund without reference",
             reason = "Refund requested by merchant",
             callback = object : PaymentCallback {
@@ -517,7 +513,7 @@ class TransactionListActivity : AppCompatActivity() {
             transactionId = null,
             type = TransactionType.BATCH_CLOSE,
             amount = java.math.BigDecimal.ZERO,
-            currency = "USD",
+            currency = Constants.getDefaultCurrency(),
             status = TransactionStatus.PROCESSING,
             timestamp = System.currentTimeMillis()
         )
@@ -639,14 +635,14 @@ class TransactionListActivity : AppCompatActivity() {
      * Generate transaction request ID
      */
     private fun generateTransactionRequestId(): String {
-        return "TXN_REQ_${System.currentTimeMillis()}_${(1000..9999).random()}"
+        return "${Constants.TRANSACTION_REQUEST_ID_PREFIX}${System.currentTimeMillis()}_${(Constants.TRANSACTION_ID_MIN_RANDOM..Constants.TRANSACTION_ID_MAX_RANDOM).random()}"
     }
 
     /**
      * Generate order ID
      */
     private fun generateOrderId(): String {
-        return "ORD_${System.currentTimeMillis()}_${(1000..9999).random()}"
+        return "${Constants.STANDALONE_ORDER_PREFIX}${System.currentTimeMillis()}_${(Constants.TRANSACTION_ID_MIN_RANDOM..Constants.TRANSACTION_ID_MAX_RANDOM).random()}"
     }
 
     /**

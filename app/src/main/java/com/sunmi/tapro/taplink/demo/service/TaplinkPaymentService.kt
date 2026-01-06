@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import com.sunmi.tapro.taplink.demo.R
+import com.sunmi.tapro.taplink.demo.util.Constants
 import com.sunmi.tapro.taplink.sdk.TaplinkSDK
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
@@ -90,7 +91,7 @@ class TaplinkPaymentService : PaymentService {
 
         // Validate configuration
         if (actualAppId.isBlank() || actualMerchantId.isBlank() || actualSecretKey.isBlank()) {
-            Log.e(TAG, "SDK initialization failed: Missing configuration")
+            Log.e(TAG, Constants.SdkMessages.SDK_INITIALIZATION_FAILED_MISSING_CONFIG)
             return false
         }
 
@@ -104,20 +105,37 @@ class TaplinkPaymentService : PaymentService {
 
         return try {
             TaplinkSDK.init(context, config)
-            Log.d(TAG, "SDK initialized successfully")
+            Log.d(TAG, Constants.SdkMessages.SDK_INITIALIZED_SUCCESSFULLY)
             true
         } catch (e: Exception) {
-            Log.e(TAG, "SDK initialization failed: ${e.message}", e)
+            Log.e(TAG, String.format(Constants.SdkMessages.SDK_INITIALIZATION_FAILED, e.message), e)
             false
         }
     }
 
     /**
-     * Connect to payment terminal with provided ConnectionConfig
-     * Main connection method that accepts ConnectionConfig with ConnectionMode already set
+     * Connect to payment terminal with comprehensive connection management
      * 
-     * Important: This method will always attempt to establish a new connection.
-     * If already connected, it will replace the existing connection listener.
+     * This method implements the core connection logic for the Taplink SDK with
+     * intelligent state management:
+     * 
+     * 1. Connection State Handling:
+     *    - If already connected: Register new listener and notify immediately
+     *    - If connecting: Update listener without starting new connection
+     *    - If disconnected: Initiate new connection attempt
+     * 
+     * 2. Listener Management:
+     *    - Always updates the connection listener reference for status updates
+     *    - Provides immediate callback for already-connected scenarios
+     *    - Ensures UI components receive real-time connection status
+     * 
+     * 3. SDK Integration:
+     *    - Uses provided ConnectionConfig with pre-configured connection mode
+     *    - Handles all SDK callback scenarios (success, failure, disconnection)
+     *    - Maintains internal state consistency with SDK state
+     * 
+     * This approach ensures optimal user experience by avoiding unnecessary
+     * reconnection attempts while maintaining robust status monitoring.
      */
     override fun connect(connectionConfig: ConnectionConfig, listener: ConnectionListener) {
         this.connectionListener = listener
@@ -127,11 +145,12 @@ class TaplinkPaymentService : PaymentService {
         Log.d(TAG, "Current connection status: connected=$connected, connecting=$connecting")
         Log.d(TAG, "Connecting with provided ConnectionConfig: $connectionConfig")
 
-        // If already connected, we still proceed to register the new listener
-        // This allows UI components to receive connection status updates
+        // Handle already-connected scenario: register new listener and provide immediate feedback
+        // This is important for UI components that need current connection status
         if (connected) {
             Log.d(TAG, "Already connected, but registering new listener")
             // Immediately notify the new listener of current connection status
+            // This ensures UI components get updated even when connection is already established
             connectedDeviceId?.let { deviceId ->
                 taproVersion?.let { version ->
                     listener.onConnected(deviceId, version)
@@ -140,7 +159,7 @@ class TaplinkPaymentService : PaymentService {
             return
         }
 
-        // If currently connecting, don't start another connection
+        // Prevent multiple simultaneous connection attempts which could cause conflicts
         if (connecting) {
             Log.d(TAG, "Already connecting, just updating listener")
             return
@@ -150,6 +169,8 @@ class TaplinkPaymentService : PaymentService {
 
         Log.d(TAG, "Calling TaplinkSDK.connect() with provided config: $connectionConfig")
 
+        // Initiate SDK connection with comprehensive callback handling
+        // The SDK will handle the actual connection establishment based on the provided config
         TaplinkSDK.connect(connectionConfig, object : SdkConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
                 Log.d(TAG, "Connected - Device: $deviceId, Version: $taproVersion")
@@ -305,35 +326,55 @@ class TaplinkPaymentService : PaymentService {
      */
     private fun isConnectionRelatedError(code: String): Boolean {
         return when (code) {
-            "C36" -> true  // Target application crashed
-            "C01" -> true  // Connection timeout
-            "C02" -> true  // Connection failed
-            "C03" -> true  // Connection lost
-            "C04" -> true  // Service disconnected
-            "C05" -> true  // Service binding failed
+            Constants.ConnectionErrorCodes.TARGET_APP_CRASHED -> true
+            Constants.ConnectionErrorCodes.CONNECTION_TIMEOUT -> true
+            Constants.ConnectionErrorCodes.CONNECTION_FAILED -> true
+            Constants.ConnectionErrorCodes.CONNECTION_LOST -> true
+            Constants.ConnectionErrorCodes.SERVICE_DISCONNECTED -> true
+            Constants.ConnectionErrorCodes.SERVICE_BINDING_FAILED -> true
             else -> code.startsWith("C")  // Most C-codes are connection related
         }
     }
 
     /**
-     * Handle payment result - converts SDK cents amounts back to dollars for UI display
-     * Converts SDK result to internal PaymentResult format
-     * Determines success based on transaction result code and status
+     * Handle payment result with comprehensive amount conversion and status determination
+     * 
+     * This method performs critical business logic for payment result processing:
+     * 
+     * 1. Amount Conversion:
+     *    - SDK returns amounts in cents (integer values)
+     *    - UI expects amounts in dollars (decimal values)
+     *    - Conversion uses proper rounding to avoid precision errors
+     * 
+     * 2. Success Determination:
+     *    - Checks both transaction result code and status
+     *    - Handles multiple success indicators from different SDK versions
+     *    - Ensures consistent success/failure classification
+     * 
+     * 3. Data Mapping:
+     *    - Converts SDK result format to internal PaymentResult format
+     *    - Preserves all transaction metadata for audit and display
+     *    - Handles optional fields gracefully (null-safe operations)
+     * 
+     * This conversion layer isolates the UI from SDK-specific data formats
+     * and ensures consistent behavior across different SDK versions.
      */
     private fun handlePaymentResult(sdkResult: SdkPaymentResult, callback: PaymentCallback) {
         Log.d(TAG, "Payment result - Code: ${sdkResult.code}, Status: ${sdkResult.transactionStatus}")
 
-        // Convert cents amounts back to dollars for UI display
+        // Convert cents amounts back to dollars for UI display and business logic
+        // The SDK uses integer cents to avoid floating-point precision issues
+        // We convert back to decimal dollars for user-friendly display
         fun toDollars(centsAmount: BigDecimal?): BigDecimal? {
             return centsAmount?.let { 
-                it.divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+                it.divide(BigDecimal(Constants.CENTS_TO_DOLLARS_MULTIPLIER), Constants.AMOUNT_DECIMAL_PLACES, RoundingMode.HALF_UP)
             }
         }
 
-        // Check if transaction is successful based on result code
-        val isSuccessful = sdkResult.transactionResultCode == "000" || 
-                          sdkResult.transactionResultCode == "0" ||
-                          sdkResult.transactionStatus == "SUCCESS"
+        // Determine transaction success using multiple criteria for robustness
+        // Different SDK versions may use different success indicators
+        val isSuccessful = sdkResult.transactionResultCode == Constants.TransactionResultCodes.SUCCESS ||
+                          sdkResult.transactionStatus == Constants.TransactionStatus.SUCCESS
 
         val result = PaymentResult(
             code = sdkResult.code,
@@ -449,13 +490,6 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Check if connecting
-     */
-    override fun isConnecting(): Boolean {
-        return connecting
-    }
-
-    /**
      * Get connected device ID
      */
     override fun getConnectedDeviceId(): String? {
@@ -521,8 +555,8 @@ class TaplinkPaymentService : PaymentService {
         }
 
         val staffInfo = StaffInfo(
-            operatorId = "Harry",
-            tipRecipientId = "Harry"
+            operatorId = Constants.DEFAULT_OPERATOR_ID,
+            tipRecipientId = Constants.DEFAULT_TIP_RECIPIENT_ID
         )
 
         val request = PaymentRequest("SALE")

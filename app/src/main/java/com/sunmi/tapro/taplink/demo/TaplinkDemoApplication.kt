@@ -18,7 +18,11 @@ import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 import java.math.BigDecimal
 
 /**
- * Taplink Demo Application Class
+ * Main application class for Taplink Demo
+ * 
+ * Handles global SDK initialization and provides a centralized entry point
+ * for SDK configuration. The SDK is initialized once at application startup
+ * to ensure consistent configuration across all activities.
  */
 class TaplinkDemoApplication : Application() {
 
@@ -31,40 +35,43 @@ class TaplinkDemoApplication : Application() {
 
         Log.d(TAG, "=== Application Started ===")
 
-        // Initialize SDK once at application level (without ConnectionMode)
+        // Initialize SDK once at application level to ensure consistent configuration
         initializeTaplinkSDK()
     }
 
     /**
-     * Initialize Taplink SDK at application level
+     * Initialize Taplink SDK with basic configuration
      * 
-     * Only initializes SDK with basic configuration (no ConnectionMode)
-     * ConnectionMode will be set later during connect phase
+     * Performs one-time SDK initialization using credentials from resources.
+     * Connection mode is intentionally not set here because it needs to be
+     * configurable at runtime based on user preferences.
+     * 
+     * @throws Exception if SDK initialization fails due to missing configuration
      */
     private fun initializeTaplinkSDK() {
         try {
             Log.d(TAG, "=== Taplink SDK Initialization Started ===")
 
-            // Read configuration from resource files
+            // Read configuration from resource files to avoid hardcoding credentials
             val appId = getString(R.string.taplink_app_id)
             val merchantId = getString(R.string.taplink_merchant_id)
             val secretKey = getString(R.string.taplink_secret_key)
 
-            // Log configuration parameters (mask sensitive data)
+            // Log configuration parameters with sensitive data masked for security
             Log.d(TAG, "=== SDK Init Request Parameters ===")
             Log.d(TAG, "App ID: $appId")
             Log.d(TAG, "Merchant ID: $merchantId")
             Log.d(TAG, "Secret Key: ${secretKey.take(4)}****${secretKey.takeLast(4)}")
 
-            // Create SDK configuration WITHOUT ConnectionMode
-            // ConnectionMode will be set during connect phase via ConnectionConfig
+            // Create SDK configuration without ConnectionMode because connection mode
+            // needs to be configurable at runtime based on user preferences
             val config = TaplinkConfig(
                 appId = appId,
                 merchantId = merchantId,
                 secretKey = secretKey
             ).setLogEnabled(true).setLogLevel(LogLevel.DEBUG)
 
-            // Initialize SDK
+            // Initialize SDK with basic configuration
             Log.d(TAG, "=== Calling TaplinkSDK.init() ===")
             TaplinkSDK.init(this, config)
 
@@ -81,7 +88,11 @@ class TaplinkDemoApplication : Application() {
     }
 
     /**
-     * Start loading connection - connect and execute sale when connected
+     * Test connection and execute sale transaction for development purposes
+     * 
+     * This method demonstrates the complete flow of connecting to Tapro and
+     * executing a transaction. It's primarily used for testing and development
+     * to verify SDK integration is working correctly.
      */
     private fun testConnectSale() {
         Log.d(TAG, "=== Starting Loading Connection ===")
@@ -96,7 +107,7 @@ class TaplinkDemoApplication : Application() {
                 Log.d(TAG, "Device ID: $deviceId")
                 Log.d(TAG, "Tapro Version: $taproVersion")
 
-                // loading: Execute sale immediately after connection success
+                // Execute sale immediately after successful connection to test the complete flow
                 Log.d(TAG, "Connection successful, executing repeated SALE transactions (Loading)")
                 executeSale()
             }
@@ -117,20 +128,26 @@ class TaplinkDemoApplication : Application() {
     }
 
     /**
-     * Execute SALE transaction (called automatically after connection success)
+     * Execute a test SALE transaction
+     * 
+     * Creates and executes a zero-amount SALE transaction for testing purposes.
+     * This demonstrates the proper way to construct payment requests and handle
+     * callbacks. The zero amount is used to avoid actual charges during testing.
      */
     private fun executeSale() {
         Log.d(TAG, "=== Executing SALE Transaction ===")
 
-        // Double check connection status
+        // Verify connection status before attempting transaction
+        // This check is commented out because it may not be reliable in all scenarios
 //        if (!TaplinkSDK.isConnected()) {
 //            Log.e(TAG, "SDK not connected, cannot execute sale")
 //            return
 //        }
 
+        // Generate unique identifiers for this transaction to ensure idempotency
         val referenceOrderId = "LAZY_ORDER_${System.currentTimeMillis()}"
         val transactionRequestId = "LAZY_REQ_${System.currentTimeMillis()}"
-        val amount = BigDecimal("0")
+        val amount = BigDecimal("0") // Zero amount for testing to avoid actual charges
         val currency = "USD"
 
         Log.d(TAG, "Order ID: $referenceOrderId")
@@ -138,13 +155,13 @@ class TaplinkDemoApplication : Application() {
         Log.d(TAG, "Amount: $amount $currency")
 
         try {
-            // Create AmountInfo with required parameters
+            // Create AmountInfo with the required parameters for the SDK
             val amountInfo = AmountInfo(
                 orderAmount = amount,
                 pricingCurrency = currency
             )
 
-            // Create PaymentRequest using chain methods
+            // Create PaymentRequest using builder pattern for better readability
             val paymentRequest = PaymentRequest(
                 action = TransactionAction.SALE.value
             ).setReferenceOrderId(referenceOrderId)
@@ -154,6 +171,7 @@ class TaplinkDemoApplication : Application() {
 
             Log.d(TAG, "PaymentRequest created, executing...")
 
+            // Execute the payment request with callback handlers
             TaplinkSDK.execute(paymentRequest, object : PaymentCallback {
                 override fun onSuccess(result: PaymentResult) {
                     Log.d(TAG, "=== LOADING SALE SUCCESS ===")

@@ -3,6 +3,7 @@ package com.sunmi.tapro.taplink.demo.util
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.sunmi.tapro.taplink.demo.util.Constants
 
 /**
  * Connection configuration management utility class
@@ -24,7 +25,7 @@ object ConnectionPreferences {
     
     // Default values
     private const val DEFAULT_MODE = "APP_TO_APP"
-    private const val DEFAULT_LAN_PORT = 8443
+    private const val DEFAULT_LAN_PORT = Constants.DEFAULT_LAN_PORT
     private const val DEFAULT_CABLE_PROTOCOL = "AUTO"
     
     /**

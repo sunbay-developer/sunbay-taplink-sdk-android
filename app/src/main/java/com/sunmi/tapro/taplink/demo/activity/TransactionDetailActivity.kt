@@ -19,6 +19,7 @@ import com.sunmi.tapro.taplink.demo.repository.TransactionRepository
 import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.demo.service.PaymentCallback
 import com.sunmi.tapro.taplink.demo.service.PaymentResult
+import com.sunmi.tapro.taplink.demo.util.Constants
 
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
@@ -38,53 +39,53 @@ class TransactionDetailActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "TransactionDetailActivity"
-        private const val PROGRESS_DIALOG_TIMEOUT = 360000L // 360 seconds timeout
+        private const val PROGRESS_DIALOG_TIMEOUT = 30000L // Use direct value to avoid circular dependency
     }
 
     // UI
-    private lateinit var tvTransactionType: TextView
-    private lateinit var tvStatus: TextView
-    private lateinit var tvTotalAmount: TextView
-    private lateinit var layoutOrderAmount: LinearLayout
-    private lateinit var tvOrderAmount: TextView
-    private lateinit var layoutSurchargeAmount: LinearLayout
-    private lateinit var tvSurchargeAmount: TextView
-    private lateinit var layoutTipAmount: LinearLayout
-    private lateinit var tvTipAmount: TextView
-    private lateinit var layoutCashbackAmount: LinearLayout
-    private lateinit var tvCashbackAmount: TextView
-    private lateinit var layoutServiceFee: LinearLayout
-    private lateinit var tvServiceFee: TextView
-    private lateinit var layoutTaxAmount: LinearLayout
-    private lateinit var tvTaxAmount: TextView
-    private lateinit var tvOrderId: TextView
-    private lateinit var tvTransactionId: TextView
-    private lateinit var layoutOriginalTransactionId: LinearLayout
-    private lateinit var tvOriginalTransactionId: TextView
-    private lateinit var tvTransactionTime: TextView
-    private lateinit var layoutAuthCode: LinearLayout
-    private lateinit var tvAuthCode: TextView
-    private lateinit var layoutError: LinearLayout
-    private lateinit var tvErrorCode: TextView
-    private lateinit var tvErrorMessage: TextView
-    private lateinit var layoutBatchCloseInfo: LinearLayout
-    private lateinit var tvBatchNo: TextView
-    private lateinit var tvBatchTotalCount: TextView
-    private lateinit var tvBatchTotalAmount: TextView
-    private lateinit var layoutBatchTotalTip: LinearLayout
-    private lateinit var tvBatchTotalTip: TextView
-    private lateinit var layoutBatchTotalSurcharge: LinearLayout
-    private lateinit var tvBatchTotalSurcharge: TextView
-    private lateinit var tvBatchCloseTime: TextView
-    private lateinit var layoutOperations: LinearLayout
-    private lateinit var btnRefund: Button
-    private lateinit var btnVoid: Button
-    private lateinit var btnTipAdjust: Button
-    private lateinit var btnIncrementalAuth: Button
-    private lateinit var btnPostAuth: Button
-    private lateinit var btnQueryByRequestId: Button
-    private lateinit var btnQueryByTransactionId: Button
-    private lateinit var tvNoOperations: TextView
+    private lateinit var transactionTypeText: TextView
+    private lateinit var statusText: TextView
+    private lateinit var totalAmountText: TextView
+    private lateinit var orderAmountLayout: LinearLayout
+    private lateinit var orderAmountText: TextView
+    private lateinit var surchargeAmountLayout: LinearLayout
+    private lateinit var surchargeAmountText: TextView
+    private lateinit var tipAmountLayout: LinearLayout
+    private lateinit var tipAmountText: TextView
+    private lateinit var cashbackAmountLayout: LinearLayout
+    private lateinit var cashbackAmountText: TextView
+    private lateinit var serviceFeeLayout: LinearLayout
+    private lateinit var serviceFeeText: TextView
+    private lateinit var taxAmountLayout: LinearLayout
+    private lateinit var taxAmountText: TextView
+    private lateinit var orderIdText: TextView
+    private lateinit var transactionIdText: TextView
+    private lateinit var originalTransactionIdLayout: LinearLayout
+    private lateinit var originalTransactionIdText: TextView
+    private lateinit var transactionTimeText: TextView
+    private lateinit var authCodeLayout: LinearLayout
+    private lateinit var authCodeText: TextView
+    private lateinit var errorLayout: LinearLayout
+    private lateinit var errorCodeText: TextView
+    private lateinit var errorMessageText: TextView
+    private lateinit var batchCloseInfoLayout: LinearLayout
+    private lateinit var batchNoText: TextView
+    private lateinit var batchTotalCountText: TextView
+    private lateinit var batchTotalAmountText: TextView
+    private lateinit var batchTotalTipLayout: LinearLayout
+    private lateinit var batchTotalTipText: TextView
+    private lateinit var batchTotalSurchargeLayout: LinearLayout
+    private lateinit var batchTotalSurchargeText: TextView
+    private lateinit var batchCloseTimeText: TextView
+    private lateinit var operationsLayout: LinearLayout
+    private lateinit var refundButton: Button
+    private lateinit var voidButton: Button
+    private lateinit var tipAdjustButton: Button
+    private lateinit var incrementalAuthButton: Button
+    private lateinit var postAuthButton: Button
+    private lateinit var queryByRequestIdButton: Button
+    private lateinit var queryByTransactionIdButton: Button
+    private lateinit var noOperationsText: TextView
 
     // Data
     private var transaction: Transaction? = null
@@ -110,49 +111,49 @@ class TransactionDetailActivity : AppCompatActivity() {
      * Initialize views
      */
     private fun initViews() {
-        tvTransactionType = findViewById(R.id.tv_transaction_type)
-        tvStatus = findViewById(R.id.tv_status)
-        tvTotalAmount = findViewById(R.id.tv_total_amount)
-        layoutOrderAmount = findViewById(R.id.layout_order_amount)
-        tvOrderAmount = findViewById(R.id.tv_order_amount)
-        layoutSurchargeAmount = findViewById(R.id.layout_surcharge_amount)
-        tvSurchargeAmount = findViewById(R.id.tv_surcharge_amount)
-        layoutTipAmount = findViewById(R.id.layout_tip_amount)
-        tvTipAmount = findViewById(R.id.tv_tip_amount)
-        layoutCashbackAmount = findViewById(R.id.layout_cashback_amount)
-        tvCashbackAmount = findViewById(R.id.tv_cashback_amount)
-        layoutServiceFee = findViewById(R.id.layout_service_fee)
-        tvServiceFee = findViewById(R.id.tv_service_fee)
-        layoutTaxAmount = findViewById(R.id.layout_tax_amount)
-        tvTaxAmount = findViewById(R.id.tv_tax_amount)
-        tvOrderId = findViewById(R.id.tv_order_id)
-        tvTransactionId = findViewById(R.id.tv_transaction_id)
-        layoutOriginalTransactionId = findViewById(R.id.layout_original_transaction_id)
-        tvOriginalTransactionId = findViewById(R.id.tv_original_transaction_id)
-        tvTransactionTime = findViewById(R.id.tv_transaction_time)
-        layoutAuthCode = findViewById(R.id.layout_auth_code)
-        tvAuthCode = findViewById(R.id.tv_auth_code)
-        layoutError = findViewById(R.id.layout_error)
-        tvErrorCode = findViewById(R.id.tv_error_code)
-        tvErrorMessage = findViewById(R.id.tv_error_message)
-        layoutBatchCloseInfo = findViewById(R.id.layout_batch_close_info)
-        tvBatchNo = findViewById(R.id.tv_batch_no)
-        tvBatchTotalCount = findViewById(R.id.tv_batch_total_count)
-        tvBatchTotalAmount = findViewById(R.id.tv_batch_total_amount)
-        layoutBatchTotalTip = findViewById(R.id.layout_batch_total_tip)
-        tvBatchTotalTip = findViewById(R.id.tv_batch_total_tip)
-        layoutBatchTotalSurcharge = findViewById(R.id.layout_batch_total_surcharge)
-        tvBatchTotalSurcharge = findViewById(R.id.tv_batch_total_surcharge)
-        tvBatchCloseTime = findViewById(R.id.tv_batch_close_time)
-        layoutOperations = findViewById(R.id.layout_operations)
-        btnRefund = findViewById(R.id.btn_refund)
-        btnVoid = findViewById(R.id.btn_void)
-        btnTipAdjust = findViewById(R.id.btn_tip_adjust)
-        btnIncrementalAuth = findViewById(R.id.btn_incremental_auth)
-        btnPostAuth = findViewById(R.id.btn_post_auth)
-        btnQueryByRequestId = findViewById(R.id.btn_query_by_request_id)
-        btnQueryByTransactionId = findViewById(R.id.btn_query_by_transaction_id)
-        tvNoOperations = findViewById(R.id.tv_no_operations)
+        transactionTypeText = findViewById(R.id.tv_transaction_type)
+        statusText = findViewById(R.id.tv_status)
+        totalAmountText = findViewById(R.id.tv_total_amount)
+        orderAmountLayout = findViewById(R.id.layout_order_amount)
+        orderAmountText = findViewById(R.id.tv_order_amount)
+        surchargeAmountLayout = findViewById(R.id.layout_surcharge_amount)
+        surchargeAmountText = findViewById(R.id.tv_surcharge_amount)
+        tipAmountLayout = findViewById(R.id.layout_tip_amount)
+        tipAmountText = findViewById(R.id.tv_tip_amount)
+        cashbackAmountLayout = findViewById(R.id.layout_cashback_amount)
+        cashbackAmountText = findViewById(R.id.tv_cashback_amount)
+        serviceFeeLayout = findViewById(R.id.layout_service_fee)
+        serviceFeeText = findViewById(R.id.tv_service_fee)
+        taxAmountLayout = findViewById(R.id.layout_tax_amount)
+        taxAmountText = findViewById(R.id.tv_tax_amount)
+        orderIdText = findViewById(R.id.tv_order_id)
+        transactionIdText = findViewById(R.id.tv_transaction_id)
+        originalTransactionIdLayout = findViewById(R.id.layout_original_transaction_id)
+        originalTransactionIdText = findViewById(R.id.tv_original_transaction_id)
+        transactionTimeText = findViewById(R.id.tv_transaction_time)
+        authCodeLayout = findViewById(R.id.layout_auth_code)
+        authCodeText = findViewById(R.id.tv_auth_code)
+        errorLayout = findViewById(R.id.layout_error)
+        errorCodeText = findViewById(R.id.tv_error_code)
+        errorMessageText = findViewById(R.id.tv_error_message)
+        batchCloseInfoLayout = findViewById(R.id.layout_batch_close_info)
+        batchNoText = findViewById(R.id.tv_batch_no)
+        batchTotalCountText = findViewById(R.id.tv_batch_total_count)
+        batchTotalAmountText = findViewById(R.id.tv_batch_total_amount)
+        batchTotalTipLayout = findViewById(R.id.layout_batch_total_tip)
+        batchTotalTipText = findViewById(R.id.tv_batch_total_tip)
+        batchTotalSurchargeLayout = findViewById(R.id.layout_batch_total_surcharge)
+        batchTotalSurchargeText = findViewById(R.id.tv_batch_total_surcharge)
+        batchCloseTimeText = findViewById(R.id.tv_batch_close_time)
+        operationsLayout = findViewById(R.id.layout_operations)
+        refundButton = findViewById(R.id.btn_refund)
+        voidButton = findViewById(R.id.btn_void)
+        tipAdjustButton = findViewById(R.id.btn_tip_adjust)
+        incrementalAuthButton = findViewById(R.id.btn_incremental_auth)
+        postAuthButton = findViewById(R.id.btn_post_auth)
+        queryByRequestIdButton = findViewById(R.id.btn_query_by_request_id)
+        queryByTransactionIdButton = findViewById(R.id.btn_query_by_transaction_id)
+        noOperationsText = findViewById(R.id.tv_no_operations)
     }
 
 
@@ -193,146 +194,146 @@ class TransactionDetailActivity : AppCompatActivity() {
         val txn = transaction ?: return
 
         // basic information
-        tvTransactionType.text = txn.getDisplayName()
-        tvStatus.text = txn.getStatusDisplayName()
-        tvStatus.setTextColor(getStatusColor(txn.status))
+        transactionTypeText.text = txn.getDisplayName()
+        statusText.text = txn.getStatusDisplayName()
+        statusText.setTextColor(getStatusColor(txn.status))
         
         // For batch close transactions, display batchCloseInfo totalAmount; for others, display total amount (transAmount) if available, otherwise display base amount
         if (txn.type == TransactionType.BATCH_CLOSE && txn.batchCloseInfo != null) {
             // For batch close, show batch total amount
-            tvTotalAmount.text = String.format("$%.2f", txn.batchCloseInfo.totalAmount)
+            totalAmountText.text = String.format("$%.2f", txn.batchCloseInfo.totalAmount)
             // Hide order amount for batch close
-            layoutOrderAmount.visibility = View.GONE
+            orderAmountLayout.visibility = View.GONE
         } else {
             // For regular transactions
             val displayTotalAmount = txn.totalAmount ?: txn.amount
-            tvTotalAmount.text = String.format("$%.2f", displayTotalAmount)
+            totalAmountText.text = String.format("$%.2f", displayTotalAmount)
             
             // Show order amount separately
-            layoutOrderAmount.visibility = View.VISIBLE
-            tvOrderAmount.text = String.format("$%.2f", txn.amount)
+            orderAmountLayout.visibility = View.VISIBLE
+            orderAmountText.text = String.format("$%.2f", txn.amount)
         }
         
         // Display order base amount (orderAmount) separately if different from total
 //        if (txn.totalAmount != null && txn.totalAmount != txn.amount) {
-//            layoutOrderAmount.visibility = View.VISIBLE
-//            tvOrderAmount.text = String.format("$%.2f", txn.amount)
+//            orderAmountLayout.visibility = View.VISIBLE
+//            orderAmountText.text = String.format("$%.2f", txn.amount)
 //        } else {
-//            layoutOrderAmount.visibility = View.GONE
+//            orderAmountLayout.visibility = View.GONE
 //        }
         
-        tvOrderId.text = txn.referenceOrderId
-        tvTransactionId.text = txn.transactionId ?: txn.transactionRequestId
-        tvTransactionTime.text = dateFormat.format(Date(txn.timestamp))
+        orderIdText.text = txn.referenceOrderId
+        transactionIdText.text = txn.transactionId ?: txn.transactionRequestId
+        transactionTimeText.text = dateFormat.format(Date(txn.timestamp))
 
         // Additional amounts (only show for non-batch-close transactions if they exist and are greater than 0)
         if (txn.type != TransactionType.BATCH_CLOSE) {
             if (txn.surchargeAmount != null && txn.surchargeAmount > BigDecimal.ZERO) {
-                layoutSurchargeAmount.visibility = View.VISIBLE
-                tvSurchargeAmount.text = String.format("$%.2f", txn.surchargeAmount)
+                surchargeAmountLayout.visibility = View.VISIBLE
+                surchargeAmountText.text = String.format("$%.2f", txn.surchargeAmount)
             } else {
-                layoutSurchargeAmount.visibility = View.GONE
+                surchargeAmountLayout.visibility = View.GONE
             }
 
             if (txn.tipAmount != null && txn.tipAmount > BigDecimal.ZERO) {
-                layoutTipAmount.visibility = View.VISIBLE
-                tvTipAmount.text = String.format("$%.2f", txn.tipAmount)
+                tipAmountLayout.visibility = View.VISIBLE
+                tipAmountText.text = String.format("$%.2f", txn.tipAmount)
             } else {
-                layoutTipAmount.visibility = View.GONE
+                tipAmountLayout.visibility = View.GONE
             }
 
             if (txn.taxAmount != null && txn.taxAmount > BigDecimal.ZERO) {
-                layoutTaxAmount.visibility = View.VISIBLE
-                tvTaxAmount.text = String.format("$%.2f", txn.taxAmount)
+                taxAmountLayout.visibility = View.VISIBLE
+                taxAmountText.text = String.format("$%.2f", txn.taxAmount)
             } else {
-                layoutTaxAmount.visibility = View.GONE
+                taxAmountLayout.visibility = View.GONE
             }
 
             if (txn.cashbackAmount != null && txn.cashbackAmount > BigDecimal.ZERO) {
-                layoutCashbackAmount.visibility = View.VISIBLE
-                tvCashbackAmount.text = String.format("$%.2f", txn.cashbackAmount)
+                cashbackAmountLayout.visibility = View.VISIBLE
+                cashbackAmountText.text = String.format("$%.2f", txn.cashbackAmount)
             } else {
-                layoutCashbackAmount.visibility = View.GONE
+                cashbackAmountLayout.visibility = View.GONE
             }
 
             if (txn.serviceFee != null && txn.serviceFee > BigDecimal.ZERO) {
-                layoutServiceFee.visibility = View.VISIBLE
-                tvServiceFee.text = String.format("$%.2f", txn.serviceFee)
+                serviceFeeLayout.visibility = View.VISIBLE
+                serviceFeeText.text = String.format("$%.2f", txn.serviceFee)
             } else {
-                layoutServiceFee.visibility = View.GONE
+                serviceFeeLayout.visibility = View.GONE
             }
         } else {
             // Hide all additional amounts for batch close transactions
-            layoutSurchargeAmount.visibility = View.GONE
-            layoutTipAmount.visibility = View.GONE
-            layoutCashbackAmount.visibility = View.GONE
-            layoutServiceFee.visibility = View.GONE
-            layoutTaxAmount.visibility = View.GONE
+            surchargeAmountLayout.visibility = View.GONE
+            tipAmountLayout.visibility = View.GONE
+            cashbackAmountLayout.visibility = View.GONE
+            serviceFeeLayout.visibility = View.GONE
+            taxAmountLayout.visibility = View.GONE
         }
 
         // Original Transaction ID (only shown for REFUND, VOID, POST_AUTH)
         if (shouldShowOriginalTransactionId(txn)) {
-            layoutOriginalTransactionId.visibility = View.VISIBLE
-            tvOriginalTransactionId.text = txn.originalTransactionId ?: "N/A"
+            originalTransactionIdLayout.visibility = View.VISIBLE
+            originalTransactionIdText.text = txn.originalTransactionId ?: "N/A"
         } else {
-            layoutOriginalTransactionId.visibility = View.GONE
+            originalTransactionIdLayout.visibility = View.GONE
         }
 
         // Authorization code (only shown for successful non-batch-close transactions)
         if (txn.type != TransactionType.BATCH_CLOSE && txn.isSuccess() && !txn.authCode.isNullOrEmpty()) {
-            layoutAuthCode.visibility = View.VISIBLE
-            tvAuthCode.text = txn.authCode
+            authCodeLayout.visibility = View.VISIBLE
+            authCodeText.text = txn.authCode
         } else {
-            layoutAuthCode.visibility = View.GONE
+            authCodeLayout.visibility = View.GONE
         }
 
         // Error information (only shown for failed transactions)
         if (txn.isFailed() && (!txn.errorCode.isNullOrEmpty() || !txn.errorMessage.isNullOrEmpty())) {
-            layoutError.visibility = View.VISIBLE
-            tvErrorCode.text = txn.errorCode ?: "Unknown Error"
-            tvErrorMessage.text = txn.errorMessage ?: "Unknown Error"
+            errorLayout.visibility = View.VISIBLE
+            errorCodeText.text = txn.errorCode ?: "Unknown Error"
+            errorMessageText.text = txn.errorMessage ?: "Unknown Error"
         } else {
-            layoutError.visibility = View.GONE
+            errorLayout.visibility = View.GONE
         }
 
         // Batch close information (only shown for successful BATCH_CLOSE transactions)
         if (txn.type == TransactionType.BATCH_CLOSE && txn.isSuccess()) {
-            layoutBatchCloseInfo.visibility = View.VISIBLE
+            batchCloseInfoLayout.visibility = View.VISIBLE
             
             // Display batch number
-            tvBatchNo.text = txn.batchNo?.toString() ?: "N/A"
+            batchNoText.text = txn.batchNo?.toString() ?: "N/A"
             
             // Display batch close info if available
             txn.batchCloseInfo?.let { batchInfo ->
-                tvBatchTotalCount.text = batchInfo.totalCount.toString()
-                tvBatchTotalAmount.text = String.format("$%.2f", batchInfo.totalAmount)
-                tvBatchCloseTime.text = batchInfo.closeTime
+                batchTotalCountText.text = batchInfo.totalCount.toString()
+                batchTotalAmountText.text = String.format("$%.2f", batchInfo.totalAmount)
+                batchCloseTimeText.text = batchInfo.closeTime
                 
                 // Show total tip if > 0
                 if (batchInfo.totalTip > BigDecimal.ZERO) {
-                    layoutBatchTotalTip.visibility = View.VISIBLE
-                    tvBatchTotalTip.text = String.format("$%.2f", batchInfo.totalTip)
+                    batchTotalTipLayout.visibility = View.VISIBLE
+                    batchTotalTipText.text = String.format("$%.2f", batchInfo.totalTip)
                 } else {
-                    layoutBatchTotalTip.visibility = View.GONE
+                    batchTotalTipLayout.visibility = View.GONE
                 }
                 
                 // Show total surcharge if > 0
                 if (batchInfo.totalSurchargeAmount > BigDecimal.ZERO) {
-                    layoutBatchTotalSurcharge.visibility = View.VISIBLE
-                    tvBatchTotalSurcharge.text = String.format("$%.2f", batchInfo.totalSurchargeAmount)
+                    batchTotalSurchargeLayout.visibility = View.VISIBLE
+                    batchTotalSurchargeText.text = String.format("$%.2f", batchInfo.totalSurchargeAmount)
                 } else {
-                    layoutBatchTotalSurcharge.visibility = View.GONE
+                    batchTotalSurchargeLayout.visibility = View.GONE
                 }
             } ?: run {
                 // If no batch close info, show basic info
-                tvBatchTotalCount.text = "N/A"
-                tvBatchTotalAmount.text = "N/A"
-                tvBatchCloseTime.text = "N/A"
-                layoutBatchTotalTip.visibility = View.GONE
-                layoutBatchTotalSurcharge.visibility = View.GONE
+                batchTotalCountText.text = "N/A"
+                batchTotalAmountText.text = "N/A"
+                batchCloseTimeText.text = "N/A"
+                batchTotalTipLayout.visibility = View.GONE
+                batchTotalSurchargeLayout.visibility = View.GONE
             }
         } else {
-            layoutBatchCloseInfo.visibility = View.GONE
+            batchCloseInfoLayout.visibility = View.GONE
         }
     }
 
@@ -353,62 +354,62 @@ class TransactionDetailActivity : AppCompatActivity() {
         val txn = transaction ?: return
 
         // Hide all buttons
-        btnRefund.visibility = View.GONE
-        btnVoid.visibility = View.GONE
-        btnTipAdjust.visibility = View.GONE
-        btnIncrementalAuth.visibility = View.GONE
-        btnPostAuth.visibility = View.GONE
-        tvNoOperations.visibility = View.GONE
+        refundButton.visibility = View.GONE
+        voidButton.visibility = View.GONE
+        tipAdjustButton.visibility = View.GONE
+        incrementalAuthButton.visibility = View.GONE
+        postAuthButton.visibility = View.GONE
+        noOperationsText.visibility = View.GONE
 
         var hasOperations = false
 
         // Show available operations based on transaction status and type
         if (txn.canRefund()) {
-            btnRefund.visibility = View.VISIBLE
+            refundButton.visibility = View.VISIBLE
             hasOperations = true
         }
 
         if (txn.canVoid()) {
-            btnVoid.visibility = View.VISIBLE
+            voidButton.visibility = View.VISIBLE
             hasOperations = true
         }
 
         if (txn.canAdjustTip()) {
-            btnTipAdjust.visibility = View.VISIBLE
+            tipAdjustButton.visibility = View.VISIBLE
             hasOperations = true
         }
 
         if (txn.canIncrementalAuth()) {
-            btnIncrementalAuth.visibility = View.VISIBLE
+            incrementalAuthButton.visibility = View.VISIBLE
             hasOperations = true
         }
 
         if (txn.canPostAuth()) {
-            btnPostAuth.visibility = View.VISIBLE
+            postAuthButton.visibility = View.VISIBLE
             hasOperations = true
         }
 
         // Query buttons are displayed for all transactions except BATCH_CLOSE
         if (txn.type != TransactionType.BATCH_CLOSE) {
-            btnQueryByRequestId.visibility = View.VISIBLE
+            queryByRequestIdButton.visibility = View.VISIBLE
             
             // Query by transaction ID button is only shown if transactionId is available
             if (!txn.transactionId.isNullOrEmpty()) {
-                btnQueryByTransactionId.visibility = View.VISIBLE
+                queryByTransactionIdButton.visibility = View.VISIBLE
             } else {
-                btnQueryByTransactionId.visibility = View.GONE
+                queryByTransactionIdButton.visibility = View.GONE
             }
             
             hasOperations = true
         } else {
             // Hide query buttons for BATCH_CLOSE transactions
-            btnQueryByRequestId.visibility = View.GONE
-            btnQueryByTransactionId.visibility = View.GONE
+            queryByRequestIdButton.visibility = View.GONE
+            queryByTransactionIdButton.visibility = View.GONE
         }
 
         // Show prompt if no other operations are available
         if (!hasOperations) {
-            tvNoOperations.visibility = View.VISIBLE
+            noOperationsText.visibility = View.VISIBLE
         }
     }
 
@@ -416,31 +417,31 @@ class TransactionDetailActivity : AppCompatActivity() {
      * Initialize event listeners
      */
     private fun initListeners() {
-        btnRefund.setOnClickListener {
+        refundButton.setOnClickListener {
             showRefundDialog()
         }
 
-        btnVoid.setOnClickListener {
+        voidButton.setOnClickListener {
             showVoidConfirmDialog()
         }
 
-        btnTipAdjust.setOnClickListener {
+        tipAdjustButton.setOnClickListener {
             showTipAdjustDialog()
         }
 
-        btnIncrementalAuth.setOnClickListener {
+        incrementalAuthButton.setOnClickListener {
             showIncrementalAuthDialog()
         }
 
-        btnPostAuth.setOnClickListener {
+        postAuthButton.setOnClickListener {
             showPostAuthDialog()
         }
 
-        btnQueryByRequestId.setOnClickListener {
+        queryByRequestIdButton.setOnClickListener {
             executeQueryByRequestId()
         }
 
-        btnQueryByTransactionId.setOnClickListener {
+        queryByTransactionIdButton.setOnClickListener {
             executeQueryByTransactionId()
         }
     }

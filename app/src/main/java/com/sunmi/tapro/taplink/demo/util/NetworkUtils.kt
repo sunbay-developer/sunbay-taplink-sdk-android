@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import com.sunmi.tapro.taplink.demo.util.Constants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -82,7 +83,7 @@ object NetworkUtils {
      * @param timeoutMs Connection timeout in milliseconds
      * @return true if connection successful, false otherwise
      */
-    suspend fun testConnection(host: String, port: Int, timeoutMs: Int = 5000): Boolean {
+    suspend fun testConnection(host: String, port: Int, timeoutMs: Int = Constants.getNetworkTestTimeout().toInt()): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 Socket().use { socket ->

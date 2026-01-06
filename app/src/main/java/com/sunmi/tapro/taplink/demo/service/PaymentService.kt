@@ -8,18 +8,27 @@ import java.math.BigDecimal
 /**
  * Payment Service Interface
  *
- * Defines core payment-related functionalities, including initialization, connection management and transaction execution
+ * Defines the contract for payment-related operations in the Taplink Demo application.
+ * This interface abstracts the underlying SDK implementation and provides a clean API
+ * for payment operations, connection management, and transaction processing.
+ * 
+ * The interface supports multiple connection modes (App-to-App, Cable, LAN) and
+ * various transaction types (SALE, AUTH, REFUND, etc.) while maintaining consistent
+ * error handling and callback patterns.
  */
 interface PaymentService {
 
     /**
-     * Initialize SDK
+     * Initialize the payment SDK with merchant credentials
      *
-     * @param context Application context
-     * @param appId Application ID
-     * @param merchantId Merchant ID
-     * @param secretKey Signature key
-     * @return Initialization result, returns true on success, false on failure
+     * This method performs one-time SDK initialization using the provided credentials.
+     * It should be called once during application startup before any other operations.
+     *
+     * @param context Application context for SDK initialization
+     * @param appId Unique application identifier provided by SUNMI
+     * @param merchantId Merchant identifier for transaction processing
+     * @param secretKey Secret key for secure communication with payment platform
+     * @return true if initialization succeeds, false if it fails due to invalid credentials or other errors
      */
     fun initialize(
         context: Context,
@@ -29,58 +38,65 @@ interface PaymentService {
     ): Boolean
 
     /**
-     * Connect to payment terminal with ConnectionConfig
+     * Establish connection to payment terminal using specified configuration
      *
-     * @param connectionConfig Connection configuration with mode and parameters
-     * @param listener Connection status listener
+     * This method attempts to connect to the payment terminal using the provided
+     * ConnectionConfig. The connection mode and parameters are determined by the
+     * configuration object, allowing for flexible connection management.
+     *
+     * @param connectionConfig Configuration object containing connection mode and parameters
+     * @param listener Callback interface for connection status updates
      */
     fun connect(connectionConfig: ConnectionConfig, listener: ConnectionListener)
 
     /**
-     * Disconnect
+     * Disconnect from the payment terminal
+     * 
+     * Cleanly terminates the connection to the payment terminal and releases
+     * any associated resources. This should be called when the connection is
+     * no longer needed or when switching connection modes.
      */
     fun disconnect()
 
     /**
-     * Check connection status
+     * Check current connection status
      *
-     * @return Whether connected
+     * @return true if currently connected to a payment terminal, false otherwise
      */
     fun isConnected(): Boolean
 
     /**
-     * Check if connecting
+     * Get the identifier of the currently connected device
      *
-     * @return Whether connecting
-     */
-    fun isConnecting(): Boolean
-
-    /**
-     * Get connected device ID
-     *
-     * @return Device ID, returns null if not connected
+     * @return Device identifier string, or null if not connected
      */
     fun getConnectedDeviceId(): String?
 
     /**
-     * Get Tapro version
+     * Get the version of the connected Tapro application
      *
-     * @return Tapro version, returns null if not connected
+     * @return Tapro version string, or null if not connected or version unavailable
      */
     fun getTaproVersion(): String?
 
     /**
-     * Execute SALE transaction
+     * Execute a SALE transaction
      *
-     * @param referenceOrderId Reference order ID
-     * @param transactionRequestId Transaction request ID
-     * @param amount Transaction amount
-     * @param currency Currency type
-     * @param description Transaction description
-     * @param surchargeAmount Surcharge amount (optional)
-     * @param tipAmount Tip amount (optional)
-     * @param cashbackAmount Cashback amount (optional)
-     * @param callback Payment callback
+     * Processes a complete sale transaction with optional additional amounts.
+     * This is the most common transaction type for point-of-sale operations.
+     *
+     * @param referenceOrderId Unique order identifier from merchant system
+     * @param transactionRequestId Unique transaction request identifier for idempotency
+     * @param amount Base transaction amount (order total)
+     * @param currency Currency code (e.g., "USD", "EUR")
+     * @param description Human-readable transaction description
+     * @param surchargeAmount Optional surcharge amount (e.g., convenience fee)
+     * @param tipAmount Optional tip amount
+     * @param taxAmount Optional tax amount
+     * @param cashbackAmount Optional cashback amount
+     * @param serviceFee Optional service fee amount
+     * @param staffInfo Optional staff information for transaction tracking
+     * @param callback Callback interface for transaction result handling
      */
     fun executeSale(
         referenceOrderId: String,
@@ -98,14 +114,18 @@ interface PaymentService {
     )
 
     /**
-     * Execute AUTH transaction (Pre-authorization)
+     * Execute an AUTH (pre-authorization) transaction
      *
-     * @param referenceOrderId Reference order ID
-     * @param transactionRequestId Transaction request ID
-     * @param amount Transaction amount
-     * @param currency Currency type
-     * @param description Transaction description
-     * @param callback Payment callback
+     * Reserves funds on the customer's payment method without completing the sale.
+     * The reserved amount can later be captured using POST_AUTH or released automatically.
+     * Commonly used in scenarios where the final amount may change (e.g., hotel reservations).
+     *
+     * @param referenceOrderId Unique order identifier from merchant system
+     * @param transactionRequestId Unique transaction request identifier for idempotency
+     * @param amount Amount to pre-authorize
+     * @param currency Currency code (e.g., "USD", "EUR")
+     * @param description Human-readable transaction description
+     * @param callback Callback interface for transaction result handling
      */
     fun executeAuth(
         referenceOrderId: String,
@@ -117,15 +137,20 @@ interface PaymentService {
     )
 
     /**
-     * Execute FORCED_AUTH transaction (Forced authorization)
+     * Execute a FORCED_AUTH (forced authorization) transaction
      *
-     * @param referenceOrderId Reference order ID
-     * @param transactionRequestId Transaction request ID
-     * @param amount Transaction amount
-     * @param currency Currency type
-     * @param authCode Authorization code
-     * @param description Transaction description
-     * @param callback Payment callback
+     * Processes an authorization using a pre-obtained authorization code.
+     * This is typically used for phone orders or when the merchant has already
+     * received authorization through an alternative channel.
+     *
+     * @param referenceOrderId Unique order identifier from merchant system
+     * @param transactionRequestId Unique transaction request identifier for idempotency
+     * @param amount Transaction amount to authorize
+     * @param currency Currency code (e.g., "USD", "EUR")
+     * @param description Human-readable transaction description
+     * @param tipAmount Optional tip amount to include in authorization
+     * @param taxAmount Optional tax amount to include in authorization
+     * @param callback Callback interface for transaction result handling
      */
     fun executeForcedAuth(
         referenceOrderId: String,

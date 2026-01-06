@@ -22,63 +22,69 @@ import com.sunmi.tapro.taplink.demo.service.PaymentService
 import com.sunmi.tapro.taplink.demo.service.TaplinkPaymentService
 import com.sunmi.tapro.taplink.demo.util.ConnectionPreferences
 import com.sunmi.tapro.taplink.demo.util.NetworkUtils
+import com.sunmi.tapro.taplink.demo.util.Constants
 import kotlinx.coroutines.launch
 
 /**
- * Connection Mode Selection Activity
+ * Connection Configuration Activity
  * 
- * Functions:
- * 1. Select connection mode (App-to-App, Cable, LAN)
- * 2. Configure connection parameters (LAN requires IP and port)
- * 3. Validate configuration integrity
- * 4. Save configuration and reconnect
+ * Provides a comprehensive interface for configuring payment terminal connections.
+ * Supports multiple connection modes with mode-specific configuration options:
+ * 
+ * - App-to-App: Direct communication with Tapro app (no additional config needed)
+ * - Cable: Physical connection via USB or RS232 with protocol selection
+ * - LAN: Network connection requiring IP address and port configuration
+ * 
+ * The activity includes real-time validation, network connectivity testing,
+ * and automatic reconnection with the new configuration upon confirmation.
  */
 class ConnectionActivity : AppCompatActivity() {
     
     companion object {
         private const val TAG = "ConnectionActivity"
         const val RESULT_CONNECTION_CHANGED = 100
+        // Click interval protection to prevent accidental double-clicks
+        private const val CLICK_INTERVAL: Long = 1000L
     }
     
-    // UI components
-    private lateinit var rgConnectionMode: RadioGroup
-    private lateinit var rbAppToApp: RadioButton
-    private lateinit var rbCable: RadioButton
-    private lateinit var rbLan: RadioButton
-    private lateinit var rbCloud: RadioButton
+    // UI components for connection mode selection
+    private lateinit var connectionModeGroup: RadioGroup
+    private lateinit var appToAppRadio: RadioButton
+    private lateinit var cableRadio: RadioButton
+    private lateinit var lanRadio: RadioButton
+    private lateinit var cloudRadio: RadioButton
     
-    // Configuration areas
+    // Configuration panels for each connection mode
     private lateinit var layoutAppToAppConfig: CardView
     private lateinit var layoutCableConfig: CardView
     private lateinit var layoutLanConfig: CardView
     private lateinit var layoutCloudConfig: CardView
     
-    // LAN configuration inputs
-    private lateinit var etLanIp: EditText
-    private lateinit var etLanPort: EditText
+    // LAN-specific configuration inputs
+    private lateinit var lanIpInput: EditText
+    private lateinit var lanPortInput: EditText
     private lateinit var switchTls: Switch
     
-    // Cable configuration inputs
+    // Cable-specific configuration inputs
     private lateinit var spinnerCableProtocol: Spinner
     
-    // Error prompts
+    // Error display components
     private lateinit var cardConfigError: CardView
-    private lateinit var tvConfigError: TextView
+    private lateinit var configErrorText: TextView
 
-    private lateinit var btnConfirm: Button
-    private lateinit var btnExitApp: Button
+    private lateinit var confirmButton: Button
+    private lateinit var exitAppButton: Button
     
     // Currently selected connection mode
     private var selectedMode: ConnectionPreferences.ConnectionMode = ConnectionPreferences.ConnectionMode.APP_TO_APP
     
-    // Payment service
+    // Payment service instance for connection management
     private val paymentService: PaymentService = TaplinkPaymentService.getInstance()
     
-    // Anti-duplicate click protection
+    // Anti-duplicate click protection mechanism
     private var lastClickTime: Long = 0
-    private val CLICK_INTERVAL: Long = 500 // 500ms interval
     
-    // Current alert dialog reference for proper cleanup
+    // Dialog reference for proper cleanup and memory management
     private var currentAlertDialog: android.app.AlertDialog? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,23 +98,26 @@ class ConnectionActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         
-        // Clean up validation runnables to prevent memory leaks
-        etLanIp.removeCallbacks(ipValidationRunnable)
-        etLanPort.removeCallbacks(portValidationRunnable)
+        // Clean up validation runnables to prevent memory leaks and crashes
+        lanIpInput.removeCallbacks(ipValidationRunnable)
+        lanPortInput.removeCallbacks(portValidationRunnable)
         
-        // Clear any other pending callbacks
-        etLanIp.removeCallbacks(null)
-        etLanPort.removeCallbacks(null)
+        // Clear any other pending callbacks as a safety measure
+        lanIpInput.removeCallbacks(null)
+        lanPortInput.removeCallbacks(null)
         
-        // Dismiss any current alert dialog
+        // Dismiss any current alert dialog to prevent window leaks
         currentAlertDialog?.dismiss()
         currentAlertDialog = null
     }
     
-
-    
     /**
-     * Check if button can be clicked (prevent duplicate clicks)
+     * Prevent duplicate button clicks within the specified interval
+     * 
+     * This is important for network operations and connection attempts
+     * which should not be triggered multiple times in quick succession.
+     * 
+     * @return true if click is allowed, false if too soon after last click
      */
     private fun canClick(): Boolean {
         val currentTime = System.currentTimeMillis()
@@ -120,15 +129,19 @@ class ConnectionActivity : AppCompatActivity() {
     }
     
     /**
-     * Initialize view components
+     * Initialize all view components and establish references
+     * 
+     * This method sets up all UI component references needed throughout
+     * the activity lifecycle. It's called once during onCreate to ensure
+     * all views are properly initialized before use.
      */
     private fun initViews() {
         // Connection mode selection
-        rgConnectionMode = findViewById(R.id.rg_connection_mode)
-        rbAppToApp = findViewById(R.id.rb_app_to_app)
-        rbCable = findViewById(R.id.rb_cable)
-        rbLan = findViewById(R.id.rb_lan)
-        rbCloud = findViewById(R.id.rb_cloud)
+        connectionModeGroup = findViewById(R.id.rg_connection_mode)
+        appToAppRadio = findViewById(R.id.rb_app_to_app)
+        cableRadio = findViewById(R.id.rb_cable)
+        lanRadio = findViewById(R.id.rb_lan)
+        cloudRadio = findViewById(R.id.rb_cloud)
         
         // Configuration areas
         layoutAppToAppConfig = findViewById(R.id.layout_app_to_app_config)
@@ -137,23 +150,27 @@ class ConnectionActivity : AppCompatActivity() {
         layoutCloudConfig = findViewById(R.id.layout_cloud_config)
         
         // LAN configuration inputs
-        etLanIp = findViewById(R.id.et_lan_ip)
-        etLanPort = findViewById(R.id.et_lan_port)
+        lanIpInput = findViewById(R.id.et_lan_ip)
+        lanPortInput = findViewById(R.id.et_lan_port)
         
         // Cable configuration inputs
         spinnerCableProtocol = findViewById(R.id.spinner_cable_protocol)
         
         // Error prompts
         cardConfigError = findViewById(R.id.card_config_error)
-        tvConfigError = findViewById(R.id.tv_config_error)
+        configErrorText = findViewById(R.id.tv_config_error)
         
         // Buttons
-        btnConfirm = findViewById(R.id.btn_confirm)
-        btnExitApp = findViewById(R.id.btn_exit_app)
+        confirmButton = findViewById(R.id.btn_confirm)
+        exitAppButton = findViewById(R.id.btn_exit_app)
     }
     
     /**
-     * Load current configuration
+     * Load and apply the currently saved connection configuration
+     * 
+     * Restores the user's previous connection settings from preferences
+     * and updates the UI to reflect the current configuration. This ensures
+     * continuity between app sessions and provides immediate visual feedback.
      */
     private fun loadCurrentConfig() {
         // Load saved connection mode
@@ -163,16 +180,16 @@ class ConnectionActivity : AppCompatActivity() {
         // Set corresponding RadioButton checked
         when (currentMode) {
             ConnectionPreferences.ConnectionMode.APP_TO_APP -> {
-                rbAppToApp.isChecked = true
+                appToAppRadio.isChecked = true
                 showConfigArea(ConnectionPreferences.ConnectionMode.APP_TO_APP)
             }
             ConnectionPreferences.ConnectionMode.CABLE -> {
-                rbCable.isChecked = true
+                cableRadio.isChecked = true
                 showConfigArea(ConnectionPreferences.ConnectionMode.CABLE)
                 setupCableProtocolSpinner()
             }
             ConnectionPreferences.ConnectionMode.LAN -> {
-                rbLan.isChecked = true
+                lanRadio.isChecked = true
                 showConfigArea(ConnectionPreferences.ConnectionMode.LAN)
                 loadLanConfig()
             }
@@ -189,8 +206,8 @@ class ConnectionActivity : AppCompatActivity() {
         val ip = lanConfig.first
         val port = lanConfig.second
         
-        ip?.let { etLanIp.setText(it) }
-        etLanPort.setText(port.toString())
+        ip?.let { lanIpInput.setText(it) }
+        lanPortInput.setText(port.toString())
 //        switchTls.isChecked = false // LAN mode defaults to TLS disabled
         
         Log.d(TAG, "Load LAN configuration - IP: $ip, Port: $port")
@@ -227,7 +244,7 @@ class ConnectionActivity : AppCompatActivity() {
      */
     private fun setupListeners() {
         // Connection mode selection listener
-        rgConnectionMode.setOnCheckedChangeListener { _, checkedId ->
+        connectionModeGroup.setOnCheckedChangeListener { _, checkedId ->
             when (checkedId) {
                 R.id.rb_app_to_app -> {
                     selectedMode = ConnectionPreferences.ConnectionMode.APP_TO_APP
@@ -251,14 +268,14 @@ class ConnectionActivity : AppCompatActivity() {
 
         
         // Confirm button click listener
-        btnConfirm.setOnClickListener {
+        confirmButton.setOnClickListener {
             if (canClick()) {
                 handleConfirm()
             }
         }
         
         // Exit app button click listener
-        btnExitApp.setOnClickListener {
+        exitAppButton.setOnClickListener {
             if (canClick()) {
                 handleExitApp()
             }
@@ -273,7 +290,7 @@ class ConnectionActivity : AppCompatActivity() {
      */
     private fun setupLanConfigValidation() {
         // IP address real-time validation
-        etLanIp.setOnFocusChangeListener { _, hasFocus ->
+        lanIpInput.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
                 validateLanIpInput()
             } else {
@@ -282,7 +299,7 @@ class ConnectionActivity : AppCompatActivity() {
         }
         
         // Port number real-time validation
-        etLanPort.setOnFocusChangeListener { _, hasFocus ->
+        lanPortInput.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
                 validateLanPortInput()
             } else {
@@ -291,23 +308,23 @@ class ConnectionActivity : AppCompatActivity() {
         }
         
         // Add text change listeners for immediate feedback
-        etLanIp.addTextChangedListener(object : android.text.TextWatcher {
+        lanIpInput.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
                 // Only validate if user has finished typing (after a short delay)
-                etLanIp.removeCallbacks(ipValidationRunnable)
-                etLanIp.postDelayed(ipValidationRunnable, 500)
+                lanIpInput.removeCallbacks(ipValidationRunnable)
+                lanIpInput.postDelayed(ipValidationRunnable, Constants.getInputValidationDelay())
             }
         })
         
-        etLanPort.addTextChangedListener(object : android.text.TextWatcher {
+        lanPortInput.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
                 // Only validate if user has finished typing (after a short delay)
-                etLanPort.removeCallbacks(portValidationRunnable)
-                etLanPort.postDelayed(portValidationRunnable, 500)
+                lanPortInput.removeCallbacks(portValidationRunnable)
+                lanPortInput.postDelayed(portValidationRunnable, Constants.getInputValidationDelay())
             }
         })
     }
@@ -329,7 +346,7 @@ class ConnectionActivity : AppCompatActivity() {
      * Validate LAN IP address input
      */
     private fun validateLanIpInput() {
-        val ip = etLanIp.text.toString().trim()
+        val ip = lanIpInput.text.toString().trim()
         
         if (ip.isNotEmpty() && !NetworkUtils.isValidIpAddress(ip)) {
             showConfigError("IP address format is incorrect. Please enter a valid IPv4 address (e.g., 192.168.1.100)")
@@ -342,7 +359,7 @@ class ConnectionActivity : AppCompatActivity() {
      * Validate LAN port number input
      */
     private fun validateLanPortInput() {
-        val portStr = etLanPort.text.toString().trim()
+        val portStr = lanPortInput.text.toString().trim()
         
         if (portStr.isNotEmpty()) {
             try {
@@ -387,44 +404,85 @@ class ConnectionActivity : AppCompatActivity() {
     }
     
     /**
-     * Handle confirm button click
+     * Handle connection confirmation with comprehensive validation and reconnection
+     * 
+     * This method implements the complete connection configuration workflow:
+     * 
+     * 1. Configuration Validation:
+     *    - Validates mode-specific parameters (IP/port for LAN, protocol for Cable)
+     *    - Performs network connectivity checks for LAN mode
+     *    - Provides user-friendly error messages for configuration issues
+     * 
+     * 2. Configuration Persistence:
+     *    - Saves validated configuration to preferences for future use
+     *    - Ensures configuration survives app restarts
+     *    - Maintains separate settings for each connection mode
+     * 
+     * 3. Connection Establishment:
+     *    - Disconnects existing connections cleanly
+     *    - Reinitializes SDK with new configuration
+     *    - Provides real-time feedback during connection process
+     * 
+     * The method ensures that configuration changes are applied immediately
+     * and provides comprehensive error handling for various failure scenarios.
      */
     private fun handleConfirm() {
         Log.d(TAG, "User clicks confirm - Selected mode: $selectedMode")
         
-        // Validate configuration
+        // Step 1: Validate configuration before attempting to save or connect
         val validationResult = validateConfig()
         if (!validationResult.isValid) {
             showConfigError(validationResult.errorMessage)
             return
         }
         
-        // Save configuration
+        // Step 2: Save validated configuration to preferences
         saveConfig()
         
-        // Reconnect with new mode (includes SDK re-initialization)
+        // Step 3: Attempt reconnection with new configuration
         reconnectWithNewMode()
     }
     
     /**
-     * Validate configuration
+     * Validate configuration with mode-specific validation logic
+     * 
+     * Each connection mode has different validation requirements:
+     * 
+     * App-to-App Mode:
+     * - No additional configuration needed
+     * - Always valid if selected
+     * 
+     * LAN Mode:
+     * - Requires network connectivity
+     * - Validates IP address format (IPv4)
+     * - Validates port number range (1-65535)
+     * - Provides network topology warnings when appropriate
+     * 
+     * Cable Mode:
+     * - No additional validation needed (protocol selection is always valid)
+     * - Hardware compatibility is handled by SDK
+     * 
+     * @return ValidationResult indicating success/failure with descriptive error message
      */
     private fun validateConfig(): ValidationResult {
         when (selectedMode) {
             ConnectionPreferences.ConnectionMode.APP_TO_APP -> {
                 // App-to-App mode requires no additional configuration
+                // The Tapro app handles all communication details
                 return ValidationResult(true, "")
             }
             
             ConnectionPreferences.ConnectionMode.LAN -> {
-                // Check network connectivity first
+                // LAN mode requires comprehensive network validation
+                
+                // First, check if device has network connectivity
                 if (!NetworkUtils.isNetworkConnected(this)) {
                     return ValidationResult(false, "No network connection available. Please check your network settings.")
                 }
                 
-                // Validate LAN configuration
-                val ip = etLanIp.text.toString().trim()
-                val portStr = etLanPort.text.toString().trim()
+                // Validate IP address configuration
+                val ip = lanIpInput.text.toString().trim()
+                val portStr = lanPortInput.text.toString().trim()
                 
                 if (TextUtils.isEmpty(ip)) {
                     return ValidationResult(false, "Please enter IP address")
@@ -434,6 +492,7 @@ class ConnectionActivity : AppCompatActivity() {
                     return ValidationResult(false, "IP address format is incorrect. Please enter a valid IPv4 address (e.g., 192.168.1.100)")
                 }
                 
+                // Validate port number configuration
                 if (TextUtils.isEmpty(portStr)) {
                     return ValidationResult(false, "Please enter port number")
                 }
@@ -448,7 +507,8 @@ class ConnectionActivity : AppCompatActivity() {
                     return ValidationResult(false, "Port number must be between 1-65535. Recommended range: 8443-8453")
                 }
                 
-                // Check if target IP is in same subnet (warning, not error)
+                // Perform network topology check (warning, not blocking)
+                // This helps users identify potential connectivity issues early
                 if (!NetworkUtils.isInSameSubnet(this, ip)) {
                     val networkType = NetworkUtils.getNetworkType(this)
                     val localIp = NetworkUtils.getLocalIpAddress(this)
@@ -459,7 +519,8 @@ class ConnectionActivity : AppCompatActivity() {
             }
             
             ConnectionPreferences.ConnectionMode.CABLE -> {
-                // Cable mode requires no additional configuration (auto-detection)
+                // Cable mode requires no additional configuration validation
+                // Protocol selection is always valid, hardware compatibility is handled by SDK
                 return ValidationResult(true, "")
             }
         }
@@ -476,8 +537,8 @@ class ConnectionActivity : AppCompatActivity() {
         // Save mode-specific configuration
         when (selectedMode) {
             ConnectionPreferences.ConnectionMode.LAN -> {
-                val ip = etLanIp.text.toString().trim()
-                val port = etLanPort.text.toString().trim().toInt()
+                val ip = lanIpInput.text.toString().trim()
+                val port = lanPortInput.text.toString().trim().toInt()
                 ConnectionPreferences.saveLanConfig(this, ip, port)
                 Log.d(TAG, "Save LAN configuration - IP: $ip, Port: $port")
             }
@@ -507,7 +568,7 @@ class ConnectionActivity : AppCompatActivity() {
         
         // Show connecting status with detailed progress
         updateConnectionProgress("Initializing SDK...")
-        btnConfirm.isEnabled = false
+        confirmButton.isEnabled = false
 
         // Re-initialize and connect
         reinitializeSDKAndConnect()
@@ -517,7 +578,7 @@ class ConnectionActivity : AppCompatActivity() {
      * Update connection progress display
      */
     private fun updateConnectionProgress(message: String) {
-        btnConfirm.text = message
+        confirmButton.text = message
         Log.d(TAG, "Connection progress: $message")
     }
     
@@ -529,33 +590,7 @@ class ConnectionActivity : AppCompatActivity() {
 
         when (selectedMode) {
             ConnectionPreferences.ConnectionMode.LAN -> {
-                val lanConfig = ConnectionPreferences.getLanConfig(this)
-                val ip = lanConfig.first ?: "unknown"
-                val port = lanConfig.second
-                updateConnectionProgress("Testing connectivity to $ip:$port...")
-                
-                // Pre-check network connectivity
-                lifecycleScope.launch {
-                    val ipAddress = lanConfig.first ?: return@launch
-                    val portNumber = lanConfig.second
-                    val isReachable = NetworkUtils.testConnection(ipAddress, portNumber, 3000)
-                    if (!isReachable) {
-                        Log.w(TAG, "Pre-check failed: Cannot reach $ipAddress:$portNumber")
-                        runOnUiThread {
-                            updateConnectionProgress("Host unreachable, trying SDK connection...")
-                        }
-                    } else {
-                        Log.d(TAG, "Pre-check successful: $ipAddress:$portNumber is reachable")
-                        runOnUiThread {
-                            updateConnectionProgress("Host reachable, establishing connection...")
-                        }
-                    }
-                    
-                    // Continue with SDK connection regardless of pre-check result
-                    runOnUiThread {
-                        startSDKConnectionWithConfig()
-                    }
-                }
+                handleLanModeConnection()
                 return
             }
             ConnectionPreferences.ConnectionMode.CABLE -> {
@@ -568,6 +603,46 @@ class ConnectionActivity : AppCompatActivity() {
         
         // For non-LAN modes, start connection immediately
         startSDKConnectionWithConfig()
+    }
+
+    /**
+     * Handle LAN mode connection with network pre-check
+     */
+    private fun handleLanModeConnection() {
+        val lanConfig = ConnectionPreferences.getLanConfig(this)
+        val ip = lanConfig.first ?: "unknown"
+        val port = lanConfig.second
+        updateConnectionProgress("Testing connectivity to $ip:$port...")
+        
+        // Pre-check network connectivity
+        lifecycleScope.launch {
+            val ipAddress = lanConfig.first ?: return@launch
+            val portNumber = lanConfig.second
+            
+            performNetworkPreCheck(ipAddress, portNumber)
+            
+            // Continue with SDK connection regardless of pre-check result
+            runOnUiThread {
+                startSDKConnectionWithConfig()
+            }
+        }
+    }
+
+    /**
+     * Perform network connectivity pre-check for LAN mode
+     */
+    private suspend fun performNetworkPreCheck(ipAddress: String, portNumber: Int) {
+        val isReachable = NetworkUtils.testConnection(ipAddress, portNumber)
+        
+        runOnUiThread {
+            if (!isReachable) {
+                Log.w(TAG, "Pre-check failed: Cannot reach $ipAddress:$portNumber")
+                updateConnectionProgress("Host unreachable, trying SDK connection...")
+            } else {
+                Log.d(TAG, "Pre-check successful: $ipAddress:$portNumber is reachable")
+                updateConnectionProgress("Host reachable, establishing connection...")
+            }
+        }
     }
     
     /**
@@ -611,59 +686,90 @@ class ConnectionActivity : AppCompatActivity() {
      * Create ConnectionConfig with ConnectionMode set based on selected mode
      */
     private fun createConnectionConfigWithMode(): com.sunmi.tapro.taplink.sdk.config.ConnectionConfig {
-        // Import SDK ConnectionMode enum
-        val sdkConnectionMode = when (selectedMode) {
-            ConnectionPreferences.ConnectionMode.APP_TO_APP -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.APP_TO_APP
-            ConnectionPreferences.ConnectionMode.CABLE -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.CABLE
-            ConnectionPreferences.ConnectionMode.LAN -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.LAN
-        }
-        
-        // Create base ConnectionConfig with ConnectionMode
+        val sdkConnectionMode = mapToSDKConnectionMode(selectedMode)
         val connectionConfig = com.sunmi.tapro.taplink.sdk.config.ConnectionConfig()
             .setConnectionMode(sdkConnectionMode)
         
         // Add mode-specific configuration
+        configureConnectionMode(connectionConfig)
+        
+        return connectionConfig
+    }
+
+    /**
+     * Map internal connection mode to SDK connection mode
+     */
+    private fun mapToSDKConnectionMode(mode: ConnectionPreferences.ConnectionMode): com.sunmi.tapro.taplink.sdk.enums.ConnectionMode {
+        return when (mode) {
+            ConnectionPreferences.ConnectionMode.APP_TO_APP -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.APP_TO_APP
+            ConnectionPreferences.ConnectionMode.CABLE -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.CABLE
+            ConnectionPreferences.ConnectionMode.LAN -> com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.LAN
+        }
+    }
+
+    /**
+     * Configure connection mode specific settings
+     */
+    private fun configureConnectionMode(connectionConfig: com.sunmi.tapro.taplink.sdk.config.ConnectionConfig) {
         when (selectedMode) {
             ConnectionPreferences.ConnectionMode.LAN -> {
-                val lanConfig = ConnectionPreferences.getLanConfig(this)
-                val ip = lanConfig.first
-                val port = lanConfig.second
-                
-                if (ip != null && ip.isNotEmpty()) {
-                    Log.d(TAG, "LAN config - IP: $ip, Port: $port")
-                    connectionConfig.setHost(ip).setPort(port)
-                } else {
-                    Log.d(TAG, "No LAN IP configured, using auto-connect")
-                }
+                configureLanMode(connectionConfig)
             }
             
             ConnectionPreferences.ConnectionMode.CABLE -> {
-                val protocol = ConnectionPreferences.getCableProtocol(this)
-                Log.d(TAG, "Cable config - Protocol: $protocol")
-                
-                when (protocol) {
-                    ConnectionPreferences.CableProtocol.AUTO -> {
-                        // Let SDK auto-detect, no additional config needed
-                    }
-                    ConnectionPreferences.CableProtocol.USB_AOA -> {
-                        connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA)
-                    }
-                    ConnectionPreferences.CableProtocol.USB_VSP -> {
-                        connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_VSP)
-                    }
-                    ConnectionPreferences.CableProtocol.RS232 -> {
-                        connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.RS232)
-                    }
-                }
+                configureCableMode(connectionConfig)
             }
             
             ConnectionPreferences.ConnectionMode.APP_TO_APP -> {
-                // App-to-App mode requires no additional configuration
-                Log.d(TAG, "App-to-App mode - no additional configuration needed")
+                configureAppToAppMode()
             }
         }
+    }
+
+    /**
+     * Configure LAN mode specific settings
+     */
+    private fun configureLanMode(connectionConfig: com.sunmi.tapro.taplink.sdk.config.ConnectionConfig) {
+        val lanConfig = ConnectionPreferences.getLanConfig(this)
+        val ip = lanConfig.first
+        val port = lanConfig.second
         
-        return connectionConfig
+        if (ip != null && ip.isNotEmpty()) {
+            Log.d(TAG, "LAN config - IP: $ip, Port: $port")
+            connectionConfig.setHost(ip).setPort(port)
+        } else {
+            Log.d(TAG, "No LAN IP configured, using auto-connect")
+        }
+    }
+
+    /**
+     * Configure Cable mode specific settings
+     */
+    private fun configureCableMode(connectionConfig: com.sunmi.tapro.taplink.sdk.config.ConnectionConfig) {
+        val protocol = ConnectionPreferences.getCableProtocol(this)
+        Log.d(TAG, "Cable config - Protocol: $protocol")
+        
+        when (protocol) {
+            ConnectionPreferences.CableProtocol.AUTO -> {
+                // Let SDK auto-detect, no additional config needed
+            }
+            ConnectionPreferences.CableProtocol.USB_AOA -> {
+                connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA)
+            }
+            ConnectionPreferences.CableProtocol.USB_VSP -> {
+                connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_VSP)
+            }
+            ConnectionPreferences.CableProtocol.RS232 -> {
+                connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.RS232)
+            }
+        }
+    }
+
+    /**
+     * Configure App-to-App mode (no additional configuration needed)
+     */
+    private fun configureAppToAppMode() {
+        Log.d(TAG, "App-to-App mode - no additional configuration needed")
     }
     
     /**
@@ -726,8 +832,8 @@ class ConnectionActivity : AppCompatActivity() {
             
             showSimpleConnectionError(message)
             
-            btnConfirm.text = getString(R.string.btn_confirm)
-            btnConfirm.isEnabled = true
+            confirmButton.text = getString(R.string.btn_confirm)
+            confirmButton.isEnabled = true
         }
     }
     
@@ -761,7 +867,7 @@ class ConnectionActivity : AppCompatActivity() {
      * Show configuration error with simple message
      */
     private fun showConfigError(message: String) {
-        tvConfigError.text = message
+        configErrorText.text = message
         cardConfigError.visibility = View.VISIBLE
         
         Log.w(TAG, "Configuration error displayed - Mode: $selectedMode, Message: $message")
