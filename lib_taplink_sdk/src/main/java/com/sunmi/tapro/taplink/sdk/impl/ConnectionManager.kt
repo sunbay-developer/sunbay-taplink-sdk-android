@@ -609,7 +609,7 @@ class ConnectionManager(
     /**
      * Update connection status
      */
-    private fun updateConnectionStatus(
+    fun updateConnectionStatus(
         newStatus: ConnectionStatus,
         deviceId: String? = null,
         taproVersion: String? = null,

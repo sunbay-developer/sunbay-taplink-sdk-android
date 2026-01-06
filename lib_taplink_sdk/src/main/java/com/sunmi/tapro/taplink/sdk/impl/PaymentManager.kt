@@ -19,6 +19,7 @@ import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import java.math.BigDecimal
 
 /**
@@ -471,6 +472,11 @@ class PaymentManager(
                 LogUtil.d(TAG, "Auto-connect successful, executing payment request")
                 // Clear flag
                 hasPendingAutoConnectTransaction = false
+                connectionManager.updateConnectionStatus(
+                    ConnectionStatus.CONNECTED,
+                    deviceId = deviceId,
+                    taproVersion = taproVersion
+                )
                 // Connection successful, execute transaction
                 sendPaymentRequest(request, callback)
             }
@@ -479,6 +485,7 @@ class PaymentManager(
                 LogUtil.e(TAG, "Auto-connect failed: ${error.message}")
                 // Clear flag
                 hasPendingAutoConnectTransaction = false
+                connectionManager.updateConnectionStatus(ConnectionStatus.ERROR)
                 // Connection failed, notify callback
                 callback.onFailure(
                     PaymentError(
@@ -493,11 +500,12 @@ class PaymentManager(
                 if (hasPendingAutoConnectTransaction) {
                     LogUtil.w(TAG, "Auto-connect disconnected: $reason")
                     hasPendingAutoConnectTransaction = false
+                    connectionManager.updateConnectionStatus(ConnectionStatus.DISCONNECTED)
                     // Notify callback of disconnection
                     callback.onFailure(
                         PaymentError(
-                            "CONNECTION_DISCONNECTED",
-                            "Auto-connect disconnected: $reason"
+                            InnerErrorCode.C36.code,
+                            "${InnerErrorCode.C36.description}:Auto-connect disconnected $reason"
                         )
                     )
                 }
