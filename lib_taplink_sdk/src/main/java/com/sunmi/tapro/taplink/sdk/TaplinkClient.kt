@@ -1,7 +1,7 @@
 package com.sunmi.tapro.taplink.sdk
 
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
-import com.sunmi.tapro.taplink.sdk.converter.TransactionRequestConverter
+import com.sunmi.tapro.taplink.sdk.adapter.PaymentRequestAdapter
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.impl.TaplinkApiImpl
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
@@ -69,7 +69,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun sale(request: SaleRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertSaleRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertSaleRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -80,7 +80,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun auth(request: AuthRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertAuthRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertAuthRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -91,7 +91,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun forcedAuth(request: ForcedAuthRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertForcedAuthRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertForcedAuthRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -102,7 +102,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun refund(request: RefundRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertRefundRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertRefundRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -113,7 +113,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun void(request: VoidRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertVoidRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertVoidRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -124,7 +124,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun postAuth(request: PostAuthRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertPostAuthRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertPostAuthRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -135,7 +135,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun incrementalAuth(request: IncrementalAuthRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertIncrementalAuthRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertIncrementalAuthRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -146,7 +146,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun abort(request: AbortRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertAbortRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertAbortRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -157,7 +157,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun tipAdjust(request: TipAdjustRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertTipAdjustRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertTipAdjustRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 
@@ -181,7 +181,7 @@ class TaplinkClient internal constructor(
      * @param callback 交易回调
      */
     fun batchClose(request: BatchCloseRequest, callback: PaymentCallback) {
-        val paymentRequest = TransactionRequestConverter.convertBatchCloseRequest(request)
+        val paymentRequest = PaymentRequestAdapter.convertBatchCloseRequest(request)
         apiImpl.execute(paymentRequest, callback)
     }
 }

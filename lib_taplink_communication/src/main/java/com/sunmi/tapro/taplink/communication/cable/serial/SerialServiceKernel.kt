@@ -15,6 +15,8 @@ import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
+import com.sunmi.tapro.taplink.communication.protocol.HexFrameBuffer
+import com.sunmi.tapro.taplink.communication.protocol.HexFrameProtocol
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.hoho.android.usbserial.driver.UsbSerialDriver
@@ -102,38 +104,9 @@ open class SerialServiceKernel(
     // ==================== 十六进制数据处理 (高性能传输模式) ====================
     
     /**
-     * 单线程数据处理执行器，确保数据按接收顺序处理
+     * 十六进制帧缓冲区管理器
      */
-    private val dataProcessingExecutor = Executors.newSingleThreadExecutor { r ->
-        Thread(r, "SerialHexDataProcessor").apply {
-            isDaemon = true
-        }
-    }
-    
-    /**
-     * 数据队列，保证FIFO顺序处理
-     */
-    private val dataQueue = LinkedBlockingQueue<ByteArray>()
-    
-    /**
-     * 十六进制数据缓冲区
-     */
-    private val hexBuffer = StringBuilder()
-    
-    /**
-     * 最大缓冲区大小
-     */
-    private val maxBufferSize = 128 * 1024 // 128KB (十六进制需要更大空间)
-    
-    /**
-     * 消息超时时间（毫秒）
-     */
-    private val messageTimeoutMs = 5000L
-    
-    /**
-     * 最后接收数据的时间戳
-     */
-    private var lastDataTimestamp = 0L
+    private var hexFrameBuffer: HexFrameBuffer? = null
 
     // USB探测器
     private val usbDefaultProber = UsbSerialProber.getDefaultProber()
@@ -164,36 +137,15 @@ open class SerialServiceKernel(
 
     init {
         registerPermissionReceiver()
-        startBufferTimeoutChecker()
-        startSequentialDataProcessor()
-    }
-
-    // ==================== 十六进制编码工具方法 ====================
-
-    /**
-     * 字节数组转十六进制字符串
-     */
-    private fun bytesToHex(bytes: ByteArray): String {
-        return bytes.joinToString("") { "%02X".format(it) }
-    }
-
-    /**
-     * 十六进制字符串转字节数组
-     */
-    private fun hexToBytes(hex: String): ByteArray {
-        return try {
-            hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to convert hex to bytes: $hex")
-            byteArrayOf()
-        }
-    }
-
-    /**
-     * 计算校验和
-     */
-    private fun calculateChecksum(data: ByteArray): Byte {
-        return (data.sum() and 0xFF).toByte()
+        
+        // 初始化十六进制帧缓冲区
+        hexFrameBuffer = HexFrameBuffer(
+            scope = scope,
+            onFrameReceived = { frame ->
+                // 发送给数据接收器
+                dataReceiver?.invoke(frame)
+            }
+        )
     }
 
     // ==================== AsyncServiceKernel 抽象方法实现 ====================
@@ -226,7 +178,7 @@ open class SerialServiceKernel(
         scope.launch {
             try {
                 // 清空缓冲区
-                clearHexBuffer()
+                hexFrameBuffer?.clear()
                 
                 val success = connectToSerialDevice()
                 if (success) {
@@ -263,19 +215,10 @@ open class SerialServiceKernel(
             val originalString = String(data)
             LogUtil.d(TAG, "Serial sending original data: $originalString (${data.size} bytes)")
 
-            // 转换为十六进制
-            val hexString = bytesToHex(data)
-            
-            // 计算校验和
-            val checksum = calculateChecksum(data)
-            val checksumHex = String.format("%02X", checksum.toInt() and 0xFF)
-            
-            // 构建帧：FF + 长度(4位) + 数据(十六进制) + 校验和(2位) + FE
-            val frameLength = String.format("%04X", data.size)
-            val frameData = "FF${frameLength}${hexString}${checksumHex}FE".toByteArray()
+            // 使用HexFrameProtocol编码数据
+            val frameData = HexFrameProtocol.encode(data)
             
             LogUtil.d(TAG, "Serial sending hex frame: ${String(frameData)} (${frameData.size} bytes)")
-            LogUtil.d(TAG, "  Original size: ${data.size}, Hex size: ${hexString.length}, Frame size: ${frameData.size}")
 
             // 发送数据
             usbSerialPort?.write(frameData, 2000)
@@ -302,8 +245,8 @@ open class SerialServiceKernel(
             permissionTimeoutJob?.cancel()
             permissionTimeoutJob = null
 
-            // 清空缓冲区
-            clearHexBuffer()
+            // 停止并清空缓冲区
+            hexFrameBuffer?.stop()
 
             // 停止IO管理器
             usbIoManager?.setListener(null)
@@ -326,182 +269,6 @@ open class SerialServiceKernel(
         }
 
         LogUtil.d(TAG, "=== Serial Hex Disconnect Finished ===")
-    }
-
-    // ==================== JSON数据缓冲和重组方法 (参考RS232NormalAdapter数据处理) ====================
-
-    // ==================== 十六进制数据处理方法 ====================
-
-    /**
-     * 启动顺序数据处理器
-     * 使用单线程执行器确保数据按接收顺序处理，解决并发导致的数据错乱问题
-     */
-    private fun startSequentialDataProcessor() {
-        dataProcessingExecutor.execute {
-            LogUtil.d(TAG, "Sequential hex data processor started")
-            
-            while (!Thread.currentThread().isInterrupted) {
-                try {
-                    // 阻塞等待数据，保证FIFO顺序
-                    val data = dataQueue.take()
-                    processHexDataInOrder(data)
-                } catch (e: InterruptedException) {
-                    LogUtil.d(TAG, "Hex data processor interrupted")
-                    Thread.currentThread().interrupt()
-                    break
-                } catch (e: Exception) {
-                    LogUtil.e(TAG, "Error in sequential hex data processing: ${e.message}")
-                }
-            }
-            
-            LogUtil.d(TAG, "Sequential hex data processor stopped")
-        }
-    }
-
-    /**
-     * 按顺序处理接收到的十六进制数据片段
-     * 替代原来的协程并发处理，确保数据顺序正确
-     */
-    private fun processHexDataInOrder(data: ByteArray) {
-        val dataString = String(data, Charsets.UTF_8)
-        LogUtil.d(TAG, "Processing hex data in order: $dataString (${data.size} bytes)")
-
-        synchronized(hexBuffer) {
-            // 更新时间戳
-            lastDataTimestamp = System.currentTimeMillis()
-
-            // 检查缓冲区大小
-            if (hexBuffer.length + dataString.length > maxBufferSize) {
-                LogUtil.w(TAG, "Hex buffer overflow, clearing buffer")
-                hexBuffer.clear()
-            }
-
-            // 添加到缓冲区
-            hexBuffer.append(dataString)
-
-            // 尝试提取完整的十六进制帧
-            extractCompleteHexFrames()
-        }
-    }
-
-    /**
-     * 从缓冲区提取完整的十六进制帧
-     */
-    private fun extractCompleteHexFrames() {
-        val bufferContent = hexBuffer.toString()
-        var startIndex = 0
-
-        while (true) {
-            // 查找帧开始标记 FF
-            val frameStart = bufferContent.indexOf("FF", startIndex)
-            if (frameStart == -1) break
-
-            // 检查是否有足够的数据读取长度
-            if (frameStart + 6 > bufferContent.length) break
-
-            try {
-                // 读取数据长度（4位十六进制）
-                val lengthHex = bufferContent.substring(frameStart + 2, frameStart + 6)
-                val dataLength = lengthHex.toInt(16)
-                
-                LogUtil.d(TAG, "Found frame start at $frameStart, data length: $dataLength")
-
-                // 计算完整帧的长度：FF(2) + 长度(4) + 数据(dataLength*2) + 校验和(2) + FE(2)
-                val totalFrameLength = 2 + 4 + (dataLength * 2) + 2 + 2
-
-                if (frameStart + totalFrameLength > bufferContent.length) {
-                    LogUtil.d(TAG, "Frame incomplete, waiting for more data")
-                    break // 帧不完整
-                }
-
-                // 检查帧尾标记 FE
-                val frameEndPos = frameStart + totalFrameLength - 2
-                if (!bufferContent.substring(frameEndPos, frameEndPos + 2).equals("FE", ignoreCase = true)) {
-                    LogUtil.w(TAG, "Invalid frame end marker at position $frameEndPos")
-                    startIndex = frameStart + 2
-                    continue
-                }
-
-                // 提取十六进制数据和校验和
-                val hexDataStart = frameStart + 6
-                val hexDataEnd = frameEndPos - 2
-                val hexData = bufferContent.substring(hexDataStart, hexDataEnd)
-                val checksumHex = bufferContent.substring(hexDataEnd, frameEndPos)
-
-                LogUtil.d(TAG, "Extracted hex data: $hexData, checksum: $checksumHex")
-
-                // 转换为原始数据
-                val originalData = hexToBytes(hexData)
-                if (originalData.isEmpty()) {
-                    LogUtil.w(TAG, "Failed to decode hex data: $hexData")
-                    startIndex = frameStart + totalFrameLength
-                    continue
-                }
-
-                // 验证校验和
-                val calculatedChecksum = calculateChecksum(originalData)
-                val expectedChecksum = checksumHex.toInt(16).toByte()
-                
-                if (calculatedChecksum != expectedChecksum) {
-                    LogUtil.w(TAG, "Checksum mismatch: calculated=${String.format("%02X", calculatedChecksum.toInt() and 0xFF)}, expected=$checksumHex")
-                    startIndex = frameStart + totalFrameLength
-                    continue
-                }
-
-                LogUtil.d(TAG, "Complete hex frame decoded successfully: ${String(originalData)} (${originalData.size} bytes)")
-
-                // 发送给数据接收器
-                dataReceiver?.invoke(originalData)
-
-                startIndex = frameStart + totalFrameLength
-
-            } catch (e: Exception) {
-                LogUtil.e(TAG, "Failed to decode hex frame: ${e.message}")
-                startIndex = frameStart + 2
-            }
-        }
-
-        // 清理已处理的数据
-        if (startIndex > 0) {
-            hexBuffer.delete(0, startIndex)
-            LogUtil.d(TAG, "Hex buffer cleaned, remaining: ${hexBuffer.length} chars")
-        }
-    }
-
-    /**
-     * 清空十六进制缓冲区
-     */
-    private fun clearHexBuffer() {
-        synchronized(hexBuffer) {
-            hexBuffer.clear()
-            lastDataTimestamp = 0L
-            LogUtil.d(TAG, "Hex buffer cleared")
-        }
-    }
-
-    /**
-     * 启动缓冲区超时检查器
-     */
-    private fun startBufferTimeoutChecker() {
-        scope.launch {
-            while (true) {
-                delay(1000) // 每秒检查一次
-
-                synchronized(hexBuffer) {
-                    val currentTime = System.currentTimeMillis()
-                    
-                    // 检查是否有超时的不完整消息
-                    if (hexBuffer.isNotEmpty() && 
-                        lastDataTimestamp > 0 && 
-                        currentTime - lastDataTimestamp > messageTimeoutMs) {
-                        
-                        LogUtil.w(TAG, "Hex message timeout, clearing buffer: ${hexBuffer.toString()}")
-                        hexBuffer.clear()
-                        lastDataTimestamp = 0L
-                    }
-                }
-            }
-        }
     }
 
     // ==================== 串口连接操作方法 ====================
@@ -757,7 +524,7 @@ open class SerialServiceKernel(
 
     /**
      * 串口数据监听器 - 十六进制版本
-     * 修复：使用队列顺序处理替代协程并发处理，解决数据错乱问题
+     * 使用HexFrameBuffer进行数据处理
      */
     private val serialInputOutputListener = object : SerialInputOutputManager.Listener {
         override fun onNewData(data: ByteArray?) {
@@ -766,11 +533,8 @@ open class SerialServiceKernel(
                 val dataString = String(data)
                 LogUtil.d(TAG, "The RS232 hex receive: $dataString")
                 
-                // 直接加入队列，保证FIFO顺序，不使用协程避免并发错乱
-                val success = dataQueue.offer(data)
-                if (!success) {
-                    LogUtil.w(TAG, "Hex data queue is full, dropping data: $dataString")
-                }
+                // 添加到缓冲区进行处理
+                hexFrameBuffer?.addData(data)
             }
         }
 
@@ -862,8 +626,8 @@ open class SerialServiceKernel(
             "isConnected" to isSerialReady(),
             "device" to (getConnectedDeviceName() ?: "none"),
             "targetDevice" to (targetDeviceName ?: "auto"),
-            "bufferSize" to hexBuffer.length,
-            "lastDataTime" to lastDataTimestamp,
+            "bufferSize" to (hexFrameBuffer?.getBufferSize() ?: 0),
+            "lastDataTime" to (hexFrameBuffer?.getLastDataTimestamp() ?: 0L),
             "mode" to "hex"
         )
     }
@@ -965,11 +729,9 @@ open class SerialServiceKernel(
         super.cleanupCommonResources()
         performDisconnect()
 
-        // 停止数据处理器
-        dataProcessingExecutor.shutdown()
-        
-        // 清空数据队列
-        dataQueue.clear()
+        // 停止缓冲区
+        hexFrameBuffer?.stop()
+        hexFrameBuffer = null
 
         // 清理权限相关状态
         pendingDevice = null
