@@ -9,11 +9,11 @@ import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.LogLevel
-import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
+
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
-import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.SaleRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 import java.math.BigDecimal
 
@@ -128,21 +128,21 @@ class TaplinkDemoApplication : Application() {
     }
 
     /**
-     * Execute a test SALE transaction
+     * Execute a test SALE transaction using new API
      * 
-     * Creates and executes a zero-amount SALE transaction for testing purposes.
-     * This demonstrates the proper way to construct payment requests and handle
-     * callbacks. The zero amount is used to avoid actual charges during testing.
+     * Creates and executes a zero-amount SALE transaction for testing purposes using
+     * the updated type-safe SaleRequest API. This demonstrates the proper way to:
+     * - Construct SaleRequest objects with the new API structure
+     * - Handle callbacks with the updated SDK interface
+     * - Migrate from legacy PaymentRequest to type-safe request objects
+     * 
+     * The zero amount is used to avoid actual charges during testing.
+     * 
+     * API Migration: This method has been updated from PaymentRequest("SALE") + TaplinkSDK.execute()
+     * to SaleRequest + TaplinkSDK.getClient().sale() for improved type safety and maintainability.
      */
     private fun executeSale() {
         Log.d(TAG, "=== Executing SALE Transaction ===")
-
-        // Verify connection status before attempting transaction
-        // This check is commented out because it may not be reliable in all scenarios
-//        if (!TaplinkSDK.isConnected()) {
-//            Log.e(TAG, "SDK not connected, cannot execute sale")
-//            return
-//        }
 
         // Generate unique identifiers for this transaction to ensure idempotency
         val referenceOrderId = "LAZY_ORDER_${System.currentTimeMillis()}"
@@ -161,18 +161,18 @@ class TaplinkDemoApplication : Application() {
                 pricingCurrency = currency
             )
 
-            // Create PaymentRequest using builder pattern for better readability
-            val paymentRequest = PaymentRequest(
-                action = TransactionAction.SALE.value
-            ).setReferenceOrderId(referenceOrderId)
-                .setTransactionRequestId(transactionRequestId)
-                .setAmount(amountInfo)
-                .setDescription("Loading SALE Transaction")
+            // Create SaleRequest using new API structure
+            val saleRequest = SaleRequest(
+                referenceOrderId = referenceOrderId,
+                transactionRequestId = transactionRequestId,
+                amount = amountInfo,
+                description = "Loading SALE Transaction"
+            )
 
-            Log.d(TAG, "PaymentRequest created, executing...")
+            Log.d(TAG, "SaleRequest created, executing with new API...")
 
-            // Execute the payment request with callback handlers
-            TaplinkSDK.execute(paymentRequest, object : PaymentCallback {
+            // Execute the sale request using new API with callback handlers
+            TaplinkSDK.getClient().sale(saleRequest, object : PaymentCallback {
                 override fun onSuccess(result: PaymentResult) {
                     Log.d(TAG, "=== LOADING SALE SUCCESS ===")
                     Log.d(TAG, "Transaction ID: ${result.transactionId}")

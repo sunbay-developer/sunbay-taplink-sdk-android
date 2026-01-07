@@ -147,7 +147,7 @@ class MainActivity : Activity() {
         progressPayment = findViewById(R.id.progress_payment)
 
         // Set initial connection status to provide immediate user feedback
-        updateConnectionStatusDisplay(Constants.Messages.STATUS_NOT_CONNECTED, false)
+        updateConnectionStatusDisplay(Constants.Messages.STATUS_NOT_CONNECTED, TaplinkSDK.isConnected())
     }
     
     /**
@@ -289,7 +289,7 @@ class MainActivity : Activity() {
      * the SDK callback interface to maintain UI responsiveness.
      */
     private fun connect() {
-        updateConnectionStatusDisplay(Constants.Messages.STATUS_CONNECTING, false)
+        updateConnectionStatusDisplay(Constants.Messages.STATUS_CONNECTING, TaplinkSDK.isConnected())
         
         val savedMode = ConnectionPreferences.getConnectionMode(this)
         val connectionConfig = createConnectionConfig(savedMode)
@@ -332,7 +332,7 @@ class MainActivity : Activity() {
         connectedTaproVersion = taproVersion
         
         runOnUiThread {
-            updateConnectionStatusDisplay(Constants.Messages.STATUS_CONNECTED, true)
+            updateConnectionStatusDisplay(Constants.Messages.STATUS_CONNECTED, TaplinkSDK.isConnected())
             Log.d(TAG, Constants.Messages.LOG_UI_UPDATED_CONNECTION_SUCCESSFUL)
         }
     }
@@ -348,7 +348,7 @@ class MainActivity : Activity() {
         connectedTaproVersion = null
         
         runOnUiThread {
-            updateConnectionStatusDisplay(Constants.Messages.STATUS_NOT_CONNECTED, false)
+            updateConnectionStatusDisplay(Constants.Messages.STATUS_NOT_CONNECTED, TaplinkSDK.isConnected())
             showConnectionExceptionDialog(Constants.Messages.TITLE_CONNECTION_LOST, String.format(Constants.Messages.ERROR_CONNECTION_DISCONNECTED, reason))
             Log.w(TAG, Constants.Messages.LOG_UI_UPDATED_CONNECTION_LOST)
         }
@@ -538,7 +538,9 @@ class MainActivity : Activity() {
      * Update connection status display - separated from business logic
      */
     private fun updateConnectionStatusDisplay(status: String, connected: Boolean) {
-        Log.d(TAG, String.format(Constants.Messages.LOG_UPDATE_CONNECTION_STATUS_DISPLAY, status, connected))
+        // Always use TaplinkSDK.isConnected() to get the actual connection status
+        val connectStatus = TaplinkSDK.isConnected()
+        Log.d(TAG, String.format(Constants.Messages.LOG_UPDATE_CONNECTION_STATUS_DISPLAY, status, connectStatus))
         
         // Update connection mode display
         val currentMode = ConnectionPreferences.getConnectionMode(this)
@@ -551,14 +553,14 @@ class MainActivity : Activity() {
         
         // Update status indicator color based on connection state
         val indicatorDrawable = when {
-            connected -> R.drawable.status_indicator_connected
+            connectStatus -> R.drawable.status_indicator_connected
             status.contains(Constants.Messages.STATUS_CONNECTING, ignoreCase = true) -> R.drawable.status_indicator_connecting
             else -> R.drawable.status_indicator_disconnected
         }
         statusIndicator.setBackgroundResource(indicatorDrawable)
         
         // Show version code only when connected, otherwise show connection status
-        if (connected) {
+        if (connectStatus) {
             val version = connectedTaproVersion
             connectionStatusText.text = if (version != null && version.isNotEmpty()) {
                 "${Constants.Messages.VERSION_PREFIX}$version"

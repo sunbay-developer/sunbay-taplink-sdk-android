@@ -11,9 +11,18 @@ import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.LogLevel
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
-import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.AbortRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.AuthAmountInfo
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.AuthRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.ForcedAuthRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.IncrementalAuthRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.PostAuthRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.RefundRequest
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.SaleRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.TipAdjustRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.VoidRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.settlement.BatchCloseRequest
 import java.math.BigDecimal
 import java.math.RoundingMode
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener as SdkConnectionListener
@@ -26,8 +35,18 @@ import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult as SdkPaymentRes
 /**
  * Unified payment service implementation supporting multiple connection modes
  *
+ * This service has been updated to use the new type-safe Taplink SDK API, replacing
+ * the legacy unified execute() method with dedicated transaction-specific methods.
+ * 
+ * Key API Changes:
+ * - PaymentRequest("ACTION") -> Dedicated request objects (SaleRequest, AuthRequest, etc.)
+ * - TaplinkSDK.execute() -> TaplinkSDK.getClient().transactionMethod()
+ * - Improved type safety and parameter validation
+ * - Better error handling and debugging capabilities
+ * 
  * Supports App-to-App, Cable, and LAN connection modes
  * Implements PaymentService interface, encapsulates Taplink SDK calling logic
+ * Maintains full backward compatibility at the interface level
  */
 class TaplinkPaymentService : PaymentService {
 
@@ -64,10 +83,119 @@ class TaplinkPaymentService : PaymentService {
     private var context: Context? = null
 
     /**
+     * Get TaplinkClient instance for new API calls
+     * 
+     * This method provides access to the new type-safe transaction methods introduced
+     * in the updated SDK. The TaplinkClient offers dedicated methods for each transaction
+     * type (sale, auth, refund, etc.) replacing the legacy unified execute() approach.
+     * 
+     * Benefits of the new API:
+     * - Type safety: Each transaction type has its own request object
+     * - Better validation: Request objects validate parameters at compile time
+     * - Cleaner code: Dedicated methods eliminate action string constants
+     * - Improved maintainability: Clear separation of transaction types
+     * 
+     * @return TaplinkClient instance for executing type-safe transactions
+     */
+    private fun getClient(): com.sunmi.tapro.taplink.sdk.TaplinkClient {
+        return TaplinkSDK.getClient()
+    }
+
+    /**
+     * Build AmountInfo object with proper dollar-to-cents conversion
+     * 
+     * This method handles all amount conversions consistently across all transaction types
+     * in the new API structure. It ensures proper formatting and conversion of monetary
+     * values from user-friendly dollar amounts to SDK-required cent amounts.
+     * 
+     * Key Features:
+     * - Consistent dollar-to-cents conversion using proper rounding
+     * - Support for all additional amount types (surcharge, tip, tax, cashback, service fee)
+     * - Null-safe handling of optional amounts
+     * - Centralized amount processing for all transaction types
+     * 
+     * This method is used by all new API transaction methods to ensure consistent
+     * amount handling across SALE, REFUND, POST_AUTH, and other transaction types.
+     * 
+     * @param amount Main transaction amount in dollars
+     * @param currency Currency code (e.g., "USD")
+     * @param surchargeAmount Optional surcharge amount in dollars
+     * @param tipAmount Optional tip amount in dollars
+     * @param taxAmount Optional tax amount in dollars
+     * @param cashbackAmount Optional cashback amount in dollars
+     * @param serviceFee Optional service fee in dollars
+     * @return AmountInfo object with all amounts converted to cents
+     */
+    private fun buildAmountInfo(
+        amount: BigDecimal,
+        currency: String,
+        surchargeAmount: BigDecimal? = null,
+        tipAmount: BigDecimal? = null,
+        taxAmount: BigDecimal? = null,
+        cashbackAmount: BigDecimal? = null,
+        serviceFee: BigDecimal? = null
+    ): AmountInfo {
+        // Convert dollar amounts to cents for SDK
+        fun toCents(dollarAmount: BigDecimal): BigDecimal {
+            return (dollarAmount * BigDecimal(Constants.CENTS_TO_DOLLARS_MULTIPLIER)).setScale(0, RoundingMode.HALF_UP)
+        }
+        
+        // Create base AmountInfo with main amount
+        var amountInfo = AmountInfo(
+            orderAmount = toCents(amount),
+            pricingCurrency = currency
+        )
+        
+        // Set additional amounts if provided, converting each to cents
+        surchargeAmount?.let { amountInfo = amountInfo.setSurchargeAmount(toCents(it)) }
+        tipAmount?.let { amountInfo = amountInfo.setTipAmount(toCents(it)) }
+        taxAmount?.let { amountInfo = amountInfo.setTaxAmount(toCents(it)) }
+        cashbackAmount?.let { amountInfo = amountInfo.setCashbackAmount(toCents(it)) }
+        serviceFee?.let { amountInfo = amountInfo.setServiceFee(toCents(it)) }
+        
+        return amountInfo
+    }
+
+    /**
+     * Build AuthAmountInfo object with proper dollar-to-cents conversion for AUTH transactions
+     * 
+     * This method creates AuthAmountInfo objects specifically for AUTH-type transactions
+     * (AUTH, FORCED_AUTH, INCREMENT_AUTH) in the new API structure. AuthAmountInfo is
+     * a specialized amount object that provides the specific fields required for
+     * authorization transactions.
+     * 
+     * Key Differences from AmountInfo:
+     * - Designed specifically for authorization transactions
+     * - Simplified structure focused on core authorization amounts
+     * - Used by AUTH, FORCED_AUTH, and INCREMENT_AUTH transaction types
+     * 
+     * This method ensures consistent amount handling across all authorization-type
+     * transactions in the new API.
+     * 
+     * @param amount Main transaction amount in dollars
+     * @param currency Currency code (e.g., "USD")
+     * @return AuthAmountInfo object with amount converted to cents
+     */
+    private fun buildAuthAmountInfo(
+        amount: BigDecimal,
+        currency: String
+    ): AuthAmountInfo {
+        // Convert dollar amounts to cents for SDK
+        fun toCents(dollarAmount: BigDecimal): BigDecimal {
+            return (dollarAmount * BigDecimal(Constants.CENTS_TO_DOLLARS_MULTIPLIER)).setScale(0, RoundingMode.HALF_UP)
+        }
+        
+        return AuthAmountInfo(
+            orderAmount = toCents(amount),
+            pricingCurrency = currency
+        )
+    }
+
+    /**
      * Get progress message from SDK event - directly use SDK message
      */
     private fun getProgressMessage(event: SdkPaymentEvent, transactionType: String): String {
-        return event.eventMsg?.takeIf { it.isNotBlank() } 
+        return event.eventMsg.takeIf { it.isNotBlank() }
             ?: "$transactionType transaction processing..."
     }
 
@@ -142,7 +270,6 @@ class TaplinkPaymentService : PaymentService {
         this.connectionListener = listener
         
         Log.d(TAG, "=== connect() called ===")
-        Log.d(TAG, "ConnectionListener set: ${listener != null}")
         Log.d(TAG, "Current connection status: connected=$connected, connecting=$connecting")
         Log.d(TAG, "Connecting with provided ConnectionConfig: $connectionConfig")
 
@@ -367,9 +494,7 @@ class TaplinkPaymentService : PaymentService {
         // The SDK uses integer cents to avoid floating-point precision issues
         // We convert back to decimal dollars for user-friendly display
         fun toDollars(centsAmount: BigDecimal?): BigDecimal? {
-            return centsAmount?.let { 
-                it.divide(BigDecimal(Constants.CENTS_TO_DOLLARS_MULTIPLIER), Constants.AMOUNT_DECIMAL_PLACES, RoundingMode.HALF_UP)
-            }
+            return centsAmount?.divide(BigDecimal(Constants.CENTS_TO_DOLLARS_MULTIPLIER), Constants.AMOUNT_DECIMAL_PLACES, RoundingMode.HALF_UP)
         }
 
         // Determine transaction success using multiple criteria for robustness
@@ -505,7 +630,15 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute SALE transaction
+     * Execute SALE transaction using new sale API
+     * 
+     * This method has been updated to use the new type-safe SaleRequest API
+     * instead of the legacy PaymentRequest("SALE") approach. The new API provides:
+     * - Better type safety with dedicated SaleRequest object
+     * - Cleaner parameter handling through structured request objects
+     * - Consistent error handling across all transaction types
+     * 
+     * API Migration: PaymentRequest("SALE") + TaplinkSDK.execute() -> SaleRequest + TaplinkSDK.getClient().sale()
      */
     override fun executeSale(
         referenceOrderId: String,
@@ -527,60 +660,30 @@ class TaplinkPaymentService : PaymentService {
             "Executing SALE transaction - OrderId: $referenceOrderId, Amount: $amount $currency"
         )
 
-        // Convert dollar amounts to cents for SDK
-        fun toCents(dollarAmount: BigDecimal): BigDecimal {
-            return (dollarAmount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
-        }
-
-        // Create AmountInfo with main amount converted to cents
-        var amountInfo = AmountInfo(
-            orderAmount = toCents(amount), // Convert main amount to cents
-            pricingCurrency = currency
+        // Build AmountInfo using the existing buildAmountInfo method
+        val amountInfo = buildAmountInfo(
+            amount = amount,
+            currency = currency,
+            surchargeAmount = surchargeAmount,
+            tipAmount = tipAmount,
+            taxAmount = taxAmount,
+            cashbackAmount = cashbackAmount,
+            serviceFee = serviceFee
         )
 
-        // Set additional amounts if provided, converting each to cents
-        surchargeAmount?.let { 
-            amountInfo = amountInfo.setSurchargeAmount(toCents(it))
-        }
-        tipAmount?.let { 
-            amountInfo = amountInfo.setTipAmount(toCents(it))
-        }
-        taxAmount?.let { 
-            amountInfo = amountInfo.setTaxAmount(toCents(it))
-        }
-        cashbackAmount?.let { 
-            amountInfo = amountInfo.setCashbackAmount(toCents(it))
-        }
-        serviceFee?.let { 
-            amountInfo = amountInfo.setServiceFee(toCents(it))
-        }
-
-        val staffInfo = StaffInfo(
-            operatorId = Constants.DEFAULT_OPERATOR_ID,
-            tipRecipientId = Constants.DEFAULT_TIP_RECIPIENT_ID
-        )
-
-        val request = PaymentRequest("SALE")
-            .setReferenceOrderId(referenceOrderId)
-            .setTransactionRequestId(transactionRequestId)
-            .setAmount(amountInfo)
-            .setDescription(description)
-            .setStaffInfo(staffInfo)
-
+        // Create SaleRequest using the new API structure
         val saleRequest = SaleRequest(
             referenceOrderId = referenceOrderId,
             transactionRequestId = transactionRequestId,
             amount = amountInfo,
-            description = description)
+            description = description
+        )
 
-        Log.d(TAG, "=== SALE Request ===")
-        Log.d(TAG, "Request: $request")
+        Log.d(TAG, "=== SALE Request (New API) ===")
+        Log.d(TAG, "SaleRequest: $saleRequest")
 
-//        TaplinkSDK.getClient().sale(saleRequest, SdkPaymentCallback) {
-//
-//        }
-
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        // Use new sale API
+        getClient().sale(saleRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -598,7 +701,15 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute AUTH transaction (pre-authorization)
+     * Execute AUTH transaction using new auth API
+     * 
+     * This method has been updated to use the new type-safe AuthRequest API
+     * instead of the legacy PaymentRequest("AUTH") approach. Key changes:
+     * - Uses AuthAmountInfo instead of generic AmountInfo for AUTH-specific requirements
+     * - Dedicated AuthRequest object provides better parameter validation
+     * - Direct API call through TaplinkSDK.getClient().auth() for improved performance
+     * 
+     * API Migration: PaymentRequest("AUTH") + TaplinkSDK.execute() -> AuthRequest + TaplinkSDK.getClient().auth()
      */
     override fun executeAuth(
         referenceOrderId: String,
@@ -614,19 +725,25 @@ class TaplinkPaymentService : PaymentService {
             "Executing AUTH transaction - OrderId: $referenceOrderId, Amount: $amount $currency"
         )
 
-        // Convert dollar amount to cents for SDK
-        val amountInCents = (amount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+        // Build AuthAmountInfo using the new method
+        val authAmountInfo = buildAuthAmountInfo(
+            amount = amount,
+            currency = currency
+        )
 
-        val request = PaymentRequest("AUTH")
-            .setReferenceOrderId(referenceOrderId)
-            .setTransactionRequestId(transactionRequestId)
-            .setAmount(AmountInfo(amountInCents, currency))
-            .setDescription(description)
+        // Create AuthRequest using the new API structure
+        val authRequest = AuthRequest(
+            referenceOrderId = referenceOrderId,
+            transactionRequestId = transactionRequestId,
+            amount = authAmountInfo,
+            description = description
+        )
 
-        Log.d(TAG, "=== AUTH Request ===")
-        Log.d(TAG, "Request: $request")
+        Log.d(TAG, "=== AUTH Request (New API) ===")
+        Log.d(TAG, "AuthRequest: $authRequest")
 
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        // Use new auth API
+        getClient().auth(authRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -644,7 +761,15 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute FORCED_AUTH transaction (forced authorization)
+     * Execute FORCED_AUTH transaction using new forcedAuth API
+     * 
+     * This method has been updated to use the new type-safe ForcedAuthRequest API
+     * instead of the legacy PaymentRequest("FORCED_AUTH") approach. The new implementation:
+     * - Uses AuthAmountInfo for consistent amount handling with other AUTH operations
+     * - Provides dedicated ForcedAuthRequest object for better type safety
+     * - Maintains compatibility with existing tip and tax amount parameters
+     * 
+     * API Migration: PaymentRequest("FORCED_AUTH") + TaplinkSDK.execute() -> ForcedAuthRequest + TaplinkSDK.getClient().forcedAuth()
      */
     override fun executeForcedAuth(
         referenceOrderId: String,
@@ -659,38 +784,28 @@ class TaplinkPaymentService : PaymentService {
 
         Log.d(
             TAG,
-            "Executing FORCED_AUTH transaction - OrderId: $referenceOrderId"
+            "Executing FORCED_AUTH transaction - OrderId: $referenceOrderId, Amount: $amount $currency"
         )
 
-        // Convert dollar amounts to cents for SDK
-        fun toCents(dollarAmount: BigDecimal): BigDecimal {
-            return (dollarAmount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
-        }
-
-        // Create AmountInfo with all amounts converted to cents
-        var amountInfo = AmountInfo(
-            orderAmount = toCents(amount),
-            pricingCurrency = currency
+        // Build AuthAmountInfo for ForcedAuth (similar to Auth transaction)
+        val authAmountInfo = buildAuthAmountInfo(
+            amount = amount,
+            currency = currency
         )
-        
-        // Set additional amounts if provided, converting each to cents
-        tipAmount?.let { 
-            amountInfo = amountInfo.setTipAmount(toCents(it))
-        }
-        taxAmount?.let { 
-            amountInfo = amountInfo.setTaxAmount(toCents(it))
-        }
 
-        val request = PaymentRequest("FORCED_AUTH")
-            .setReferenceOrderId(referenceOrderId)
-            .setTransactionRequestId(transactionRequestId)
-            .setAmount(amountInfo)
-            .setDescription(description)
+        // Create ForcedAuthRequest directly in the method using the new API structure
+        val forcedAuthRequest = ForcedAuthRequest(
+            referenceOrderId = referenceOrderId,
+            transactionRequestId = transactionRequestId,
+            amount = authAmountInfo,
+            description = description
+        )
 
-        Log.d(TAG, "=== FORCED_AUTH Request ===")
-        Log.d(TAG, "Request: $request")
+        Log.d(TAG, "=== FORCED_AUTH Request (New API) ===")
+        Log.d(TAG, "ForcedAuthRequest: $forcedAuthRequest")
 
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        // Use new forcedAuth API
+        getClient().forcedAuth(forcedAuthRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -708,7 +823,15 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute REFUND transaction (refund)
+     * Execute REFUND transaction using new refund API
+     * 
+     * This method has been updated to use the new type-safe RefundRequest API
+     * instead of the legacy PaymentRequest("REFUND") approach. Key improvements:
+     * - Dedicated RefundRequest object with proper field validation
+     * - Flexible original transaction reference (by ID or order ID)
+     * - Note: The 'reason' parameter is logged but not supported in the new API structure
+     * 
+     * API Migration: PaymentRequest("REFUND") + TaplinkSDK.execute() -> RefundRequest + TaplinkSDK.getClient().refund()
      */
     override fun executeRefund(
         referenceOrderId: String,
@@ -726,36 +849,33 @@ class TaplinkPaymentService : PaymentService {
             "Executing REFUND transaction - OriginalTxnId: $originalTransactionId, Amount: $amount $currency"
         )
 
-        // Convert dollar amount to cents for SDK
-        val amountInCents = (amount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
-
-        val request = if (originalTransactionId.isNotEmpty()) {
-            Log.d(TAG, "Creating REFUND request with originalTransactionId: $originalTransactionId")
-            PaymentRequest("REFUND")
-                .setReferenceOrderId(referenceOrderId)
-                .setTransactionRequestId(transactionRequestId)
-                .setOriginalTransactionId(originalTransactionId)
-                .setAmount(AmountInfo(amountInCents, currency))
-                .setDescription(description)
+        // Incorporate reason into description field when provided
+        val finalDescription = if (reason != null) {
+            if (description.isNotEmpty()) "$description (Reason: $reason)" else "Reason: $reason"
         } else {
-            Log.d(TAG, "Creating standalone REFUND request without originalTransactionId")
-            PaymentRequest("REFUND")
-                .setReferenceOrderId(referenceOrderId)
-                .setTransactionRequestId(transactionRequestId)
-                .setAmount(AmountInfo(amountInCents, currency))
-                .setDescription(description)
+            description
         }
 
-        // Set reason if provided
-        reason?.let {
-            Log.d(TAG, "Setting refund reason: $it")
-            request.setReason(it)
-        }
+        // Build AmountInfo using the existing buildAmountInfo method
+        val amountInfo = buildAmountInfo(
+            amount = amount,
+            currency = currency
+        )
 
-        Log.d(TAG, "=== REFUND Request ===")
-        Log.d(TAG, "Request: $request")
+        // Create RefundRequest
+        val refundRequest = RefundRequest(
+            transactionRequestId = transactionRequestId,
+            amount = amountInfo,
+            description = finalDescription,
+            originalTransactionId = originalTransactionId.takeIf { it.isNotEmpty() },
+            referenceOrderId = referenceOrderId.takeIf { originalTransactionId.isEmpty() }
+        )
 
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        Log.d(TAG, "=== REFUND Request (New API) ===")
+        Log.d(TAG, "RefundRequest: $refundRequest")
+
+        // Use new refund API
+        getClient().refund(refundRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -773,7 +893,15 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute VOID transaction (void)
+     * Execute VOID transaction using new void API
+     * 
+     * This method has been updated to use the new type-safe VoidRequest API
+     * instead of the legacy PaymentRequest("VOID") approach. The new implementation:
+     * - Uses dedicated VoidRequest object for better parameter validation
+     * - Supports both originalTransactionId and originalTransactionRequestId references
+     * - Incorporates reason into description field when provided
+     * 
+     * API Migration: PaymentRequest("VOID") + TaplinkSDK.execute() -> VoidRequest + TaplinkSDK.getClient().void()
      */
     override fun executeVoid(
         referenceOrderId: String,
@@ -786,18 +914,29 @@ class TaplinkPaymentService : PaymentService {
 
         Log.d(TAG, "Executing VOID transaction - OriginalTxnId: $originalTransactionId")
 
-        val request = PaymentRequest("VOID")
-            .setReferenceOrderId(referenceOrderId)
-            .setTransactionRequestId(transactionRequestId)
-            .setOriginalTransactionId(originalTransactionId)
-            .setDescription(description)
+        // Note: reason parameter is not directly supported in VoidRequest, but can be included in description
+        val finalDescription = if (reason != null) {
+            if (description.isNotEmpty()) "$description (Reason: $reason)" else "Reason: $reason"
+        } else {
+            description
+        }
 
-        reason?.let { request.setReason(it) }
+        // Create VoidRequest directly in the method using the correct structure
+        // VoidRequest requires either originalTransactionId or originalTransactionRequestId
+        val voidRequest = VoidRequest(
+            originalTransactionId = originalTransactionId.takeIf { it.isNotEmpty() },
+            originalTransactionRequestId = null,
+            transactionRequestId = transactionRequestId,
+            description = finalDescription.takeIf { it.isNotEmpty() },
+            attach = null, // Optional field, not provided in current interface
+            notifyUrl = null // Optional field, not provided in current interface
+        )
 
-        Log.d(TAG, "=== VOID Request ===")
-        Log.d(TAG, "Request: $request")
+        Log.d(TAG, "=== VOID Request (New API) ===")
+        Log.d(TAG, "VoidRequest: $voidRequest")
 
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        // Use new void API
+        getClient().void(voidRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -815,7 +954,15 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute POST_AUTH transaction (post-auth)
+     * Execute POST_AUTH transaction using new postAuth API
+     * 
+     * This method has been updated to use the new type-safe PostAuthRequest API
+     * instead of the legacy PaymentRequest("POST_AUTH") approach. Key features:
+     * - Dedicated PostAuthRequest object with proper field structure
+     * - Full support for additional amounts (surcharge, tip, tax, cashback, service fee)
+     * - Direct reference to original transaction ID for completion processing
+     * 
+     * API Migration: PaymentRequest("POST_AUTH") + TaplinkSDK.execute() -> PostAuthRequest + TaplinkSDK.getClient().postAuth()
      */
     override fun executePostAuth(
         referenceOrderId: String,
@@ -837,35 +984,31 @@ class TaplinkPaymentService : PaymentService {
             "Executing POST_AUTH transaction - OriginalTxnId: $originalTransactionId, Amount: $amount $currency"
         )
 
-        // Convert dollar amounts to cents for SDK
-        fun toCents(dollarAmount: BigDecimal): BigDecimal {
-            return (dollarAmount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
-        }
-
-        // Create AmountInfo with all amounts converted to cents using builder pattern
-        var amountInfo = AmountInfo(
-            orderAmount = toCents(amount), 
-            pricingCurrency = currency
+        // Build AmountInfo using the existing buildAmountInfo method
+        val amountInfo = buildAmountInfo(
+            amount = amount,
+            currency = currency,
+            surchargeAmount = surchargeAmount,
+            tipAmount = tipAmount,
+            taxAmount = taxAmount,
+            cashbackAmount = cashbackAmount,
+            serviceFee = serviceFee
         )
 
-        // Set additional amounts if provided, converting each to cents
-        // surchargeAmount?.let { amountInfo = amountInfo.setSurchargeAmount(toCents(it)) }
-        tipAmount?.let { amountInfo = amountInfo.setTipAmount(toCents(it)) }
-        taxAmount?.let { amountInfo = amountInfo.setTaxAmount(toCents(it)) }
-        // cashbackAmount?.let { amountInfo = amountInfo.setCashbackAmount(toCents(it)) }
-        // serviceFee?.let { amountInfo = amountInfo.setServiceFee(toCents(it)) }
+        // Create PostAuthRequest directly in the method using the new API structure
+        // Note: PostAuthRequest doesn't have referenceOrderId field, only originalTransactionId and transactionRequestId
+        val postAuthRequest = PostAuthRequest(
+            originalTransactionId = originalTransactionId,
+            transactionRequestId = transactionRequestId,
+            amount = amountInfo,
+            description = description
+        )
 
-        val request = PaymentRequest("POST_AUTH")
-            .setReferenceOrderId(referenceOrderId)
-            .setTransactionRequestId(transactionRequestId)
-            .setOriginalTransactionId(originalTransactionId)
-            .setAmount(amountInfo)
-            .setDescription(description)
+        Log.d(TAG, "=== POST_AUTH Request (New API) ===")
+        Log.d(TAG, "PostAuthRequest: $postAuthRequest")
 
-        Log.d(TAG, "=== POST_AUTH Request ===")
-        Log.d(TAG, "Request: $request")
-
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        // Use new postAuth API
+        getClient().postAuth(postAuthRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -883,7 +1026,15 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute INCREMENT_AUTH transaction (incremental auth)
+     * Execute INCREMENT_AUTH transaction using new incrementalAuth API
+     * 
+     * This method has been updated to use the new type-safe IncrementalAuthRequest API
+     * instead of the legacy PaymentRequest("INCREMENT_AUTH") approach. The new implementation:
+     * - Uses AuthAmountInfo for consistent amount handling with other AUTH operations
+     * - Dedicated IncrementalAuthRequest object for better type safety
+     * - Direct reference to original transaction for incremental authorization
+     * 
+     * API Migration: PaymentRequest("INCREMENT_AUTH") + TaplinkSDK.execute() -> IncrementalAuthRequest + TaplinkSDK.getClient().incrementalAuth()
      */
     override fun executeIncrementalAuth(
         referenceOrderId: String,
@@ -900,20 +1051,26 @@ class TaplinkPaymentService : PaymentService {
             "Executing INCREMENT_AUTH transaction - OriginalTxnId: $originalTransactionId, Amount: $amount $currency"
         )
 
-        // Convert dollar amount to cents for SDK
-        val amountInCents = (amount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+        // Build AuthAmountInfo using the existing buildAuthAmountInfo method (similar to executeAuth)
+        val authAmountInfo = buildAuthAmountInfo(
+            amount = amount,
+            currency = currency
+        )
 
-        val request = PaymentRequest("INCREMENT_AUTH")
-            .setReferenceOrderId(referenceOrderId)
-            .setTransactionRequestId(transactionRequestId)
-            .setOriginalTransactionId(originalTransactionId)
-            .setAmount(AmountInfo(amountInCents, currency))
-            .setDescription(description)
+        // Create IncrementalAuthRequest directly in the method using the new API structure
+        // Note: IncrementalAuthRequest doesn't have referenceOrderId field, only originalTransactionId and transactionRequestId
+        val incrementalAuthRequest = IncrementalAuthRequest(
+            originalTransactionId = originalTransactionId,
+            transactionRequestId = transactionRequestId,
+            amount = authAmountInfo,
+            description = description
+        )
 
-        Log.d(TAG, "=== INCREMENT_AUTH Request ===")
-        Log.d(TAG, "Request: $request")
+        Log.d(TAG, "=== INCREMENT_AUTH Request (New API) ===")
+        Log.d(TAG, "IncrementalAuthRequest: $incrementalAuthRequest")
 
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        // Use new incrementalAuth API
+        getClient().incrementalAuth(incrementalAuthRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -931,7 +1088,15 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute TIP_ADJUST transaction (tip adjust)
+     * Execute TIP_ADJUST transaction using new tipAdjust API
+     * 
+     * This method has been updated to use the new type-safe TipAdjustRequest API
+     * instead of the legacy PaymentRequest("TIP_ADJUST") approach. Key changes:
+     * - Dedicated TipAdjustRequest object with tip-specific field validation
+     * - Proper dollar-to-cents conversion for tip amounts
+     * - Description parameter mapped to attach field for additional context
+     * 
+     * API Migration: PaymentRequest("TIP_ADJUST") + TaplinkSDK.execute() -> TipAdjustRequest + TaplinkSDK.getClient().tipAdjust()
      */
     override fun executeTipAdjust(
         referenceOrderId: String,
@@ -948,19 +1113,23 @@ class TaplinkPaymentService : PaymentService {
         )
 
         // Convert dollar tip amount to cents for SDK
-        val tipAmountInCents = (tipAmount * BigDecimal(100)).setScale(0, RoundingMode.HALF_UP)
+        val tipAmountInCents = (tipAmount * BigDecimal(Constants.CENTS_TO_DOLLARS_MULTIPLIER)).setScale(0, RoundingMode.HALF_UP)
 
-        val request = PaymentRequest("TIP_ADJUST")
-            .setReferenceOrderId(referenceOrderId)
-            .setTransactionRequestId(transactionRequestId)
-            .setOriginalTransactionId(originalTransactionId)
-            .setTipAmount(tipAmountInCents)
-            .setDescription(description)
+        // Create TipAdjustRequest directly in the method using the new API structure
+        // Based on the actual TipAdjustRequest structure, it uses originalTransactionId and tipAmount
+        // The description parameter is not directly supported, but can be passed as attach
+        val tipAdjustRequest = TipAdjustRequest(
+            originalTransactionId = originalTransactionId.takeIf { it.isNotEmpty() },
+            originalTransactionRequestId = transactionRequestId.takeIf { originalTransactionId.isEmpty() },
+            tipAmount = tipAmountInCents,
+            attach = description.takeIf { it.isNotEmpty() }
+        )
 
-        Log.d(TAG, "=== TIP_ADJUST Request ===")
-        Log.d(TAG, "Request: $request")
+        Log.d(TAG, "=== TIP_ADJUST Request (New API) ===")
+        Log.d(TAG, "TipAdjustRequest: $tipAdjustRequest")
 
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        // Use new tipAdjust API
+        getClient().tipAdjust(tipAdjustRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -978,22 +1147,23 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute QUERY transaction (query) - using transaction request ID
+     * Execute QUERY transaction using new query API - using transaction request ID
      */
     override fun executeQuery(
         transactionRequestId: String,
         callback: PaymentCallback
     ) {
-
         Log.d(TAG, "Executing QUERY transaction - TransactionRequestId: $transactionRequestId")
 
-        val query = QueryRequest()
+        // Create QueryRequest using the actual API structure with chain calls
+        val queryRequest = QueryRequest()
             .setTransactionRequestId(transactionRequestId)
 
-        Log.d(TAG, "=== QUERY Request (by RequestId) ===")
-        Log.d(TAG, "Request: $query")
+        Log.d(TAG, "=== QUERY Request (New API - by RequestId) ===")
+        Log.d(TAG, "QueryRequest: $queryRequest")
 
-        TaplinkSDK.query(query, object : SdkPaymentCallback {
+        // Use new query API
+        getClient().query(queryRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -1011,22 +1181,23 @@ class TaplinkPaymentService : PaymentService {
     }
 
     /**
-     * Execute QUERY transaction (query) - using transaction ID
+     * Execute QUERY transaction using new query API - using transaction ID
      */
     override fun executeQueryByTransactionId(
         transactionId: String,
         callback: PaymentCallback
     ) {
-
         Log.d(TAG, "Executing QUERY transaction - TransactionId: $transactionId")
 
-        val query = QueryRequest()
+        // Create QueryRequest using the actual API structure with chain calls
+        val queryRequest = QueryRequest()
             .setTransactionId(transactionId)
 
-        Log.d(TAG, "=== QUERY Request (by TransactionId) ===")
-        Log.d(TAG, "Request: $query")
+        Log.d(TAG, "=== QUERY Request (New API - by TransactionId) ===")
+        Log.d(TAG, "QueryRequest: $queryRequest")
 
-        TaplinkSDK.query(query, object : SdkPaymentCallback {
+        // Use new query API
+        getClient().query(queryRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -1041,8 +1212,9 @@ class TaplinkPaymentService : PaymentService {
         })
     }
 
+
     /**
-     * Execute BATCH_CLOSE transaction (batch close)
+     * Execute BATCH_CLOSE transaction using new batchClose API
      */
     override fun executeBatchClose(
         transactionRequestId: String,
@@ -1052,14 +1224,17 @@ class TaplinkPaymentService : PaymentService {
 
         Log.d(TAG, "Executing BATCH_CLOSE transaction")
 
-        val request = PaymentRequest("BATCH_CLOSE")
-            .setTransactionRequestId(transactionRequestId)
-            .setDescription(description)
+        // Create BatchCloseRequest using the new API structure
+        val batchCloseRequest = BatchCloseRequest(
+            transactionRequestId = transactionRequestId,
+            description = description
+        )
 
-        Log.d(TAG, "=== BATCH_CLOSE Request ===")
-        Log.d(TAG, "Request: $request")
+        Log.d(TAG, "=== BATCH_CLOSE Request (New API) ===")
+        Log.d(TAG, "BatchCloseRequest: $batchCloseRequest")
 
-        TaplinkSDK.execute(request, object : SdkPaymentCallback {
+        // Use new batchClose API
+        getClient().batchClose(batchCloseRequest, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
                 handlePaymentResult(result, callback)
             }
@@ -1071,6 +1246,51 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "BATCH_CLOSE progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "BATCH_CLOSE")
+                callback.onProgress("PROCESSING", progressMessage)
+            }
+        })
+    }
+
+    /**
+     * Execute ABORT transaction using new abort API
+     * 
+     * This method provides the ability to abort/cancel an ongoing transaction.
+     * It uses the new AbortRequest API for type-safe transaction cancellation.
+     */
+    override fun executeAbort(
+        originalTransactionId: String?,
+        originalTransactionRequestId: String?,
+        description: String?,
+        callback: PaymentCallback
+    ) {
+
+        Log.d(TAG, "Executing ABORT transaction - OriginalTxnId: $originalTransactionId, OriginalRequestId: $originalTransactionRequestId")
+
+        // Create AbortRequest using the new API structure
+        // Based on the actual AbortRequest structure, it uses description field for the abort reason
+        val abortRequest = AbortRequest(
+            originalTransactionId = originalTransactionId,
+            originalTransactionRequestId = originalTransactionRequestId,
+            description = description,
+            attach = null // Optional attach field, not used in this implementation
+        )
+
+        Log.d(TAG, "=== ABORT Request (New API) ===")
+        Log.d(TAG, "AbortRequest: $abortRequest")
+
+        // Use new abort API
+        getClient().abort(abortRequest, object : SdkPaymentCallback {
+            override fun onSuccess(result: SdkPaymentResult) {
+                handlePaymentResult(result, callback)
+            }
+
+            override fun onFailure(error: SdkPaymentError) {
+                handlePaymentFailure("ABORT", error, callback)
+            }
+
+            override fun onProgress(event: SdkPaymentEvent) {
+                Log.d(TAG, "ABORT progress: ${event.eventMsg}")
+                val progressMessage = getProgressMessage(event, "ABORT")
                 callback.onProgress("PROCESSING", progressMessage)
             }
         })

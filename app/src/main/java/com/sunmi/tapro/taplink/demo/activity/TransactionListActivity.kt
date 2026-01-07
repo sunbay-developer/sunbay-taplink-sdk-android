@@ -151,10 +151,6 @@ class TransactionListActivity : AppCompatActivity() {
      * Show query transaction dialog
      */
     private fun showQueryTransactionDialog() {
-        if (!paymentService.isConnected()) {
-            showToast("Not connected to payment terminal")
-            return
-        }
 
         // Dismiss any existing dialog first
         currentAlertDialog?.dismiss()
@@ -365,10 +361,6 @@ class TransactionListActivity : AppCompatActivity() {
      * Show Refund confirmation dialog
      */
     private fun showRefundDialog() {
-        if (!paymentService.isConnected()) {
-            showToast("Not connected to payment terminal")
-            return
-        }
 
         val input = android.widget.EditText(this)
         input.hint = "Enter Refund Amount"

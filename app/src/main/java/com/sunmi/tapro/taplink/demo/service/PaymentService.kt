@@ -299,7 +299,6 @@ interface PaymentService {
     /**
      * Execute BATCH_CLOSE transaction (Batch close)
      *
-     * @param referenceOrderId Reference order ID
      * @param transactionRequestId Transaction request ID
      * @param description Transaction description
      * @param callback Payment callback
@@ -307,6 +306,21 @@ interface PaymentService {
     fun executeBatchClose(
         transactionRequestId: String,
         description: String,
+        callback: PaymentCallback
+    )
+
+    /**
+     * Execute ABORT transaction (Cancel/Abort ongoing transaction)
+     *
+     * @param originalTransactionId Original transaction ID to abort
+     * @param originalTransactionRequestId Original transaction request ID to abort
+     * @param description Description/reason for aborting the transaction
+     * @param callback Payment callback
+     */
+    fun executeAbort(
+        originalTransactionId: String?,
+        originalTransactionRequestId: String?,
+        description: String?,
         callback: PaymentCallback
     )
 }
