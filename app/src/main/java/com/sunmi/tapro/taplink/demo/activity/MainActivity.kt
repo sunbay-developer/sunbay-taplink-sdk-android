@@ -454,6 +454,7 @@ class MainActivity : Activity() {
      * This method is called when we need to establish a new connection
      */
     private fun attemptAutoConnection() {
+        Log.d(TAG, "Auto Connect")
         // Use SDK Connection instead of PaymentService wrapper
         connect()
     }

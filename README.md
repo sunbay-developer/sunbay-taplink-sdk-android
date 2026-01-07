@@ -395,7 +395,7 @@ app/src/main/res/
 - **JVM Target**: 11
 
 #### 核心依赖
-- **Taplink SDK**: 1.0.3-SNAPSHOT
+- **Taplink SDK**: 1.0.3
 - **AndroidX Core KTX**: 1.16.0
 - **AndroidX AppCompat**: 1.7.1
 - **Material Components**: 1.12.0

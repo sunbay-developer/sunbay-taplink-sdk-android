@@ -13,6 +13,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.SaleRequest
 import java.math.BigDecimal
 import java.math.RoundingMode
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener as SdkConnectionListener
@@ -566,8 +567,18 @@ class TaplinkPaymentService : PaymentService {
             .setDescription(description)
             .setStaffInfo(staffInfo)
 
+        val saleRequest = SaleRequest(
+            referenceOrderId = referenceOrderId,
+            transactionRequestId = transactionRequestId,
+            amount = amountInfo,
+            description = description)
+
         Log.d(TAG, "=== SALE Request ===")
         Log.d(TAG, "Request: $request")
+
+//        TaplinkSDK.getClient().sale(saleRequest, SdkPaymentCallback) {
+//
+//        }
 
         TaplinkSDK.execute(request, object : SdkPaymentCallback {
             override fun onSuccess(result: SdkPaymentResult) {
