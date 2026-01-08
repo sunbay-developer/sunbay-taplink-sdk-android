@@ -337,8 +337,8 @@ class PaymentManager(
                 LogUtil.e(TAG, "orderAmount must be an integer, got: ${amountInfo.orderAmount}")
                 callback.onFailure(
                     PaymentError(
-                        InnerErrorCode.C43.code,
-                        "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_order)}"
+                        InnerErrorCode.T18.code,
+                        "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_order)}"
                     )
                 )
                 return false
@@ -349,8 +349,8 @@ class PaymentManager(
                     LogUtil.e(TAG, "tipAmount must be an integer, got: $it")
                     callback.onFailure(
                         PaymentError(
-                            InnerErrorCode.C43.code,
-                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tip)}"
+                            InnerErrorCode.T18.code,
+                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_tip)}"
                         )
                     )
                     return false
@@ -362,8 +362,8 @@ class PaymentManager(
                     LogUtil.e(TAG, "taxAmount must be an integer, got: $it")
                     callback.onFailure(
                         PaymentError(
-                            InnerErrorCode.C43.code,
-                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tax)}"
+                            InnerErrorCode.T18.code,
+                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_tax)}"
                         )
                     )
                     return false
@@ -375,8 +375,8 @@ class PaymentManager(
                     LogUtil.e(TAG, "surchargeAmount must be an integer, got: $it")
                     callback.onFailure(
                         PaymentError(
-                            InnerErrorCode.C43.code,
-                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_surcharge)}"
+                            InnerErrorCode.T18.code,
+                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_surcharge)}"
                         )
                     )
                     return false
@@ -388,8 +388,8 @@ class PaymentManager(
                     LogUtil.e(TAG, "cashbackAmount must be an integer, got: $it")
                     callback.onFailure(
                         PaymentError(
-                            InnerErrorCode.C43.code,
-                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_cashback)}"
+                            InnerErrorCode.T18.code,
+                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_cashback)}"
                         )
                     )
                     return false
@@ -401,8 +401,8 @@ class PaymentManager(
                     LogUtil.e(TAG, "serviceFee must be an integer, got: $it")
                     callback.onFailure(
                         PaymentError(
-                            InnerErrorCode.C43.code,
-                            "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_service_fee)}"
+                            InnerErrorCode.T18.code,
+                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_service_fee)}"
                         )
                     )
                     return false
@@ -416,8 +416,8 @@ class PaymentManager(
                 LogUtil.e(TAG, "PaymentRequest tipAmount must be an integer, got: $it")
                 callback.onFailure(
                     PaymentError(
-                        InnerErrorCode.C43.code,
-                        "${InnerErrorCode.C43.description}:${context.getString(R.string.error_invalid_amount_tip)}"
+                        InnerErrorCode.T18.code,
+                        "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_tip)}"
                     )
                 )
                 return false
@@ -505,8 +505,8 @@ class PaymentManager(
                     // Notify callback of disconnection
                     callback.onFailure(
                         PaymentError(
-                            InnerErrorCode.C36.code,
-                            "${InnerErrorCode.C36.description}:Auto-connect disconnected $reason"
+                            InnerErrorCode.T06.code,
+                            "${InnerErrorCode.T06.description}:Auto-connect disconnected $reason"
                         )
                     )
                 }

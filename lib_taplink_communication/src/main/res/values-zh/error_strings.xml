@@ -2,139 +2,224 @@
 <resources>
     <!-- 成功响应 -->
     <string name="error_0_description">接口响应成功</string>
+    <string name="error_0_solution">接口响应成功，但不代表交易成功。检查交易状态和结果码确定实际交易状态</string>
 
-    <!-- 安全限制错误（S 系列） -->
-    <string name="error_s01_description">IP 地址无效</string>
+    <!-- T系列错误码 - 连接相关 (T01-T14) -->
+    <string name="error_t01_description">SDK未初始化</string>
+    <string name="error_t01_solution">调用connect()前先调用TaplinkSDK.init()初始化SDK</string>
     
-    <string name="error_s02_description">请求时间戳与服务器时间相差过大</string>
+    <string name="error_t02_description">Tapro应用未安装（应用间模式）</string>
+    <string name="error_t02_solution">在设备上安装Tapro应用</string>
     
-    <string name="error_s03_description">签名验证失败</string>
+    <string name="error_t03_description">IPC服务绑定失败（应用间模式）</string>
+    <string name="error_t03_solution">检查Tapro应用是否正常运行，重启应用或设备</string>
     
-    <string name="error_s04_description">API 调用频率超限</string>
+    <string name="error_t04_description">WebSocket连接失败（局域网模式）</string>
+    <string name="error_t04_solution">检查网络防火墙设置，确保端口8443-8453未被阻止</string>
     
-    <string name="error_s05_description">数据解密失败</string>
+    <string name="error_t05_description">mDNS发现失败（局域网模式）</string>
+    <string name="error_t05_solution">检查网络是否支持mDNS，或手动输入IP地址</string>
     
-    <string name="error_s06_description">权限不足</string>
+    <string name="error_t06_description">连接已断开</string>
+    <string name="error_t06_solution">检查连接状态，调用connect()重新建立连接</string>
     
-    <string name="error_s07_description">TMK 密钥不存在或已过期</string>
+    <string name="error_t07_description">未建立连接</string>
+    <string name="error_t07_solution">发起交易前先调用connect()建立连接</string>
     
-    <string name="error_s08_description">工作密钥不存在或已过期</string>
+    <string name="error_t08_description">手动断开连接</string>
+    <string name="error_t08_solution">正常的手动断开，无需处理</string>
     
-    <string name="error_s09_description">登录会话过期或未登录</string>
+    <string name="error_t09_description">连接已存在</string>
+    <string name="error_t09_solution">连接已存在，无需重复建立</string>
+    
+    <string name="error_t10_description">无效的USB协议</string>
+    <string name="error_t10_solution">使用支持的USB协议（USB AOA/USB-VSP/RS232）或启用自动检测</string>
+    
+    <string name="error_t11_description">USB设备访问被拒绝</string>
+    <string name="error_t11_solution">重新授权USB设备权限</string>
+    
+    <string name="error_t12_description">USB设备连接超时</string>
+    <string name="error_t12_solution">检查USB连接，重新插拔设备</string>
+    
+    <string name="error_t13_description">串口设备未就绪</string>
+    <string name="error_t13_solution">重新初始化串口连接</string>
+    
+    <string name="error_t14_description">VSP客户端未就绪</string>
+    <string name="error_t14_solution">重新初始化VSP客户端</string>
 
-    <!-- 客户端错误（C 系列） -->
-    <string name="error_c01_description">缺少请求参数</string>
+    <!-- T系列错误码 - 参数校验 (T15-T19) -->
+    <string name="error_t15_description">缺少请求参数</string>
+    <string name="error_t15_solution">确保提供所有必需参数</string>
     
-    <string name="error_c02_description">请求 JSON 格式错误</string>
+    <string name="error_t16_description">请求JSON格式错误</string>
+    <string name="error_t16_solution">检查JSON结构、括号匹配和数据类型有效性</string>
     
-    <string name="error_c03_description">商户（merchantId）不存在或已禁用</string>
+    <string name="error_t17_description">协议数据无效或解析失败</string>
+    <string name="error_t17_solution">检查协议数据格式是否正确</string>
     
-    <string name="error_c04_description">门店（storeId）不存在或已禁用</string>
+    <string name="error_t18_description">金额参数无效</string>
+    <string name="error_t18_solution">检查金额格式和范围有效性</string>
     
-    <string name="error_c05_description">设备（sn）不存在</string>
-    
-    <string name="error_c06_description">重复的请求序列号</string>
-    
-    <string name="error_c07_description">重复的商户订单号</string>
-    
-    <string name="error_c08_description">交易锁定（防并发操作）</string>
-    
-    <string name="error_c09_description">订单未支付</string>
-    
-    <string name="error_c10_description">订单已支付</string>
-    
-    <string name="error_c11_description">订单已关闭</string>
-    
-    <string name="error_c12_description">订单不存在</string>
-    
-    <string name="error_c13_description">不支持的定价货币</string>
-    
-    <string name="error_c14_description">交易金额超出允许范围</string>
-    
-    <string name="error_c15_description">退款金额超出原订单金额</string>
-    
-    <string name="error_c16_description">请求参数为空</string>
-    
-    <string name="error_c17_description">请求参数格式错误</string>
-    
-    <string name="error_c18_description">请求接口不存在</string>
-    
-    <string name="error_c19_description">不支持的 HTTP 方法</string>
-    
-    <string name="error_c20_description">SDK 未初始化</string>
-    
-    <string name="error_c21_description">设备不存在</string>
-    
-    <string name="error_c22_description">Tapro 应用未安装（应用间模式）</string>
-    
-    <string name="error_c23_description">线缆未物理连接（线缆模式）</string>
-    
-    <string name="error_c24_description">不支持的线缆协议（线缆模式）</string>
-    
-    <string name="error_c25_description">IPC 服务绑定失败（应用间模式）</string>
-    
-    <string name="error_c26_description">IPC 服务连接超时（应用间模式）</string>
-    
-    <string name="error_c27_description">线缆连接超时（线缆模式）</string>
-    
-    <string name="error_c28_description">线缆通信错误（线缆模式）</string>
-    
-    <string name="error_c29_description">设备未配对（局域网模式）</string>
-    
-    <string name="error_c30_description">网络连接失败（局域网模式）</string>
-    
-    <string name="error_c31_description">网络连接超时（局域网模式）</string>
-    
-    <string name="error_c32_description">TLS 握手失败（局域网模式）</string>
-    
-    <string name="error_c33_description">WebSocket 连接失败（局域网模式）</string>
-    
-    <string name="error_c34_description">设备离线（局域网模式）</string>
-    
-    <string name="error_c35_description">mDNS 发现失败（局域网模式）</string>
-    
-    <string name="error_c36_description">连接已断开</string>
-    
-    <string name="error_c37_description">未建立连接</string>
-    
-    <string name="error_c38_description">不支持的交易类型（Action）</string>
-    
-    <string name="error_c39_description">交易被取消</string>
-    
-    <string name="error_c40_description">应用初始化失败</string>
-    
-    <string name="error_c41_description">Protocol data is invalid or parsing failed</string>
+    <string name="error_t19_description">协议类型不匹配</string>
+    <string name="error_t19_solution">确认协议类型与预期值匹配</string>
 
-    <string name="error_c42_description">Declined</string>
+    <!-- T系列错误码 - 数据传输 (T20-T25) -->
+    <string name="error_t20_description">无可用服务内核</string>
+    <string name="error_t20_solution">重新初始化服务内核</string>
+    
+    <string name="error_t21_description">发送数据失败</string>
+    <string name="error_t21_solution">检查网络连接，重试数据传输</string>
+    
+    <string name="error_t22_description">无法发送数据，未连接</string>
+    <string name="error_t22_solution">先建立连接再发送数据</string>
+    
+    <string name="error_t23_description">发送数据失败</string>
+    <string name="error_t23_solution">检查网络/硬件状态，重试传输</string>
+    
+    <string name="error_t24_description">发送数据时发生意外错误</string>
+    <string name="error_t24_solution">记录错误详情，重启服务或重试</string>
+    
+    <string name="error_t25_description">ITransaction为空</string>
+    <string name="error_t25_solution">重新绑定交易服务接口</string>
 
-    <!-- 商户配置错误（M 系列） -->
-    <string name="error_m01_description">接口调用权限不足或未激活</string>
+    <!-- T系列错误码 - 交易处理 (T27-T31) -->
+    <string name="error_t27_description">交易锁定（防并发操作）</string>
+    <string name="error_t27_solution">等待当前操作完成后重试</string>
     
-    <string name="error_m02_description">应用（appId）不存在或已禁用</string>
+    <string name="error_t28_description">不支持的交易类型（Action）</string>
+    <string name="error_t28_solution">检查action参数是否正确且受支持</string>
     
-    <string name="error_m03_description">应用和商户绑定关系不匹配</string>
+    <string name="error_t29_description">交易已取消</string>
+    <string name="error_t29_solution">交易已被取消，无需重试</string>
     
-    <string name="error_m04_description">商户未激活此支付产品</string>
+    <string name="error_t30_description">系统正在处理其他交易</string>
+    <string name="error_t30_solution">等待当前交易完成后重试</string>
+    
+    <string name="error_t31_description">初始化失败：系统正在处理其他交易</string>
+    <string name="error_t31_solution">等待交易完成后重新初始化</string>
 
-    <!-- 支付渠道错误（P 系列） -->
-    <string name="error_p01_description">银行渠道异常</string>
-
-    <!-- 系统错误（E 系列） -->
-    <string name="error_e01_description">系统繁忙，请稍后重试</string>
-    
-    <string name="error_e02_description">网络错误</string>
-    
-    <string name="error_e03_description">未知异常</string>
-    
-    <string name="error_e04_description">系统异常</string>
-
-    <!-- 风控拦截（R 系列） -->
-    <string name="error_r01_description">风控系统拒绝交易</string>
+    <!-- T系列错误码 - 系统超时 (T34) -->
+    <string name="error_t34_description">Tapro响应超时</string>
+    <string name="error_t34_solution">增加超时时长或检查系统响应</string>
 
     <!-- 其他错误码 -->
+    <string name="error_e04_description">系统异常</string>
+    <string name="error_e04_solution">捕获系统抛出的异常并反馈给调用方</string>
+    
     <string name="error_996_description">系统超时</string>
+    <string name="error_996_solution">调用订单查询接口确认交易状态，如未支付则重试，如仍失败请联系技术支持</string>
 
     <!-- 未知错误 -->
     <string name="error_unknown_description">未知错误码</string>
     <string name="error_empty_description">错误码为空</string>
+
+    <!-- C系列错误码（向后兼容） -->
+    <string name="error_c01_description">缺少请求参数</string>
+    <string name="error_c01_solution">检查请求参数，确保提供所有必需字段</string>
+    
+    <string name="error_c02_description">请求JSON格式错误</string>
+    <string name="error_c02_solution">检查JSON格式，确保有效的JSON结构</string>
+    
+    <string name="error_c08_description">交易锁定</string>
+    <string name="error_c08_solution">等待当前交易完成后再发起新交易</string>
+    
+    <string name="error_c20_description">SDK未初始化</string>
+    <string name="error_c20_solution">调用connect()前先调用TaplinkSDK.init()初始化SDK</string>
+    
+    <string name="error_c22_description">Tapro应用未安装</string>
+    <string name="error_c22_solution">在设备上安装Tapro应用</string>
+    
+    <string name="error_c25_description">IPC服务绑定失败</string>
+    <string name="error_c25_solution">检查Tapro应用是否正常运行，重启应用或设备</string>
+    
+    <string name="error_c33_description">WebSocket连接失败</string>
+    <string name="error_c33_solution">检查网络防火墙设置，确保端口8443-8453未被阻止</string>
+    
+    <string name="error_c35_description">mDNS发现失败</string>
+    <string name="error_c35_solution">检查网络是否支持mDNS，或手动输入IP地址</string>
+    
+    <string name="error_c36_description">连接已断开</string>
+    <string name="error_c36_solution">检查连接状态，调用connect()重新建立连接</string>
+    
+    <string name="error_c37_description">未建立连接</string>
+    <string name="error_c37_solution">发起交易前调用connect()建立连接</string>
+    
+    <string name="error_c38_description">不支持的交易类型</string>
+    <string name="error_c38_solution">使用支持的交易类型或检查交易配置</string>
+    
+    <string name="error_c39_description">交易已取消</string>
+    <string name="error_c39_solution">交易被用户或系统取消，如需要可重试</string>
+    
+    <string name="error_c41_description">协议数据无效或解析失败</string>
+    <string name="error_c41_solution">检查数据格式和协议规范</string>
+    
+    <string name="error_c42_description">系统正在处理其他交易</string>
+    <string name="error_c42_solution">等待当前交易完成后再发起新交易</string>
+    
+    <string name="error_c43_description">金额参数无效</string>
+    <string name="error_c43_solution">检查金额格式，确保为正数且小数位数正确</string>
+    
+    <string name="error_c44_description">初始化失败：系统正在处理其他交易</string>
+    <string name="error_c44_solution">等待当前交易完成后再初始化</string>
+    
+    <string name="error_c45_description">手动断开连接</string>
+    <string name="error_c45_solution">正常的手动断开，无需操作</string>
+    
+    <string name="error_c46_description">无可用服务内核</string>
+    <string name="error_c46_solution">检查服务状态，如需要重启服务</string>
+    
+    <string name="error_c47_description">发送数据失败</string>
+    <string name="error_c47_solution">检查连接状态，重试发送数据</string>
+    
+    <string name="error_c48_description">无效的USB协议</string>
+    <string name="error_c48_solution">使用支持的USB协议（USB AOA/USB-VSP/RS232）或启用自动检测</string>
+    
+    <string name="error_c49_description">USB设备访问被拒绝</string>
+    <string name="error_c49_solution">重新授权USB设备权限</string>
+    
+    <string name="error_c50_description">USB设备连接超时</string>
+    <string name="error_c50_solution">检查USB连接，重新插拔设备</string>
+    
+    <string name="error_c51_description">USB权限请求失败</string>
+    <string name="error_c51_solution">重新授权USB设备权限</string>
+    
+    <string name="error_c52_description">未找到USB设备</string>
+    <string name="error_c52_solution">检查USB设备连接</string>
+    
+    <string name="error_c53_description">USB权限被拒绝</string>
+    <string name="error_c53_solution">授予USB设备权限</string>
+    
+    <string name="error_c54_description">打开USB设备失败</string>
+    <string name="error_c54_solution">检查USB设备状态，重新插拔设备</string>
+    
+    <string name="error_c55_description">AOA协议序列失败</string>
+    <string name="error_c55_solution">检查USB AOA协议支持，尝试不同的USB模式</string>
+    
+    <string name="error_c56_description">USB设备已断开</string>
+    <string name="error_c56_solution">检查USB连接，重新插拔设备</string>
+    
+    <string name="error_c57_description">连接已建立</string>
+    <string name="error_c57_solution">连接已存在，无需重复建立</string>
+    
+    <string name="error_c58_description">协议类型不匹配</string>
+    <string name="error_c58_solution">检查协议配置，确保协议类型正确</string>
+    
+    <string name="error_c61_description">无法发送数据，未连接</string>
+    <string name="error_c61_solution">发送数据前先建立连接</string>
+    
+    <string name="error_c62_description">发送数据失败</string>
+    <string name="error_c62_solution">检查连接状态，重试发送数据</string>
+    
+    <string name="error_c63_description">发送数据时发生意外错误</string>
+    <string name="error_c63_solution">检查系统状态，如需要重启应用</string>
+    
+    <string name="error_c65_description">串口设备未就绪</string>
+    <string name="error_c65_solution">重新初始化串口连接</string>
+    
+    <string name="error_c66_description">VSP客户端未就绪</string>
+    <string name="error_c66_solution">重新初始化VSP客户端</string>
+    
+    <string name="error_c67_description">ITransaction为空</string>
+    <string name="error_c67_solution">检查交易对象初始化</string>
+
 </resources>

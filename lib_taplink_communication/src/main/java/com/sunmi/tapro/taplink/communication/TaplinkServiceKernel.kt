@@ -55,8 +55,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
     fun connect(protocol: String, appid: String, appSecretKey: String, connectionCallback: ConnectionCallback) {
         if (!isInitialized()) {
             connectionCallback.onDisconnected(
-                InnerErrorCode.C20.code,
-                InnerErrorCode.C20.description
+                InnerErrorCode.T01.code,
+                InnerErrorCode.T01.description
             )
             return
         }
@@ -64,7 +64,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         // 解析协议，确定使用哪个服务
         val parseResult = ProtocolManager.parseProtocol(protocol)
         if (parseResult is ProtocolParseResult.Error) {
-            connectionCallback.onDisconnected(InnerErrorCode.C41.code, parseResult.message)
+            connectionCallback.onDisconnected(InnerErrorCode.T17.code, parseResult.message)
             return
         }
 
@@ -72,8 +72,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
         val serviceKernel = getServiceKernelByProtocol(parseResult, appid, appSecretKey)
         if (serviceKernel == null) {
             connectionCallback.onDisconnected(
-                InnerErrorCode.C58.code,
-                "${InnerErrorCode.C58.description}: ${parseResult::class.simpleName}"
+                InnerErrorCode.T19.code,
+                "${InnerErrorCode.T19.description}: ${parseResult::class.simpleName}"
             )
             return
         }
@@ -237,7 +237,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         val kernel = currentServiceKernel
         if (kernel == null) {
             LogUtil.e(TAG, "No service kernel available, cannot send data")
-            callback?.onError(InnerErrorCode.C46.code, InnerErrorCode.C46.description)
+            callback?.onError(InnerErrorCode.T20.code, InnerErrorCode.T20.description)
             return
         }
 
@@ -245,7 +245,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
             kernel.sendData(traceId, data, callback)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send data: traceId=$traceId, error=${e.message}")
-            callback?.onError(InnerErrorCode.C47.code, "${InnerErrorCode.C47.description}:${e.message}")
+            callback?.onError(InnerErrorCode.T21.code, "${InnerErrorCode.T21.description}:${e.message}")
         }
     }
 

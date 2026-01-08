@@ -99,7 +99,7 @@ class VSPClientKernel(
                             }
                         } else {
                             LogUtil.e(TAG, "USB permission denied for VSP device: ${device.deviceName}")
-                            notifyConnectionError("USB permission denied by user", InnerErrorCode.C25)
+                            notifyConnectionError("USB permission denied by user", InnerErrorCode.T03)
                         }
                     } else {
                         LogUtil.w(TAG, "Permission result for different or unknown device")
@@ -171,11 +171,11 @@ class VSPClientKernel(
                         )
                     )
                 } else {
-                    notifyConnectionError("Failed to connect to VSP device", InnerErrorCode.C25)
+                    notifyConnectionError("Failed to connect to VSP device", InnerErrorCode.T03)
                 }
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to connect VSP client: ${e.message}")
-                notifyConnectionError(e.message ?: "Unknown error", InnerErrorCode.C25)
+                notifyConnectionError(e.message ?: "Unknown error", InnerErrorCode.T03)
             }
         }
     }
@@ -183,7 +183,7 @@ class VSPClientKernel(
     override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!isVspReady()) {
             LogUtil.e(TAG, "VSP client not ready")
-            callback?.onError(InnerErrorCode.C66.code, InnerErrorCode.C66.description)
+            callback?.onError(InnerErrorCode.T14.code, InnerErrorCode.T14.description)
             return
         }
 
@@ -197,13 +197,13 @@ class VSPClientKernel(
 
         } catch (e: IOException) {
             LogUtil.e(TAG, "Failed to send VSP client data: ${e.message}")
-            callback?.onError(InnerErrorCode.C62.code, e.message ?: InnerErrorCode.C62.description)
+            callback?.onError(InnerErrorCode.T23.code, e.message ?: InnerErrorCode.T23.description)
             
             // 发送失败可能表示连接断开
             handleConnectionError()
         } catch (e: Exception) {
             LogUtil.e(TAG, "Unexpected error sending VSP client data: ${e.message}")
-            callback?.onError(InnerErrorCode.C63.code, e.message ?: InnerErrorCode.C63.description)
+            callback?.onError(InnerErrorCode.T24.code, e.message ?: InnerErrorCode.T24.description)
         }
     }
 

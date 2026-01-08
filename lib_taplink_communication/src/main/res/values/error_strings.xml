@@ -2,166 +2,224 @@
 <resources>
     <!-- Success Response -->
     <string name="error_0_description">Interface response successful</string>
+    <string name="error_0_solution">Interface response successful, but does not represent transaction success. Check transaction status and result code to determine actual transaction status</string>
 
-    <!-- Security Restriction Errors (S Series) -->
-    <string name="error_s01_description">Invalid IP address</string>
+    <!-- T Series Error Codes - Connection Related (T01-T14) -->
+    <string name="error_t01_description">SDK not initialized</string>
+    <string name="error_t01_solution">Call TaplinkSDK.init() to initialize SDK before calling connect()</string>
     
-    <string name="error_s02_description">Request timestamp differs too much from server time</string>
+    <string name="error_t02_description">Tapro application not installed (inter-app mode)</string>
+    <string name="error_t02_solution">Install Tapro application on device</string>
     
-    <string name="error_s03_description">Signature verification failed</string>
+    <string name="error_t03_description">IPC service binding failed (inter-app mode)</string>
+    <string name="error_t03_solution">Check if Tapro application is running normally, restart application or device</string>
     
-    <string name="error_s04_description">API call frequency exceeded limit</string>
+    <string name="error_t04_description">WebSocket connection failed (LAN mode)</string>
+    <string name="error_t04_solution">Check network firewall settings, ensure ports 8443-8453 are not blocked</string>
     
-    <string name="error_s05_description">Data decryption failed</string>
+    <string name="error_t05_description">mDNS discovery failed (LAN mode)</string>
+    <string name="error_t05_solution">Check if network supports mDNS, or manually input IP address</string>
     
-    <string name="error_s06_description">Insufficient permissions</string>
+    <string name="error_t06_description">Connection disconnected</string>
+    <string name="error_t06_solution">Check connection status, call connect() to re-establish connection</string>
     
-    <string name="error_s07_description">TMK key does not exist or has expired</string>
+    <string name="error_t07_description">No connection established</string>
+    <string name="error_t07_solution">Call connect() to establish connection before initiating transaction</string>
     
-    <string name="error_s08_description">Working key does not exist or has expired</string>
+    <string name="error_t08_description">Manual disconnect</string>
+    <string name="error_t08_solution">Normal manual disconnect, no action needed</string>
     
-    <string name="error_s09_description">Login session expired or not logged in</string>
+    <string name="error_t09_description">Connection already established</string>
+    <string name="error_t09_solution">Connection already exists, no need to establish again</string>
+    
+    <string name="error_t10_description">Invalid USB protocol</string>
+    <string name="error_t10_solution">Use supported USB protocol (USB AOA/USB-VSP/RS232) or enable auto-detection</string>
+    
+    <string name="error_t11_description">USB device access denied</string>
+    <string name="error_t11_solution">Re-authorize USB device permissions</string>
+    
+    <string name="error_t12_description">USB device connection timeout</string>
+    <string name="error_t12_solution">Check USB connection, re-plug device</string>
+    
+    <string name="error_t13_description">Serial device not ready</string>
+    <string name="error_t13_solution">Re-initialize serial port connection</string>
+    
+    <string name="error_t14_description">VSP client not ready</string>
+    <string name="error_t14_solution">Re-initialize VSP client</string>
 
-    <!-- Client Errors (C Series) -->
-    <string name="error_c01_description">Missing request parameters</string>
+    <!-- T Series Error Codes - Parameter Validation (T15-T19) -->
+    <string name="error_t15_description">Missing request parameters</string>
+    <string name="error_t15_solution">Ensure all required parameters are provided</string>
     
-    <string name="error_c02_description">Request JSON format error</string>
+    <string name="error_t16_description">Request JSON format error</string>
+    <string name="error_t16_solution">Check JSON structure, bracket matching and data type validity</string>
     
-    <string name="error_c03_description">Merchant (merchantId) does not exist or is disabled</string>
+    <string name="error_t17_description">Protocol data is invalid or parsing failed</string>
+    <string name="error_t17_solution">Check protocol data format is correct</string>
     
-    <string name="error_c04_description">Store (storeId) does not exist or is disabled</string>
+    <string name="error_t18_description">Invalid amount parameters</string>
+    <string name="error_t18_solution">Check amount format and range validity</string>
     
-    <string name="error_c05_description">Device (sn) does not exist</string>
-    
-    <string name="error_c06_description">Duplicate request sequence number</string>
-    
-    <string name="error_c07_description">Duplicate merchant order number</string>
-    
-    <string name="error_c08_description">Transaction locked (anti-concurrent operation)</string>
-    
-    <string name="error_c09_description">Order not paid</string>
-    
-    <string name="error_c10_description">Order already paid</string>
-    
-    <string name="error_c11_description">Order closed</string>
-    
-    <string name="error_c12_description">Order does not exist</string>
-    
-    <string name="error_c13_description">Unsupported pricing currency</string>
-    
-    <string name="error_c14_description">Transaction amount exceeds allowed range</string>
-    
-    <string name="error_c15_description">Refund amount exceeds original order amount</string>
-    
-    <string name="error_c16_description">Request parameter is empty</string>
-    
-    <string name="error_c17_description">Request parameter format error</string>
-    
-    <string name="error_c18_description">Request interface does not exist</string>
-    
-    <string name="error_c19_description">Unsupported HTTP method</string>
-    
-    <string name="error_c20_description">SDK not initialized</string>
-    
-    <string name="error_c21_description">Device does not exist</string>
-    
-    <string name="error_c22_description">Tapro application not installed (inter-app mode)</string>
-    
-    <string name="error_c23_description">Cable not physically connected (cable mode)</string>
-    
-    <string name="error_c24_description">Unsupported cable protocol (cable mode)</string>
-    
-    <string name="error_c25_description">IPC service binding failed (inter-app mode)</string>
-    
-    <string name="error_c26_description">IPC service connection timeout (inter-app mode)</string>
-    
-    <string name="error_c27_description">Cable connection timeout (cable mode)</string>
-    
-    <string name="error_c28_description">Cable communication error (cable mode)</string>
-    
-    <string name="error_c29_description">Device not paired (LAN mode)</string>
-    
-    <string name="error_c30_description">Network connection failed (LAN mode)</string>
-    
-    <string name="error_c31_description">Network connection timeout (LAN mode)</string>
-    
-    <string name="error_c32_description">TLS handshake failed (LAN mode)</string>
-    
-    <string name="error_c33_description">WebSocket connection failed (LAN mode)</string>
-    
-    <string name="error_c34_description">Device offline (LAN mode)</string>
-    
-    <string name="error_c35_description">mDNS discovery failed (LAN mode)</string>
-    
-    <string name="error_c36_description">Connection disconnected</string>
-    
-    <string name="error_c37_description">No connection established</string>
-    
-    <string name="error_c38_description">Unsupported transaction type (Action)</string>
-    
-    <string name="error_c39_description">Transaction cancelled</string>
-    
-    <string name="error_c40_description">Application initialization failed</string>
-    
-    <string name="error_c41_description">Protocol data is invalid or parsing failed</string>
+    <string name="error_t19_description">Protocol type mismatch</string>
+    <string name="error_t19_solution">Confirm protocol type matches expected value</string>
 
-    <string name="error_c42_description">Declined</string>
+    <!-- T Series Error Codes - Data Transmission (T20-T25) -->
+    <string name="error_t20_description">No service kernel available</string>
+    <string name="error_t20_solution">Re-initialize service kernel</string>
     
-    <string name="error_c43_description">Invalid amount</string>
-    <string name="error_c44_description">Tapro application initialization failed</string>
-    <string name="error_c45_description">Connection cancelled due to manual disconnect</string>
-    <string name="error_c46_description">No service kernel available, cannot send data</string>
-    <string name="error_c47_description">Failed to send data</string>
-    <string name="error_c48_description">Invalid protocol type</string>
-    <string name="error_c49_description">USB device permission denied</string>
-    <string name="error_c50_description">USB device detached before connection</string>
-    <string name="error_c51_description">Failed to request USB permission</string>
-    <string name="error_c52_description">USB device not found</string>
-    <string name="error_c53_description">No permission for USB device</string>
-    <string name="error_c54_description">Failed to open USB device</string>
-    <string name="error_c55_description">Failed to send AOA protocol sequence</string>
-    <string name="error_c56_description">AOA connection timeout</string>
-    <string name="error_c57_description">Service is already connected or connecting</string>
-    <string name="error_c58_description">Protocol type mismatch</string>
-    <string name="error_c59_description">Failed to convert protocol to WebSocket URI</string>
-    <string name="error_c60_description">No available Taplink services found via NSD</string>
-    <string name="error_c61_description">Service not connected</string>
-    <string name="error_c62_description">Failed to send data</string>
-    <string name="error_c63_description">Send error</string>
-    <string name="error_c64_description">WebSocket client interface is null</string>
-    <string name="error_c65_description">Serial device not connected</string>
-    <string name="error_c66_description">VSP client not connected</string>
-    <string name="error_c67_description">ITransaction interface is null</string>
+    <string name="error_t21_description">Failed to send data</string>
+    <string name="error_t21_solution">Check network connection, retry data transmission</string>
+    
+    <string name="error_t22_description">Cannot send data, not connected</string>
+    <string name="error_t22_solution">Establish connection first before sending data</string>
+    
+    <string name="error_t23_description">Failed to send data</string>
+    <string name="error_t23_solution">Check network/hardware status, retry transmission</string>
+    
+    <string name="error_t24_description">Unexpected error sending data</string>
+    <string name="error_t24_solution">Log error details, restart service or retry</string>
+    
+    <string name="error_t25_description">ITransaction is null</string>
+    <string name="error_t25_solution">Re-bind transaction service interface</string>
 
-    <!-- Merchant Configuration Errors (M Series) -->
-    <string name="error_m01_description">Insufficient interface call permissions or not activated</string>
+    <!-- T Series Error Codes - Transaction Processing (T27-T31) -->
+    <string name="error_t27_description">Transaction locked (anti-concurrent operation)</string>
+    <string name="error_t27_solution">Wait for current operation to complete before retrying</string>
     
-    <string name="error_m02_description">Application (appId) does not exist or is disabled</string>
+    <string name="error_t28_description">Unsupported transaction type (Action)</string>
+    <string name="error_t28_solution">Check if action parameter is correct and supported</string>
     
-    <string name="error_m03_description">Application and merchant binding relationship mismatch</string>
+    <string name="error_t29_description">Transaction cancelled</string>
+    <string name="error_t29_solution">Transaction has been cancelled, no retry needed</string>
     
-    <string name="error_m04_description">Merchant has not activated this payment product</string>
+    <string name="error_t30_description">System is processing another transaction</string>
+    <string name="error_t30_solution">Wait for current transaction to complete before retrying</string>
+    
+    <string name="error_t31_description">Init Failed: System is processing another transaction</string>
+    <string name="error_t31_solution">Wait for transaction to complete before re-initializing</string>
 
-    <!-- Payment Channel Errors (P Series) -->
-    <string name="error_p01_description">Bank channel exception</string>
-
-    <!-- System Errors (E Series) -->
-    <string name="error_e01_description">System busy, please try again later</string>
-    
-    <string name="error_e02_description">Network error</string>
-    
-    <string name="error_e03_description">Unknown exception</string>
-    
-    <string name="error_e04_description">System exception</string>
-
-    <!-- Risk Control Interception (R Series) -->
-    <string name="error_r01_description">Risk control system rejected transaction</string>
+    <!-- T Series Error Codes - System Timeout (T34) -->
+    <string name="error_t34_description">Tapro response timeout</string>
+    <string name="error_t34_solution">Increase timeout duration or check system response</string>
 
     <!-- Other Error Codes -->
+    <string name="error_e04_description">System exception</string>
+    <string name="error_e04_solution">Capture system thrown exception and feedback to caller</string>
+    
     <string name="error_996_description">System timeout</string>
+    <string name="error_996_solution">Call order query interface to confirm transaction status, retry if not paid, contact technical support if still failing</string>
 
     <!-- Unknown Error -->
     <string name="error_unknown_description">Unknown error code</string>
     <string name="error_empty_description">Error code is empty</string>
+
+    <!-- C Series Error Codes (Backward Compatibility) -->
+    <string name="error_c01_description">Missing request parameters</string>
+    <string name="error_c01_solution">Check request parameters, ensure all required fields are provided</string>
+    
+    <string name="error_c02_description">Request JSON format error</string>
+    <string name="error_c02_solution">Check JSON format, ensure valid JSON structure</string>
+    
+    <string name="error_c08_description">Transaction locked</string>
+    <string name="error_c08_solution">Wait for current transaction to complete before initiating new transaction</string>
+    
+    <string name="error_c20_description">SDK not initialized</string>
+    <string name="error_c20_solution">Call TaplinkSDK.init() to initialize SDK before calling connect()</string>
+    
+    <string name="error_c22_description">Tapro application not installed</string>
+    <string name="error_c22_solution">Install Tapro application on device</string>
+    
+    <string name="error_c25_description">IPC service binding failed</string>
+    <string name="error_c25_solution">Check if Tapro application is running normally, restart application or device</string>
+    
+    <string name="error_c33_description">WebSocket connection failed</string>
+    <string name="error_c33_solution">Check network firewall settings, ensure ports 8443-8453 are not blocked</string>
+    
+    <string name="error_c35_description">mDNS discovery failed</string>
+    <string name="error_c35_solution">Check if network supports mDNS, or manually input IP address</string>
+    
+    <string name="error_c36_description">Connection disconnected</string>
+    <string name="error_c36_solution">Check connection status, call connect() to re-establish connection</string>
+    
+    <string name="error_c37_description">No connection established</string>
+    <string name="error_c37_solution">Call connect() to establish connection before initiating transaction</string>
+    
+    <string name="error_c38_description">Unsupported transaction type</string>
+    <string name="error_c38_solution">Use supported transaction type or check transaction configuration</string>
+    
+    <string name="error_c39_description">Transaction cancelled</string>
+    <string name="error_c39_solution">Transaction cancelled by user or system, retry if needed</string>
+    
+    <string name="error_c41_description">Protocol data is invalid or parsing failed</string>
+    <string name="error_c41_solution">Check data format and protocol specification</string>
+    
+    <string name="error_c42_description">System is processing another transaction</string>
+    <string name="error_c42_solution">Wait for current transaction to complete before initiating new transaction</string>
+    
+    <string name="error_c43_description">Invalid amount parameters</string>
+    <string name="error_c43_solution">Check amount format, ensure positive number with correct decimal places</string>
+    
+    <string name="error_c44_description">Init Failed: System is processing another transaction</string>
+    <string name="error_c44_solution">Wait for current transaction to complete before initializing</string>
+    
+    <string name="error_c45_description">Manual disconnect</string>
+    <string name="error_c45_solution">Normal manual disconnect, no action needed</string>
+    
+    <string name="error_c46_description">No service kernel available</string>
+    <string name="error_c46_solution">Check service status, restart service if needed</string>
+    
+    <string name="error_c47_description">Failed to send data</string>
+    <string name="error_c47_solution">Check connection status, retry sending data</string>
+    
+    <string name="error_c48_description">Invalid USB protocol</string>
+    <string name="error_c48_solution">Use supported USB protocol (USB AOA/USB-VSP/RS232) or enable auto-detection</string>
+    
+    <string name="error_c49_description">USB device access denied</string>
+    <string name="error_c49_solution">Re-authorize USB device permissions</string>
+    
+    <string name="error_c50_description">USB device connection timeout</string>
+    <string name="error_c50_solution">Check USB connection, re-plug device</string>
+    
+    <string name="error_c51_description">USB permission request failed</string>
+    <string name="error_c51_solution">Re-authorize USB device permissions</string>
+    
+    <string name="error_c52_description">USB device not found</string>
+    <string name="error_c52_solution">Check USB device connection</string>
+    
+    <string name="error_c53_description">USB permission denied</string>
+    <string name="error_c53_solution">Grant USB device permissions</string>
+    
+    <string name="error_c54_description">Failed to open USB device</string>
+    <string name="error_c54_solution">Check USB device status, re-plug device</string>
+    
+    <string name="error_c55_description">AOA protocol sequence failed</string>
+    <string name="error_c55_solution">Check USB AOA protocol support, try different USB mode</string>
+    
+    <string name="error_c56_description">USB device disconnected</string>
+    <string name="error_c56_solution">Check USB connection, re-plug device</string>
+    
+    <string name="error_c57_description">Connection already established</string>
+    <string name="error_c57_solution">Connection already exists, no need to establish again</string>
+    
+    <string name="error_c58_description">Protocol type mismatch</string>
+    <string name="error_c58_solution">Check protocol configuration, ensure correct protocol type</string>
+    
+    <string name="error_c61_description">Cannot send data, not connected</string>
+    <string name="error_c61_solution">Establish connection before sending data</string>
+    
+    <string name="error_c62_description">Failed to send data</string>
+    <string name="error_c62_solution">Check connection status, retry sending data</string>
+    
+    <string name="error_c63_description">Unexpected error sending data</string>
+    <string name="error_c63_solution">Check system status, restart application if needed</string>
+    
+    <string name="error_c65_description">Serial device not ready</string>
+    <string name="error_c65_solution">Re-initialize serial port connection</string>
+    
+    <string name="error_c66_description">VSP client not ready</string>
+    <string name="error_c66_solution">Re-initialize VSP client</string>
+    
+    <string name="error_c67_description">ITransaction is null</string>
+    <string name="error_c67_solution">Check transaction object initialization</string>
 
 </resources>

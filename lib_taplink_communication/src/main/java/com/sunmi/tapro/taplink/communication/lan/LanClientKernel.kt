@@ -132,7 +132,7 @@ class LanClientKernel(
                 } catch (e: Exception) {
                     notifyConnectionError(
                         "Invalid URI: ${lanResult.ip}:${lanResult.port}",
-                        InnerErrorCode.C59
+                        InnerErrorCode.T04
                     )
                     return@launchInScope
                 }
@@ -195,12 +195,12 @@ class LanClientKernel(
 //                callback?.onResponse("Data sent successfully")
             } else {
                 LogUtil.e(TAG, "Failed to send data: traceId=$traceId")
-                callback?.onError(InnerErrorCode.C62.code, InnerErrorCode.C62.description)
+                callback?.onError(InnerErrorCode.T23.code, InnerErrorCode.T23.description)
             }
 
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error sending data: traceId=$traceId, error=${e.message}")
-            callback?.onError(InnerErrorCode.C62.code, e.message ?: InnerErrorCode.C62.description)
+            callback?.onError(InnerErrorCode.T23.code, e.message ?: InnerErrorCode.T23.description)
         }
     }
 
@@ -313,14 +313,14 @@ class LanClientKernel(
 
                 // 构建断开信息，包含是否为主动断开的信息
                 val disconnectCode = if (isManualDisconnect) {
-                    InnerErrorCode.C45.code
+                    InnerErrorCode.T08.code
                 } else {
-                    InnerErrorCode.C36.code
+                    InnerErrorCode.T06.code
                 }
                 val disconnectMessage = if (isManualDisconnect) {
-                    "${InnerErrorCode.C45.description}:Manual disconnect, $reason($code)"
+                    "${InnerErrorCode.T08.description}:Manual disconnect, $reason($code)"
                 } else {
-                    "${InnerErrorCode.C36.description}:Passive disconnect, $reason($code)"
+                    "${InnerErrorCode.T06.description}:Passive disconnect, $reason($code)"
                 }
 
                 // 保存是否为主动断开的标志
@@ -448,7 +448,7 @@ class LanClientKernel(
             }
 
             LogUtil.w(TAG, "No available services found via service discovery")
-            notifyConnectionError("No available services found", InnerErrorCode.C60)
+            notifyConnectionError("No available services found", InnerErrorCode.T05)
 
         } catch (e: Exception) {
             LogUtil.e(TAG, "Service discovery failed: ${e.message}")
@@ -460,7 +460,7 @@ class LanClientKernel(
                 LogUtil.d(TAG, "Service discovery failed, but already connected/connecting, ignoring error")
                 return
             }
-            notifyConnectionError("Service discovery failed: ${e.message}", InnerErrorCode.C35)
+            notifyConnectionError("Service discovery failed: ${e.message}", InnerErrorCode.T05)
         }
     }
 
@@ -658,8 +658,9 @@ class LanClientKernel(
         try {
             val config = HeartbeatManager.HeartbeatConfig()
             val sender = object : HeartbeatManager.HeartbeatSender {
-                override fun sendHeartbeat(message: String): Boolean {
-                    return connectionManager.send(message)
+                override suspend fun sendHeartbeat(message: String): Boolean {
+                    // 使用带连通性检查的心跳发送方法
+                    return connectionManager.sendHeartbeatWithConnectivityCheck(message)
                 }
             }
 
@@ -726,7 +727,16 @@ class LanClientKernel(
      * 检查是否是心跳响应
      */
     private fun isHeartbeatResponse(message: String): Boolean {
-        return message.contains("pong") || message.contains("ping")
+        // 更严格的心跳响应检测
+        return try {
+            // 检查是否是JSON格式的pong响应
+            message.contains("\"type\":\"pong\"") || 
+            message.contains("pong") ||
+            // 或者是简单的ping响应
+            message.trim().equals("pong", ignoreCase = true)
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**

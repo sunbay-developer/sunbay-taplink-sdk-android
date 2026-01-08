@@ -42,15 +42,15 @@ class InnerErrorCodeTest {
 
     @Test
     fun testUnknownErrorCode() {
-        // Test custom description and solution
+        // Test custom description
         val customError = InnerErrorCode.Unknown(
             "CUSTOM01",
-            "Custom error description",
+            "Custom error description"
         )
         assertEquals("CUSTOM01", customError.code)
         assertEquals("Custom error description", customError.description)
 
-        // Test default description and solution
+        // Test default description
         val defaultError = InnerErrorCode.Unknown("DEFAULT01")
         assertEquals("DEFAULT01", defaultError.code)
         assertNotNull(defaultError.description)
@@ -58,29 +58,33 @@ class InnerErrorCodeTest {
 
     @Test
     fun testErrorCodeCategories() {
-        // Test client errors
-        assertTrue(InnerErrorCode.isClientError("C20"))
-        assertFalse(InnerErrorCode.isClientError("S01"))
+        // Test T-series error codes
+        assertTrue(InnerErrorCode.isTSeriesError("T01"))
+        assertFalse(InnerErrorCode.isTSeriesError("C20"))
 
-        // Test system errors
-        assertTrue(InnerErrorCode.isSystemError("E01"))
-        assertFalse(InnerErrorCode.isSystemError("C20"))
+        // Test connection errors
+        assertTrue(InnerErrorCode.isConnectionError("T01"))
+        assertTrue(InnerErrorCode.isConnectionError("T14"))
+        assertFalse(InnerErrorCode.isConnectionError("T15"))
 
-        // Test security errors
-        assertTrue(InnerErrorCode.isSecurityError("S01"))
-        assertFalse(InnerErrorCode.isSecurityError("C20"))
+        // Test parameter validation errors
+        assertTrue(InnerErrorCode.isParameterValidationError("T15"))
+        assertTrue(InnerErrorCode.isParameterValidationError("T19"))
+        assertFalse(InnerErrorCode.isParameterValidationError("T20"))
 
-        // Test merchant configuration errors
-        assertTrue(InnerErrorCode.isMerchantConfigError("M01"))
-        assertFalse(InnerErrorCode.isMerchantConfigError("C20"))
+        // Test data transmission errors
+        assertTrue(InnerErrorCode.isDataTransmissionError("T20"))
+        assertTrue(InnerErrorCode.isDataTransmissionError("T25"))
+        assertFalse(InnerErrorCode.isDataTransmissionError("T27"))
 
-        // Test payment channel errors
-        assertTrue(InnerErrorCode.isPaymentChannelError("P01"))
-        assertFalse(InnerErrorCode.isPaymentChannelError("C20"))
+        // Test transaction processing errors
+        assertTrue(InnerErrorCode.isTransactionProcessingError("T27"))
+        assertTrue(InnerErrorCode.isTransactionProcessingError("T31"))
+        assertFalse(InnerErrorCode.isTransactionProcessingError("T34"))
 
-        // Test risk control errors
-        assertTrue(InnerErrorCode.isRiskControlError("R01"))
-        assertFalse(InnerErrorCode.isRiskControlError("C20"))
+        // Test system timeout errors
+        assertTrue(InnerErrorCode.isSystemTimeoutError("T34"))
+        assertFalse(InnerErrorCode.isSystemTimeoutError("T31"))
     }
 
     @Test

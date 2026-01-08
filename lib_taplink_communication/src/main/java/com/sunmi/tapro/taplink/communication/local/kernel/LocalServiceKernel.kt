@@ -87,7 +87,7 @@ class LocalServiceKernel constructor(
         val context = TaplinkServiceKernel.getInstance()?.getContext()
         if (context == null) {
             LogUtil.e(TAG, "Application context is null")
-            notifyConnectionError("Application context is null", InnerErrorCode.C20)
+            notifyConnectionError("Application context is null", InnerErrorCode.T01)
             return
         }
 
@@ -103,7 +103,7 @@ class LocalServiceKernel constructor(
             context.packageManager.getPackageInfo(packageName, 0)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Target app not installed: ${e.message}")
-            notifyConnectionError("packageName=$packageName", InnerErrorCode.C22)
+            notifyConnectionError("packageName=$packageName", InnerErrorCode.T02)
             return
         }
 
@@ -118,7 +118,7 @@ class LocalServiceKernel constructor(
             LogUtil.e(TAG, "No matching service found for package: $packageName, action: $action")
             notifyConnectionError(
                 "Service not found packageName=$packageName, action=$action",
-                InnerErrorCode.C22
+                InnerErrorCode.T02
             )
             return
         }
@@ -139,18 +139,18 @@ class LocalServiceKernel constructor(
             val bindResult = context.bindService(intent, serviceConnection!!, bindFlags)
             if (!bindResult) {
                 LogUtil.e(TAG, "bindService failed")
-                notifyConnectionError("Bind service result false", InnerErrorCode.C25)
+                notifyConnectionError("Bind service result false", InnerErrorCode.T03)
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Exception during bindService: ${e.message}")
-            notifyConnectionError("${e.message}", InnerErrorCode.C25)
+            notifyConnectionError("${e.message}", InnerErrorCode.T03)
         }
     }
 
     override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (iTransaction == null) {
             LogUtil.e(TAG, "ITransaction is null, cannot send data")
-            callback?.onError(InnerErrorCode.C67.code, InnerErrorCode.C67.description)
+            callback?.onError(InnerErrorCode.T25.code, InnerErrorCode.T25.description)
             return
         }
 
@@ -244,15 +244,15 @@ class LocalServiceKernel constructor(
                             }
                         } else {
                             LogUtil.e(TAG, "Failed to convert binder to ITransaction")
-                            notifyConnectionError("Failed to convert binder to ITransaction", InnerErrorCode.C25)
+                            notifyConnectionError("Failed to convert binder to ITransaction", InnerErrorCode.T03)
                         }
                     } catch (e: Exception) {
                         LogUtil.e(TAG, "Exception while converting binder: ${e.message}")
-                        notifyConnectionError("Exception while converting binder: ${e.message}", InnerErrorCode.C25)
+                        notifyConnectionError("Exception while converting binder: ${e.message}", InnerErrorCode.T03)
                     }
                 } else {
                     LogUtil.e(TAG, "Service binder is null")
-                    notifyConnectionError("Service binder is null", InnerErrorCode.C25)
+                    notifyConnectionError("Service binder is null", InnerErrorCode.T03)
                 }
             }
 
@@ -266,7 +266,7 @@ class LocalServiceKernel constructor(
                 val packageName = name?.packageName ?: "unknown"
                 val errorMessage = "Target application crashed: $packageName. " +
                         "The service disconnected unexpectedly, which usually means the service process crashed or was killed."
-                notifyConnectionDisconnected(InnerErrorCode.C36.code, errorMessage)
+                notifyConnectionDisconnected(InnerErrorCode.T06.code, errorMessage)
             }
 
             override fun onBindingDied(name: ComponentName?) {
@@ -280,7 +280,7 @@ class LocalServiceKernel constructor(
                 val errorMessage = "Target application crashed: $packageName. " +
                         "The service binding died, which usually means the target process crashed during or after binding. " +
                         "Common causes: service crashed in onCreate()/onBind(), process killed by system, or AIDL interface mismatch."
-                notifyConnectionDisconnected(InnerErrorCode.C36.code, errorMessage)
+                notifyConnectionDisconnected(InnerErrorCode.T06.code, errorMessage)
             }
 
             override fun onNullBinding(name: ComponentName?) {
@@ -289,7 +289,7 @@ class LocalServiceKernel constructor(
                 iTransaction = null
 
                 updateStatus(InnerConnectionStatus.ERROR)
-                notifyConnectionError("Service returned null binding", InnerErrorCode.C36)
+                notifyConnectionError("Service returned null binding", InnerErrorCode.T06)
             }
         }
     }

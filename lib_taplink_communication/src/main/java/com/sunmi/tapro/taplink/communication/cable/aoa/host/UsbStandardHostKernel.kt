@@ -173,7 +173,7 @@ class UsbStandardHostKernel(
             }
 
             if (device == null) {
-                handleConnectionError(InnerErrorCode.C52.description, connectionCallback, InnerErrorCode.C52.code)
+                handleConnectionError(InnerErrorCode.T11.description, connectionCallback, InnerErrorCode.T11.code)
                 return
             }
 
@@ -189,9 +189,9 @@ class UsbStandardHostKernel(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to connect USB AOA host device: ${e.message}")
             handleConnectionError(
-                "${InnerErrorCode.C37.description}:${e.message ?: "Unknown error"}",
+                "${InnerErrorCode.T07.description}:${e.message ?: "Unknown error"}",
                 connectionCallback,
-                InnerErrorCode.C37.code
+                InnerErrorCode.T07.code
             )
         }
     }
@@ -203,7 +203,7 @@ class UsbStandardHostKernel(
         try {
             if (!usbManager.hasPermission(device)) {
                 LogUtil.e(TAG, "No permission for USB device: ${device.deviceName}")
-                handleConnectionError(InnerErrorCode.C53.description, connectionCallback, InnerErrorCode.C53.code)
+                handleConnectionError(InnerErrorCode.T11.description, connectionCallback, InnerErrorCode.T11.code)
                 return
             }
 
@@ -232,7 +232,7 @@ class UsbStandardHostKernel(
             // 打开设备连接
             val connection = usbManager.openDevice(device) ?: run {
                 LogUtil.e(TAG, "Failed to open USB device")
-                handleConnectionError(InnerErrorCode.C54.description, connectionCallback, InnerErrorCode.C54.code)
+                handleConnectionError(InnerErrorCode.T11.description, connectionCallback, InnerErrorCode.T11.code)
                 return
             }
 
@@ -247,7 +247,7 @@ class UsbStandardHostKernel(
             if (!UsbStandardProtocol.sendAoaProtocolSequence(connection, aoaDeviceInfo)) {
                 LogUtil.e(TAG, "Failed to send AOA protocol sequence")
                 disconnectInternal()
-                handleConnectionError(InnerErrorCode.C55.description, connectionCallback, InnerErrorCode.C55.code)
+                handleConnectionError(InnerErrorCode.T10.description, connectionCallback, InnerErrorCode.T10.code)
                 return
             }
             // 关闭设备连接
@@ -268,9 +268,9 @@ class UsbStandardHostKernel(
             LogUtil.e(TAG, "Failed to start AOA protocol: ${e.message}")
             disconnectInternal()
             handleConnectionError(
-                "${InnerErrorCode.C55.description}:${e.message ?: "Unknown error"}",
+                "${InnerErrorCode.T10.description}:${e.message ?: "Unknown error"}",
                 connectionCallback,
-                InnerErrorCode.C55.code
+                InnerErrorCode.T10.code
             )
         }
     }
@@ -375,7 +375,7 @@ class UsbStandardHostKernel(
         }
 
         updateStatus(InnerConnectionStatus.DISCONNECTED)
-        handleConnectionError(InnerErrorCode.C56.description, connectionCallback, InnerErrorCode.C56.code)
+        handleConnectionError(InnerErrorCode.T06.description, connectionCallback, InnerErrorCode.T06.code)
     }
 
     /**

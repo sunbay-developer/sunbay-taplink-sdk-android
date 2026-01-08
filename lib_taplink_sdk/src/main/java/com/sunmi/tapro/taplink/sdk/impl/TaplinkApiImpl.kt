@@ -138,7 +138,7 @@ class TaplinkApiImpl : TaplinkApi {
             LogUtil.e(TAG, "SDK not initialized, please call init() first")
             listener.onError(
                 com.sunmi.tapro.taplink.sdk.error.ConnectionError(
-                    "C20",
+                    "T01",
                     "SDK not initialized, please call init() first"
                 )
             )

@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - 管理WebSocket客户端连接
  * - 处理连接状态变化
  * - 处理消息发送和接收
+ * - 集成网络连通性检查
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -33,6 +34,9 @@ class ConnectionManager {
 
     private val isConnected = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    
+    // 网络连通性检查器
+    private val connectivityChecker = NetworkConnectivityChecker()
 
     suspend fun connect(uri: URI): ConnectionResult {
         return withContext(Dispatchers.IO) {
@@ -114,11 +118,21 @@ class ConnectionManager {
                 return false
             }
 
-            client?.send(data)
+            // 检查WebSocket连接的实际状态
+            val client = this.client
+            if (client == null || client.isClosed || client.isClosing) {
+                LogUtil.w(TAG, "Cannot send data: WebSocket client is closed or closing")
+                isConnected.set(false)
+                return false
+            }
+
+            client.send(data)
             LogUtil.d(TAG, "Binary data sent: ${data.size} bytes")
             true
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send binary data: ${e.message}")
+            // 发送失败时更新连接状态
+            isConnected.set(false)
             false
         }
     }
@@ -130,11 +144,75 @@ class ConnectionManager {
                 return false
             }
 
-            client?.send(message)
+            // 检查WebSocket连接的实际状态
+            val client = this.client
+            if (client == null || client.isClosed || client.isClosing) {
+                LogUtil.w(TAG, "Cannot send message: WebSocket client is closed or closing")
+                isConnected.set(false)
+                return false
+            }
+
+            client.send(message)
             LogUtil.d(TAG, "Text message sent: $message")
             true
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send text message: ${e.message}")
+            // 发送失败时更新连接状态
+            isConnected.set(false)
+            false
+        }
+    }
+    
+    /**
+     * 发送心跳消息（带网络连通性检查）
+     * 
+     * 注意：网络连通性检查仅使用ping，不会创建TCP连接，
+     * 这样可以避免干扰现有的WebSocket连接（特别是当服务器只支持单客户端连接时）
+     * 
+     * @param message 心跳消息
+     * @return true if sent successfully, false otherwise
+     */
+    suspend fun sendHeartbeatWithConnectivityCheck(message: String): Boolean {
+        return try {
+            if (!isConnected()) {
+                LogUtil.w(TAG, "Cannot send heartbeat: not connected")
+                return false
+            }
+
+            // 检查WebSocket连接的实际状态
+            val client = this.client
+            if (client == null || client.isClosed || client.isClosing) {
+                LogUtil.w(TAG, "Cannot send heartbeat: WebSocket client is closed or closing")
+                isConnected.set(false)
+                return false
+            }
+
+            // 检查网络连通性（仅对心跳进行额外检查）
+            val uri = currentUri
+            if (uri != null) {
+                val isReachable = connectivityChecker.isHostReachable(
+                    host = uri.host,
+                    port = uri.port,
+                    timeoutMs = 2000 // 2秒超时
+                )
+                
+                if (!isReachable) {
+                    LogUtil.w(TAG, "Cannot send heartbeat: host ${uri.host}:${uri.port} is not reachable")
+                    // 网络不通时，更新连接状态但不立即断开WebSocket
+                    // 让WebSocket自己检测到网络问题并触发onError或onClose
+                    return false
+                }
+            }
+
+            // 发送心跳消息
+            client.send(message)
+            LogUtil.d(TAG, "Heartbeat message sent with connectivity check: $message")
+            true
+            
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to send heartbeat message: ${e.message}")
+            // 发送失败时更新连接状态
+            isConnected.set(false)
             false
         }
     }

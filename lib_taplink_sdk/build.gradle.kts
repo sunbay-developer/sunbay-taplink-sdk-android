@@ -7,8 +7,9 @@ plugins {
 // ==================== 常量配置 ====================
 object SdkVersion {
     const val CODE = 6
-//    const val NAME = "1.0.3"
-    const val NAME = "1.0.7.8"
+
+    //    const val NAME = "1.0.3"
+    const val NAME = "1.0.7.9"
 }
 
 object BuildConfig {

@@ -205,8 +205,8 @@ class ConnectionManager(
             updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
-                    InnerErrorCode.C20.code,
-                    InnerErrorCode.C20.description
+                    InnerErrorCode.T01.code,
+                    InnerErrorCode.T01.description
                 )
             )
             return
@@ -225,8 +225,8 @@ class ConnectionManager(
             updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
-                    InnerErrorCode.C41.code,
-                    "${InnerErrorCode.C41.description}:$protocol"
+                    InnerErrorCode.T17.code,
+                    "${InnerErrorCode.T17.description}:$protocol"
                 )
             )
             return
@@ -272,8 +272,8 @@ class ConnectionManager(
                             )
                         } else {
                             val error = ConnectionError(
-                                errorCode ?: InnerErrorCode.C44.code,
-                                errorMsg ?: InnerErrorCode.C44.description
+                                errorCode ?: InnerErrorCode.T31.code,
+                                errorMsg ?: InnerErrorCode.T31.description
                             )
 
                             // Notify pending reconnection listeners
@@ -469,8 +469,8 @@ class ConnectionManager(
         // Clear pending connection listeners
         if (pendingConnectionListeners.isNotEmpty()) {
             val error = ConnectionError(
-                InnerErrorCode.C45.code,
-                InnerErrorCode.C45.description
+                InnerErrorCode.T08.code,
+                InnerErrorCode.T08.description
             )
             notifyPendingConnectionListenersError(error)
         }
@@ -907,7 +907,7 @@ class ConnectionManager(
     private fun isConnectionError(code: String, msg: String): Boolean {
         // 连接阶段的错误码
         val connectionErrorCodes = setOf(
-            "C20", "C22", "C25", "C33", "C35", "C36", "C41", // 通用连接错误
+            "T01", "T02", "T03", "T04", "T05", "T06", "T17", // 通用连接错误（已从C系列迁移到T系列）
             "-1", // BaseServiceKernel 默认错误码
             "1006", "1002", "1015", // WebSocket 连接错误码
             "CONNECTION_FAILED", "WEBSOCKET_NULL", "SEND_FAILED", // 自定义错误码
