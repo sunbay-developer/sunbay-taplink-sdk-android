@@ -366,7 +366,10 @@ class ReconnectManager(
      * @param listener Connection listener
      */
     fun onAddressChanged(newConnectionConfig: ConnectionConfig, listener: ConnectionListener) {
-        LogUtil.i(TAG, "Service address changed, updating connection config and reconnecting: $newConnectionConfig")
+        LogUtil.i(
+            TAG,
+            "Service address changed, updating connection config and reconnecting: $newConnectionConfig,$lastConnectionConfig"
+        )
 
         // Update saved connection configuration
         lastConnectionConfig = newConnectionConfig

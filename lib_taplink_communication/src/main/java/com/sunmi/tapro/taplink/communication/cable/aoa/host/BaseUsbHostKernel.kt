@@ -283,6 +283,7 @@ abstract class BaseUsbHostKernel(
                     LogUtil.w(TAG, "Error closing USB device connection: ${e.message}")
                 }
             }
+            usbEndpointIn
             
             // 清理连接相关的变量
             usbDeviceConnection = null

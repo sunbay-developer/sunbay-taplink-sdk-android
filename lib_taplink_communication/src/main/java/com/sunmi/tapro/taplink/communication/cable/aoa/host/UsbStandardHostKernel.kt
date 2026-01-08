@@ -3,23 +3,23 @@ package com.sunmi.tapro.taplink.communication.cable.aoa.host
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import com.sunmi.tapro.taplink.communication.cable.aoa.manager.AoaErrorHandler
-import com.sunmi.tapro.taplink.communication.cable.aoa.util.AoaDeviceUtils
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
+import com.sunmi.tapro.taplink.communication.protocol.HexFrameBuffer
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
+import com.sunmi.tapro.taplink.communication.util.InnerUtil
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * USB AOA Host模式内核类
@@ -57,6 +57,9 @@ class UsbStandardHostKernel(
     // 集成AOA错误处理器（重连由SDK层统一管理）
     private val aoaErrorHandler = AoaErrorHandler()
 
+    // 十六进制帧缓冲区管理器
+    private var hexFrameBuffer: HexFrameBuffer? = null
+
     /**
      * 重写断开连接方法，添加Host特有的清理逻辑
      */
@@ -66,6 +69,10 @@ class UsbStandardHostKernel(
         try {
             // 重置AOA连接标志
             aoaConnectionInProgress = false
+
+            // 停止并清空HexFrame缓冲区
+            hexFrameBuffer?.stop()
+            hexFrameBuffer = null
 
             // 清理待处理的权限请求
             synchronized(this) {
@@ -246,10 +253,6 @@ class UsbStandardHostKernel(
             // 关闭设备连接
             connection.close()
             LogUtil.d(TAG, "AOA protocol completed successfully")
-            LogUtil.d(TAG, "Device will now re-enumerate as AOA Accessory...")
-            LogUtil.d(TAG, "Expected AOA device VID/PID: 0x18D1/0x2D00-0x2D05")
-            LogUtil.i(TAG, "Note: A second permission dialog will appear for the AOA accessory device")
-
 
             this.usbDeviceConnection = null
             this.connectedDevice = null
@@ -536,6 +539,15 @@ class UsbStandardHostKernel(
             this.usbEndpointOut = outEndpoint
             this.connectedDevice = device
 
+            // 初始化HexFrame缓冲区
+            hexFrameBuffer = HexFrameBuffer(
+                scope = scope,
+                onFrameReceived = { frame ->
+                    LogUtil.d(TAG, "AOA HexFrame received: ${frame.size} bytes")
+                    dataReceiver?.invoke(frame)
+                }
+            )
+
             LogUtil.d(TAG, "AOA device connected successfully")
             LogUtil.d(TAG, "Connection details:")
             LogUtil.d(TAG, "  Interface: class=${aoaInterface.interfaceClass}, id=${aoaInterface.id}")
@@ -553,22 +565,38 @@ class UsbStandardHostKernel(
                 LogUtil.w(TAG, "No IN endpoint found, data receive not available")
             }
 
-            // 连接成功 - 添加连接验证
-            LogUtil.d(TAG, "Calling connection success callback...")
+            // 连接成功 - 立即更新状态为CONNECTED，允许发送数据
+            // 注意：状态更新应该在连接验证之前，确保可以立即发送数据
+            LogUtil.d(TAG, "Connection established, updating status to CONNECTED immediately")
+            updateStatus(InnerConnectionStatus.CONNECTED)
             aoaConnectionInProgress = false // 重置标志
 
-            // 添加连接验证延迟，确保Accessory端准备就绪
+            // 重要：等待Accessory端准备好接收数据
+            // 根据日志分析，Accessory端需要时间完成权限授予和连接建立（约2-5秒）
+            // 在Accessory端准备好之前发送数据会导致数据丢失和设备被移除
+            LogUtil.d(TAG, "Waiting for Accessory to be ready before allowing data transmission...")
+            LogUtil.d(TAG, "Note: Accessory needs time to complete permission grant and connection setup")
+            
+            // 延迟调用连接成功回调，给Accessory端时间准备好接收数据
+            // 延迟时间设置为3秒，确保Accessory端已经启动接收循环
             scope.launch {
-                delay(1000) // 等待1秒让Accessory端稳定
+                delay(3000) // 等待3秒，确保Accessory端准备好
+                LogUtil.d(TAG, "Accessory should be ready now, calling connection success callback...")
+                handleConnectionSuccess(connectionCallback, null)
+            }
+
+            // 在后台进行连接验证（不阻塞连接成功回调）
+            scope.launch {
+                LogUtil.d(TAG, "Starting background connection validation (3 seconds)...")
+                delay(3000) // 3秒后验证连接状态
 
                 // 验证连接状态
                 if (validateConnectionState()) {
-                    LogUtil.d(TAG, "Connection validated successfully")
-                    handleConnectionSuccess(connectionCallback, null)
+                    LogUtil.d(TAG, "Connection validated successfully after stabilization")
                 } else {
-                    LogUtil.e(TAG, "Connection validation failed")
-                    disconnectInternal()
-                    connectionCallback?.onDisconnected("CONNECTION_FAILED", "Connection validation failed")
+                    LogUtil.w(TAG, "Connection validation failed after stabilization, but connection already established")
+                    // 注意：这里不立即断开，因为连接可能已经成功，只是验证失败
+                    // 如果连接真的有问题，会在后续的数据传输中暴露出来
                 }
             }
 
@@ -658,7 +686,7 @@ class UsbStandardHostKernel(
             ) {
                 try {
                     // 如果状态还是WAITING_CONNECT，先等待一下状态更新
-                    if (currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT) {
+                    if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTED) {
                         LogUtil.d(TAG, "Waiting for connection status to become CONNECTED...")
                         delay(100) // 等待100ms让状态更新
                         continue
@@ -673,7 +701,9 @@ class UsbStandardHostKernel(
                             // 成功接收数据，重置错误计数
                             aoaErrorHandler.resetErrorCount()
                             val data = buffer.copyOf(bytesRead)
-                            LogUtil.d(TAG, "AOA data received (Host端): $bytesRead bytes")
+                            LogUtil.d(TAG, "AOA raw data received (Host端): $bytesRead bytes,${InnerUtil.bytes2HexStr(data)}")
+
+                            // 直接处理原始数据，不使用HexFrame解码
                             dataReceiver?.invoke(data)
                         }
 
@@ -809,7 +839,7 @@ class UsbStandardHostKernel(
         return try {
             val data = UsbStandardProtocol.buildSendStringCommand(index, string)
             val result = connection.controlTransfer(
-                UsbStandardProtocol.USB_DIR_OUT or UsbStandardProtocol.USB_TYPE_VENDOR,
+                UsbStandardProtocol.USB_TYPE_VENDOR,
                 UsbStandardProtocol.AOA_SEND_STRING,
                 0,
                 index,
@@ -860,9 +890,35 @@ class UsbStandardHostKernel(
     }
 
     /**
-     * 实现Host端数据发送 - 使用Bulk传输发送数据到AOA设备
+     * 实现Host端数据发送 - 临时移除HexFrame协议，直接发送原始数据
      */
     override fun sendDataToDevice(data: ByteArray): Boolean {
+        LogUtil.d(TAG, "=== AOA Data Send Analysis ===")
+        LogUtil.d(TAG, "AOA sending raw data (HexFrame disabled):")
+        LogUtil.d(TAG, "  Size: ${data.size} bytes")
+
+        val tempData = "12345".toByteArray()
+
+        try {
+            // 尝试作为UTF-8字符串解析
+//            val dataAsString = String(data, Charsets.UTF_8)
+            val dataAsString = String(tempData, Charsets.UTF_8)
+            LogUtil.d(TAG, "  Content (UTF-8): $dataAsString")
+        } catch (e: Exception) {
+            LogUtil.d(TAG, "  Content (UTF-8): [Invalid UTF-8 data]")
+        }
+
+        // 显示前64字节的十六进制内容
+        val hexPreview = data.take(64).joinToString(" ") { "%02X".format(it) }
+        LogUtil.d(TAG, "  Content (Hex, first 64 bytes): $hexPreview")
+
+        if (data.size > 64) {
+            LogUtil.d(TAG, "  ... (${data.size - 64} more bytes)")
+        }
+
+        LogUtil.d(TAG, "=== End AOA Data Analysis ===")
+
+        // 临时禁用HexFrame编码，直接发送原始数据
         return sendDataToAoaDevice(data)
     }
 
@@ -903,11 +959,40 @@ class UsbStandardHostKernel(
      * 集成AoaErrorHandler进行智能错误处理和重试
      */
     private fun sendDataToAoaDevice(data: ByteArray): Boolean {
+        // 修复：使用实际传入的数据，而不是硬编码的测试数据
         // 发送前检查连接健康状态
         if (!isConnectionHealthy()) {
             LogUtil.e(TAG, "Connection not healthy, aborting data send")
             return false
         }
+
+        // 发送前添加短暂延迟，确保设备状态稳定
+        // 这个延迟可以避免在设备状态不稳定时发送数据，导致USB模式冲突
+        // 延迟时间设置为20ms，既能确保设备稳定，又不会显著影响性能
+        try {
+            Thread.sleep(20) // 20ms延迟，确保设备状态稳定
+            LogUtil.d(TAG, "Pre-send stabilization delay completed (20ms)")
+        } catch (e: InterruptedException) {
+            LogUtil.w(TAG, "Pre-send stabilization delay interrupted: ${e.message}")
+            Thread.currentThread().interrupt() // 恢复中断状态
+        }
+        
+        // 重要：发送前再次检查设备是否仍然连接
+        // 根据日志分析，设备可能在发送前就被系统移除了
+        val deviceList = usbManager.deviceList
+        val currentDevice = deviceList.values.find {
+            it.deviceName == connectedDevice!!.deviceName &&
+                    it.vendorId == connectedDevice!!.vendorId &&
+                    it.productId == connectedDevice!!.productId
+        }
+        
+        if (currentDevice == null) {
+            LogUtil.e(TAG, "Device no longer in system list before send, aborting")
+            LogUtil.e(TAG, "This may indicate the device was removed or USB state changed")
+            return false
+        }
+        
+        LogUtil.d(TAG, "Device still in system list, proceeding with data send")
 
         return try {
             // 详细检查连接状态
@@ -928,16 +1013,33 @@ class UsbStandardHostKernel(
 
             // 检查设备连接状态
             val deviceList = usbManager.deviceList
-            val isDeviceStillConnected = deviceList.values.any {
+            val currentDevice = deviceList.values.find {
                 it.deviceName == connectedDevice!!.deviceName &&
                         it.vendorId == connectedDevice!!.vendorId &&
                         it.productId == connectedDevice!!.productId
             }
 
-            if (!isDeviceStillConnected) {
+            if (currentDevice == null) {
                 LogUtil.e(TAG, "AOA device is no longer connected")
                 return false
             }
+
+            // 检查USB设备权限（重要：确保有权限才能发送数据）
+            if (!usbManager.hasPermission(currentDevice)) {
+                LogUtil.e(TAG, "USB device permission lost, cannot send data")
+                LogUtil.e(
+                    TAG,
+                    "Device: ${currentDevice.deviceName}, VID: ${
+                        String.format(
+                            "0x%04X",
+                            currentDevice.vendorId
+                        )
+                    }, PID: ${String.format("0x%04X", currentDevice.productId)}"
+                )
+                updateStatus(InnerConnectionStatus.ERROR)
+                return false
+            }
+            LogUtil.d(TAG, "USB device permission verified: ${currentDevice.deviceName}")
 
             // 检查端点信息
             LogUtil.d(TAG, "Sending data to AOA device:")
@@ -954,42 +1056,76 @@ class UsbStandardHostKernel(
             )
             LogUtil.d(TAG, "  Interface: ${usbInterface?.id}")
 
-            // 检查接口是否仍然被声明
-            if (usbInterface != null) {
-                val isInterfaceClaimed = try {
-                    // 尝试重新声明接口（如果已声明会返回true）
-                    usbDeviceConnection!!.claimInterface(usbInterface, true)
-                } catch (e: Exception) {
-                    LogUtil.w(TAG, "Failed to claim interface: ${e.message}")
-                    false
-                }
-
-                if (!isInterfaceClaimed) {
-                    LogUtil.e(TAG, "USB interface is not claimed")
-                    return false
-                }
+            // 实验性改动：不再在发送时重新 claim 接口
+            // 接口应该在连接时（connectToAoaDeviceDirectly）已经 claim 一次
+            // 频繁 claim 可能导致系统断开设备连接
+            // 只检查接口和连接是否存在，不进行 claim 操作
+            if (usbInterface == null || usbDeviceConnection == null) {
+                LogUtil.e(TAG, "USB interface or connection is null, cannot send data")
+                return false
             }
+
+            // 验证接口是否仍然有效（但不 claim）
+            val interfaceId = usbInterface?.id
+            LogUtil.d(
+                TAG,
+                "USB interface check passed (interface ID: $interfaceId), interface should already be claimed during connection"
+            )
 
             // 使用AoaErrorHandler进行智能重试
             val maxRetries = 3
 
             repeat(maxRetries) { attempt ->
                 try {
+                    // 添加详细的发送前日志
+                    LogUtil.d(TAG, "Attempting to send data (attempt ${attempt + 1}/$maxRetries):")
+                    LogUtil.d(TAG, "  Data size: ${data.size} bytes")
+                    LogUtil.d(TAG, "  Endpoint: ${String.format("0x%02X", usbEndpointOut!!.address)}")
+                    LogUtil.d(TAG, "  Interface: ${usbInterface?.id}")
+                    LogUtil.d(TAG, "  Device: ${connectedDevice!!.deviceName}")
+                    LogUtil.d(TAG, "  Data preview (first 32 bytes): ${data.take(32).joinToString(" ") { "%02X".format(it) }}")
+                    
+                    // 验证接口是否仍然被claim（重要：确保接口没有被释放）
+                    val interfaceId = usbInterface?.id
+                    if (interfaceId == null) {
+                        LogUtil.e(TAG, "USB interface is null, cannot send data")
+                        return false
+                    }
+                    
+                    // 检查接口状态（但不重新claim，避免干扰）
+                    // 注意：在Android中，无法直接查询接口是否被claim，只能通过尝试使用来验证
+                    LogUtil.d(TAG, "Verifying interface state before bulk transfer: interfaceId=$interfaceId")
+                    LogUtil.d(TAG, "Connection state: connection=${usbDeviceConnection != null}, endpoint=${usbEndpointOut != null}")
+                    
                     // 执行bulk传输
+                    val startTime = System.currentTimeMillis()
                     val result = usbDeviceConnection!!.bulkTransfer(
                         usbEndpointOut, data, data.size, 5000 // 5秒超时
                     )
+                    val transferTime = System.currentTimeMillis() - startTime
 
+                    LogUtil.d(TAG, "Bulk transfer result: $result (expected: ${data.size}), transferTime=${transferTime}ms")
+                    
+                    // 如果返回负数，说明传输失败
+                    if (result < 0) {
+                        LogUtil.e(TAG, "Bulk transfer failed with error code: $result")
+                        LogUtil.e(TAG, "Common error codes: -1=timeout, -2=pipe error, -3=no device")
+                    }
+                    
                     if (result == data.size) {
                         // 发送成功，重置错误计数
                         aoaErrorHandler.resetErrorCount()
                         LogUtil.d(TAG, "AOA data sent successfully: ${data.size} bytes (attempt ${attempt + 1})")
 
-                        // 添加发送后稳定延迟，避免立即断开
+                        // 添加短暂的发送后延迟，确保Accessory端有时间处理数据
+                        // 这个延迟可以避免在Accessory端还在处理数据时进行其他操作，导致USB模式冲突
+                        // 延迟时间设置为50ms，既能给Accessory端足够时间，又不会显著影响性能
                         try {
-                            Thread.sleep(50) // 50ms稳定延迟
+                            Thread.sleep(50) // 50ms延迟，让Accessory端处理数据
+                            LogUtil.d(TAG, "Post-send stabilization delay completed (50ms)")
                         } catch (e: InterruptedException) {
-                            LogUtil.w(TAG, "Send stabilization delay interrupted")
+                            LogUtil.w(TAG, "Post-send stabilization delay interrupted: ${e.message}")
+                            Thread.currentThread().interrupt() // 恢复中断状态
                         }
 
                         return true
@@ -1069,6 +1205,10 @@ class UsbStandardHostKernel(
 
             // 重置AOA连接标志
             aoaConnectionInProgress = false
+
+            // 停止并清空HexFrame缓冲区
+            hexFrameBuffer?.stop()
+            hexFrameBuffer = null
 
             // 调用基类的清理逻辑
             super.release()

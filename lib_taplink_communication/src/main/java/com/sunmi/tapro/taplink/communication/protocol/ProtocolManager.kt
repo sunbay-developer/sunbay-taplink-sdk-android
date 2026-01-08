@@ -148,16 +148,10 @@ object ProtocolManager {
      * @param protocol 协议字符串
      * @return URI? WebSocket URI，转换失败返回null
      */
-    fun lanProtocolToWebSocketUri(protocol: String): URI? {
-        val result = parseProtocol(protocol)
-        if (result !is ProtocolParseResult.LanProtocol) {
-            LogUtil.e(TAG, "Protocol is not a LAN protocol: $protocol")
-            return null
-        }
-
+    fun lanProtocolToWebSocketUri(lanProtocol: ProtocolParseResult.LanProtocol): URI? {
         return try {
-            val scheme = if (result.port == 443) "wss" else "ws"
-            URI("$scheme://${result.ip}:${result.port}")
+            val scheme = if (lanProtocol.port == 443) "wss" else "ws"
+            URI("$scheme://${lanProtocol.ip}:${lanProtocol.port}")
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to create WebSocket URI: ${e.message}")
             null

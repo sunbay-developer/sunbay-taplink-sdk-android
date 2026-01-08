@@ -8,7 +8,7 @@ import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.IServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
-import com.sunmi.tapro.taplink.communication.lan.WebSocketClientKernel
+import com.sunmi.tapro.taplink.communication.lan.LanClientKernel
 import com.sunmi.tapro.taplink.communication.local.kernel.LocalServiceKernel
 import com.sunmi.tapro.taplink.communication.cable.vsp.VSPClientKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
@@ -159,7 +159,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
      */
     private fun isServiceKernelOfType(kernel: IServiceKernel, serviceKey: String): Boolean {
         return when (serviceKey) {
-            SERVICE_KEY_LAN -> kernel is WebSocketClientKernel
+            SERVICE_KEY_LAN -> kernel is LanClientKernel
             SERVICE_KEY_USB -> kernel is UsbStandardHostKernel
             SERVICE_KEY_SERIAL -> kernel is SerialServiceKernel
             SERVICE_KEY_VSP -> kernel is VSPClientKernel
@@ -181,7 +181,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         return when (serviceKey) {
             SERVICE_KEY_LAN -> {
                 LogUtil.d(TAG, "Creating LAN service")
-                WebSocketClientKernel(appId, appSecretKey, mContext)
+                LanClientKernel(appId, appSecretKey, mContext)
             }
 
             SERVICE_KEY_USB -> {

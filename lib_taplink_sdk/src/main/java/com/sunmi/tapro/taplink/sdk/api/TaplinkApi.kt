@@ -75,7 +75,6 @@ interface TaplinkApi {
      * @return String 设备ID，如果未连接返回null
      */
     fun getConnectedDeviceId(): String?
-
     /**
      * 获取连接模式
      *

@@ -86,7 +86,7 @@ class TaplinkApiImpl : TaplinkApi {
         }
 
         // Check if auto-connect is needed
-        checkAutoConnect()
+//        checkAutoConnect()
     }
 
     /**
