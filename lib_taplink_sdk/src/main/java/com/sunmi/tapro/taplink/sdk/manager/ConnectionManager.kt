@@ -387,9 +387,7 @@ class ConnectionManager(
 
                     // 检查是否是同一个设备
                     val sameDevice =
-                        (deviceId.isNullOrEmpty() || deviceId == "unknown") || (deviceId != null && newServiceName.endsWith(
-                            deviceId!!
-                        ))
+                        (deviceId.isNullOrEmpty() || deviceId == "unknown") || (newServiceName.endsWith(deviceId))
 
                     if (!sameDevice) {
                         LogUtil.d(TAG, "Service address change from different device, ignoring")

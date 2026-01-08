@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
+import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
  * 强制预授权交易请求
@@ -15,6 +16,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
  * @param attach 附加信息（可选）
  * @param notifyUrl 通知URL（可选）
  * @param requestTimeout 请求超时时间（可选，单位：秒）
+ * @param staffInfo 员工信息（可选）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -27,7 +29,8 @@ data class ForcedAuthRequest(
     val paymentMethod: PaymentMethodInfo? = null,
     val attach: String? = null,
     val notifyUrl: String? = null,
-    val requestTimeout: Long? = null
+    val requestTimeout: Long? = null,
+    val staffInfo: StaffInfo? = null
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -65,6 +68,7 @@ data class ForcedAuthRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
+        private var staffInfo: StaffInfo? = null
 
         /**
          * 设置参考订单号
@@ -131,6 +135,14 @@ data class ForcedAuthRequest(
         }
 
         /**
+         * 设置员工信息
+         */
+        fun setStaffInfo(staffInfo: StaffInfo): Builder {
+            this.staffInfo = staffInfo
+            return this
+        }
+
+        /**
          * 构建ForcedAuthRequest实例
          * 
          * @throws TransactionRequestValidationException 如果验证失败
@@ -144,7 +156,8 @@ data class ForcedAuthRequest(
                 paymentMethod = paymentMethod,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                staffInfo = staffInfo
             )
 
             val validationResult = request.validate()
