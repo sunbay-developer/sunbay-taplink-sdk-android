@@ -102,6 +102,16 @@
     <string name="error_t34_description">Tapro响应超时</string>
     <string name="error_t34_solution">增加超时时长或检查系统响应</string>
 
+    <!-- T系列错误码 - 扩展连接错误 (T35, T37, T38) -->
+    <string name="error_t35_description">线缆未连接</string>
+    <string name="error_t35_solution">检查线缆物理连接状态</string>
+    
+    <string name="error_t37_description">未建立连接</string>
+    <string name="error_t37_solution">先调用connect()建立连接</string>
+    
+    <string name="error_t38_description">Tapro初始化失败</string>
+    <string name="error_t38_solution">检查初始化参数和系统状态</string>
+
     <!-- 其他错误码 -->
     <string name="error_e04_description">系统异常</string>
     <string name="error_e04_solution">捕获系统抛出的异常并反馈给调用方</string>

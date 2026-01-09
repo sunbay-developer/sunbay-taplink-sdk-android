@@ -102,6 +102,16 @@
     <string name="error_t34_description">Tapro response timeout</string>
     <string name="error_t34_solution">Increase timeout duration or check system response</string>
 
+    <!-- T Series Error Codes - Extended Connection Errors (T35, T37, T38) -->
+    <string name="error_t35_description">Cable not connected</string>
+    <string name="error_t35_solution">Check cable physical connection status</string>
+    
+    <string name="error_t37_description">No connection established</string>
+    <string name="error_t37_solution">Call connect() to establish connection first</string>
+    
+    <string name="error_t38_description">Tapro initialization failed</string>
+    <string name="error_t38_solution">Check initialization parameters and system status</string>
+
     <!-- Other Error Codes -->
     <string name="error_e04_description">System exception</string>
     <string name="error_e04_solution">Capture system thrown exception and feedback to caller</string>
