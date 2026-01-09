@@ -180,7 +180,7 @@ class LanClientKernel(
 
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Error in performConnect: ${e.message}")
-                notifyConnectionError("Connection failed: ${e.message}")
+                notifyConnectionError("Connection failed: ${e.message}", InnerErrorCode.T04)
             }
         }
     }
@@ -361,7 +361,7 @@ class LanClientKernel(
                 LogUtil.e(TAG, "LAN connection error: ${exception.message}")
 
                 // 通知连接错误（使用AsyncServiceKernel提供的方法）
-                notifyConnectionError("Connection error: ${exception.message}")
+                notifyConnectionError("Connection error: ${exception.message}", InnerErrorCode.T04)
             }
         })
 
@@ -690,7 +690,7 @@ class LanClientKernel(
                     if (consecutiveFailures >= 3) {
                         LogUtil.e(TAG, "Too many heartbeat failures, disconnecting connection but keeping service discovery")
                         // 通知连接错误
-                        notifyConnectionError("Heartbeat failed: $error")
+                        notifyConnectionError("Heartbeat failed: $error", InnerErrorCode.T04)
                         // 心跳失败时断开连接，但不停止mDNS服务发现，以便在设备恢复后能够重新发现并连接
                         disconnectOnHeartbeatFailure()
                     }
