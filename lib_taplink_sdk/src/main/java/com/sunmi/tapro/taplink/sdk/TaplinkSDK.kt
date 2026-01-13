@@ -318,6 +318,10 @@ class TaplinkSDK private constructor() : TaplinkApi {
         apiImpl.clearDeviceCache()
     }
 
+    override fun getConnectionConfig(): ConnectionConfig? {
+        return apiImpl.getConnectionConfig()
+    }
+
     // ==================== 向后兼容接口（实例方法，已弃用） ====================
 
     override fun execute(request: PaymentRequest, callback: PaymentCallback) {

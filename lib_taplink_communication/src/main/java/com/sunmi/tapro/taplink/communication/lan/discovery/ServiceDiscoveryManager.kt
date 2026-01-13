@@ -7,6 +7,7 @@ import com.sunmi.tapro.taplink.communication.lan.model.ServiceInfo
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 基于Android NSD的服务发现管理器
@@ -42,6 +43,12 @@ class ServiceDiscoveryManager(
     private val discoveredServices = ConcurrentHashMap<String, ServiceInfo>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
+    // 用于防止重复解析同一个服务
+    private val resolvingServices = ConcurrentHashMap<String, AtomicBoolean>()
+    
+    // 用于同步服务更新操作
+    private val serviceUpdateLock = kotlinx.coroutines.sync.Mutex()
+
     suspend fun discoverServices(serviceType: String, timeoutMs: Long = DISCOVERY_TIMEOUT_MS): List<ServiceInfo> {
         return withContext(Dispatchers.IO) {
             try {
@@ -49,6 +56,7 @@ class ServiceDiscoveryManager(
                 
                 // 清理之前的发现结果
                 discoveredServices.clear()
+                resolvingServices.clear()
                 
                 // 开始发现
                 val tempListener = createDiscoveryListener()
@@ -154,27 +162,44 @@ class ServiceDiscoveryManager(
             }
             
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                LogUtil.d(TAG, "Service found: ${serviceInfo.serviceName}")
+                LogUtil.d(TAG, "Service found: ${serviceInfo.serviceName}, host=${serviceInfo.host?.hostAddress}, port=${serviceInfo.port}")
                 
-                // 解析服务信息
-                nsdManager.resolveService(serviceInfo, createResolveListener { resolvedInfo ->
-                    val service = convertToServiceInfo(resolvedInfo)
-                    if (service != null) {
-                        val existing = discoveredServices.put(service.name, service)
-                        
-                        if (existing == null) {
-                            serviceChangeListener?.onServiceFound(service)
-                        } else if (existing != service) {
-                            serviceChangeListener?.onServiceUpdated(existing, service)
-                        }
-                    }
-                })
+                val serviceName = serviceInfo.serviceName
+                
+                // 检查服务是否已存在，如果存在，可能是重新注册，需要重新解析以检测地址变化
+                val existing = discoveredServices[serviceName]
+                if (existing != null) {
+                    LogUtil.i(TAG, "Service $serviceName already exists, but received onServiceFound again - may be re-registered, allowing re-resolution to detect address changes")
+                    // 清理解析状态，允许重新解析（即使当前正在解析中，也允许重新解析以检测地址变化）
+                    resolvingServices.remove(serviceName)
+                }
+                
+                // 检查是否已经在解析这个服务，防止重复解析
+                val isResolving = resolvingServices.computeIfAbsent(serviceName) { AtomicBoolean(false) }
+                
+                if (isResolving.compareAndSet(false, true)) {
+                    // 成功设置为正在解析状态，开始解析
+                    LogUtil.d(TAG, "Starting to resolve service: $serviceName")
+                    
+                    // 解析服务信息
+                    nsdManager.resolveService(serviceInfo, createResolveListener(serviceName) { resolvedInfo ->
+                        handleServiceResolved(serviceName, resolvedInfo)
+                    })
+                } else {
+                    // 服务已经在解析中，跳过
+                    LogUtil.d(TAG, "Service $serviceName is already being resolved, skipping")
+                }
             }
             
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                 LogUtil.d(TAG, "Service lost: ${serviceInfo.serviceName}")
                 
-                val service = discoveredServices.remove(serviceInfo.serviceName)
+                val serviceName = serviceInfo.serviceName
+                
+                // 清理解析状态
+                resolvingServices.remove(serviceName)
+                
+                val service = discoveredServices.remove(serviceName)
                 if (service != null) {
                     serviceChangeListener?.onServiceLost(service)
                 }
@@ -183,12 +208,61 @@ class ServiceDiscoveryManager(
     }
     
     /**
+     * 处理服务解析完成
+     */
+    private fun handleServiceResolved(serviceName: String, resolvedInfo: NsdServiceInfo) {
+        scope.launch {
+            try {
+                serviceUpdateLock.lock()
+                
+                val service = convertToServiceInfo(resolvedInfo)
+                if (service != null) {
+                    val existing = discoveredServices[service.name]
+                    
+                    if (existing == null) {
+                        // 新服务
+                        discoveredServices[service.name] = service
+                        LogUtil.i(TAG, "New service discovered: ${service.name} at ${service.getAddress()}")
+                        serviceChangeListener?.onServiceFound(service)
+                    } else {
+                        // 服务已存在，检查是否有变化
+                        val addressChanged = existing.host != service.host || existing.port != service.port
+                        if (addressChanged) {
+                            LogUtil.i(
+                                TAG,
+                                "Service address changed: ${service.name}, ${existing.getAddress()} -> ${service.getAddress()}"
+                            )
+                            discoveredServices[service.name] = service
+                            serviceChangeListener?.onServiceUpdated(existing, service)
+                        } else if (existing != service) {
+                            // 地址未变化，但其他属性变化了
+                            discoveredServices[service.name] = service
+                            serviceChangeListener?.onServiceUpdated(existing, service)
+                        } else {
+                            // 服务信息完全相同，可能是重复发现，记录日志但不触发回调
+                            LogUtil.d(TAG, "Service found again with same info: ${service.name} at ${service.getAddress()}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error handling resolved service $serviceName: ${e.message}")
+            } finally {
+                serviceUpdateLock.unlock()
+                // 清理解析状态
+                resolvingServices.remove(serviceName)
+            }
+        }
+    }
+    
+    /**
      * 创建服务解析监听器
      */
-    private fun createResolveListener(onResolved: (NsdServiceInfo) -> Unit): NsdManager.ResolveListener {
+    private fun createResolveListener(serviceName: String, onResolved: (NsdServiceInfo) -> Unit): NsdManager.ResolveListener {
         return object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 LogUtil.w(TAG, "Resolve failed: ${serviceInfo.serviceName}, error: $errorCode")
+                // 清理解析状态
+                resolvingServices.remove(serviceName)
             }
             
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
@@ -230,6 +304,7 @@ class ServiceDiscoveryManager(
         discoveryListener = null
         serviceChangeListener = null
         discoveredServices.clear()
+        resolvingServices.clear()
     }
     
     /**

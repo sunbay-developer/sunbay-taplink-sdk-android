@@ -305,6 +305,7 @@ class PaymentManager(
      * Process received response data
      */
     private fun processReceivedResponse(responseJson: String) {
+        LogUtil.e(TAG, "PaymentManager:processReceivedResponse: ${responseJson}")
         try {
             if (responseJson.isBlank()) {
                 return

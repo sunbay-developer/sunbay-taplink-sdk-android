@@ -2,6 +2,8 @@ package com.sunmi.tapro.taplink.communication.lan.heartbeat
 
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import kotlinx.coroutines.*
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 心跳管理器
@@ -11,8 +13,10 @@ import kotlinx.coroutines.*
  * - 心跳配置动态调整
  * - 心跳状态监控
  *
- * 简化设计：不再使用接口，直接使用具体类
- * 避免过度设计，保持简单实用
+ * 修复版本：
+ * - 使用独立心跳线程，避免被其他协程阻塞
+ * - 优化超时检测机制
+ * - 增强错误处理和恢复能力
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -23,8 +27,16 @@ class HeartbeatManager {
         private const val TAG = "HeartbeatManager"
     }
 
+    // 使用专用的心跳调度器，确保心跳不被其他操作影响
+    private val heartbeatDispatcher = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "HeartbeatThread").apply {
+            isDaemon = true
+            priority = Thread.MAX_PRIORITY // 高优先级确保心跳及时执行
+        }
+    }.asCoroutineDispatcher()
+
     private var config: HeartbeatConfig = HeartbeatConfig()
-    private var isRunning = false
+    private val isRunning = AtomicBoolean(false)
     private var heartbeatJob: Job? = null
     private var listener: HeartbeatListener? = null
     private var sender: HeartbeatSender? = null
@@ -32,6 +44,7 @@ class HeartbeatManager {
 
     private var lastSentTime = 0L
     private var consecutiveFailures = 0
+    private var timeoutCheckJob: Job? = null
 
     /**
      * 开始心跳
@@ -39,27 +52,30 @@ class HeartbeatManager {
      * @param config 心跳配置
      */
     fun startHeartbeat(config: HeartbeatConfig, sender: HeartbeatSender) {
-        if (isRunning) {
+        if (isRunning.get()) {
             LogUtil.w(TAG, "Heartbeat already running, stopping first")
             stopHeartbeat()
         }
 
         this.config = config
         this.sender = sender
-        this.isRunning = true
+        this.isRunning.set(true)
         this.consecutiveFailures = 0
 
-        LogUtil.d(TAG, "Starting heartbeat with interval: ${config.intervalMs}ms")
+        LogUtil.d(TAG, "Starting heartbeat with interval: ${config.intervalMs}ms, timeout: ${config.timeoutMs}ms")
 
-        heartbeatJob = CoroutineScope(Dispatchers.IO).launch {
-            while (isActive && isRunning) {
+        heartbeatJob = CoroutineScope(heartbeatDispatcher).launch {
+            while (isActive && isRunning.get()) {
                 try {
                     delay(config.intervalMs)
 
-                    if (!isRunning) break
+                    if (!isRunning.get()) break
 
                     sendHeartbeat()
 
+                } catch (e: CancellationException) {
+                    LogUtil.d(TAG, "Heartbeat cancelled")
+                    break
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Heartbeat error: ${e.message}")
                     handleHeartbeatError("Heartbeat exception: ${e.message}")
@@ -71,7 +87,7 @@ class HeartbeatManager {
                 }
             }
 
-            isRunning = false
+            isRunning.set(false)
             LogUtil.d(TAG, "Heartbeat loop ended")
         }
     }
@@ -80,12 +96,18 @@ class HeartbeatManager {
      * 停止心跳
      */
     fun stopHeartbeat() {
-        if (!isRunning) return
+        if (!isRunning.get()) return
 
         LogUtil.d(TAG, "Stopping heartbeat")
-        isRunning = false
+        isRunning.set(false)
+        
+        // 取消心跳任务
         heartbeatJob?.cancel()
         heartbeatJob = null
+        
+        // 取消超时检测任务
+        timeoutCheckJob?.cancel()
+        timeoutCheckJob = null
     }
 
     /**
@@ -101,7 +123,7 @@ class HeartbeatManager {
         listener?.onConfigUpdated(oldConfig, config)
 
         // 如果正在运行，重启以应用新配置
-        if (isRunning && sender != null) {
+        if (isRunning.get() && sender != null) {
             LogUtil.d(TAG, "Restarting heartbeat with new config")
             val currentSender = sender!!
             stopHeartbeat()
@@ -114,7 +136,7 @@ class HeartbeatManager {
      *
      * @return true if running, false otherwise
      */
-    fun isRunning(): Boolean = isRunning
+    fun isRunning(): Boolean = isRunning.get()
 
     /**
      * 获取当前心跳配置
@@ -131,6 +153,25 @@ class HeartbeatManager {
     fun setHeartbeatListener(listener: HeartbeatListener?) {
         this.listener = listener
         LogUtil.d(TAG, "Heartbeat listener ${if (listener != null) "set" else "removed"}")
+    }
+
+    /**
+     * 检查是否是心跳响应
+     *
+     * @param message 接收到的消息
+     * @return true 如果是心跳响应，false 否则
+     */
+    fun isHeartbeatResponse(message: String): Boolean {
+        // 更严格的心跳响应检测
+        return try {
+            // 检查是否是JSON格式的pong响应
+            message.contains("\"type\":\"pong\"") ||
+            message.contains("pong") ||
+            // 或者是简单的pong响应
+            message.trim().equals("pong", ignoreCase = true)
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
@@ -174,10 +215,12 @@ class HeartbeatManager {
         val currentTime = System.currentTimeMillis()
         lastSentTime = currentTime
 
-        // 使用协程发送心跳（支持异步连通性检查）
-        CoroutineScope(Dispatchers.IO).launch {
+        // 使用专用调度器发送心跳，并设置发送超时
+        CoroutineScope(heartbeatDispatcher).launch {
             try {
-                val success = sender?.sendHeartbeat(config.message) ?: false
+                val success = withTimeout(config.sendTimeoutMs) {
+                    sender?.sendHeartbeat(config.message) ?: false
+                }
 
                 if (success) {
                     // 更新统计
@@ -186,14 +229,17 @@ class HeartbeatManager {
                         lastSentTime = currentTime
                     )
 
-                    LogUtil.d(TAG, "Heartbeat sent successfully")
+                    LogUtil.d(TAG, "Heartbeat sent successfully at $currentTime")
                     listener?.onHeartbeatSent(currentTime)
 
-                    // 启动超时检测
-                    startHeartbeatTimeoutCheck()
+                    // 启动增强的超时检测
+                    startEnhancedTimeoutCheck()
                 } else {
                     handleHeartbeatError("Failed to send heartbeat")
                 }
+            } catch (e: TimeoutCancellationException) {
+                LogUtil.e(TAG, "Heartbeat send timeout: ${config.sendTimeoutMs}ms")
+                handleHeartbeatError("Heartbeat send timeout")
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Exception during heartbeat send: ${e.message}")
                 handleHeartbeatError("Heartbeat send exception: ${e.message}")
@@ -202,24 +248,31 @@ class HeartbeatManager {
     }
 
     /**
-     * 启动心跳超时检测
+     * 启动心跳超时检测（简化版）
      */
-    private fun startHeartbeatTimeoutCheck() {
-        CoroutineScope(Dispatchers.IO).launch {
+    private fun startEnhancedTimeoutCheck() {
+        // 取消之前的超时检测
+        timeoutCheckJob?.cancel()
+        
+        timeoutCheckJob = CoroutineScope(heartbeatDispatcher).launch {
+            val sentTime = lastSentTime
+            
+            // 等待超时时间
             delay(config.timeoutMs)
-
+            
             // 检查是否在超时时间内收到了响应
-            val timeSinceLastSent = System.currentTimeMillis() - lastSentTime
-            val timeSinceLastReceived = System.currentTimeMillis() - stats.lastReceivedTime
-
-            // 如果发送后超过超时时间还没收到响应，认为超时
-            if (timeSinceLastSent >= config.timeoutMs &&
-                (stats.lastReceivedTime == 0L || timeSinceLastReceived > timeSinceLastSent)
-            ) {
+            if (!hasReceivedResponseSince(sentTime)) {
                 LogUtil.w(TAG, "Heartbeat timeout detected: ${config.timeoutMs}ms")
                 handleHeartbeatTimeout()
             }
         }
+    }
+
+    /**
+     * 检查是否在指定时间后收到了响应
+     */
+    private fun hasReceivedResponseSince(sentTime: Long): Boolean {
+        return stats.lastReceivedTime > sentTime
     }
 
     /**
@@ -262,10 +315,11 @@ class HeartbeatManager {
      * 心跳配置
      */
     data class HeartbeatConfig(
-        val intervalMs: Long = 2_000L,  // 2秒间隔，总共3次心跳在6秒内完成
-        val timeoutMs: Long = 5_000L,   // 5秒超时，与间隔时间一致
-        val maxRetryCount: Int = 3,     // 最大重试3次
-        val message: String = "{\"type\":\"ping\"}"
+        val intervalMs: Long = 5_000L,      // 5秒间隔
+        val timeoutMs: Long = 5_000L,      // 每次检测5秒超时
+        val maxRetryCount: Int = 3,         // 连续3次失败，总共15秒（3次 × 5秒）
+        val sendTimeoutMs: Long = 3_000L,   // 发送超时时间
+        val message: String = "{\"type\":\"ping\",\"timestamp\":${System.currentTimeMillis()}}"
     ) {
         /**
          * 验证配置是否有效
@@ -273,7 +327,12 @@ class HeartbeatManager {
          * @return true if valid, false otherwise
          */
         fun isValid(): Boolean {
-            return intervalMs > 0 && timeoutMs > 0 && maxRetryCount > 0 && message.isNotEmpty()
+            return intervalMs > 0 && 
+                   timeoutMs > 0 && 
+                   maxRetryCount > 0 && 
+                   sendTimeoutMs > 0 &&
+                   sendTimeoutMs < timeoutMs &&
+                   message.isNotEmpty()
         }
     }
 
@@ -326,6 +385,14 @@ class HeartbeatManager {
          * @param roundTripTime 往返时间
          */
         fun onHeartbeatResponse(responseTime: Long, roundTripTime: Long)
+
+        /**
+         * 心跳响应延迟警告
+         *
+         * @param timeoutMs 超时时间
+         * @param ratio 延迟比例（0.0-1.0）
+         */
+        fun onHeartbeatDelayed(timeoutMs: Long, ratio: Double) {}
 
         /**
          * 心跳超时

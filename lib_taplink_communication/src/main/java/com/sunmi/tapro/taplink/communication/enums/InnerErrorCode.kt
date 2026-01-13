@@ -74,7 +74,16 @@ sealed class InnerErrorCode(
     // 连接状态错误 (T35-T38) - 扩展连接相关错误
     object T35 : InnerErrorCode("T35") // 线缆未连接
     object T37 : InnerErrorCode("T37") // 未建立连接
-    object T38 : InnerErrorCode("T38") // Tapro初始化失败
+    object T38 : InnerErrorCode("T38") // host交易拒绝
+    
+    // 交易处理错误 (T39) - Host交易处理中
+    object T39 : InnerErrorCode("T39") // Host交易处理中，需要查询
+    
+    // 交易处理错误 (T40) - 终止失败
+    object T40 : InnerErrorCode("T40") // 终止失败
+    
+    // 连接认证错误 (T41) - 连接认证失败
+    object T41 : InnerErrorCode("T41") // 连接认证失败
 
     // ==================== 其他错误码 ====================
     object Exception : InnerErrorCode("E04")
@@ -191,6 +200,15 @@ sealed class InnerErrorCode(
                 "T35" -> T35
                 "T37" -> T37
                 "T38" -> T38
+                
+                // 交易处理错误 (T39)
+                "T39" -> T39
+                
+                // 交易处理错误 (T40)
+                "T40" -> T40
+                
+                // 连接认证错误 (T41)
+                "T41" -> T41
 
                 // 向后兼容：C系列错误码对象
                 "C01" -> C01
@@ -251,7 +269,7 @@ sealed class InnerErrorCode(
                 T01, T02, T03, T04, T05, T06, T07, T08, T09, T10,
                 T11, T12, T13, T14, T15, T16, T17, T18, T19, T20,
                 T21, T22, T23, T24, T25, T27, T28, T29, T30, T31, T34,
-                T35, T37, T38,
+                T35, T37, T38, T39, T40, T41,
                 // 其他错误码
                 Exception, Timeout,
                 // C 系列错误码（向后兼容）

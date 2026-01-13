@@ -7,6 +7,11 @@ import org.java_websocket.handshake.ServerHandshake
 import java.net.URI
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLSocketFactory
 
 /**
  * WebSocket连接管理器
@@ -24,7 +29,43 @@ class ConnectionManager {
 
     companion object {
         private const val TAG = "ConnectionManager"
-        private const val CONNECTION_TIMEOUT_MS = 10_000L
+        // wss 连接需要 TLS 握手，给更多时间
+        // ws 连接不需要 TLS，时间可以短一些
+        private const val CONNECTION_TIMEOUT_MS_WS = 15_000L  // ws:// 15秒
+        private const val CONNECTION_TIMEOUT_MS_WSS = 45_000L  // wss:// 45秒（TLS握手需要更多时间）
+    }
+    
+    /**
+     * 根据 URI scheme 获取连接超时时间
+     */
+    private fun getConnectionTimeout(uri: URI): Long {
+        return if (uri.scheme == "wss") {
+            CONNECTION_TIMEOUT_MS_WSS
+        } else {
+            CONNECTION_TIMEOUT_MS_WS
+        }
+    }
+    
+    /**
+     * 创建接受自签名证书的 SSL Socket Factory
+     * 
+     * 注意：这仅用于 LAN 环境下的自签名证书，生产环境应使用严格的证书验证
+     */
+    private fun createTrustAllSSLSocketFactory(): SSLSocketFactory? {
+        return try {
+            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            })
+            
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+            sslContext.socketFactory
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to create SSL socket factory: ${e.message}")
+            null
+        }
     }
 
     private var client: InternalWebSocketClient? = null
@@ -43,15 +84,21 @@ class ConnectionManager {
             try {
                 LogUtil.d(TAG, "Attempting to connect to: $uri")
 
-                // 如果已连接到相同URI，直接返回成功
+                // 如果已连接到相同URI，检查实际连接状态
                 if (isConnected.get() && currentUri == uri) {
-                    LogUtil.d(TAG, "Already connected to $uri")
-                    return@withContext ConnectionResult.Success
-                }
-
-                // 断开现有连接
-                if (isConnected.get()) {
-                    LogUtil.d(TAG, "Disconnecting existing connection")
+                    // 检查 WebSocket 实际状态
+                    if (client?.isOpen == true) {
+                        LogUtil.d(TAG, "Already connected to $uri (WebSocket is open)")
+                        return@withContext ConnectionResult.Success
+                    } else {
+                        // WebSocket 已关闭但标志位未更新，需要清理并重新连接
+                        LogUtil.w(TAG, "URI matches but WebSocket is closed, cleaning up and reconnecting...")
+                        cleanup()
+                        // 继续执行连接逻辑
+                    }
+                } else if (isConnected.get() && currentUri != uri) {
+                    // 连接到不同的 URI，需要先断开现有连接
+                    LogUtil.d(TAG, "Disconnecting existing connection to different URI: $currentUri -> $uri")
                     disconnect()
                 }
 
@@ -59,11 +106,26 @@ class ConnectionManager {
                 client = InternalWebSocketClient(uri)
                 currentUri = uri
 
+                // 如果是 wss 连接，配置 SSL Socket Factory（接受自签名证书）
+                if (uri.scheme == "wss") {
+                    val sslSocketFactory = createTrustAllSSLSocketFactory()
+                    if (sslSocketFactory != null) {
+                        client?.setSocketFactory(sslSocketFactory)
+                        LogUtil.d(TAG, "Configured SSL socket factory for wss connection")
+                    } else {
+                        LogUtil.w(TAG, "Failed to create SSL socket factory, wss connection may fail")
+                    }
+                }
+
                 // 连接
                 client?.connect()
 
+                // 根据连接类型使用不同的超时时间
+                val timeoutMs = getConnectionTimeout(uri)
+                LogUtil.d(TAG, "Using connection timeout: ${timeoutMs}ms for ${uri.scheme}://${uri.host}:${uri.port}")
+
                 // 等待连接结果
-                val connectionResult = withTimeoutOrNull(CONNECTION_TIMEOUT_MS) {
+                val connectionResult = withTimeoutOrNull(timeoutMs) {
                     while (!isConnected.get() && client?.isOpen != true) {
                         delay(100)
 
@@ -158,6 +220,36 @@ class ConnectionManager {
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send text message: ${e.message}")
             // 发送失败时更新连接状态
+            isConnected.set(false)
+            false
+        }
+    }
+    
+    /**
+     * 简化的心跳发送方法
+     * 
+     * 移除额外的网络连通性检查，减少发送延迟
+     * 网络问题会通过WebSocket的onError/onClose回调检测到
+     * 
+     * @param message 心跳消息
+     * @return true if sent successfully, false otherwise
+     */
+    suspend fun sendHeartbeat(message: String): Boolean {
+        return try {
+            val client = this.client
+            if (client == null || client.isClosed || client.isClosing) {
+                LogUtil.w(TAG, "Cannot send heartbeat: WebSocket not available")
+                isConnected.set(false)
+                return false
+            }
+
+            // 直接发送心跳，不进行额外检查
+            client.send(message)
+            LogUtil.d(TAG, "Heartbeat sent: $message")
+            true
+            
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to send heartbeat: ${e.message}")
             isConnected.set(false)
             false
         }

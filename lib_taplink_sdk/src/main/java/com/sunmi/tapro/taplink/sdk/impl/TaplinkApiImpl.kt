@@ -66,7 +66,7 @@ class TaplinkApiImpl : TaplinkApi {
         connectionManager = ConnectionManager(config, context)
         responseProcessor = ResponseProcessor()
         paymentManager = PaymentManager(config, connectionManager!!, responseProcessor!!, context)
-        
+
         // Set payment manager reference in connection manager for connection loss notifications
         connectionManager?.setPaymentManager(paymentManager!!)
 
@@ -84,50 +84,6 @@ class TaplinkApiImpl : TaplinkApi {
         } else {
             LogUtil.setLevel(9999)
         }
-
-        // Check if auto-connect is needed
-//        checkAutoConnect()
-    }
-
-    /**
-     * Check and execute auto-connect
-     */
-    private fun checkAutoConnect() {
-        try {
-            val connectionMgr = connectionManager ?: return
-            
-            if (connectionMgr.shouldAutoConnect()) {
-                val autoConnectConfig = connectionMgr.getAutoConnectConfig()
-                if (autoConnectConfig != null) {
-                    LogUtil.i(TAG, "Auto-connect enabled, attempting to connect with saved configuration")
-                    
-                    // Create internal listener for auto-connect
-                    val autoConnectListener = object : ConnectionListener {
-                        override fun onConnected(deviceId: String, taproVersion: String) {
-                            LogUtil.i(TAG, "Auto-connect successful: deviceId=$deviceId")
-                        }
-                        
-                        override fun onError(error: com.sunmi.tapro.taplink.sdk.error.ConnectionError) {
-                            LogUtil.w(TAG, "Auto-connect failed: ${error.message}")
-                            // Don't notify application layer on auto-connect failure, let user connect manually
-                        }
-                        
-                        override fun onDisconnected(reason: String) {
-                            LogUtil.d(TAG, "Auto-connect disconnected: $reason")
-                        }
-                        
-                        override fun onReconnecting(currentAttempt: Int, maxAttempts: Int) {
-                            LogUtil.d(TAG, "Auto-connect reconnecting: $currentAttempt/$maxAttempts")
-                        }
-                    }
-                    
-                    // Execute auto-connect
-                    connect(autoConnectConfig, autoConnectListener)
-                }
-            }
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Auto-connect check failed: ${e.message}")
-        }
     }
 
     // ==================== Connection Management ====================
@@ -144,14 +100,14 @@ class TaplinkApiImpl : TaplinkApi {
             )
             return
         }
-        
+
         connectionMgr.connect(config, listener)
     }
 
     override fun disconnect() {
         LogUtil.d(TAG, "Manual disconnect")
         connectionManager?.disconnect()
-        
+
         // Clear all pending payment callbacks
         paymentManager?.clearAllCallbacks()
     }
@@ -180,13 +136,13 @@ class TaplinkApiImpl : TaplinkApi {
             LogUtil.e(TAG, "SDK not initialized, please call init() first")
             callback.onFailure(
                 com.sunmi.tapro.taplink.sdk.error.PaymentError(
-                    "SDK_NOT_INITIALIZED", 
+                    "SDK_NOT_INITIALIZED",
                     "SDK not initialized, please call init() first"
                 )
             )
             return
         }
-        
+
         paymentMgr.execute(request, callback)
     }
 
@@ -196,13 +152,13 @@ class TaplinkApiImpl : TaplinkApi {
             LogUtil.e(TAG, "SDK not initialized, please call init() first")
             callback.onFailure(
                 com.sunmi.tapro.taplink.sdk.error.PaymentError(
-                    "SDK_NOT_INITIALIZED", 
+                    "SDK_NOT_INITIALIZED",
                     "SDK not initialized, please call init() first"
                 )
             )
             return
         }
-        
+
         paymentMgr.query(request, callback)
     }
 
@@ -227,5 +183,9 @@ class TaplinkApiImpl : TaplinkApi {
         // Clear device cache through connection manager
         // This could be implemented in ConnectionManager if needed
         // TODO: Implement device cache clearing logic
+    }
+
+    override fun getConnectionConfig(): ConnectionConfig? {
+        return connectionManager?.getAutoConnectConfig()
     }
 }

@@ -109,8 +109,20 @@
     <string name="error_t37_description">No connection established</string>
     <string name="error_t37_solution">Call connect() to establish connection first</string>
     
-    <string name="error_t38_description">Tapro initialization failed</string>
-    <string name="error_t38_solution">Check initialization parameters and system status</string>
+    <string name="error_t38_description">Host transaction rejected</string>
+    <string name="error_t38_solution">Transaction was rejected by host, check transaction parameters and retry</string>
+    
+    <!-- T Series Error Codes - Transaction Processing (T39) -->
+    <string name="error_t39_description">Host transaction processing, query required</string>
+    <string name="error_t39_solution">Host is processing transaction, query transaction status to confirm result</string>
+    
+    <!-- T Series Error Codes - Transaction Processing (T40) -->
+    <string name="error_t40_description">Void failed</string>
+    <string name="error_t40_solution">Transaction void operation failed, check transaction status and retry</string>
+    
+    <!-- T Series Error Codes - Connection Authentication (T41) -->
+    <string name="error_t41_description">Connection authentication failed</string>
+    <string name="error_t41_solution">Check authentication parameters (appId, secretKey, etc.) and re-establish connection</string>
 
     <!-- Other Error Codes -->
     <string name="error_e04_description">System exception</string>
