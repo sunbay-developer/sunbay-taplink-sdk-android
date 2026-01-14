@@ -79,12 +79,10 @@ class VSPClientKernel(
                 synchronized(this@VSPClientKernel) {
                     val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     val permissionGranted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-
                     LogUtil.d(TAG, "USB permission result:")
                     LogUtil.d(TAG, "  Device: ${device?.deviceName}")
                     LogUtil.d(TAG, "  Permission granted: $permissionGranted")
                     LogUtil.d(TAG, "  Pending device: ${pendingDevice?.deviceName}")
-
                     if (device != null && device == pendingDevice) {
                         pendingDevice = null
 
@@ -343,7 +341,6 @@ class VSPClientKernel(
     private suspend fun continueConnectionInternal(targetDriver: UsbSerialDriver): Boolean {
         return try {
             val usbDevice = targetDriver.device
-
             // 打开USB设备连接
             val connection = usbManager.openDevice(usbDevice) ?: run {
                 LogUtil.e(TAG, "Failed to open USB device")

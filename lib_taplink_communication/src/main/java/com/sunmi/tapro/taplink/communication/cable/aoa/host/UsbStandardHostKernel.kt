@@ -86,7 +86,6 @@ class UsbStandardHostKernel(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error during AOA Host disconnect: ${e.message}")
         }
-
         LogUtil.d(TAG, "=== AOA Host Disconnect Finished ===")
     }
 
@@ -580,7 +579,7 @@ class UsbStandardHostKernel(
             // 延迟调用连接成功回调，给Accessory端时间准备好接收数据
             // 延迟时间设置为3秒，确保Accessory端已经启动接收循环
             scope.launch {
-                delay(3000) // 等待3秒，确保Accessory端准备好
+                delay(5000) // 等待3秒，确保Accessory端准备好
                 LogUtil.d(TAG, "Accessory should be ready now, calling connection success callback...")
                 handleConnectionSuccess(connectionCallback, null)
             }
@@ -897,29 +896,43 @@ class UsbStandardHostKernel(
         LogUtil.d(TAG, "AOA sending raw data (HexFrame disabled):")
         LogUtil.d(TAG, "  Size: ${data.size} bytes")
 
-        val tempData = "12345".toByteArray()
+        val tempData = "FF123456"
 
         try {
             // 尝试作为UTF-8字符串解析
 //            val dataAsString = String(data, Charsets.UTF_8)
-            val dataAsString = String(tempData, Charsets.UTF_8)
+            val dataAsString = tempData
             LogUtil.d(TAG, "  Content (UTF-8): $dataAsString")
         } catch (e: Exception) {
             LogUtil.d(TAG, "  Content (UTF-8): [Invalid UTF-8 data]")
         }
 
         // 显示前64字节的十六进制内容
-        val hexPreview = data.take(64).joinToString(" ") { "%02X".format(it) }
-        LogUtil.d(TAG, "  Content (Hex, first 64 bytes): $hexPreview")
-
-        if (data.size > 64) {
-            LogUtil.d(TAG, "  ... (${data.size - 64} more bytes)")
-        }
-
+//        val hexPreview = data.take(64).joinToString(" ") { "%02X".format(it) }
+//        LogUtil.d(TAG, "  Content (Hex, first 64 bytes): $hexPreview")
+//
+//        if (data.size > 64) {
+//            LogUtil.d(TAG, "  ... (${data.size - 64} more bytes)")
+//        }
         LogUtil.d(TAG, "=== End AOA Data Analysis ===")
 
         // 临时禁用HexFrame编码，直接发送原始数据
-        return sendDataToAoaDevice(data)
+        return sendDataToAoaDevice(hexToBytes(tempData))
+    }
+
+    fun hexToBytes(hex: String): ByteArray {
+        var hex = hex
+        hex = hex.replace("0x", "").replace("\\s+".toRegex(), "")
+        require((hex.length and 1) != 1) { "hex length must be even" }
+
+        val len = hex.length
+        val out = ByteArray(len / 2)
+        var i = 0
+        while (i < len) {
+            out[i / 2] = hex.substring(i, i + 2).toInt(16).toByte()
+            i += 2
+        }
+        return out
     }
 
     /**
