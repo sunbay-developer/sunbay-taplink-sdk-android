@@ -67,7 +67,7 @@ abstract class BaseUsbAoaKernel(
      */
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
         if (parseResult !is ProtocolParseResult.UsbProtocol) {
-            handleConnectionError(InnerErrorCode.T19.description, connectionCallback, InnerErrorCode.T19.code)
+            handleConnectionError(InnerErrorCode.E254.description, connectionCallback, InnerErrorCode.E254.code)
             return
         }
 

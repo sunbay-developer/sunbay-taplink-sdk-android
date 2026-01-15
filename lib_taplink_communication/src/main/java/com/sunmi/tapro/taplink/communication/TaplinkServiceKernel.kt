@@ -55,8 +55,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
     fun connect(protocol: String, appid: String, appSecretKey: String, connectionCallback: ConnectionCallback) {
         if (!isInitialized()) {
             connectionCallback.onDisconnected(
-                InnerErrorCode.T01.code,
-                InnerErrorCode.T01.description
+                InnerErrorCode.E201.code,
+                InnerErrorCode.E201.description
             )
             return
         }
@@ -64,7 +64,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         // 解析协议，确定使用哪个服务
         val parseResult = ProtocolManager.parseProtocol(protocol)
         if (parseResult is ProtocolParseResult.Error) {
-            connectionCallback.onDisconnected(InnerErrorCode.T17.code, parseResult.message)
+            connectionCallback.onDisconnected(InnerErrorCode.E214.code, parseResult.message)
             return
         }
 
@@ -72,8 +72,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
         val serviceKernel = getServiceKernelByProtocol(parseResult, appid, appSecretKey)
         if (serviceKernel == null) {
             connectionCallback.onDisconnected(
-                InnerErrorCode.T19.code,
-                "${InnerErrorCode.T19.description}: ${parseResult::class.simpleName}"
+                InnerErrorCode.E214.code,
+                "${InnerErrorCode.E214.description}: ${parseResult::class.simpleName}"
             )
             return
         }
@@ -81,15 +81,15 @@ class TaplinkServiceKernel private constructor(context: Context) {
         // 检查当前是否有已连接的服务内核
         val oldServiceKernel = currentServiceKernel
         if (oldServiceKernel != null && oldServiceKernel !== serviceKernel) {
-            // 如果当前连接的服务内核和要连接的不是同一个，且当前服务处于连接状态，先断开旧的
+            // 如果当前连接的服务内核和要连接的不是同一个，先断开旧的
+            // 注意：即使状态是 DISCONNECTED，也要调用 disconnect() 以确保清理资源
+            // （例如正在运行的协程、服务发现等）
             val oldStatus = oldServiceKernel.getConnectionStatus()
-            if (oldStatus != InnerConnectionStatus.DISCONNECTED) {
-                LogUtil.d(TAG, "Disconnecting old service kernel before connecting new one. Old status: $oldStatus")
-                try {
-                    oldServiceKernel.disconnect()
-                } catch (e: Exception) {
-                    LogUtil.e(TAG, "Error disconnecting old service kernel: ${e.message}")
-                }
+            LogUtil.d(TAG, "Disconnecting old service kernel before connecting new one. Old status: $oldStatus")
+            try {
+                oldServiceKernel.disconnect()
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error disconnecting old service kernel: ${e.message}")
             }
             // 清空旧的serviceKernel引用（因为要切换到新的类型）
             currentServiceKernel = null
@@ -237,7 +237,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         val kernel = currentServiceKernel
         if (kernel == null) {
             LogUtil.e(TAG, "No service kernel available, cannot send data")
-            callback?.onError(InnerErrorCode.T20.code, InnerErrorCode.T20.description)
+            callback?.onError(InnerErrorCode.E203.code, "No service kernel available")
             return
         }
 
@@ -245,7 +245,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
             kernel.sendData(traceId, data, callback)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send data: traceId=$traceId, error=${e.message}")
-            callback?.onError(InnerErrorCode.T21.code, "${InnerErrorCode.T21.description}:${e.message}")
+            callback?.onError(InnerErrorCode.E304.code, "${InnerErrorCode.E304.description}:${e.message}")
         }
     }
 

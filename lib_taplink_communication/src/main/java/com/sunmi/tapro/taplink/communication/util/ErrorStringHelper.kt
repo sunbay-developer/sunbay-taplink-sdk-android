@@ -82,7 +82,7 @@ object ErrorStringHelper {
      */
     private fun getDefaultDescription(code: String): String {
         return when (code.uppercase()) {
-            "" -> "Error code is empty"
+            "" -> "UNMATCHED ERROR"
             else -> "Unknown error code: $code"
         }
     }

@@ -41,10 +41,6 @@ class ConnectionManager(
 ) {
     private val TAG = "ConnectionManager"
 
-    companion object {
-        private const val SUCCESS_CODE = "0"
-    }
-
     /**
      * Connection status
      */
@@ -72,11 +68,6 @@ class ConnectionManager(
      */
     private var currentConnectionConfig: ConnectionConfig? = null
 
-    /**
-     * Flag to prevent duplicate INIT command sending
-     * Set to true when INIT command is sent, reset when connection is disconnected
-     */
-    private var initCommandSent: Boolean = false
 
     /**
      * Reconnect manager
@@ -241,8 +232,8 @@ class ConnectionManager(
             updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
-                    InnerErrorCode.T01.code,
-                    InnerErrorCode.T01.description
+                    InnerErrorCode.E201.code,
+                    InnerErrorCode.E201.description
                 )
             )
             return
@@ -266,8 +257,8 @@ class ConnectionManager(
             updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
-                    InnerErrorCode.T17.code,
-                    "${InnerErrorCode.T17.description}:$protocol"
+                    InnerErrorCode.E302.code,
+                    "${InnerErrorCode.E302.description}:$protocol"
                 )
             )
             return
@@ -287,9 +278,15 @@ class ConnectionManager(
             object : ServiceConnectionCallback {
                 override fun onConnected(extraInfoMap: Map<String, String?>?) {
                     // Prevent duplicate INIT command sending
-                    // This can happen if onConnected is called multiple times (e.g., from different callbacks)
-                    if (initCommandSent) {
-                        LogUtil.w(TAG, "INIT command already sent, ignoring duplicate onConnected callback")
+                    // Check if INIT is already in progress by checking if there are pending callbacks
+                    // This prevents duplicate INIT commands when onConnected is called multiple times
+                    // Note: We check callback count instead of connection status because:
+                    // 1. In app-to-app mode, onServiceConnected may be called again during reconnection
+                    //    even if status is still CONNECTED (disconnect is async)
+                    // 2. Checking callback count is more accurate - if INIT is already sent, 
+                    //    there should be a pending callback
+                    if (callbackManager.getTraceIdCallbackCount() > 0) {
+                        LogUtil.w(TAG, "INIT command already in progress (pending callbacks exist), ignoring duplicate onConnected callback")
                         return
                     }
 
@@ -298,9 +295,6 @@ class ConnectionManager(
 
                     // Register data receiver
                     registerDataReceiver()
-
-                    // Mark INIT command as sent to prevent duplicate calls
-                    initCommandSent = true
 
                     // Send INIT command to initialize tapro application
                     // Note: If INIT fails, we need to disconnect WebSocket to ensure state consistency
@@ -325,8 +319,8 @@ class ConnectionManager(
                             // 监听器已在 onConnected 时设置，无需重复设置
                         } else {
                             val error = ConnectionError(
-                                errorCode ?: InnerErrorCode.T31.code,
-                                errorMsg ?: InnerErrorCode.T31.description
+                                errorCode ?: InnerErrorCode.E305.code,
+                                errorMsg ?: InnerErrorCode.E305.description
                             )
 
                             LogUtil.w(TAG, "INIT command failed, disconnecting WebSocket connection to ensure state consistency")
@@ -409,7 +403,6 @@ class ConnectionManager(
                         connectedTaproVersion = null
                         currentConnectionMode = null
                         currentConnectionConfig = null
-                        initCommandSent = false
                     } else {
                         updateConnectionStatus(
                             ConnectionStatus.DISCONNECTED,
@@ -430,7 +423,6 @@ class ConnectionManager(
                             connectedTaproVersion = null
                             currentConnectionMode = null
                             currentConnectionConfig = null
-                            initCommandSent = false
                         }
                         // If reconnecting, preserve device info and connection mode
                     }
@@ -455,8 +447,8 @@ class ConnectionManager(
         // Clear pending connection listeners
         if (pendingConnectionListeners.isNotEmpty()) {
             val error = ConnectionError(
-                InnerErrorCode.T08.code,
-                InnerErrorCode.T08.description
+                InnerErrorCode.E213.code,
+                InnerErrorCode.E213.description
             )
             notifyPendingConnectionListenersError(error)
         }
@@ -467,7 +459,6 @@ class ConnectionManager(
         connectedTaproVersion = null
         currentConnectionMode = null
         currentConnectionConfig = null
-        initCommandSent = false
 
         // 清除服务地址变化监听器（断开连接时清除）
         clearServiceAddressChangeListener()
@@ -691,8 +682,8 @@ class ConnectionManager(
                         }
 
                         // Determine success
-                        if (code == SUCCESS_CODE && basicResponse.event is PaymentEvent.Completed
-                            && (transactionResultCode == "0" || transactionResultCode == "000")
+                        if (code == ResponseProcessor.SUCCESS_CODE &&
+                            basicResponse.event is PaymentEvent.Completed
                         ) {
                             LogUtil.d(TAG, "INIT command completed successfully")
                             LogUtil.d(TAG, "Device info: deviceId=$deviceId, taproVersion=$taproVersion")
@@ -955,9 +946,17 @@ class ConnectionManager(
      * @return Boolean true表示连接错误，false表示正常断开
      */
     private fun isConnectionError(code: String, msg: String): Boolean {
-        // 连接阶段的错误码
+        // 连接阶段的错误码（包含新错误码和向后兼容的T系列错误码）
         val connectionErrorCodes = setOf(
-            "T01", "T02", "T03", "T04", "T05", "T06", "T17", // 通用连接错误（已从C系列迁移到T系列）
+            // 新错误码
+            "201", "202", "203", // 初始化错误
+            "211", "212", "213", "214", "221", // 连接状态/失败
+            "231", "232", // APP_TO_APP连接错误
+            "241", "242", // LAN连接错误
+            "251", "252", "253", "254", "255", // USB模式连接错误
+            // 向后兼容：T系列错误码
+            "T01", "T02", "T04", "T05", "T06", "T07", "T08", "T09", "T10", "T11", "T12", "T17",
+            // 其他错误码
             "-1", // BaseServiceKernel 默认错误码
             "1006", "1002", "1015", // WebSocket 连接错误码
             "CONNECTION_FAILED", "WEBSOCKET_NULL", "SEND_FAILED", // 自定义错误码

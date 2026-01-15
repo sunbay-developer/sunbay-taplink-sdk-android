@@ -195,11 +195,11 @@ open class SerialServiceKernel(
                         )
                     )
                 } else {
-                    notifyConnectionError("Failed to connect to serial device", InnerErrorCode.T03)
+                    notifyConnectionError("Failed to connect to serial device", InnerErrorCode.E232)
                 }
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to connect serial device: ${e.message}")
-                notifyConnectionError(e.message ?: "Unknown error", InnerErrorCode.T03)
+                notifyConnectionError(e.message ?: "Unknown error", InnerErrorCode.E232)
             }
         }
     }
@@ -207,7 +207,7 @@ open class SerialServiceKernel(
     override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!isSerialReady()) {
             LogUtil.e(TAG, "Serial device not ready")
-            callback?.onError(InnerErrorCode.T13.code, InnerErrorCode.T13.description)
+            callback?.onError(InnerErrorCode.E255.code, InnerErrorCode.E255.description)
             return
         }
 
@@ -227,13 +227,13 @@ open class SerialServiceKernel(
 
         } catch (e: IOException) {
             LogUtil.e(TAG, "Failed to send serial hex data: ${e.message}")
-            callback?.onError(InnerErrorCode.T23.code, e.message ?: InnerErrorCode.T23.description)
+            callback?.onError(InnerErrorCode.E304.code, e.message ?: InnerErrorCode.E304.description)
 
             // 发送失败可能表示连接断开
             handleConnectionError()
         } catch (e: Exception) {
             LogUtil.e(TAG, "Unexpected error sending serial hex data: ${e.message}")
-            callback?.onError(InnerErrorCode.T24.code, e.message ?: InnerErrorCode.T24.description)
+            callback?.onError(InnerErrorCode.E304.code, e.message ?: InnerErrorCode.E304.description)
         }
     }
 
@@ -461,7 +461,7 @@ open class SerialServiceKernel(
                 if (usbPermission == UsbPermission.Requested) {
                     LogUtil.e(TAG, "USB permission request timeout")
                     usbPermission = UsbPermission.Denied
-                    notifyConnectionError("USB permission request timeout", InnerErrorCode.T03)
+                    notifyConnectionError("USB permission request timeout", InnerErrorCode.E232)
                 }
             }
 

@@ -1,10 +1,109 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Success Response -->
+    <string name="error_100_description">Operation successful</string>
+    <string name="error_100_solution">Operation completed successfully</string>
+    
     <string name="error_0_description">Interface response successful</string>
     <string name="error_0_solution">Interface response successful, but does not represent transaction success. Check transaction status and result code to determine actual transaction status</string>
 
-    <!-- T Series Error Codes - Connection Related (T01-T14) -->
+    <!-- Initialization Errors (20x) -->
+    <string name="error_201_description">SDK not initialized</string>
+    <string name="error_201_solution">Call TaplinkSDK.init() to initialize SDK</string>
+    
+    <string name="error_202_description">SDK service exception</string>
+    <string name="error_202_solution">Restart application</string>
+    
+    <string name="error_203_description">Tapro initialization failed</string>
+    <string name="error_203_solution">Reconnect</string>
+
+    <!-- Connection State/Failure Errors (21x) -->
+    <string name="error_211_description">Connection already exists, no need to reconnect</string>
+    <string name="error_211_solution">No need to reconnect</string>
+    
+    <string name="error_212_description">Device not connected</string>
+    <string name="error_212_solution">Call connect() to establish connection first</string>
+    
+    <string name="error_213_description">Connection disconnected</string>
+    <string name="error_213_solution">Call connect() again to reconnect</string>
+    
+    <string name="error_214_description">Unable to establish connection</string>
+    <string name="error_214_solution">Check network or device status and retry</string>
+    
+    <string name="error_221_description">Authentication failed</string>
+    <string name="error_221_solution">Check if appId and secretKey are correct</string>
+
+    <!-- Local Mode Connection Failure (23x) -->
+    <string name="error_231_description">Tapro application not installed</string>
+    <string name="error_231_solution">Install Tapro application</string>
+    
+    <string name="error_232_description">Unable to connect to Tapro</string>
+    <string name="error_232_solution">Restart Tapro application or device</string>
+
+    <!-- LAN Mode Connection Failure (24x) -->
+    <string name="error_241_description">Unable to connect to server</string>
+    <string name="error_241_solution">Check network connection and firewall settings</string>
+    
+    <string name="error_242_description">Unable to discover server</string>
+    <string name="error_242_solution">Manually enter server IP address</string>
+
+    <!-- USB Mode Connection Failure (25x) -->
+    <string name="error_251_description">Cable not connected</string>
+    <string name="error_251_solution">Connect USB cable or serial cable</string>
+    
+    <string name="error_252_description">USB permission denied</string>
+    <string name="error_252_solution">Authorize application to use USB device</string>
+    
+    <string name="error_253_description">USB connection timeout</string>
+    <string name="error_253_solution">Re-plug USB cable</string>
+    
+    <string name="error_254_description">USB protocol not supported</string>
+    <string name="error_254_solution">Use auto-detection mode, or contact technical support</string>
+    
+    <string name="error_255_description">Serial port device not ready</string>
+    <string name="error_255_solution">Re-plug serial cable</string>
+
+    <!-- Transaction Processing Errors (30x + 399) -->
+    <string name="error_301_description">Missing required parameters</string>
+    <string name="error_301_solution">Check required parameters such as amount, transaction type, etc.</string>
+    
+    <string name="error_302_description">Request data format error</string>
+    <string name="error_302_solution">Check if parameter format meets API documentation requirements</string>
+    
+    <string name="error_303_description">Unsupported transaction type</string>
+    <string name="error_303_solution">Check action parameter (SALE/REFUND/VOID, etc.)</string>
+    
+    <string name="error_304_description">Request send failed</string>
+    <string name="error_304_solution">Check network connection and retry</string>
+    
+    <string name="error_305_description">Transaction in progress</string>
+    <string name="error_305_solution">Wait for current transaction to complete</string>
+    
+    <string name="error_306_description">Response timeout</string>
+    <string name="error_306_solution">Query transaction status first, then retry after confirmation</string>
+    
+    <string name="error_307_description">Transaction rejected</string>
+    <string name="error_307_solution">Check parameters and retry with new ID</string>
+    
+    <string name="error_308_description">Transaction processing</string>
+    <string name="error_308_solution">Query transaction status first, then retry after confirmation</string>
+    
+    <string name="error_309_description">Transaction terminated</string>
+    <string name="error_309_solution">Do not retry</string>
+    
+    <string name="error_310_description">Insufficient balance</string>
+    <string name="error_310_solution">Prompt user about insufficient balance, retry with new ID</string>
+    
+    <string name="error_311_description">Password error</string>
+    <string name="error_311_solution">Prompt user to re-enter password, retry with new ID</string>
+    
+    <string name="error_312_description">Query transaction failed</string>
+    <string name="error_312_solution">Check connection status and retry query, or check transaction ID validity</string>
+    
+    <string name="error_399_description">Transaction failed</string>
+    <string name="error_399_solution">Check error details and retry with new ID</string>
+
+    <!-- T Series Error Codes (Backward Compatibility) -->
     <string name="error_t01_description">SDK not initialized</string>
     <string name="error_t01_solution">Call TaplinkSDK.init() to initialize SDK before calling connect()</string>
     
@@ -134,114 +233,5 @@
     <!-- Unknown Error -->
     <string name="error_unknown_description">Unknown error code</string>
     <string name="error_empty_description">Error code is empty</string>
-
-    <!-- C Series Error Codes (Backward Compatibility) -->
-    <string name="error_c01_description">Missing request parameters</string>
-    <string name="error_c01_solution">Check request parameters, ensure all required fields are provided</string>
-    
-    <string name="error_c02_description">Request JSON format error</string>
-    <string name="error_c02_solution">Check JSON format, ensure valid JSON structure</string>
-    
-    <string name="error_c08_description">Transaction locked</string>
-    <string name="error_c08_solution">Wait for current transaction to complete before initiating new transaction</string>
-    
-    <string name="error_c20_description">SDK not initialized</string>
-    <string name="error_c20_solution">Call TaplinkSDK.init() to initialize SDK before calling connect()</string>
-    
-    <string name="error_c22_description">Tapro application not installed</string>
-    <string name="error_c22_solution">Install Tapro application on device</string>
-    
-    <string name="error_c25_description">IPC service binding failed</string>
-    <string name="error_c25_solution">Check if Tapro application is running normally, restart application or device</string>
-    
-    <string name="error_c33_description">WebSocket connection failed</string>
-    <string name="error_c33_solution">Check network firewall settings, ensure ports 8443-8453 are not blocked</string>
-    
-    <string name="error_c35_description">mDNS discovery failed</string>
-    <string name="error_c35_solution">Check if network supports mDNS, or manually input IP address</string>
-    
-    <string name="error_c36_description">Connection disconnected</string>
-    <string name="error_c36_solution">Check connection status, call connect() to re-establish connection</string>
-    
-    <string name="error_c37_description">No connection established</string>
-    <string name="error_c37_solution">Call connect() to establish connection before initiating transaction</string>
-    
-    <string name="error_c38_description">Unsupported transaction type</string>
-    <string name="error_c38_solution">Use supported transaction type or check transaction configuration</string>
-    
-    <string name="error_c39_description">Transaction cancelled</string>
-    <string name="error_c39_solution">Transaction cancelled by user or system, retry if needed</string>
-    
-    <string name="error_c41_description">Protocol data is invalid or parsing failed</string>
-    <string name="error_c41_solution">Check data format and protocol specification</string>
-    
-    <string name="error_c42_description">System is processing another transaction</string>
-    <string name="error_c42_solution">Wait for current transaction to complete before initiating new transaction</string>
-    
-    <string name="error_c43_description">Invalid amount parameters</string>
-    <string name="error_c43_solution">Check amount format, ensure positive number with correct decimal places</string>
-    
-    <string name="error_c44_description">Init Failed: System is processing another transaction</string>
-    <string name="error_c44_solution">Wait for current transaction to complete before initializing</string>
-    
-    <string name="error_c45_description">Manual disconnect</string>
-    <string name="error_c45_solution">Normal manual disconnect, no action needed</string>
-    
-    <string name="error_c46_description">No service kernel available</string>
-    <string name="error_c46_solution">Check service status, restart service if needed</string>
-    
-    <string name="error_c47_description">Failed to send data</string>
-    <string name="error_c47_solution">Check connection status, retry sending data</string>
-    
-    <string name="error_c48_description">Invalid USB protocol</string>
-    <string name="error_c48_solution">Use supported USB protocol (USB AOA/USB-VSP/RS232) or enable auto-detection</string>
-    
-    <string name="error_c49_description">USB device access denied</string>
-    <string name="error_c49_solution">Re-authorize USB device permissions</string>
-    
-    <string name="error_c50_description">USB device connection timeout</string>
-    <string name="error_c50_solution">Check USB connection, re-plug device</string>
-    
-    <string name="error_c51_description">USB permission request failed</string>
-    <string name="error_c51_solution">Re-authorize USB device permissions</string>
-    
-    <string name="error_c52_description">USB device not found</string>
-    <string name="error_c52_solution">Check USB device connection</string>
-    
-    <string name="error_c53_description">USB permission denied</string>
-    <string name="error_c53_solution">Grant USB device permissions</string>
-    
-    <string name="error_c54_description">Failed to open USB device</string>
-    <string name="error_c54_solution">Check USB device status, re-plug device</string>
-    
-    <string name="error_c55_description">AOA protocol sequence failed</string>
-    <string name="error_c55_solution">Check USB AOA protocol support, try different USB mode</string>
-    
-    <string name="error_c56_description">USB device disconnected</string>
-    <string name="error_c56_solution">Check USB connection, re-plug device</string>
-    
-    <string name="error_c57_description">Connection already established</string>
-    <string name="error_c57_solution">Connection already exists, no need to establish again</string>
-    
-    <string name="error_c58_description">Protocol type mismatch</string>
-    <string name="error_c58_solution">Check protocol configuration, ensure correct protocol type</string>
-    
-    <string name="error_c61_description">Cannot send data, not connected</string>
-    <string name="error_c61_solution">Establish connection before sending data</string>
-    
-    <string name="error_c62_description">Failed to send data</string>
-    <string name="error_c62_solution">Check connection status, retry sending data</string>
-    
-    <string name="error_c63_description">Unexpected error sending data</string>
-    <string name="error_c63_solution">Check system status, restart application if needed</string>
-    
-    <string name="error_c65_description">Serial device not ready</string>
-    <string name="error_c65_solution">Re-initialize serial port connection</string>
-    
-    <string name="error_c66_description">VSP client not ready</string>
-    <string name="error_c66_solution">Re-initialize VSP client</string>
-    
-    <string name="error_c67_description">ITransaction is null</string>
-    <string name="error_c67_solution">Check transaction object initialization</string>
 
 </resources>

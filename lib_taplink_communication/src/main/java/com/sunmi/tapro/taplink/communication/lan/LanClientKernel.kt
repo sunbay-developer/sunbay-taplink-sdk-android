@@ -17,7 +17,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.URI
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -33,7 +32,6 @@ import java.util.concurrent.atomic.AtomicLong
  * - ConnectionManager: WebSocket连接管理
  * - ServiceDiscoveryManager: mDNS服务发现
  * - HeartbeatManager: 心跳机制管理
- * - ConnectionCallbackManager: 回调管理，支持多个回调
  *
  * @param appId 应用ID
  * @param appSecretKey 应用密钥
@@ -88,15 +86,10 @@ class LanClientKernel(
     private var currentOperationId: String? = null
 
     /**
-     * 回调管理器
-     */
-    private val callbackManager = ConnectionCallbackManager()
-    
-    /**
      * 服务地址变化监听器（独立于连接回调，用于持久监听）
      */
     private var serviceAddressChangeListener: ServiceAddressChangeListener? = null
-    
+
     /**
      * 服务地址变化监听器接口
      */
@@ -118,10 +111,10 @@ class LanClientKernel(
             oldPort: Int
         ): Boolean
     }
-    
+
     /**
      * 设置服务地址变化监听器
-     * 
+     *
      * @param listener 监听器，为 null 时清除监听器
      */
     fun setServiceAddressChangeListener(listener: ServiceAddressChangeListener?) {
@@ -131,7 +124,7 @@ class LanClientKernel(
         }
     }
 
-    fun getServiceAddressChangeListener():ServiceAddressChangeListener? = serviceAddressChangeListener
+    fun getServiceAddressChangeListener(): ServiceAddressChangeListener? = serviceAddressChangeListener
 
     // ==================== 管理器组件 ====================
 
@@ -186,112 +179,6 @@ class LanClientKernel(
         setupConnectionManager()
     }
 
-    // ==================== 回调管理器 ====================
-
-    /**
-     * 连接回调管理器
-     * 支持多个回调，避免回调替换问题
-     */
-    private class ConnectionCallbackManager {
-        private val callbacks = Collections.synchronizedList(mutableListOf<CallbackEntry>())
-
-        data class CallbackEntry(
-            val operationId: String,
-            val operationType: String,
-            val callback: ConnectionCallback,
-            val timestamp: Long = System.currentTimeMillis()
-        )
-
-        fun addCallback(operationId: String, operationType: String, callback: ConnectionCallback) {
-            synchronized(callbacks) {
-                callbacks.add(CallbackEntry(operationId, operationType, callback))
-                LogUtil.d(TAG, "Added callback for operation: $operationType ($operationId)")
-            }
-        }
-
-        fun removeCallback(operationId: String) {
-            synchronized(callbacks) {
-                val removed = callbacks.removeAll { it.operationId == operationId }
-                if (removed) {
-                    LogUtil.d(TAG, "Removed callback for operation: $operationId")
-                }
-            }
-        }
-
-        fun notifyConnected(data: Map<String, String?>, currentOperationId: String?) {
-            synchronized(callbacks) {
-                LogUtil.d(TAG, "Notifying ${callbacks.size} callbacks of connection success")
-                val callbacksToNotify = callbacks.toList() // 创建副本避免并发修改
-                callbacksToNotify.forEach { entry ->
-                    try {
-                        entry.callback.onConnected(data)
-                        LogUtil.d(TAG, "Notified ${entry.operationType} callback of success")
-                    } catch (e: Exception) {
-                        LogUtil.e(TAG, "Error notifying callback: ${e.message}")
-                    }
-                }
-                // 只清除当前操作的回调，保留其他回调用于服务监听
-                if (currentOperationId != null) {
-                    val removed = callbacks.removeAll { it.operationId == currentOperationId }
-                    if (removed) {
-                        LogUtil.d(TAG, "Removed callback for completed operation: $currentOperationId")
-                    }
-                }
-                LogUtil.d(TAG, "Callbacks remaining for service monitoring: ${callbacks.size}")
-            }
-        }
-
-        fun notifyError(code: String, message: String, currentOperationId: String?) {
-            synchronized(callbacks) {
-                LogUtil.d(TAG, "Notifying ${callbacks.size} callbacks of connection error")
-                val callbacksToNotify = callbacks.toList() // 创建副本避免并发修改
-                callbacksToNotify.forEach { entry ->
-                    try {
-                        // ConnectionCallback 接口没有 onError 方法，使用 onDisconnected 通知错误
-                        entry.callback.onDisconnected(code, message)
-                        LogUtil.d(TAG, "Notified ${entry.operationType} callback of error")
-                    } catch (e: Exception) {
-                        LogUtil.e(TAG, "Error notifying callback: ${e.message}")
-                    }
-                }
-                // 只清除当前操作的回调，保留其他回调用于服务监听
-                if (currentOperationId != null) {
-                    val removed = callbacks.removeAll { it.operationId == currentOperationId }
-                    if (removed) {
-                        LogUtil.d(TAG, "Removed callback for failed operation: $currentOperationId")
-                    }
-                }
-                LogUtil.d(TAG, "Callbacks remaining for service monitoring: ${callbacks.size}")
-            }
-        }
-
-        // notifyServiceAddressChanged 方法已移除
-        // 现在统一使用持久监听器 (serviceAddressChangeListener) 来通知服务地址变化
-        // 这样可以避免回调机制导致的监听器丢失问题
-
-        fun hasCallbacks(): Boolean {
-            synchronized(callbacks) {
-                return callbacks.isNotEmpty()
-            }
-        }
-
-        fun getCallbackCount(): Int {
-            synchronized(callbacks) {
-                return callbacks.size
-            }
-        }
-
-        fun clearExpiredCallbacks(timeoutMs: Long = 30000) {
-            synchronized(callbacks) {
-                val currentTime = System.currentTimeMillis()
-                val removed = callbacks.removeAll { currentTime - it.timestamp > timeoutMs }
-                if (removed) {
-                    LogUtil.w(TAG, "Removed expired callbacks")
-                }
-            }
-        }
-    }
-
     // ==================== 安全操作执行器 ====================
 
     /**
@@ -311,7 +198,7 @@ class LanClientKernel(
             val currentOp = currentOperation
             LogUtil.w(TAG, "Another operation is in progress: $currentOp, rejecting $operationType")
             callback.onDisconnected(
-                InnerErrorCode.T04.code,
+                InnerErrorCode.E241.code,
                 "Another connection operation is in progress: $currentOp"
             )
             return
@@ -324,8 +211,8 @@ class LanClientKernel(
             currentOperation = operationType
             currentOperationId = operationId
 
-            // 添加回调到管理器
-            callbackManager.addCallback(operationId, operationType, callback)
+            // 注意：回调已由基类 AsyncServiceKernel 的 currentConnectionCallback 管理
+            // 不需要额外的回调管理器，因为连接操作是互斥的（operationMutex 保护）
 
             LogUtil.d(TAG, "Starting $operationType operation: $operationId")
 
@@ -335,12 +222,8 @@ class LanClientKernel(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error in $operationType operation: ${e.message}")
 
-            // 通知错误（传入 operationId 以便清除对应回调）
-            callbackManager.notifyError(
-                InnerErrorCode.T04.code,
-                "Operation failed: ${e.message}",
-                operationId
-            )
+            // 通知错误：使用基类的 notifyConnectionError()
+            notifyConnectionError("Operation failed: ${e.message}", InnerErrorCode.E241)
 
         } finally {
             // 注意：不在这里清除 currentOperationId，因为连接成功回调可能在 finally 之后异步触发
@@ -457,9 +340,9 @@ class LanClientKernel(
                             // 3. 如果在这里检查，可能会误判为操作被取消，导致连接被断开
                             // 4. 连接成功的处理会通过 ConnectionManager 的监听器触发
                             // 5. 如果操作真的被取消，onConnected() 回调中会处理断开逻辑
-                            
+
                             // 连接成功的处理会通过 ConnectionManager 的监听器触发
-                            // 这里不需要额外处理，监听器会调用 callbackManager.notifyConnected()
+                            // 监听器会调用 notifyConnectionSuccess() 作为统一的连接成功通知出口
                         }
 
                         is ConnectionManager.ConnectionResult.Failure -> {
@@ -508,6 +391,11 @@ class LanClientKernel(
                         "Retrying service discovery (attempt ${retryCount + 1}/${SERVICE_DISCOVERY_MAX_RETRIES + 1}) after ${delayMs}ms delay ($operationId)"
                     )
                     delay(delayMs)
+                    // 延迟后再次检查操作是否仍然有效（可能在延迟期间模式已切换）
+                    if (!isOperationValid(operationId)) {
+                        LogUtil.w(TAG, "Service discovery cancelled after delay: $operationId")
+                        return
+                    }
                 } else {
                     LogUtil.d(TAG, "Starting service discovery for operation: $operationId")
                 }
@@ -648,106 +536,6 @@ class LanClientKernel(
     }
 
     /**
-     * 尝试连接到发现的服务列表
-     *
-     * @param services 发现的服务列表
-     * @param operationId 操作ID
-     * @return 连接结果
-     */
-    private suspend fun tryConnectToDiscoveredServices(
-        services: List<ServiceInfo>,
-        operationId: String
-    ): ConnectionAttemptResult {
-        var hasValidService = false
-        var lastError: String? = null
-
-        for (service in services) {
-            // 检查操作是否仍然有效
-            if (!isOperationValid(operationId)) {
-                LogUtil.w(TAG, "Service discovery cancelled during processing: $operationId")
-                return ConnectionAttemptResult(false, "Operation cancelled")
-            }
-
-            if (!service.isValid()) {
-                LogUtil.w(TAG, "Invalid service found: ${service.name} ($operationId)")
-                continue
-            }
-
-            hasValidService = true
-
-            // 通知服务地址变化（使用持久监听器）
-            val listener = serviceAddressChangeListener
-            val shouldReconnect = if (listener != null) {
-                try {
-                    listener.onServiceAddressChanged(
-                        service.name,
-                        service.host,
-                        service.port,
-                        currentService?.host ?: "",
-                        currentService?.port ?: -1
-                    )
-                } catch (e: Exception) {
-                    LogUtil.e(TAG, "Error in service address change listener: ${e.message}")
-                    false
-                }
-            } else {
-                LogUtil.w(TAG, "No service address change listener set, cannot notify service address change")
-                false
-            }
-
-            try {
-                // 默认使用 ws://，如果当前 URI 是 wss:// 则保持 wss://
-                val secure = currentUri?.scheme == "wss"
-                val scheme = if (secure) "wss" else "ws"
-                val newUri = URI("$scheme://${service.host}:${service.port}")
-
-                // 检查当前连接状态，避免不必要的重连
-                // 使用 ConnectionManager 的实际状态，而不是 currentInnerConnectionStatus
-                val isCurrentlyConnected = isWebSocketConnected()
-
-                // 如果当前已连接且地址相同，不需要重连
-                if (isCurrentlyConnected && newUri == currentUri) {
-                    LogUtil.d(TAG, "Already connected to the same URI: ${newUri}, skipping reconnection ($operationId)")
-                    return ConnectionAttemptResult(true, null)
-                }
-
-                // 统一连接逻辑，只保留日志区分
-                val isReconnection = shouldReconnect
-                if (isReconnection) {
-                    LogUtil.d(
-                        TAG,
-                        "Service address changed, attempting reconnection to ${service.host}:${service.port} ($operationId)"
-                    )
-                } else {
-                    LogUtil.d(TAG, "Trying direct connection to ${service.host}:${service.port} ($operationId)")
-                }
-                val result = connectionManager.connect(newUri)
-
-                when (result) {
-                    is ConnectionManager.ConnectionResult.Success -> {
-                        LogUtil.d(TAG, "Connection successful to ${service.host}:${service.port} ($operationId)")
-                        currentUri = newUri
-                        currentService = service
-                        return ConnectionAttemptResult(true, null)
-                    }
-
-                    is ConnectionManager.ConnectionResult.Failure -> {
-                        lastError = "Connection failed to ${service.host}:${service.port}: ${result.error}"
-                        LogUtil.w(TAG, lastError + " ($operationId)")
-                        // 继续尝试其他服务
-                    }
-                }
-            } catch (e: Exception) {
-                lastError = "Exception connecting to ${service.host}:${service.port}: ${e.message}"
-                LogUtil.e(TAG, lastError + " ($operationId)")
-                // 继续尝试其他服务
-            }
-        }
-
-        return ConnectionAttemptResult(false, lastError ?: if (hasValidService) "All services failed" else "No valid services")
-    }
-
-    /**
      * 判断服务发现错误是否可重试
      *
      * @param e 异常
@@ -783,14 +571,6 @@ class LanClientKernel(
         return retryableErrors.any { errorMessage.contains(it) }
     }
 
-    /**
-     * 连接尝试结果
-     */
-    private data class ConnectionAttemptResult(
-        val success: Boolean,
-        val errorMessage: String?
-    )
-
     override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         try {
             LogUtil.d(TAG, "Sending data via LAN: traceId=$traceId, size=${data.size} bytes")
@@ -801,12 +581,12 @@ class LanClientKernel(
 //                callback?.onResponse("Data sent successfully")
             } else {
                 LogUtil.e(TAG, "Failed to send data: traceId=$traceId")
-                callback?.onError(InnerErrorCode.T23.code, InnerErrorCode.T23.description)
+                callback?.onError(InnerErrorCode.E304.code, InnerErrorCode.E304.description)
             }
 
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error sending data: traceId=$traceId, error=${e.message}")
-            callback?.onError(InnerErrorCode.T23.code, e.message ?: InnerErrorCode.T23.description)
+            callback?.onError(InnerErrorCode.E304.code, e.message ?: InnerErrorCode.E304.description)
         }
     }
 
@@ -855,12 +635,8 @@ class LanClientKernel(
                 // 安全更新状态
                 updateStatusSafely(InnerConnectionStatus.ERROR)
 
-                // 通知回调管理器连接错误（心跳失败不清除回调，保留用于服务监听）
-                callbackManager.notifyError(
-                    InnerErrorCode.T06.code,
-                    "Connection lost due to heartbeat failure",
-                    null // 不清除回调，保留用于服务监听
-                )
+                // 通知连接错误：使用基类的 notifyConnectionError()
+                notifyConnectionError("Connection lost due to heartbeat failure", InnerErrorCode.E213)
 
                 // 不停止服务发现，保持mDNS服务发现运行，以便在设备恢复后能够重新发现
 
@@ -922,17 +698,17 @@ class LanClientKernel(
                     // 启动服务监听
                     startServiceMonitoring()
 
-                    // 通知所有回调连接成功
+                    // 统一连接成功通知出口：只使用基类的 notifyConnectionSuccess()
+                    // 直接使用基类的 currentConnectionCallback，不需要额外的回调管理器
                     val connectionData = mapOf("uri" to currentUri?.toString())
                     val operationIdToClear = currentOperationId
-                    callbackManager.notifyConnected(connectionData, operationIdToClear)
 
-                    // 清除当前操作ID，以便下次连接时不会误清除
+                    // 清除当前操作ID
                     if (operationIdToClear != null) {
                         currentOperationId = null
                     }
 
-                    // 同时通知基类（保持兼容性）
+                    // 统一通知出口：只使用基类的 notifyConnectionSuccess()
                     notifyConnectionSuccess(connectionData)
                 }
             }
@@ -949,14 +725,14 @@ class LanClientKernel(
 
                     // 构建断开信息
                     val disconnectCode = if (isManualDisconnect) {
-                        InnerErrorCode.T08.code
+                        InnerErrorCode.E213.code
                     } else {
-                        InnerErrorCode.T06.code
+                        InnerErrorCode.E213.code
                     }
                     val disconnectMessage = if (isManualDisconnect) {
-                        "${InnerErrorCode.T08.description}:Manual disconnect, $reason($code)"
+                        "${InnerErrorCode.E213.description}:Manual disconnect, $reason($code)"
                     } else {
-                        "${InnerErrorCode.T06.description}:Passive disconnect, $reason($code)"
+                        "${InnerErrorCode.E213.description}:Passive disconnect, $reason($code)"
                     }
 
                     val wasManual = isManualDisconnect
@@ -972,14 +748,12 @@ class LanClientKernel(
                         updateStatusSafely(InnerConnectionStatus.DISCONNECTED)
                     }
 
-                    // 通知所有回调连接断开（断开连接不清除回调，保留用于服务监听）
-                    callbackManager.notifyError(disconnectCode, disconnectMessage, null)
-
-                    // 同时通知基类（保持兼容性）
+                    // 通知连接断开：使用基类的 notifyConnectionDisconnected()
                     notifyConnectionDisconnected(disconnectCode, disconnectMessage)
 
-                    // 如果不是主动断开，启动服务监听
-                    if (!wasManual && callbackManager.hasCallbacks()) {
+                    // 如果不是主动断开，且当前有连接回调，启动服务监听
+                    // 使用基类的 currentConnectionCallback 判断是否有待处理的连接
+                    if (!wasManual && currentConnectionCallback != null) {
                         LogUtil.d(TAG, "Passive disconnect detected, starting service monitoring")
                         if (!isServiceMonitoring) {
                             startServiceMonitoring()
@@ -995,15 +769,8 @@ class LanClientKernel(
                     // 安全更新状态
                     updateStatusSafely(InnerConnectionStatus.ERROR)
 
-                    // 通知所有回调连接错误（连接错误不清除回调，保留用于服务监听）
-                    callbackManager.notifyError(
-                        InnerErrorCode.T04.code,
-                        "Connection error: ${exception.message}",
-                        null // 不清除回调，保留用于服务监听
-                    )
-
-                    // 同时通知基类（保持兼容性）
-                    notifyConnectionError("Connection error: ${exception.message}", InnerErrorCode.T04)
+                    // 通知连接错误：使用基类的 notifyConnectionError()
+                    notifyConnectionError("Connection error: ${exception.message}", InnerErrorCode.E241)
                 }
             }
         })
@@ -1036,7 +803,7 @@ class LanClientKernel(
 
     /**
      * 处理服务地址变化的通用方法
-     * 
+     *
      * @param service 新的服务信息
      * @param oldHost 旧的主机地址
      * @param oldPort 旧的端口号
@@ -1243,7 +1010,7 @@ class LanClientKernel(
                     if (consecutiveFailures >= 2) { // 降低阈值，更快检测问题
                         LogUtil.e(TAG, "Too many heartbeat failures, disconnecting connection but keeping service discovery")
                         // 通知连接错误
-                        notifyConnectionError("Heartbeat failed: $error", InnerErrorCode.T04)
+                        notifyConnectionError("Heartbeat failed: $error", InnerErrorCode.E241)
                         // 心跳失败时断开连接，但不停止mDNS服务发现，以便在设备恢复后能够重新发现并连接
                         disconnectOnHeartbeatFailure()
                     }
@@ -1293,8 +1060,6 @@ class LanClientKernel(
      */
     private fun cleanupResources() {
         // 清理回调
-        callbackManager.clearExpiredCallbacks(0) // 清理所有回调
-
         // 重置状态变量
         currentUri = null
         currentService = null
@@ -1336,11 +1101,6 @@ class LanClientKernel(
      * 获取当前操作ID
      */
     fun getCurrentOperationId(): String? = currentOperationId
-
-    /**
-     * 获取活跃回调数量
-     */
-    fun getActiveCallbackCount(): Int = callbackManager.getCallbackCount()
 
     /**
      * 检查是否有操作在进行

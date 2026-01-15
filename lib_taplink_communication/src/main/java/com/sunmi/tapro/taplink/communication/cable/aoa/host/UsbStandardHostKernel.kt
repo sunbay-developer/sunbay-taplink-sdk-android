@@ -64,29 +64,20 @@ class UsbStandardHostKernel(
      * 重写断开连接方法，添加Host特有的清理逻辑
      */
     override fun performDisconnect() {
-        LogUtil.d(TAG, "=== AOA Host Disconnect Started ===")
+        LogUtil.d(TAG, "AOA Host disconnect started")
 
         try {
-            // 重置AOA连接标志
             aoaConnectionInProgress = false
-
-            // 停止并清空HexFrame缓冲区
             hexFrameBuffer?.stop()
             hexFrameBuffer = null
-
-            // 清理待处理的权限请求
             synchronized(this) {
                 pendingDevice = null
             }
-
-            // 调用基类的断开连接逻辑
             super.performDisconnect()
-
-            LogUtil.d(TAG, "AOA Host disconnect completed successfully")
+            LogUtil.d(TAG, "AOA Host disconnect completed")
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Error during AOA Host disconnect: ${e.message}")
+            LogUtil.e(TAG, "Error during disconnect: ${e.message}")
         }
-        LogUtil.d(TAG, "=== AOA Host Disconnect Finished ===")
     }
 
     /**
@@ -100,51 +91,23 @@ class UsbStandardHostKernel(
      * 设备连接时的回调
      */
     override fun onDeviceAttached(device: UsbDevice) {
-        LogUtil.d(TAG, "=== USB DEVICE ATTACHED ===")
-        LogUtil.d(TAG, "Device attached: ${device.deviceName}")
-        LogUtil.d(TAG, "VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)}")
-        LogUtil.d(TAG, "Current status: $currentInnerConnectionStatus")
+        LogUtil.d(TAG, "Device attached: ${device.deviceName} (VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)})")
 
-        // 检查是否是AOA设备
         if (UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)) {
-            LogUtil.d(TAG, "AOA device attached via broadcast: ${device.deviceName}")
-            // 只在等待状态时尝试连接，避免与waitForAoaAccessory重复处理
-            if (currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT ||
-                currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING
-            ) {
-                LogUtil.d(TAG, "Host is waiting for AOA device, but waitForAoaAccessory will handle this")
-                // 不在这里处理连接，让waitForAoaAccessory方法来处理
-                // 这样避免重复的权限请求
-            } else {
-                LogUtil.d(TAG, "AOA device attached but Host not waiting (current: $currentInnerConnectionStatus)")
-            }
-        } else {
-            LogUtil.d(TAG, "Non-AOA device attached: ${device.deviceName}")
+            LogUtil.d(TAG, "AOA device attached, status: $currentInnerConnectionStatus")
         }
-        LogUtil.d(TAG, "=== END USB DEVICE ATTACHED ===")
     }
 
     /**
      * 设备断开时的回调
      */
     override fun onDeviceDetached(device: UsbDevice) {
-        LogUtil.d(TAG, "=== USB DEVICE DETACHED ===")
-        LogUtil.d(TAG, "Device detached: ${device.deviceName}")
-        LogUtil.d(TAG, "VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)}")
+        LogUtil.d(TAG, "Device detached: ${device.deviceName} (VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)})")
 
-        // 基础的断开逻辑已经在BaseUsbHostKernel.deviceReceiver中处理了
-        // 这里只需要添加AOA特定的日志和处理
-        if (UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)) {
-            LogUtil.d(TAG, "AOA device detached")
-
-            // 如果正在等待连接，记录状态
-            if (currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT) {
-                LogUtil.w(TAG, "AOA device detached while waiting for connection")
-            }
-        } else {
-            LogUtil.d(TAG, "Non-AOA device detached")
+        if (UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId) &&
+            currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT) {
+            LogUtil.w(TAG, "AOA device detached while waiting for connection")
         }
-        LogUtil.d(TAG, "=== END USB DEVICE DETACHED ===")
     }
 
     /**
@@ -155,121 +118,98 @@ class UsbStandardHostKernel(
         connectionCallback: ConnectionCallback
     ) {
         try {
-            // 从已连接的设备中查找匹配的设备
             val devices = usbManager.deviceList
+            LogUtil.d(TAG, "Starting USB connect, found ${devices.size} device(s)")
+            
+            // 检查是否存在AOA设备
+            val aoaDevice = devices.values.find { device ->
+                UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)
+            }
+            
+            if (aoaDevice != null) {
+                LogUtil.d(TAG, "Found existing AOA device: ${aoaDevice.deviceName}")
+                if (usbManager.hasPermission(aoaDevice)) {
+                    connectToAoaDevice(aoaDevice, connectionCallback)
+                } else {
+                    requestPermission(aoaDevice, connectionCallback)
+                }
+                return
+            }
+            
+            // 查找需要切换的Android设备
             val device = when {
-                parseResult.deviceName != null -> {
-                    devices.values.firstOrNull { it.deviceName == parseResult.deviceName }
-                }
-
-                parseResult.deviceId != null -> {
-                    devices.values.firstOrNull { it.deviceId.toString() == parseResult.deviceId }
-                }
-
-                else -> {
-                    devices.values.firstOrNull()
-                }
+                parseResult.deviceName != null -> devices.values.firstOrNull { it.deviceName == parseResult.deviceName }
+                parseResult.deviceId != null -> devices.values.firstOrNull { it.deviceId.toString() == parseResult.deviceId }
+                else -> devices.values.firstOrNull()
             }
 
             if (device == null) {
-                handleConnectionError(InnerErrorCode.T11.description, connectionCallback, InnerErrorCode.T11.code)
+                LogUtil.e(TAG, "No suitable USB device found")
+                handleConnectionError(InnerErrorCode.E252.description, connectionCallback, InnerErrorCode.E252.code)
                 return
             }
+            
+            LogUtil.d(TAG, "Selected device: ${device.deviceName} (VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)})")
 
-            // 检查权限
             if (usbManager.hasPermission(device)) {
-                // 已有权限，直接开始AOA协议
                 startAoaProtocol(device, connectionCallback)
             } else {
-                // 没有权限，请求权限
-                LogUtil.d(TAG, "Requesting permission for USB device: ${device.deviceName}")
                 requestPermission(device, connectionCallback)
             }
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to connect USB AOA host device: ${e.message}")
+            LogUtil.e(TAG, "Failed to connect: ${e.message}")
             handleConnectionError(
-                "${InnerErrorCode.T07.description}:${e.message ?: "Unknown error"}",
+                "${InnerErrorCode.E212.description}:${e.message ?: "Unknown error"}",
                 connectionCallback,
-                InnerErrorCode.T07.code
+                InnerErrorCode.E212.code
             )
         }
     }
 
     /**
      * 开始AOA协议流程
+     * 
+     * 注意：调用此方法前必须确保已有USB设备权限
      */
     private suspend fun startAoaProtocol(device: UsbDevice, connectionCallback: ConnectionCallback) {
         try {
-            if (!usbManager.hasPermission(device)) {
-                LogUtil.e(TAG, "No permission for USB device: ${device.deviceName}")
-                handleConnectionError(InnerErrorCode.T11.description, connectionCallback, InnerErrorCode.T11.code)
+            LogUtil.d(TAG, "Starting AOA protocol for ${device.deviceName}")
+
+            if (UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)) {
+                LogUtil.d(TAG, "Device already in AOA mode")
+                connectToAoaDevice(device, connectionCallback)
                 return
             }
 
-            LogUtil.d(TAG, "=== Starting AOA Protocol ===")
-            LogUtil.d(
-                TAG,
-                "Original device: ${device.deviceName} (VID: ${
-                    String.format(
-                        "0x%04X",
-                        device.vendorId
-                    )
-                }, PID: ${String.format("0x%04X", device.productId)})"
-            )
-
-            // 预先检查是否已经有AOA设备存在（可能之前已经切换过）
-            val existingAoaDevice = usbManager.deviceList.values.find { aoaDevice ->
-                UsbStandardProtocol.isAoaCompatible(aoaDevice.vendorId, aoaDevice.productId)
-            }
-
-            if (existingAoaDevice != null) {
-                LogUtil.d(TAG, "Found existing AOA device, connecting directly...")
-                connectToAoaDevice(existingAoaDevice, connectionCallback)
-                return
-            }
-
-            // 打开设备连接
             val connection = usbManager.openDevice(device) ?: run {
                 LogUtil.e(TAG, "Failed to open USB device")
-                handleConnectionError(InnerErrorCode.T11.description, connectionCallback, InnerErrorCode.T11.code)
+                handleConnectionError(InnerErrorCode.E252.description, connectionCallback, InnerErrorCode.E252.code)
                 return
             }
 
-            LogUtil.d(TAG, "USB device opened: ${device.deviceName}")
-            this.usbDeviceConnection = connection
-            this.connectedDevice = device
-
-            // 创建AOA设备信息
             val aoaDeviceInfo = UsbStandardProtocol.createDefaultAoaDeviceInfo()
 
-            // 发送AOA协议序列
             if (!UsbStandardProtocol.sendAoaProtocolSequence(connection, aoaDeviceInfo)) {
                 LogUtil.e(TAG, "Failed to send AOA protocol sequence")
-                disconnectInternal()
-                handleConnectionError(InnerErrorCode.T10.description, connectionCallback, InnerErrorCode.T10.code)
+                connection.close()
+                handleConnectionError(InnerErrorCode.E254.description, connectionCallback, InnerErrorCode.E254.code)
                 return
             }
-            // 关闭设备连接
+            
             connection.close()
-            LogUtil.d(TAG, "AOA protocol completed successfully")
+            LogUtil.d(TAG, "AOA protocol sent, waiting for device to switch")
 
-            this.usbDeviceConnection = null
-            this.connectedDevice = null
-
-            // 设置状态并等待Accessory
             updateStatus(InnerConnectionStatus.WAITING_CONNECT)
             currentConnectionCallback = connectionCallback
-
-            // 等待AOA设备出现
             waitForAoaAccessory(connectionCallback)
 
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to start AOA protocol: ${e.message}")
             disconnectInternal()
             handleConnectionError(
-                "${InnerErrorCode.T10.description}:${e.message ?: "Unknown error"}",
+                "${InnerErrorCode.E254.description}:${e.message ?: "Unknown error"}",
                 connectionCallback,
-                InnerErrorCode.T10.code
+                InnerErrorCode.E254.code
             )
         }
     }
@@ -374,7 +314,7 @@ class UsbStandardHostKernel(
         }
 
         updateStatus(InnerConnectionStatus.DISCONNECTED)
-        handleConnectionError(InnerErrorCode.T06.description, connectionCallback, InnerErrorCode.T06.code)
+        handleConnectionError(InnerErrorCode.E213.description, connectionCallback, InnerErrorCode.E213.code)
     }
 
     /**
@@ -406,121 +346,53 @@ class UsbStandardHostKernel(
      */
     private suspend fun connectToAoaDeviceDirectly(device: UsbDevice, connectionCallback: ConnectionCallback) {
         try {
-            LogUtil.d(TAG, "Connecting directly to AOA device: ${device.deviceName}")
-            LogUtil.d(
-                TAG,
-                "Device info: VID=${String.format("0x%04X", device.vendorId)}, PID=${String.format("0x%04X", device.productId)}"
-            )
+            LogUtil.d(TAG, "Connecting to AOA device: ${device.deviceName}")
 
-            // 打开设备连接
-            val connection = usbManager.openDevice(device) ?: run {
-                throw Exception("Failed to open AOA device")
-            }
+            val connection = usbManager.openDevice(device) ?: throw Exception("Failed to open AOA device")
 
-            LogUtil.d(TAG, "Device opened successfully, interface count: ${device.interfaceCount}")
-
-            // 查找AOA标准接口 (优先选择class=255, subclass=66, protocol=1)
+            // 查找AOA标准接口 (class=255, subclass=66, protocol=1)
             var aoaInterface: UsbInterface? = null
             for (i in 0 until device.interfaceCount) {
                 val usbInterface = device.getInterface(i)
-                LogUtil.d(
-                    TAG,
-                    "Interface[$i]: class=${usbInterface.interfaceClass}, subclass=${usbInterface.interfaceSubclass}, protocol=${usbInterface.interfaceProtocol}"
-                )
-                LogUtil.d(TAG, "  Endpoint count: ${usbInterface.endpointCount}")
-
-                // 打印所有端点信息
-                for (j in 0 until usbInterface.endpointCount) {
-                    val endpoint = usbInterface.getEndpoint(j)
-                    LogUtil.d(
-                        TAG, "    Endpoint[$j]: address=${String.format("0x%02X", endpoint.address)}, " +
-                                "type=${endpoint.type}, direction=${if (endpoint.direction == UsbConstants.USB_DIR_IN) "IN" else "OUT"}, " +
-                                "maxPacketSize=${endpoint.maxPacketSize}"
-                    )
-                }
-
-                // 优先选择AOA标准接口 (class=255, subclass=66, protocol=1)
                 if (usbInterface.interfaceClass == 255 &&
                     usbInterface.interfaceSubclass == 66 &&
                     usbInterface.interfaceProtocol == 1 &&
                     usbInterface.endpointCount >= 2
                 ) {
                     aoaInterface = usbInterface
-                    LogUtil.d(TAG, "Selected AOA standard interface[$i] (class=255, subclass=66, protocol=1)")
-                    break // 找到标准接口就停止搜索
+                    LogUtil.d(TAG, "Found AOA interface[$i]")
+                    break
                 }
 
-                // 如果没有找到标准接口，使用第一个Vendor Specific接口作为备选
                 if (aoaInterface == null &&
                     usbInterface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC &&
                     usbInterface.endpointCount >= 2
                 ) {
                     aoaInterface = usbInterface
-                    LogUtil.d(TAG, "Selected fallback interface[$i] for AOA communication")
                 }
             }
 
             if (aoaInterface == null) {
                 connection.close()
-                throw Exception("No suitable interface found on AOA device")
+                throw Exception("No suitable interface found")
             }
 
-            // 声明接口
-            LogUtil.d(TAG, "Claiming interface...")
             if (!connection.claimInterface(aoaInterface, true)) {
                 connection.close()
-                throw Exception("Failed to claim AOA interface")
+                throw Exception("Failed to claim interface")
             }
-            LogUtil.d(TAG, "Interface claimed successfully")
 
-            // 查找并验证AOA标准端点 (OUT=0x02, IN=0x82)
+            // 查找端点
             var inEndpoint: UsbEndpoint? = null
             var outEndpoint: UsbEndpoint? = null
 
             for (i in 0 until aoaInterface.endpointCount) {
                 val endpoint = aoaInterface.getEndpoint(i)
-                LogUtil.d(
-                    TAG, "Checking endpoint[$i]: address=${String.format("0x%02X", endpoint.address)}, " +
-                            "type=${endpoint.type}, direction=${endpoint.direction}"
-                )
-
                 if (endpoint.type == UsbConstants.USB_ENDPOINT_XFER_BULK) {
                     if (endpoint.direction == UsbConstants.USB_DIR_IN) {
                         inEndpoint = endpoint
-                        LogUtil.d(TAG, "Found IN endpoint: ${String.format("0x%02X", endpoint.address)}")
-
-                        // 验证IN端点地址是否为AOA标准地址
-                        if (endpoint.address == 0x82) {
-                            LogUtil.d(TAG, "✓ IN endpoint matches AOA standard (0x82)")
-                        } else {
-                            LogUtil.w(
-                                TAG,
-                                "⚠ IN endpoint address ${
-                                    String.format(
-                                        "0x%02X",
-                                        endpoint.address
-                                    )
-                                } differs from AOA standard (0x82)"
-                            )
-                        }
                     } else if (endpoint.direction == UsbConstants.USB_DIR_OUT) {
                         outEndpoint = endpoint
-                        LogUtil.d(TAG, "Found OUT endpoint: ${String.format("0x%02X", endpoint.address)}")
-
-                        // 验证OUT端点地址是否为AOA标准地址
-                        if (endpoint.address == 0x02) {
-                            LogUtil.d(TAG, "✓ OUT endpoint matches AOA standard (0x02)")
-                        } else {
-                            LogUtil.w(
-                                TAG,
-                                "⚠ OUT endpoint address ${
-                                    String.format(
-                                        "0x%02X",
-                                        endpoint.address
-                                    )
-                                } differs from AOA standard (0x02)"
-                            )
-                        }
                     }
                 }
             }
@@ -528,7 +400,7 @@ class UsbStandardHostKernel(
             if (outEndpoint == null) {
                 connection.releaseInterface(aoaInterface)
                 connection.close()
-                throw Exception("No bulk OUT endpoint found on AOA device")
+                throw Exception("No bulk OUT endpoint found")
             }
 
             // 保存连接信息
@@ -542,68 +414,31 @@ class UsbStandardHostKernel(
             hexFrameBuffer = HexFrameBuffer(
                 scope = scope,
                 onFrameReceived = { frame ->
-                    LogUtil.d(TAG, "AOA HexFrame received: ${frame.size} bytes")
                     dataReceiver?.invoke(frame)
                 }
             )
 
-            LogUtil.d(TAG, "AOA device connected successfully")
-            LogUtil.d(TAG, "Connection details:")
-            LogUtil.d(TAG, "  Interface: class=${aoaInterface.interfaceClass}, id=${aoaInterface.id}")
-            LogUtil.d(TAG, "  IN endpoint: ${if (inEndpoint != null) String.format("0x%02X", inEndpoint.address) else "none"}")
-            LogUtil.d(
-                TAG,
-                "  OUT endpoint: ${String.format("0x%02X", outEndpoint.address)} (maxPacketSize: ${outEndpoint.maxPacketSize})"
-            )
+            LogUtil.d(TAG, "AOA device connected, IN: ${inEndpoint?.let { String.format("0x%02X", it.address) } ?: "none"}, OUT: ${String.format("0x%02X", outEndpoint.address)}")
 
-            // 启动数据接收（如果有输入端点）
             if (inEndpoint != null) {
-                LogUtil.d(TAG, "Starting data receive...")
                 startDataReceive()
-            } else {
-                LogUtil.w(TAG, "No IN endpoint found, data receive not available")
             }
 
-            // 连接成功 - 立即更新状态为CONNECTED，允许发送数据
-            // 注意：状态更新应该在连接验证之前，确保可以立即发送数据
-            LogUtil.d(TAG, "Connection established, updating status to CONNECTED immediately")
-            updateStatus(InnerConnectionStatus.CONNECTED)
-            aoaConnectionInProgress = false // 重置标志
+            handleConnectionSuccess(connectionCallback, null)
+            aoaConnectionInProgress = false
 
-            // 重要：等待Accessory端准备好接收数据
-            // 根据日志分析，Accessory端需要时间完成权限授予和连接建立（约2-5秒）
-            // 在Accessory端准备好之前发送数据会导致数据丢失和设备被移除
-            LogUtil.d(TAG, "Waiting for Accessory to be ready before allowing data transmission...")
-            LogUtil.d(TAG, "Note: Accessory needs time to complete permission grant and connection setup")
-            
-            // 延迟调用连接成功回调，给Accessory端时间准备好接收数据
-            // 延迟时间设置为3秒，确保Accessory端已经启动接收循环
+
+            // 后台验证连接
             scope.launch {
-                delay(5000) // 等待3秒，确保Accessory端准备好
-                LogUtil.d(TAG, "Accessory should be ready now, calling connection success callback...")
-                handleConnectionSuccess(connectionCallback, null)
-            }
-
-            // 在后台进行连接验证（不阻塞连接成功回调）
-            scope.launch {
-                LogUtil.d(TAG, "Starting background connection validation (3 seconds)...")
-                delay(3000) // 3秒后验证连接状态
-
-                // 验证连接状态
-                if (validateConnectionState()) {
-                    LogUtil.d(TAG, "Connection validated successfully after stabilization")
-                } else {
-                    LogUtil.w(TAG, "Connection validation failed after stabilization, but connection already established")
-                    // 注意：这里不立即断开，因为连接可能已经成功，只是验证失败
-                    // 如果连接真的有问题，会在后续的数据传输中暴露出来
+                delay(1000)
+                if (!validateConnectionState()) {
+                    LogUtil.w(TAG, "Connection validation failed")
                 }
             }
 
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to connect directly to AOA device: ${e.message}")
-            LogUtil.e(TAG, "Exception type: ${e.javaClass.simpleName}")
-            e.printStackTrace()
-            aoaConnectionInProgress = false // 重置标志
+            LogUtil.e(TAG, "Failed to connect: ${e.message}")
+            aoaConnectionInProgress = false
             disconnectInternal()
             throw e
         }

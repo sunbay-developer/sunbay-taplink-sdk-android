@@ -14,7 +14,11 @@ import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import com.sunmi.tapro.taplink.sdk.manager.ConnectionManager
 import com.sunmi.tapro.taplink.sdk.manager.PaymentManager
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
+import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
+import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.sunmi.tapro.taplink.sdk.callback.onFailure
+import com.sunmi.tapro.taplink.sdk.error.PaymentError
 
 /**
  * Taplink API implementation class
@@ -134,11 +138,10 @@ class TaplinkApiImpl : TaplinkApi {
         val paymentMgr = paymentManager
         if (paymentMgr == null) {
             LogUtil.e(TAG, "SDK not initialized, please call init() first")
+            val errorCode = InnerErrorCode.E201
             callback.onFailure(
-                com.sunmi.tapro.taplink.sdk.error.PaymentError(
-                    "SDK_NOT_INITIALIZED",
-                    "SDK not initialized, please call init() first"
-                )
+                errorCode = errorCode,
+                transactionRequestId = request.transactionRequestId
             )
             return
         }
@@ -150,10 +153,13 @@ class TaplinkApiImpl : TaplinkApi {
         val paymentMgr = paymentManager
         if (paymentMgr == null) {
             LogUtil.e(TAG, "SDK not initialized, please call init() first")
+            val errorCode = InnerErrorCode.E201
             callback.onFailure(
-                com.sunmi.tapro.taplink.sdk.error.PaymentError(
-                    "SDK_NOT_INITIALIZED",
-                    "SDK not initialized, please call init() first"
+                PaymentError.create(
+                    code = errorCode.code,
+                    message = errorCode.description,
+                    suggestion = ErrorStringHelper.getSolution(errorCode.code) ?: "",
+                    transactionRequestId = request.transactionRequestId
                 )
             )
             return

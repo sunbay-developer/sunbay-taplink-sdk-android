@@ -48,9 +48,9 @@ abstract class AsyncServiceKernel(
         LogUtil.i("tag", "=======AsyncServiceKernel:::connect:protocol:$protocol")
         if (!canConnect()) {
             handleConnectionError(
-                InnerErrorCode.T09.description + ": Current status: $currentInnerConnectionStatus",
+                InnerErrorCode.E211.description + ": Current status: $currentInnerConnectionStatus",
                 connectionCallback,
-                InnerErrorCode.T09.code
+                InnerErrorCode.E211.code
             )
             return
         }
@@ -67,8 +67,8 @@ abstract class AsyncServiceKernel(
             val parseResult = ProtocolManager.parseProtocol(protocol)
             if (parseResult is ProtocolParseResult.Error) {
                 handleConnectionError(
-                    "${InnerErrorCode.T17.description}:${parseResult.message}", connectionCallback,
-                    InnerErrorCode.T17.code
+                    "${InnerErrorCode.E302.description}:${parseResult.message}", connectionCallback,
+                    InnerErrorCode.E302.code
                 )
                 return
             }
@@ -76,9 +76,9 @@ abstract class AsyncServiceKernel(
             // Validate protocol type
             if (!isValidProtocolType(parseResult)) {
                 handleConnectionError(
-                    InnerErrorCode.T19.description + ", expected ${getExpectedProtocolType()}",
+                    InnerErrorCode.E302.description + ", expected ${getExpectedProtocolType()}",
                     connectionCallback,
-                    InnerErrorCode.T19.code
+                    InnerErrorCode.E302.code
                 )
                 return
             }
@@ -89,9 +89,9 @@ abstract class AsyncServiceKernel(
         } catch (e: Exception) {
             LogUtil.e(getTag(), "Failed to start connection: ${e.message}")
             handleConnectionError(
-                "${InnerErrorCode.T07.description}: ${e.message}",
+                "${InnerErrorCode.E212.description}: ${e.message}",
                 connectionCallback,
-                InnerErrorCode.T07.code
+                InnerErrorCode.E212.code
             )
         }
     }
@@ -102,7 +102,7 @@ abstract class AsyncServiceKernel(
     override fun sendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!canSendData()) {
             LogUtil.d(getTag(), "Cannot send data, not connected. Status: $currentInnerConnectionStatus")
-            callback?.onError(InnerErrorCode.T22.code, "${getServiceType()} ${InnerErrorCode.T22.description}")
+            callback?.onError(InnerErrorCode.E304.code, "${getServiceType()} ${InnerErrorCode.E304.description}")
             return
         }
 
@@ -117,7 +117,7 @@ abstract class AsyncServiceKernel(
 
                 } catch (e: Exception) {
                     LogUtil.e(getTag(), "Failed to send data: traceId=$traceId, error=${e.message}")
-                    callback?.onError(InnerErrorCode.T24.code, e.message ?: InnerErrorCode.T24.description)
+                    callback?.onError(InnerErrorCode.E304.code, e.message ?: InnerErrorCode.E304.description)
                 }
             }
         }
@@ -197,12 +197,12 @@ abstract class AsyncServiceKernel(
     /**
      * Get error code when connection is busy
      */
-    protected open fun getConnectionBusyErrorCode(): String = InnerErrorCode.T03.code
+    protected open fun getConnectionBusyErrorCode(): String = InnerErrorCode.E232.code
 
     /**
      * Get error code when connection fails
      */
-    protected open fun getConnectionFailedErrorCode(): String = InnerErrorCode.T03.code
+    protected open fun getConnectionFailedErrorCode(): String = InnerErrorCode.E232.code
 
     // ==================== Helper methods ====================
 
@@ -232,7 +232,7 @@ abstract class AsyncServiceKernel(
     /**
      * Notify connection failure
      */
-    protected fun notifyConnectionError(message: String, error: InnerErrorCode = InnerErrorCode.T03) {
+    protected fun notifyConnectionError(message: String, error: InnerErrorCode = InnerErrorCode.E232) {
         currentConnectionCallback?.let { callback ->
             handleConnectionError("${error.description}:${message}", callback, error.code)
         }

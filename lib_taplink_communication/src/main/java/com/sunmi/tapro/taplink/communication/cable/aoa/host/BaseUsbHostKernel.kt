@@ -113,7 +113,7 @@ abstract class BaseUsbHostKernel(
                             pendingDevice = null
 
                             callback?.let {
-                                handleConnectionError(InnerErrorCode.T11.description, it, InnerErrorCode.T11.code)
+                                handleConnectionError(InnerErrorCode.E252.description, it, InnerErrorCode.E252.code)
                             }
                         } else {
                             LogUtil.w(TAG, "Permission denied for non-pending device: ${device.deviceName}")
@@ -174,7 +174,7 @@ abstract class BaseUsbHostKernel(
                         if (it == pendingDevice) {
                             pendingDevice = null
                             currentConnectionCallback?.let { callback ->
-                                handleConnectionError(InnerErrorCode.T12.description, callback, InnerErrorCode.T12.code)
+                                handleConnectionError(InnerErrorCode.E253.description, callback, InnerErrorCode.E253.code)
                             }
                         }
                         onDeviceDetached(it)
@@ -247,7 +247,7 @@ abstract class BaseUsbHostKernel(
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to request USB permission: ${e.message}")
                 pendingDevice = null
-                handleConnectionError("USB permission request failed: ${e.message}", connectionCallback, InnerErrorCode.T11.code)
+                handleConnectionError("USB permission request failed: ${e.message}", connectionCallback, InnerErrorCode.E252.code)
             }
         }
     }
@@ -313,12 +313,12 @@ abstract class BaseUsbHostKernel(
             val success = sendDataToDevice(data)
             if (!success) {
                 updateStatus(InnerConnectionStatus.ERROR)
-                callback?.onError(InnerErrorCode.T23.code, InnerErrorCode.T23.description)
+                callback?.onError(InnerErrorCode.E304.code, InnerErrorCode.E304.description)
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send data: ${e.message}")
             updateStatus(InnerConnectionStatus.ERROR)
-            callback?.onError(InnerErrorCode.T24.code, e.message ?: InnerErrorCode.T24.description)
+            callback?.onError(InnerErrorCode.E304.code, e.message ?: InnerErrorCode.E304.description)
         }
     }
 

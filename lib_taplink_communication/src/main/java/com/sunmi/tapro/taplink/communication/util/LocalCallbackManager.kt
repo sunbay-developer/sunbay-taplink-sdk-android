@@ -273,6 +273,15 @@ class LocalCallbackManager<T>(
     }
 
     /**
+     * 获取当前 traceId 回调数量
+     *
+     * @return Int traceId 回调数量
+     */
+    fun getTraceIdCallbackCount(): Int {
+        return traceIdCallbackMap.size
+    }
+
+    /**
      * 启动超时清理任务
      *
      * @param requestId 请求ID

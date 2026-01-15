@@ -112,7 +112,7 @@ object UsbStandardProtocol {
             if (protocolVersion <= 0) {
                 return false
             }
-            
+
             // 2. 发送SEND_STRING命令序列
             val strings = listOf(
                 Pair(AOA_STRING_MANUFACTURER, deviceInfo.manufacturer),
@@ -122,14 +122,14 @@ object UsbStandardProtocol {
                 Pair(AOA_STRING_URI, deviceInfo.uri),
                 Pair(AOA_STRING_SERIAL, deviceInfo.serial)
             )
-            
+
             for ((index, string) in strings) {
                 if (!sendString(connection, index, string)) {
                     return false
                 }
-                Thread.sleep(50)
+                Thread.sleep(10)
             }
-            
+
             // 3. 发送START命令
             sendStart(connection)
         } catch (e: Exception) {
@@ -170,7 +170,7 @@ object UsbStandardProtocol {
         return try {
             val data = buildSendStringCommand(index, string)
             val result = connection.controlTransfer(
-                USB_DIR_OUT or USB_TYPE_VENDOR,
+                USB_TYPE_VENDOR,
                 AOA_SEND_STRING,
                 0,
                 index,
@@ -190,13 +190,13 @@ object UsbStandardProtocol {
     private fun sendStart(connection: android.hardware.usb.UsbDeviceConnection): Boolean {
         return try {
             val result = connection.controlTransfer(
-                USB_DIR_OUT or USB_TYPE_VENDOR,
+                USB_TYPE_VENDOR,
                 AOA_START,
                 0,
                 0,
                 null,
                 0,
-                1000
+                100
             )
             result >= 0
         } catch (e: Exception) {

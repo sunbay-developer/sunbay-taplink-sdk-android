@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import com.sunmi.tapro.taplink.sdk.R
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
+import com.sunmi.tapro.taplink.sdk.callback.onFailure
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
@@ -111,10 +112,8 @@ class PaymentManager(
                 // There's already a transaction waiting for auto-connect, reject this one
                 LogUtil.w(TAG, "Connection in progress with pending transaction, rejecting new transaction")
                 callback.onFailure(
-                    PaymentError(
-                        "CONNECTION_IN_PROGRESS",
-                        "Connection is in progress with pending transaction, please wait for connection to complete"
-                    )
+                    errorCode = InnerErrorCode.E307,
+                    transactionRequestId = request.transactionRequestId
                 )
             } else {
                 // No pending transaction, wait for connection to complete
@@ -151,11 +150,11 @@ class PaymentManager(
                     // There's already a transaction waiting for auto-connect, reject this one
                     LogUtil.w(TAG, "Connection in progress with pending transaction, rejecting new query")
                     callback.onFailure(
-                        PaymentError(
-                            "CONNECTION_IN_PROGRESS",
-                            "Connection is in progress with pending transaction, please wait for connection to complete"
-                        )
+                        errorCode = InnerErrorCode.E312,
+                        errorMessage = "${InnerErrorCode.E312.description}(${"Connection in progress with pending transaction, rejecting new query"})",
+                        transactionRequestId = request.transactionRequestId
                     )
+
                 } else {
                     // No pending transaction, wait for connection to complete
                     LogUtil.d(TAG, "Connection in progress, waiting for connection to complete before querying")
@@ -168,7 +167,10 @@ class PaymentManager(
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error converting QueryRequest to PaymentRequest: ${e.message}")
-            callback.onFailure(PaymentError("REQUEST_ERROR", e.message ?: "Failed to convert query request"))
+            callback.onFailure(
+                InnerErrorCode.E302,
+                errorMessage = "${InnerErrorCode.E302.description}(${e.message})"
+            )
         }
     }
 
@@ -226,7 +228,12 @@ class PaymentManager(
             if (serviceKernel == null) {
                 LogUtil.e(TAG, "Service kernel not available")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                callback.onFailure(PaymentError("NOT_CONNECTED", "Service kernel not available"))
+                callback.onFailure(
+                    errorCode = InnerErrorCode.E212,
+                    errorMessage = "${InnerErrorCode.E212.description}(${"Service kernel not available"})",
+                    traceId = basicRequest.traceId,
+                    transactionRequestId = request.transactionRequestId
+                )
                 return
             }
 
@@ -241,11 +248,20 @@ class PaymentManager(
                 // Remove callback and notify error on send failure
                 LogUtil.e(TAG, "Failed to send data: traceId=${basicRequest.traceId}, error=${e.message}")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                callback.onFailure(PaymentError("SEND_ERROR", "Failed to send data: ${e.message}"))
+                callback.onFailure(
+                    errorCode = InnerErrorCode.E304,
+                    errorMessage = "${InnerErrorCode.E304.description}(${"Failed to send data(${e.message})"})",
+                    traceId = basicRequest.traceId,
+                    transactionRequestId = request.transactionRequestId
+                )
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error processing request: action=${request.action}, error=${e.message}")
-            callback.onFailure(PaymentError("REQUEST_ERROR", e.message ?: "Unknown error"))
+            callback.onFailure(
+                errorCode = InnerErrorCode.E304,
+                errorMessage = "${InnerErrorCode.E304.description}(${"Failed to send data(${e.message})"})",
+                transactionRequestId = request.transactionRequestId
+            )
         }
     }
 
@@ -292,7 +308,13 @@ class PaymentManager(
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
                 LogUtil.e(TAG, "Received error: code=$code, msg=$msg, traceId=$traceId")
-                callback.onFailure(PaymentError(code, msg))
+                callback.onFailure(
+                    code = code,
+                    errorMsg = msg,
+                    traceId = traceId,
+                    referenceOrderId = request.referenceOrderId,
+                    transactionRequestId = request.transactionRequestId
+                )
             }
 
             override fun onResponse(responseData: String) {
@@ -322,7 +344,7 @@ class PaymentManager(
     private fun validateConnection(callback: PaymentCallback): Boolean {
         if (!connectionManager.isConnected()) {
             LogUtil.e(TAG, "Not connected, please call connect() first")
-            callback.onFailure(PaymentError("NOT_CONNECTED", "Not connected, please call connect() first"))
+            callback.onFailure(errorCode = InnerErrorCode.E212)
             return false
         }
         return true
@@ -337,10 +359,9 @@ class PaymentManager(
             if (!isInteger(amountInfo.orderAmount)) {
                 LogUtil.e(TAG, "orderAmount must be an integer, got: ${amountInfo.orderAmount}")
                 callback.onFailure(
-                    PaymentError(
-                        InnerErrorCode.T18.code,
-                        "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_order)}"
-                    )
+                    errorCode = InnerErrorCode.E302,
+                    errorMessage = "${InnerErrorCode.E302.description}(${context.getString(R.string.error_invalid_amount_order)})",
+                    transactionRequestId = request.transactionRequestId
                 )
                 return false
             }
@@ -349,10 +370,9 @@ class PaymentManager(
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "tipAmount must be an integer, got: $it")
                     callback.onFailure(
-                        PaymentError(
-                            InnerErrorCode.T18.code,
-                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_tip)}"
-                        )
+                        errorCode = InnerErrorCode.E302,
+                        errorMessage = "${InnerErrorCode.E302.description}(${context.getString(R.string.error_invalid_amount_tip)})",
+                        transactionRequestId = request.transactionRequestId
                     )
                     return false
                 }
@@ -362,10 +382,9 @@ class PaymentManager(
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "taxAmount must be an integer, got: $it")
                     callback.onFailure(
-                        PaymentError(
-                            InnerErrorCode.T18.code,
-                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_tax)}"
-                        )
+                        errorCode = InnerErrorCode.E302,
+                        errorMessage = "${InnerErrorCode.E302.description}(${context.getString(R.string.error_invalid_amount_tax)})",
+                        transactionRequestId = request.transactionRequestId
                     )
                     return false
                 }
@@ -375,10 +394,9 @@ class PaymentManager(
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "surchargeAmount must be an integer, got: $it")
                     callback.onFailure(
-                        PaymentError(
-                            InnerErrorCode.T18.code,
-                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_surcharge)}"
-                        )
+                        errorCode = InnerErrorCode.E302,
+                        errorMessage = "${InnerErrorCode.E302.description}(${context.getString(R.string.error_invalid_amount_surcharge)})",
+                        transactionRequestId = request.transactionRequestId
                     )
                     return false
                 }
@@ -388,10 +406,9 @@ class PaymentManager(
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "cashbackAmount must be an integer, got: $it")
                     callback.onFailure(
-                        PaymentError(
-                            InnerErrorCode.T18.code,
-                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_cashback)}"
-                        )
+                        errorCode = InnerErrorCode.E302,
+                        errorMessage = "${InnerErrorCode.E302.description}(${context.getString(R.string.error_invalid_amount_cashback)})",
+                        transactionRequestId = request.transactionRequestId
                     )
                     return false
                 }
@@ -401,10 +418,9 @@ class PaymentManager(
                 if (!isInteger(it)) {
                     LogUtil.e(TAG, "serviceFee must be an integer, got: $it")
                     callback.onFailure(
-                        PaymentError(
-                            InnerErrorCode.T18.code,
-                            "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_service_fee)}"
-                        )
+                        errorCode = InnerErrorCode.E302,
+                        errorMessage = "${InnerErrorCode.E302.description}(${context.getString(R.string.error_invalid_amount_service_fee)})",
+                        transactionRequestId = request.transactionRequestId
                     )
                     return false
                 }
@@ -416,10 +432,9 @@ class PaymentManager(
             if (!isInteger(it)) {
                 LogUtil.e(TAG, "PaymentRequest tipAmount must be an integer, got: $it")
                 callback.onFailure(
-                    PaymentError(
-                        InnerErrorCode.T18.code,
-                        "${InnerErrorCode.T18.description}:${context.getString(R.string.error_invalid_amount_tip)}"
-                    )
+                    errorCode = InnerErrorCode.E302,
+                    errorMessage = "${InnerErrorCode.E302.description}(${context.getString(R.string.error_invalid_amount_tip)})",
+                    transactionRequestId = request.transactionRequestId
                 )
                 return false
             }
@@ -490,10 +505,8 @@ class PaymentManager(
                 connectionManager.updateConnectionStatus(ConnectionStatus.ERROR)
                 // Connection failed, notify callback
                 callback.onFailure(
-                    PaymentError(
-                        error.code,
-                        "Auto-connect failed: ${error.message}"
-                    )
+                    errorCode = InnerErrorCode.E214,
+                    transactionRequestId = request.transactionRequestId
                 )
             }
 
@@ -505,10 +518,8 @@ class PaymentManager(
                     connectionManager.updateConnectionStatus(ConnectionStatus.DISCONNECTED)
                     // Notify callback of disconnection
                     callback.onFailure(
-                        PaymentError(
-                            InnerErrorCode.T06.code,
-                            "${InnerErrorCode.T06.description}:Auto-connect disconnected $reason"
-                        )
+                        errorCode = InnerErrorCode.E213,
+                        transactionRequestId = request.transactionRequestId
                     )
                 }
             }
@@ -545,13 +556,13 @@ class PaymentManager(
         val transaction = pendingTransaction
         if (transaction != null) {
             pendingTransaction = null
-            val (_, callback) = transaction
+            val (request, callback) = transaction
             LogUtil.e(TAG, "Connection failed, notifying pending transaction: ${error.message}")
+
             callback.onFailure(
-                PaymentError(
-                    error.code,
-                    "Connection failed: ${error.message}"
-                )
+                errorCode = InnerErrorCode.E307,
+                errorMessage = "${InnerErrorCode.E307.description}(${"Connection failed,pending transaction failed"})",
+                transactionRequestId = request.transactionRequestId
             )
         }
     }

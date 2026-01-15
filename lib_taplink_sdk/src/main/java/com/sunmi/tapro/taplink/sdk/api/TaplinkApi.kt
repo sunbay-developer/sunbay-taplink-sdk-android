@@ -5,11 +5,8 @@ import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
-import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
-import com.sunmi.tapro.taplink.sdk.error.TaplinkException
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
-import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 
 /**
  * Taplink SDK API接口
