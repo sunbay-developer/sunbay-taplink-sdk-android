@@ -84,7 +84,13 @@ class UsbStandardHostKernel(
      * 权限授予后的回调
      */
     override suspend fun onPermissionGranted(device: UsbDevice, callback: ConnectionCallback) {
-        startAoaProtocol(device, callback)
+        // 获取当前 token，确保是当前连接操作的权限授予
+        val token = currentOpToken()
+        if (!isTokenActive(token)) {
+            LogUtil.w(TAG, "onPermissionGranted ignored: stale token=$token")
+            return
+        }
+        startAoaProtocol(token, device, callback)
     }
 
     /**
@@ -117,70 +123,99 @@ class UsbStandardHostKernel(
         parseResult: ProtocolParseResult.UsbProtocol,
         connectionCallback: ConnectionCallback
     ) {
-        try {
-            val devices = usbManager.deviceList
-            LogUtil.d(TAG, "Starting USB connect, found ${devices.size} device(s)")
-            
-            // 检查是否存在AOA设备
-            val aoaDevice = devices.values.find { device ->
-                UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)
+        // 开始新的连接操作，生成新的 token，避免旧操作误伤新连接
+        val token = beginNewOperation("USB connect started")
+        LogUtil.d(TAG, "USB connect started with token=$token")
+
+        // 在 connectMutex 内执行所有连接建立操作，确保原子性
+        connectMutex.withLock {
+            // Token 检查：确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "USB connect ignored: token changed during lock acquisition, token=$token")
+                return@withLock
             }
             
-            if (aoaDevice != null) {
-                LogUtil.d(TAG, "Found existing AOA device: ${aoaDevice.deviceName}")
-                if (usbManager.hasPermission(aoaDevice)) {
-                    connectToAoaDevice(aoaDevice, connectionCallback)
-                } else {
-                    requestPermission(aoaDevice, connectionCallback)
+            try {
+                val devices = usbManager.deviceList
+                LogUtil.d(TAG, "Starting USB connect, found ${devices.size} device(s)")
+
+                // 检查是否存在AOA设备
+                val aoaDevice = devices.values.find { device ->
+                    UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)
                 }
-                return
-            }
-            
-            // 查找需要切换的Android设备
-            val device = when {
-                parseResult.deviceName != null -> devices.values.firstOrNull { it.deviceName == parseResult.deviceName }
-                parseResult.deviceId != null -> devices.values.firstOrNull { it.deviceId.toString() == parseResult.deviceId }
-                else -> devices.values.firstOrNull()
-            }
 
-            if (device == null) {
-                LogUtil.e(TAG, "No suitable USB device found")
-                handleConnectionError(InnerErrorCode.E252.description, connectionCallback, InnerErrorCode.E252.code)
-                return
-            }
-            
-            LogUtil.d(TAG, "Selected device: ${device.deviceName} (VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)})")
+                if (aoaDevice != null) {
+                    LogUtil.d(TAG, "Found existing AOA device: ${aoaDevice.deviceName}")
+                    if (usbManager.hasPermission(aoaDevice)) {
+                        connectToAoaDevice(token, aoaDevice, connectionCallback)
+                    } else {
+                        requestPermission(aoaDevice, connectionCallback)
+                    }
+                    return@withLock
+                }
 
-            if (usbManager.hasPermission(device)) {
-                startAoaProtocol(device, connectionCallback)
-            } else {
-                requestPermission(device, connectionCallback)
+                // 查找需要切换的Android设备
+                val device = when {
+                    parseResult.deviceName != null -> devices.values.firstOrNull { it.deviceName == parseResult.deviceName }
+                    parseResult.deviceId != null -> devices.values.firstOrNull { it.deviceId.toString() == parseResult.deviceId }
+                    else -> devices.values.firstOrNull()
+                }
+
+                if (device == null) {
+                    LogUtil.e(TAG, "No suitable USB device found")
+                    handleConnectionError(InnerErrorCode.E252.description, connectionCallback, InnerErrorCode.E252.code)
+                    return@withLock
+                }
+                
+                LogUtil.d(TAG, "Selected device: ${device.deviceName} (VID: ${String.format("0x%04X", device.vendorId)}, PID: ${String.format("0x%04X", device.productId)})")
+
+                if (usbManager.hasPermission(device)) {
+                    startAoaProtocol(token, device, connectionCallback)
+                } else {
+                    requestPermission(device, connectionCallback)
+                }
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Failed to connect: ${e.message}")
+                handleConnectionError(
+                    "${InnerErrorCode.E212.description}:${e.message ?: "Unknown error"}",
+                    connectionCallback,
+                    InnerErrorCode.E212.code
+                )
             }
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to connect: ${e.message}")
-            handleConnectionError(
-                "${InnerErrorCode.E212.description}:${e.message ?: "Unknown error"}",
-                connectionCallback,
-                InnerErrorCode.E212.code
-            )
         }
     }
 
     /**
      * 开始AOA协议流程
-     * 
+     *
      * 注意：调用此方法前必须确保已有USB设备权限
+     * 注意：此方法应在 connectMutex.withLock { ... } 内调用，确保连接建立的原子性
+     * 
+     * @param token 操作令牌，用于验证连接未切换
      */
-    private suspend fun startAoaProtocol(device: UsbDevice, connectionCallback: ConnectionCallback) {
+    private suspend fun startAoaProtocol(token: Long, device: UsbDevice, connectionCallback: ConnectionCallback) {
+        // Token 检查：确保连接操作未切换
+        if (!isTokenActive(token)) {
+            LogUtil.w(TAG, "startAoaProtocol ignored: stale token=$token")
+            return
+        }
+        
         try {
-            LogUtil.d(TAG, "Starting AOA protocol for ${device.deviceName}")
+            LogUtil.d(TAG, "Starting AOA protocol for ${device.deviceName}, token=$token")
 
             if (UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)) {
                 LogUtil.d(TAG, "Device already in AOA mode")
-                connectToAoaDevice(device, connectionCallback)
+                connectToAoaDevice(token, device, connectionCallback)
                 return
             }
 
+            // Token 检查：确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "startAoaProtocol ignored: token changed before openDevice, token=$token")
+                return
+            }
+
+            // openDevice 必须在 connectMutex 内执行（调用方已保证）
             val connection = usbManager.openDevice(device) ?: run {
                 LogUtil.e(TAG, "Failed to open USB device")
                 handleConnectionError(InnerErrorCode.E252.description, connectionCallback, InnerErrorCode.E252.code)
@@ -197,11 +232,17 @@ class UsbStandardHostKernel(
             }
             
             connection.close()
-            LogUtil.d(TAG, "AOA protocol sent, waiting for device to switch")
+            LogUtil.d(TAG, "AOA protocol sent, waiting for device to switch, token=$token")
+
+            // Token 检查：确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "startAoaProtocol ignored: token changed after sending AOA protocol, token=$token")
+                return
+            }
 
             updateStatus(InnerConnectionStatus.WAITING_CONNECT)
             // currentConnectionCallback 已在 AsyncServiceKernel.connect() 中设置，无需重复赋值
-            waitForAoaAccessory(connectionCallback)
+            waitForAoaAccessory(token, connectionCallback)
 
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to start AOA protocol: ${e.message}")
@@ -216,8 +257,10 @@ class UsbStandardHostKernel(
 
     /**
      * 等待AOA Accessory出现并连接
+     * 
+     * @param token 操作令牌，用于验证连接未切换，避免旧 wait 协程把新连接覆盖/断开
      */
-    private suspend fun waitForAoaAccessory(connectionCallback: ConnectionCallback) {
+    private suspend fun waitForAoaAccessory(token: Long, connectionCallback: ConnectionCallback) {
         val maxWaitTime = 15000L // 15秒
         val checkInterval = 200L
         val maxAttempts = (maxWaitTime / checkInterval).toInt()
@@ -225,18 +268,38 @@ class UsbStandardHostKernel(
         var attempts = 0
         var aoaPermissionRequested = false // 标记是否已经请求过AOA设备权限
 
+        LogUtil.d(TAG, "Waiting for AOA accessory, token=$token")
+
         while (attempts < maxAttempts &&
             (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING ||
                     currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT)
         ) {
+            // Token 检查：每次循环开始前检查，确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed, token=$token")
+                return
+            }
+
             delay(checkInterval)
             attempts++
+
+            // Token 检查：delay 后再次检查，确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed after delay, token=$token")
+                return
+            }
 
             // 检查连接状态是否已改变（可能通过广播连接了）
             if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTING &&
                 currentInnerConnectionStatus != InnerConnectionStatus.WAITING_CONNECT
             ) {
-                LogUtil.d(TAG, "Connection established via broadcast")
+                LogUtil.d(TAG, "Connection established via broadcast, token=$token")
+                return
+            }
+
+            // Token 检查：确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed before device check, token=$token")
                 return
             }
 
@@ -246,7 +309,13 @@ class UsbStandardHostKernel(
             }
 
             if (aoaDevice != null && !aoaConnectionInProgress) {
-                LogUtil.d(TAG, "AOA device detected: ${aoaDevice.deviceName}")
+                // Token 检查：发现设备后再次检查，确保连接操作未切换
+                if (!isTokenActive(token)) {
+                    LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed after finding AOA device, token=$token")
+                    return
+                }
+
+                LogUtil.d(TAG, "AOA device detected: ${aoaDevice.deviceName}, token=$token")
                 LogUtil.d(
                     TAG, "VID: ${String.format("0x%04X", aoaDevice.vendorId)}, " +
                             "PID: ${String.format("0x%04X", aoaDevice.productId)}"
@@ -256,14 +325,29 @@ class UsbStandardHostKernel(
                 aoaConnectionInProgress = true
 
                 try {
+                    // Token 检查：连接前再次检查，确保连接操作未切换
+                    if (!isTokenActive(token)) {
+                        LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed before connecting, token=$token")
+                        aoaConnectionInProgress = false
+                        return
+                    }
+
                     // 检查是否已有权限
                     if (usbManager.hasPermission(aoaDevice)) {
-                        LogUtil.d(TAG, "AOA device already has permission, connecting directly...")
-                        connectToAoaDeviceDirectly(aoaDevice, connectionCallback)
+                        LogUtil.d(TAG, "AOA device already has permission, connecting directly..., token=$token")
+                        // 在 connectMutex 内执行连接建立
+                        connectMutex.withLock {
+                            // Token 检查：进入锁后再次检查，确保连接操作未切换
+                            if (!isTokenActive(token)) {
+                                LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed in connectMutex, token=$token")
+                                return@withLock
+                            }
+                            connectToAoaDeviceDirectly(token, aoaDevice, connectionCallback)
+                        }
                         return
                     } else if (!aoaPermissionRequested) {
                         // 只请求一次AOA设备权限
-                        LogUtil.d(TAG, "Requesting permission for AOA device")
+                        LogUtil.d(TAG, "Requesting permission for AOA device, token=$token")
                         LogUtil.i(
                             TAG,
                             "Note: This is the second permission request - AOA protocol requires separate permissions for:"
@@ -271,18 +355,26 @@ class UsbStandardHostKernel(
                         LogUtil.i(TAG, "  1. Original device (for AOA protocol setup)")
                         LogUtil.i(TAG, "  2. AOA accessory device (for data communication)")
                         aoaPermissionRequested = true
-                        connectToAoaDevice(aoaDevice, connectionCallback)
+                        // 在 connectMutex 内执行连接建立
+                        connectMutex.withLock {
+                            // Token 检查：进入锁后再次检查，确保连接操作未切换
+                            if (!isTokenActive(token)) {
+                                LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed in connectMutex, token=$token")
+                                return@withLock
+                            }
+                            connectToAoaDevice(token, aoaDevice, connectionCallback)
+                        }
                         return
                     }
                 } catch (e: Exception) {
-                    LogUtil.w(TAG, "Failed to connect to AOA device: ${e.message}")
+                    LogUtil.w(TAG, "Failed to connect to AOA device: ${e.message}, token=$token")
                     aoaConnectionInProgress = false // 重置标志
                 }
             }
 
             // 每5秒打印一次状态
             if (attempts % 25 == 0) {
-                LogUtil.d(TAG, "Waiting for AOA device... (${attempts * checkInterval}ms elapsed)")
+                LogUtil.d(TAG, "Waiting for AOA device... (${attempts * checkInterval}ms elapsed, token=$token)")
                 if (aoaPermissionRequested) {
                     LogUtil.d(TAG, "AOA device permission already requested, waiting for user response...")
                 }
@@ -290,6 +382,13 @@ class UsbStandardHostKernel(
         }
 
         // 超时处理
+        // Token 检查：超时后再次检查，确保连接操作未切换
+        if (!isTokenActive(token)) {
+            LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed after loop timeout, token=$token")
+            aoaConnectionInProgress = false
+            return
+        }
+        
         aoaConnectionInProgress = false // 重置标志
 
         val finalAoaDevice = usbManager.deviceList.values.find { device ->
@@ -297,7 +396,12 @@ class UsbStandardHostKernel(
         }
 
         if (finalAoaDevice != null) {
-            LogUtil.w(TAG, "AOA device found but connection failed after ${maxWaitTime}ms")
+            // Token 检查：发现设备但连接失败，确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed after finding final device, token=$token")
+                return
+            }
+            LogUtil.w(TAG, "AOA device found but connection failed after ${maxWaitTime}ms, token=$token")
             LogUtil.w(
                 TAG, "Device: ${finalAoaDevice.deviceName} " +
                         "(VID: ${String.format("0x%04X", finalAoaDevice.vendorId)}, " +
@@ -309,8 +413,19 @@ class UsbStandardHostKernel(
                 LogUtil.w(TAG, "Permission was requested but user may have denied it or timeout occurred")
             }
         } else {
-            LogUtil.w(TAG, "No AOA device found after ${maxWaitTime}ms")
+            // Token 检查：超时前再次检查，确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed after timeout, token=$token")
+                return
+            }
+            LogUtil.w(TAG, "No AOA device found after ${maxWaitTime}ms, token=$token")
             LogUtil.w(TAG, "Target device may not support AOA or failed to switch to Accessory mode")
+        }
+
+        // Token 检查：最终检查，确保连接操作未切换
+        if (!isTokenActive(token)) {
+            LogUtil.w(TAG, "waitForAoaAccessory stopped: token changed before error handling, token=$token")
+            return
         }
 
         updateStatus(InnerConnectionStatus.DISCONNECTED)
@@ -319,23 +434,39 @@ class UsbStandardHostKernel(
 
     /**
      * 连接到AOA设备
+     * 
+     * 注意：此方法应在 connectMutex.withLock { ... } 内调用，确保连接建立的原子性
+     * 
+     * @param token 操作令牌，用于验证连接未切换
      */
-    private suspend fun connectToAoaDevice(device: UsbDevice, connectionCallback: ConnectionCallback) {
+    private suspend fun connectToAoaDevice(token: Long, device: UsbDevice, connectionCallback: ConnectionCallback) {
+        // Token 检查：确保连接操作未切换
+        if (!isTokenActive(token)) {
+            LogUtil.w(TAG, "connectToAoaDevice ignored: stale token=$token")
+            return
+        }
+        
         try {
-            LogUtil.d(TAG, "Attempting to connect to AOA device: ${device.deviceName}")
+            LogUtil.d(TAG, "Attempting to connect to AOA device: ${device.deviceName}, token=$token")
 
             // 检查权限
             if (!usbManager.hasPermission(device)) {
-                LogUtil.d(TAG, "Requesting permission for AOA device")
+                LogUtil.d(TAG, "Requesting permission for AOA device, token=$token")
                 requestPermission(device, connectionCallback)
                 return
             }
 
+            // Token 检查：确保连接操作未切换
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "connectToAoaDevice ignored: token changed before direct connect, token=$token")
+                return
+            }
+
             // 直接连接
-            connectToAoaDeviceDirectly(device, connectionCallback)
+            connectToAoaDeviceDirectly(token, device, connectionCallback)
 
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to connect to AOA device: ${e.message}")
+            LogUtil.e(TAG, "Failed to connect to AOA device: ${e.message}, token=$token")
             disconnectInternal()
             throw e
         }
@@ -343,10 +474,26 @@ class UsbStandardHostKernel(
 
     /**
      * 直接连接到AOA设备（已有权限）
+     * 
+     * 注意：此方法应在 connectMutex.withLock { ... } 内调用，确保连接建立的原子性
+     * 
+     * @param token 操作令牌，用于验证连接未切换（注意：连接成功后会调用 beginNewOperation 生成新 token）
      */
-    private suspend fun connectToAoaDeviceDirectly(device: UsbDevice, connectionCallback: ConnectionCallback) {
+    private suspend fun connectToAoaDeviceDirectly(token: Long, device: UsbDevice, connectionCallback: ConnectionCallback) {
+        // Token 检查：确保连接操作未切换
+        if (!isTokenActive(token)) {
+            LogUtil.w(TAG, "connectToAoaDeviceDirectly ignored: stale token=$token")
+            return
+        }
+        
         try {
-            LogUtil.d(TAG, "Connecting to AOA device: ${device.deviceName}")
+            LogUtil.d(TAG, "Connecting to AOA device: ${device.deviceName}, token=$token")
+
+            // Token 检查：openDevice 前再次检查
+            if (!isTokenActive(token)) {
+                LogUtil.w(TAG, "connectToAoaDeviceDirectly ignored: token changed before openDevice, token=$token")
+                return
+            }
 
             val connection = usbManager.openDevice(device) ?: throw Exception("Failed to open AOA device")
 
@@ -372,14 +519,37 @@ class UsbStandardHostKernel(
                 }
             }
 
+            // Token 检查：openDevice 后再次检查
+            if (!isTokenActive(token)) {
+                connection.close()
+                LogUtil.w(TAG, "connectToAoaDeviceDirectly ignored: token changed after openDevice, token=$token")
+                return
+            }
+
             if (aoaInterface == null) {
                 connection.close()
                 throw Exception("No suitable interface found")
             }
 
+            // Token 检查：claimInterface 前再次检查
+            if (!isTokenActive(token)) {
+                connection.close()
+                LogUtil.w(TAG, "connectToAoaDeviceDirectly ignored: token changed before claimInterface, token=$token")
+                return
+            }
+
+            // claimInterface 必须在 connectMutex 内执行（调用方已保证）
             if (!connection.claimInterface(aoaInterface, true)) {
                 connection.close()
                 throw Exception("Failed to claim interface")
+            }
+
+            // Token 检查：claimInterface 后再次检查
+            if (!isTokenActive(token)) {
+                connection.releaseInterface(aoaInterface)
+                connection.close()
+                LogUtil.w(TAG, "connectToAoaDeviceDirectly ignored: token changed after claimInterface, token=$token")
+                return
             }
 
             // 查找端点
@@ -403,6 +573,14 @@ class UsbStandardHostKernel(
                 throw Exception("No bulk OUT endpoint found")
             }
 
+            // Token 检查：保存连接信息前再次检查，这是最后的检查点
+            if (!isTokenActive(token)) {
+                connection.releaseInterface(aoaInterface)
+                connection.close()
+                LogUtil.w(TAG, "connectToAoaDeviceDirectly ignored: token changed before saving connection, token=$token")
+                return
+            }
+
             // 保存连接信息
             this.usbDeviceConnection = connection
             this.usbInterface = aoaInterface
@@ -418,12 +596,23 @@ class UsbStandardHostKernel(
                 }
             )
 
-            LogUtil.d(TAG, "AOA device connected, IN: ${inEndpoint?.let { String.format("0x%02X", it.address) } ?: "none"}, OUT: ${String.format("0x%02X", outEndpoint.address)}")
+            LogUtil.d(TAG, "AOA device connected, IN: ${inEndpoint?.let { String.format("0x%02X", it.address) } ?: "none"}, OUT: ${String.format("0x%02X", outEndpoint.address)}, oldToken=$token")
 
+            // 开始新的操作，生成新的操作令牌，用于防止旧协程/旧广播误伤新连接
+            // 注意：这里生成新 token，因为连接已建立，后续操作应该使用新 token
+            val newToken = beginNewOperation("AOA device connected")
+            LogUtil.d(TAG, "New operation token generated: $newToken (replaced old token=$token)")
+
+            // 重要：先更新状态为 CONNECTED，确保接收循环能立即开始读取数据
+            // 如果先启动接收循环再更新状态，接收循环可能会等待状态更新，导致对端阻塞/断开
+            updateStatus(InnerConnectionStatus.CONNECTED)
+            
+            // 启动数据接收（接收循环会检查状态，现在状态已经是 CONNECTED）
             if (inEndpoint != null) {
                 startDataReceive()
             }
 
+            // 通知连接成功（handleConnectionSuccess 内部也会更新状态，但我们已经提前更新了）
             handleConnectionSuccess(connectionCallback, null)
             aoaConnectionInProgress = false
 
@@ -725,34 +914,13 @@ class UsbStandardHostKernel(
 
     /**
      * 实现Host端数据发送 - 临时移除HexFrame协议，直接发送原始数据
+     * 
+     * 注意：conn 和 epOut 已在锁内读取，保证在发送过程中不会被 disconnect 清掉。
+     * 使用传入的参数，而不是直接访问共享字段。
      */
-    override fun sendDataToDevice(data: ByteArray): Boolean {
-        LogUtil.d(TAG, "=== AOA Data Send Analysis ===")
-        LogUtil.d(TAG, "AOA sending raw data (HexFrame disabled):")
-        LogUtil.d(TAG, "  Size: ${data.size} bytes")
-
-        val tempData = "FF123456"
-
-        try {
-            // 尝试作为UTF-8字符串解析
-//            val dataAsString = String(data, Charsets.UTF_8)
-            val dataAsString = tempData
-            LogUtil.d(TAG, "  Content (UTF-8): $dataAsString")
-        } catch (e: Exception) {
-            LogUtil.d(TAG, "  Content (UTF-8): [Invalid UTF-8 data]")
-        }
-
-        // 显示前64字节的十六进制内容
-//        val hexPreview = data.take(64).joinToString(" ") { "%02X".format(it) }
-//        LogUtil.d(TAG, "  Content (Hex, first 64 bytes): $hexPreview")
-//
-//        if (data.size > 64) {
-//            LogUtil.d(TAG, "  ... (${data.size - 64} more bytes)")
-//        }
-        LogUtil.d(TAG, "=== End AOA Data Analysis ===")
-
-        // 临时禁用HexFrame编码，直接发送原始数据
-        return sendDataToAoaDevice(hexToBytes(tempData))
+    override suspend fun sendDataToDevice(conn: UsbDeviceConnection, epOut: UsbEndpoint, data: ByteArray, expectedToken: Long): Boolean {
+        LogUtil.d(TAG, "Sending raw data: size=${data.size}, token: $expectedToken")
+        return sendDataToAoaDevice(conn, epOut, data, expectedToken)
     }
 
     fun hexToBytes(hex: String): ByteArray {
@@ -805,61 +973,134 @@ class UsbStandardHostKernel(
     /**
      * 发送数据到AOA设备（使用Bulk传输）
      * 集成AoaErrorHandler进行智能错误处理和重试
+     * 
+     * 优化策略：快路径 + 失败再判定
+     * - 快路径：直接尝试 bulkTransfer（连接字段已在锁内检查并传递）
+     * - 失败判定：如果 bulkTransfer 返回负数，再做详细的 deviceList/permission 检查
+     * 
+     * 注意：conn 和 epOut 已在锁内读取并传递，保证在发送过程中不会被 disconnect 清掉。
+     * 不再需要检查这些字段是否为 null，直接使用即可。
+     * 
+     * @param conn USB 设备连接（已在锁内读取，保证在发送过程中不会被清空）
+     * @param epOut USB 输出端点（已在锁内读取，保证在发送过程中不会被清空）
+     * @param data 要发送的数据
+     * @param expectedToken 期望的操作令牌，用于验证连接未切换
      */
-    private fun sendDataToAoaDevice(data: ByteArray): Boolean {
-        // 修复：使用实际传入的数据，而不是硬编码的测试数据
-        // 发送前检查连接健康状态
-        if (!isConnectionHealthy()) {
-            LogUtil.e(TAG, "Connection not healthy, aborting data send")
+    private suspend fun sendDataToAoaDevice(conn: UsbDeviceConnection, epOut: UsbEndpoint, data: ByteArray, expectedToken: Long): Boolean {
+        // Token 校验：如果 token 不匹配，说明连接已切换，直接失败
+        if (!isTokenActive(expectedToken)) {
+            LogUtil.w(TAG, "Send data failed: operation token invalid (expected: $expectedToken, current: $activeOpToken), connection may be switched")
             return false
         }
+        
+        // 注意：conn 和 epOut 已在锁内检查并传递，不需要再次检查 null
 
         // 发送前添加短暂延迟，确保设备状态稳定
-        // 这个延迟可以避免在设备状态不稳定时发送数据，导致USB模式冲突
-        // 延迟时间设置为20ms，既能确保设备稳定，又不会显著影响性能
-        try {
-            Thread.sleep(20) // 20ms延迟，确保设备状态稳定
-            LogUtil.d(TAG, "Pre-send stabilization delay completed (20ms)")
-        } catch (e: InterruptedException) {
-            LogUtil.w(TAG, "Pre-send stabilization delay interrupted: ${e.message}")
-            Thread.currentThread().interrupt() // 恢复中断状态
-        }
-        
-        // 重要：发送前再次检查设备是否仍然连接
-        // 根据日志分析，设备可能在发送前就被系统移除了
-        val deviceList = usbManager.deviceList
-        val currentDevice = deviceList.values.find {
-            it.deviceName == connectedDevice!!.deviceName &&
-                    it.vendorId == connectedDevice!!.vendorId &&
-                    it.productId == connectedDevice!!.productId
-        }
-        
-        if (currentDevice == null) {
-            LogUtil.e(TAG, "Device no longer in system list before send, aborting")
-            LogUtil.e(TAG, "This may indicate the device was removed or USB state changed")
-            return false
-        }
-        
-        LogUtil.d(TAG, "Device still in system list, proceeding with data send")
+        delay(20) // 20ms延迟，确保设备状态稳定
 
+        // 使用AoaErrorHandler进行智能重试
+        val maxRetries = 3
+
+        repeat(maxRetries) { attempt ->
+            try {
+                LogUtil.d(TAG, "Attempting to send data (attempt ${attempt + 1}/$maxRetries): size=${data.size} bytes")
+                
+                // 再次检查 token，确保连接未切换
+                if (!isTokenActive(expectedToken)) {
+                    LogUtil.w(TAG, "Send data failed: operation token changed during send (expected: $expectedToken, current: $activeOpToken), connection switched")
+                    return false
+                }
+                
+                // 快路径：直接尝试 bulkTransfer（使用传入的参数，而不是共享字段）
+                val startTime = System.currentTimeMillis()
+                val result = conn.bulkTransfer(
+                    epOut, data, data.size, 5000 // 5秒超时
+                )
+                val transferTime = System.currentTimeMillis() - startTime
+
+                LogUtil.d(TAG, "Bulk transfer result: $result (expected: ${data.size}), transferTime=${transferTime}ms")
+                
+                if (result == data.size) {
+                    // 发送成功，重置错误计数
+                    aoaErrorHandler.resetErrorCount()
+                    LogUtil.d(TAG, "AOA data sent successfully: ${data.size} bytes (attempt ${attempt + 1})")
+
+                    // 添加短暂的发送后延迟，确保Accessory端有时间处理数据
+                    delay(50) // 50ms延迟，让Accessory端处理数据
+                    return true
+                } else {
+                    // 发送失败：执行慢路径检查（失败再判定）
+                    LogUtil.w(TAG, "Bulk transfer failed with error code: $result")
+                    LogUtil.w(TAG, "Common error codes: -1=timeout, -2=pipe error, -3=no device")
+                    
+                    // 慢路径：检查设备连接状态和权限
+                    val deviceStillConnected = checkDeviceConnectionAndPermission()
+                    
+                    // 使用AoaErrorHandler处理发送错误
+                    val errorResult = aoaErrorHandler.handleSendError(
+                        result, data.size, attempt, maxRetries, deviceStillConnected
+                    )
+
+                    LogUtil.w(
+                        TAG, "Send error handling result (attempt ${attempt + 1}): " +
+                                "shouldContinue=${errorResult.shouldContinue}, " +
+                                "shouldBreak=${errorResult.shouldBreak}, delayMs=${errorResult.delayMs}, " +
+                                "deviceStillConnected=$deviceStillConnected"
+                    )
+
+                    // 根据错误处理结果更新状态
+                    errorResult.newStatus?.let { newStatus ->
+                        updateStatus(newStatus)
+                    }
+
+                    // 根据错误处理结果决定是否继续重试
+                    if (errorResult.shouldBreak) {
+                        LogUtil.w(TAG, "Breaking send retry due to error handling result")
+                        return false
+                    }
+
+                    if (!errorResult.shouldContinue) {
+                        LogUtil.w(TAG, "Stopping send retry due to error handling result")
+                        return false
+                    }
+
+                    // 应用延迟
+                    if (errorResult.delayMs > 0) {
+                        delay(errorResult.delayMs.toLong())
+                    }
+                }
+
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Exception during data send (attempt ${attempt + 1}): ${e.message}")
+
+                // 最后一次尝试时抛出异常
+                if (attempt == maxRetries - 1) {
+                    throw e
+                }
+
+                // 其他情况下短暂延迟后继续
+                delay(100)
+            }
+        }
+
+        LogUtil.e(TAG, "Failed to send data after $maxRetries attempts")
+        LogUtil.e(TAG, "Final error stats: ${aoaErrorHandler.getErrorStats()}")
+        return false
+    }
+
+    /**
+     * 慢路径：检查设备连接状态和权限（仅在发送失败时调用）
+     * 
+     * @return true 如果设备仍然连接且有权限，false 否则
+     */
+    private fun checkDeviceConnectionAndPermission(): Boolean {
         return try {
-            // 详细检查连接状态
-            if (usbDeviceConnection == null) {
-                LogUtil.e(TAG, "USB device connection is null")
-                return false
-            }
-
-            if (usbEndpointOut == null) {
-                LogUtil.e(TAG, "USB output endpoint is null")
-                return false
-            }
-
             if (connectedDevice == null) {
-                LogUtil.e(TAG, "Connected device is null")
+                LogUtil.w(TAG, "Connected device is null")
                 return false
             }
 
-            // 检查设备连接状态
+            // 检查设备是否仍在设备列表中
             val deviceList = usbManager.deviceList
             val currentDevice = deviceList.values.find {
                 it.deviceName == connectedDevice!!.deviceName &&
@@ -868,175 +1109,25 @@ class UsbStandardHostKernel(
             }
 
             if (currentDevice == null) {
-                LogUtil.e(TAG, "AOA device is no longer connected")
+                LogUtil.w(TAG, "Device no longer in system list")
                 return false
             }
 
-            // 检查USB设备权限（重要：确保有权限才能发送数据）
-            if (!usbManager.hasPermission(currentDevice)) {
-                LogUtil.e(TAG, "USB device permission lost, cannot send data")
-                LogUtil.e(
+            // 检查USB设备权限
+            val hasPermission = usbManager.hasPermission(currentDevice)
+            if (!hasPermission) {
+                LogUtil.w(TAG, "USB device permission lost: ${currentDevice.deviceName}")
+                LogUtil.w(
                     TAG,
                     "Device: ${currentDevice.deviceName}, VID: ${
-                        String.format(
-                            "0x%04X",
-                            currentDevice.vendorId
-                        )
+                        String.format("0x%04X", currentDevice.vendorId)
                     }, PID: ${String.format("0x%04X", currentDevice.productId)}"
                 )
-                updateStatus(InnerConnectionStatus.ERROR)
-                return false
-            }
-            LogUtil.d(TAG, "USB device permission verified: ${currentDevice.deviceName}")
-
-            // 检查端点信息
-            LogUtil.d(TAG, "Sending data to AOA device:")
-            LogUtil.d(TAG, "  Device: ${connectedDevice!!.deviceName}")
-            LogUtil.d(TAG, "  Data size: ${data.size} bytes")
-            LogUtil.d(
-                TAG,
-                "  Endpoint: ${
-                    String.format(
-                        "0x%02X",
-                        usbEndpointOut!!.address
-                    )
-                } (maxPacketSize: ${usbEndpointOut!!.maxPacketSize})"
-            )
-            LogUtil.d(TAG, "  Interface: ${usbInterface?.id}")
-
-            // 实验性改动：不再在发送时重新 claim 接口
-            // 接口应该在连接时（connectToAoaDeviceDirectly）已经 claim 一次
-            // 频繁 claim 可能导致系统断开设备连接
-            // 只检查接口和连接是否存在，不进行 claim 操作
-            if (usbInterface == null || usbDeviceConnection == null) {
-                LogUtil.e(TAG, "USB interface or connection is null, cannot send data")
-                return false
             }
 
-            // 验证接口是否仍然有效（但不 claim）
-            val interfaceId = usbInterface?.id
-            LogUtil.d(
-                TAG,
-                "USB interface check passed (interface ID: $interfaceId), interface should already be claimed during connection"
-            )
-
-            // 使用AoaErrorHandler进行智能重试
-            val maxRetries = 3
-
-            repeat(maxRetries) { attempt ->
-                try {
-                    // 添加详细的发送前日志
-                    LogUtil.d(TAG, "Attempting to send data (attempt ${attempt + 1}/$maxRetries):")
-                    LogUtil.d(TAG, "  Data size: ${data.size} bytes")
-                    LogUtil.d(TAG, "  Endpoint: ${String.format("0x%02X", usbEndpointOut!!.address)}")
-                    LogUtil.d(TAG, "  Interface: ${usbInterface?.id}")
-                    LogUtil.d(TAG, "  Device: ${connectedDevice!!.deviceName}")
-                    LogUtil.d(TAG, "  Data preview (first 32 bytes): ${data.take(32).joinToString(" ") { "%02X".format(it) }}")
-                    
-                    // 验证接口是否仍然被claim（重要：确保接口没有被释放）
-                    val interfaceId = usbInterface?.id
-                    if (interfaceId == null) {
-                        LogUtil.e(TAG, "USB interface is null, cannot send data")
-                        return false
-                    }
-                    
-                    // 检查接口状态（但不重新claim，避免干扰）
-                    // 注意：在Android中，无法直接查询接口是否被claim，只能通过尝试使用来验证
-                    LogUtil.d(TAG, "Verifying interface state before bulk transfer: interfaceId=$interfaceId")
-                    LogUtil.d(TAG, "Connection state: connection=${usbDeviceConnection != null}, endpoint=${usbEndpointOut != null}")
-                    
-                    // 执行bulk传输
-                    val startTime = System.currentTimeMillis()
-                    val result = usbDeviceConnection!!.bulkTransfer(
-                        usbEndpointOut, data, data.size, 5000 // 5秒超时
-                    )
-                    val transferTime = System.currentTimeMillis() - startTime
-
-                    LogUtil.d(TAG, "Bulk transfer result: $result (expected: ${data.size}), transferTime=${transferTime}ms")
-                    
-                    // 如果返回负数，说明传输失败
-                    if (result < 0) {
-                        LogUtil.e(TAG, "Bulk transfer failed with error code: $result")
-                        LogUtil.e(TAG, "Common error codes: -1=timeout, -2=pipe error, -3=no device")
-                    }
-                    
-                    if (result == data.size) {
-                        // 发送成功，重置错误计数
-                        aoaErrorHandler.resetErrorCount()
-                        LogUtil.d(TAG, "AOA data sent successfully: ${data.size} bytes (attempt ${attempt + 1})")
-
-                        // 添加短暂的发送后延迟，确保Accessory端有时间处理数据
-                        // 这个延迟可以避免在Accessory端还在处理数据时进行其他操作，导致USB模式冲突
-                        // 延迟时间设置为50ms，既能给Accessory端足够时间，又不会显著影响性能
-                        try {
-                            Thread.sleep(50) // 50ms延迟，让Accessory端处理数据
-                            LogUtil.d(TAG, "Post-send stabilization delay completed (50ms)")
-                        } catch (e: InterruptedException) {
-                            LogUtil.w(TAG, "Post-send stabilization delay interrupted: ${e.message}")
-                            Thread.currentThread().interrupt() // 恢复中断状态
-                        }
-
-                        return true
-                    } else {
-                        // 使用AoaErrorHandler处理发送错误
-                        val currentDeviceConnected = deviceList.values.any {
-                            it.deviceName == connectedDevice!!.deviceName
-                        }
-
-                        val errorResult = aoaErrorHandler.handleSendError(
-                            result, data.size, attempt, maxRetries, currentDeviceConnected
-                        )
-
-                        LogUtil.w(
-                            TAG, "Send error handling result (attempt ${attempt + 1}): " +
-                                    "shouldContinue=${errorResult.shouldContinue}, " +
-                                    "shouldBreak=${errorResult.shouldBreak}, delayMs=${errorResult.delayMs}"
-                        )
-
-                        // 根据错误处理结果更新状态
-                        errorResult.newStatus?.let { newStatus ->
-                            updateStatus(newStatus)
-                        }
-
-                        // 根据错误处理结果决定是否继续重试
-                        if (errorResult.shouldBreak) {
-                            LogUtil.w(TAG, "Breaking send retry due to error handling result")
-                            return false
-                        }
-
-                        if (!errorResult.shouldContinue) {
-                            LogUtil.w(TAG, "Stopping send retry due to error handling result")
-                            return false
-                        }
-
-                        // 应用延迟
-                        if (errorResult.delayMs > 0) {
-                            Thread.sleep(errorResult.delayMs)
-                        }
-                    }
-
-                } catch (e: Exception) {
-                    LogUtil.e(TAG, "Exception during data send (attempt ${attempt + 1}): ${e.message}")
-
-                    // 最后一次尝试时抛出异常
-                    if (attempt == maxRetries - 1) {
-                        throw e
-                    }
-
-                    // 其他情况下短暂延迟后继续
-                    Thread.sleep(100)
-                }
-            }
-
-            LogUtil.e(TAG, "Failed to send data after $maxRetries attempts")
-            LogUtil.e(TAG, "Final error stats: ${aoaErrorHandler.getErrorStats()}")
-            false
-
+            hasPermission
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Error sending data to AOA device: ${e.message}")
-            LogUtil.e(TAG, "Exception type: ${e.javaClass.simpleName}")
-            LogUtil.e(TAG, "Error stats: ${aoaErrorHandler.getErrorStats()}")
-            e.printStackTrace()
+            LogUtil.w(TAG, "Error checking device connection and permission: ${e.message}")
             false
         }
     }

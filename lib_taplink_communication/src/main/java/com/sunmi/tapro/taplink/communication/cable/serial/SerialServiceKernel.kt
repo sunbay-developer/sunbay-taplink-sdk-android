@@ -204,7 +204,7 @@ open class SerialServiceKernel(
         }
     }
 
-    override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
+    override suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!isSerialReady()) {
             LogUtil.e(TAG, "Serial device not ready")
             callback?.onError(InnerErrorCode.E255.code, InnerErrorCode.E255.description)

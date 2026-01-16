@@ -178,7 +178,7 @@ class VSPClientKernel(
         }
     }
 
-    override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
+    override suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (!isVspReady()) {
             LogUtil.e(TAG, "VSP client not ready")
             callback?.onError(InnerErrorCode.E202.code, InnerErrorCode.E202.description)

@@ -185,7 +185,7 @@ abstract class AsyncServiceKernel(
     /**
      * Execute specific send data logic
      */
-    protected abstract fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?)
+    protected abstract suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?)
 
     /**
      * Execute specific disconnect logic

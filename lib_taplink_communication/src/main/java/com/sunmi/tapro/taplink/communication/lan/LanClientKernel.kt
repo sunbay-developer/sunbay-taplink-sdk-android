@@ -571,7 +571,7 @@ class LanClientKernel(
         return retryableErrors.any { errorMessage.contains(it) }
     }
 
-    override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
+    override suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         try {
             LogUtil.d(TAG, "Sending data via LAN: traceId=$traceId, size=${data.size} bytes")
 

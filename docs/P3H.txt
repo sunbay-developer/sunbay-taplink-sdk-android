@@ -1,0 +1,232 @@
+2026-01-13 19:03:05.763 13377 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 78294732; UID 10159; state: ENABLED
+2026-01-13 19:03:05.799 13377 Buffer...nsumer com...apro.taplink.demo  D  [](id:344100000006,api:0,p:-1,c:13377) connect: controlledByApp=false
+2026-01-13 19:03:05.801 13377 OpenGLRenderer  com...apro.taplink.demo  E  Unable to match the desired swap behavior.
+2026-01-13 19:03:05.832 13377 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[MainActivity]#6](f:0,a:1) acquireNextBufferLocked size=720x1600 mFrameNumber=1 applyTransaction=true mTimestamp=38545245215600(auto) mPendingTransactions.size=0 graphicBufferId=57453777518644 transform=0
+2026-01-13 19:03:05.990 13377 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[ConnectionActivity]#3](f:0,a:1) destructor()
+2026-01-13 19:03:05.990 13377 Buffer...nsumer com...apro.taplink.demo  D  [VRI[ConnectionActivity]#3(BLAST Consumer)3](id:344100000003,api:0,p:-1,c:13377) disconnect
+2026-01-13 19:03:06.004 13377 Window...atcher com...apro.taplink.demo  W  sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda19@4a0b6c2
+2026-01-13 19:03:06.024 13377 View            com...apro.taplink.demo  D  [Warning] assignParent to null: this = DecorView@ee45224[ConnectionActivity]
+2026-01-13 19:03:06.031 13377 InputTransport  com...apro.taplink.demo  D  Destroy ARC handle: 0xb400007d19a26840
+2026-01-13 19:03:07.907 13377 ro.taplink.demo com...apro.taplink.demo  E  checking suspend fail; inst: b9400020 checkinst: f94002b5
+2026-01-13 19:03:08.281 13377 Connec...tivity com...apro.taplink.demo  D  Show configuration area: CABLE
+2026-01-13 19:03:08.282 13377 Connec...tivity com...apro.taplink.demo  D  Cable protocol spinner setup with saved protocol: USB_AOA
+2026-01-13 19:03:08.283 13377 Connec...tivity com...apro.taplink.demo  D  Load current configuration - Connection mode: CABLE
+2026-01-13 19:03:08.310 13377 VRI[Co...ivity] com...apro.taplink.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-13 19:03:08.320 13377 InputTransport  com...apro.taplink.demo  D  Create ARC handle: 0xb400007d19a34670
+2026-01-13 19:03:08.320 13377 InputE...ceiver com...apro.taplink.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-13 19:03:08.320 13377 InputTransport  com...apro.taplink.demo  D  Input log is disabled in InputChannel.
+2026-01-13 19:03:08.400 13377 Buffer...nsumer com...apro.taplink.demo  D  [](id:344100000007,api:0,p:-1,c:13377) connect: controlledByApp=false
+2026-01-13 19:03:08.404 13377 OpenGLRenderer  com...apro.taplink.demo  E  Unable to match the desired swap behavior.
+2026-01-13 19:03:08.477 13377 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[ConnectionActivity]#7](f:0,a:1) acquireNextBufferLocked size=720x1600 mFrameNumber=1 applyTransaction=true mTimestamp=38547890890601(auto) mPendingTransactions.size=0 graphicBufferId=57453777518652 transform=0
+2026-01-13 19:03:08.758 13377 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[MainActivity]#6](f:0,a:1) destructor()
+2026-01-13 19:03:08.758 13377 Buffer...nsumer com...apro.taplink.demo  D  [VRI[MainActivity]#6(BLAST Consumer)6](id:344100000006,api:0,p:-1,c:13377) disconnect
+2026-01-13 19:03:12.393 13377 Connec...tivity com...apro.taplink.demo  D  User clicks confirm - Selected mode: CABLE
+2026-01-13 19:03:12.395 13377 Connec...tivity com...apro.taplink.demo  D  Save Cable configuration - Protocol: USB_AOA
+2026-01-13 19:03:12.395 13377 Connec...tivity com...apro.taplink.demo  D  Configuration saved successfully - Mode: CABLE
+2026-01-13 19:03:12.396 13377 Connec...tivity com...apro.taplink.demo  D  Start reconnecting with mode: CABLE
+2026-01-13 19:03:12.399 13377 Connec...tivity com...apro.taplink.demo  D  Connection progress: Initializing SDK...
+2026-01-13 19:03:12.404 13377 Connec...tivity com...apro.taplink.demo  D  Starting connection with mode: CABLE
+2026-01-13 19:03:12.411 13377 Connec...tivity com...apro.taplink.demo  D  Connection progress: Connecting via Cable...
+2026-01-13 19:03:12.411 13377 Connec...tivity com...apro.taplink.demo  D  Starting SDK connection for mode: CABLE
+2026-01-13 19:03:12.412 13377 Connec...tivity com...apro.taplink.demo  D  Cable config - Protocol: USB_AOA
+2026-01-13 19:03:12.412 13377 Connec...tivity com...apro.taplink.demo  D  Connecting with ConnectionConfig: ConnectionConfig(connectionMode=CABLE, cableProtocol=USB_AOA, host=null, port=null, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-13 19:03:12.412 13377 Taplin...ervice com...apro.taplink.demo  D  === connect() called ===
+2026-01-13 19:03:12.413 13377 Taplin...ervice com...apro.taplink.demo  D  ConnectionListener set: true
+2026-01-13 19:03:12.413 13377 Taplin...ervice com...apro.taplink.demo  D  Connecting with provided ConnectionConfig: ConnectionConfig(connectionMode=CABLE, cableProtocol=USB_AOA, host=null, port=null, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-13 19:03:12.413 13377 Taplin...ervice com...apro.taplink.demo  D  Calling TaplinkSDK.connect() with provided config: ConnectionConfig(connectionMode=CABLE, cableProtocol=USB_AOA, host=null, port=null, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-13 19:03:12.415 13377 Reconn...anager com...apro.taplink.demo  D  [ (ReconnectManager.kt:344)#GetLastConnectionConfig ] Using in-memory connection config
+2026-01-13 19:03:12.416 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:158)#Connect ] ========actualConfig:ConnectionConfig(connectionMode=CABLE, cableProtocol=USB_AOA, host=null, port=null, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms),oldConfig:ConnectionConfig(connectionMode=CABLE, cableProtocol=USB_AOA, host=null, port=null, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-13 19:03:12.417 13377 Reconn...anager com...apro.taplink.demo  D  [ (ReconnectManager.kt:83)#PrepareConnect ] Preparing connection, resetting reconnect state
+2026-01-13 19:03:12.418 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:787)#UpdateConnectionStatus ] Connection status changed: DISCONNECTED -> CONNECTING
+2026-01-13 19:03:12.419 13377 Connec...anager com...apro.taplink.demo  I  [ (ConnectionManager.kt:847)#UpdateConnectionStatus ] do not need callback
+2026-01-13 19:03:12.420 13377 Connec...anager com...apro.taplink.demo  W  [ (ConnectionManager.kt:1530)#ValidateStatusConsistency ] Status inconsistency detected: ConnectionManager=CONNECTING, Kernel=DISCONNECTED (expected: DISCONNECTED), auto-fixing...
+2026-01-13 19:03:12.421 13377 Taplin...Kernel com...apro.taplink.demo  D  [ (TaplinkServiceKernel.kt:144)#GetServiceKernelByProtocol ] Reusing existing service kernel of type: usb
+2026-01-13 19:03:12.422 13377 tag             com...apro.taplink.demo  I  [ (AsyncServiceKernel.kt:48)#Connect ] =======AsyncServiceKernel:::connect:protocol:usb://host
+2026-01-13 19:03:12.425 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (AsyncServiceKernel.kt:59)#Connect ] Starting connection with protocol: usb://host
+2026-01-13 19:03:12.427 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: DISCONNECTED -> CONNECTING
+2026-01-13 19:03:12.428 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1368)#SetupKernelStatusListener$lambda$13 ] Kernel status changed: CONNECTING -> syncing to ConnectionManager: CONNECTING (was: DISCONNECTED)
+2026-01-13 19:03:12.429 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1379)#SetupKernelStatusListener ] Kernel status listener setup successfully
+2026-01-13 19:03:12.429 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:787)#UpdateConnectionStatus ] Connection status changed: CONNECTING -> WAIT_CONNECTING
+2026-01-13 19:03:12.430 13377 Connec...anager com...apro.taplink.demo  I  [ (ConnectionManager.kt:847)#UpdateConnectionStatus ] do not need callback
+2026-01-13 19:03:12.439 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:185)#PerformUsbConnect ] Requesting permission for USB device: /dev/bus/usb/001/013
+2026-01-13 19:03:12.474 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:246)#RequestPermission ] USB permission request sent for device: /dev/bus/usb/001/013
+2026-01-13 19:03:13.763 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:60)#OnReceive ] USB device permission broadcast received: com.sunmi.tapro.taplink.host.USB_PERMISSION
+2026-01-13 19:03:13.765 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:76)#OnReceive ] USB device permission result:
+2026-01-13 19:03:13.767 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:77)#OnReceive ]   Device: /dev/bus/usb/001/013
+2026-01-13 19:03:13.768 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:78)#OnReceive ]   Permission granted: true
+2026-01-13 19:03:13.770 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:79)#OnReceive ]   Pending device: /dev/bus/usb/001/013
+2026-01-13 19:03:13.771 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:90)#OnReceive ] USB device permission granted: /dev/bus/usb/001/013
+2026-01-13 19:03:13.777 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:209)#StartAoaProtocol ] === Starting AOA Protocol ===
+2026-01-13 19:03:13.779 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:210)#StartAoaProtocol ] Original device: /dev/bus/usb/001/013 (VID: 0x0E8D, PID: 0x201C)
+2026-01-13 19:03:13.784 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:238)#StartAoaProtocol ] USB device opened: /dev/bus/usb/001/013
+2026-01-13 19:03:14.094 13377 UsbDev...ionJNI com...apro.taplink.demo  D  close
+2026-01-13 19:03:14.095 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:254)#StartAoaProtocol ] AOA protocol completed successfully
+2026-01-13 19:03:14.096 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTING -> WAITING_CONNECT
+2026-01-13 19:03:14.207 13377 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:132)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_DETACHED
+2026-01-13 19:03:14.209 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:145)#OnReceive ] USB device detached: /dev/bus/usb/001/013
+2026-01-13 19:03:14.209 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:131)#OnDeviceDetached ] === USB DEVICE DETACHED ===
+2026-01-13 19:03:14.209 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:132)#OnDeviceDetached ] Device detached: /dev/bus/usb/001/013
+2026-01-13 19:03:14.211 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:133)#OnDeviceDetached ] VID: 0x0E8D, PID: 0x201C
+2026-01-13 19:03:14.212 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:145)#OnDeviceDetached ] Non-AOA device detached
+2026-01-13 19:03:14.212 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:147)#OnDeviceDetached ] === END USB DEVICE DETACHED ===
+2026-01-13 19:03:15.015 13377 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:132)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_ATTACHED
+2026-01-13 19:03:15.018 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:137)#OnReceive ] USB device attached: /dev/bus/usb/001/014
+2026-01-13 19:03:15.018 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:103)#OnDeviceAttached ] === USB DEVICE ATTACHED ===
+2026-01-13 19:03:15.019 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:104)#OnDeviceAttached ] Device attached: /dev/bus/usb/001/014
+2026-01-13 19:03:15.022 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:105)#OnDeviceAttached ] VID: 0x18D1, PID: 0x2D01
+2026-01-13 19:03:15.022 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:106)#OnDeviceAttached ] Current status: WAITING_CONNECT
+2026-01-13 19:03:15.023 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:110)#OnDeviceAttached ] AOA device attached via broadcast: /dev/bus/usb/001/014
+2026-01-13 19:03:15.023 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:115)#OnDeviceAttached ] Host is waiting for AOA device, but waitForAoaAccessory will handle this
+2026-01-13 19:03:15.024 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:124)#OnDeviceAttached ] === END USB DEVICE ATTACHED ===
+2026-01-13 19:03:15.115 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:309)#WaitForAoaAccessory ] AOA device detected: /dev/bus/usb/001/014
+2026-01-13 19:03:15.118 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:310)#WaitForAoaAccessory ] VID: 0x18D1, PID: 0x2D01
+2026-01-13 19:03:15.121 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:326)#WaitForAoaAccessory ] Requesting permission for AOA device
+2026-01-13 19:03:15.121 13377 UsbAoa...Kernel com...apro.taplink.demo  I  [ (UsbStandardHostKernel.kt:327)#WaitForAoaAccessory ] Note: This is the second permission request - AOA protocol requires separate permissions for:
+2026-01-13 19:03:15.122 13377 UsbAoa...Kernel com...apro.taplink.demo  I  [ (UsbStandardHostKernel.kt:331)#WaitForAoaAccessory ]   1. Original device (for AOA protocol setup)
+2026-01-13 19:03:15.123 13377 UsbAoa...Kernel com...apro.taplink.demo  I  [ (UsbStandardHostKernel.kt:332)#WaitForAoaAccessory ]   2. AOA accessory device (for data communication)
+2026-01-13 19:03:15.123 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:385)#ConnectToAoaDevice ] Attempting to connect to AOA device: /dev/bus/usb/001/014
+2026-01-13 19:03:15.126 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:389)#ConnectToAoaDevice ] Requesting permission for AOA device
+2026-01-13 19:03:15.149 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:246)#RequestPermission ] USB permission request sent for device: /dev/bus/usb/001/014
+2026-01-13 19:03:19.135 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:60)#OnReceive ] USB device permission broadcast received: com.sunmi.tapro.taplink.host.USB_PERMISSION
+2026-01-13 19:03:19.138 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:76)#OnReceive ] USB device permission result:
+2026-01-13 19:03:19.140 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:77)#OnReceive ]   Device: /dev/bus/usb/001/014
+2026-01-13 19:03:19.141 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:78)#OnReceive ]   Permission granted: true
+2026-01-13 19:03:19.142 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:79)#OnReceive ]   Pending device: /dev/bus/usb/001/014
+2026-01-13 19:03:19.143 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:90)#OnReceive ] USB device permission granted: /dev/bus/usb/001/014
+2026-01-13 19:03:19.150 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:209)#StartAoaProtocol ] === Starting AOA Protocol ===
+2026-01-13 19:03:19.155 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:210)#StartAoaProtocol ] Original device: /dev/bus/usb/001/014 (VID: 0x18D1, PID: 0x2D01)
+2026-01-13 19:03:19.158 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:226)#StartAoaProtocol ] Found existing AOA device, connecting directly...
+2026-01-13 19:03:19.159 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:385)#ConnectToAoaDevice ] Attempting to connect to AOA device: /dev/bus/usb/001/014
+2026-01-13 19:03:19.161 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:409)#ConnectToAoaDeviceDirectly ] Connecting directly to AOA device: /dev/bus/usb/001/014
+2026-01-13 19:03:19.163 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:410)#ConnectToAoaDeviceDirectly ] Device info: VID=0x18D1, PID=0x2D01
+2026-01-13 19:03:19.165 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:420)#ConnectToAoaDeviceDirectly ] Device opened successfully, interface count: 2
+2026-01-13 19:03:19.166 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:426)#ConnectToAoaDeviceDirectly ] Interface[0]: class=255, subclass=255, protocol=0
+2026-01-13 19:03:19.166 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:430)#ConnectToAoaDeviceDirectly ]   Endpoint count: 2
+2026-01-13 19:03:19.167 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:435)#ConnectToAoaDeviceDirectly ]     Endpoint[0]: address=0x81, type=2, direction=IN, maxPacketSize=512
+2026-01-13 19:03:19.168 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:435)#ConnectToAoaDeviceDirectly ]     Endpoint[1]: address=0x01, type=2, direction=OUT, maxPacketSize=512
+2026-01-13 19:03:19.169 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:459)#ConnectToAoaDeviceDirectly ] Selected fallback interface[0] for AOA communication
+2026-01-13 19:03:19.169 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:426)#ConnectToAoaDeviceDirectly ] Interface[1]: class=255, subclass=66, protocol=1
+2026-01-13 19:03:19.169 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:430)#ConnectToAoaDeviceDirectly ]   Endpoint count: 2
+2026-01-13 19:03:19.171 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:435)#ConnectToAoaDeviceDirectly ]     Endpoint[0]: address=0x02, type=2, direction=OUT, maxPacketSize=512
+2026-01-13 19:03:19.172 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:435)#ConnectToAoaDeviceDirectly ]     Endpoint[1]: address=0x82, type=2, direction=IN, maxPacketSize=512
+2026-01-13 19:03:19.172 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:449)#ConnectToAoaDeviceDirectly ] Selected AOA standard interface[1] (class=255, subclass=66, protocol=1)
+2026-01-13 19:03:19.173 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:469)#ConnectToAoaDeviceDirectly ] Claiming interface...
+2026-01-13 19:03:19.174 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:474)#ConnectToAoaDeviceDirectly ] Interface claimed successfully
+2026-01-13 19:03:19.177 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:482)#ConnectToAoaDeviceDirectly ] Checking endpoint[0]: address=0x02, type=2, direction=0
+2026-01-13 19:03:19.179 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:508)#ConnectToAoaDeviceDirectly ] Found OUT endpoint: 0x02
+2026-01-13 19:03:19.180 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:512)#ConnectToAoaDeviceDirectly ] ✓ OUT endpoint matches AOA standard (0x02)
+2026-01-13 19:03:19.183 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:482)#ConnectToAoaDeviceDirectly ] Checking endpoint[1]: address=0x82, type=2, direction=128
+2026-01-13 19:03:19.185 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:490)#ConnectToAoaDeviceDirectly ] Found IN endpoint: 0x82
+2026-01-13 19:03:19.185 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:494)#ConnectToAoaDeviceDirectly ] ✓ IN endpoint matches AOA standard (0x82)
+2026-01-13 19:03:19.188 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:550)#ConnectToAoaDeviceDirectly ] AOA device connected successfully
+2026-01-13 19:03:19.189 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:551)#ConnectToAoaDeviceDirectly ] Connection details:
+2026-01-13 19:03:19.189 13377 HexFrameBuffer  com...apro.taplink.demo  D  [ (HexFrameBuffer.kt:140)#StartSequentialDataProcessor$lambda$5 ] Sequential hex data processor started
+2026-01-13 19:03:19.190 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:552)#ConnectToAoaDeviceDirectly ]   Interface: class=255, id=1
+2026-01-13 19:03:19.192 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:553)#ConnectToAoaDeviceDirectly ]   IN endpoint: 0x82
+2026-01-13 19:03:19.193 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:554)#ConnectToAoaDeviceDirectly ]   OUT endpoint: 0x02 (maxPacketSize: 512)
+2026-01-13 19:03:19.193 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:561)#ConnectToAoaDeviceDirectly ] Starting data receive...
+2026-01-13 19:03:19.196 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:569)#ConnectToAoaDeviceDirectly ] Connection established, updating status to CONNECTED immediately
+2026-01-13 19:03:19.196 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:678)#InvokeSuspend ] Starting AOA data receive loop (Host端 Bulk传输)...
+2026-01-13 19:03:19.198 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:679)#InvokeSuspend ] Current status: CONNECTED
+2026-01-13 19:03:19.198 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: WAITING_CONNECT -> CONNECTED
+2026-01-13 19:03:19.199 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1368)#SetupKernelStatusListener$lambda$13 ] Kernel status changed: CONNECTED -> syncing to ConnectionManager: CONNECTED (was: WAIT_CONNECTING)
+2026-01-13 19:03:19.200 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:576)#ConnectToAoaDeviceDirectly ] Waiting for Accessory to be ready before allowing data transmission...
+2026-01-13 19:03:19.200 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:577)#ConnectToAoaDeviceDirectly ] Note: Accessory needs time to complete permission grant and connection setup
+2026-01-13 19:03:19.203 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:589)#InvokeSuspend ] Starting background connection validation (3 seconds)...
+2026-01-13 19:03:19.721 13377 AoaErrorHandler com...apro.taplink.demo  W  [ (AoaErrorHandler.kt:66)#HandleReceiveError ] Handling receive error: type=TRANSFER_ERROR, bytesRead=-1, consecutiveErrors=0, totalErrors=11
+2026-01-13 19:03:19.721 13377 AoaErrorHandler com...apro.taplink.demo  D  [ (AoaErrorHandler.kt:100)#HandleReceiveError ] Transfer error, retrying after delay
+2026-01-13 19:03:19.722 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:723)#InvokeSuspend ] Error handling result: shouldContinue=true, shouldBreak=false, delayMs=100
+2026-01-13 19:03:20.329 13377 AoaErrorHandler com...apro.taplink.demo  W  [ (AoaErrorHandler.kt:66)#HandleReceiveError ] Handling receive error: type=TRANSFER_ERROR, bytesRead=-1, consecutiveErrors=1, totalErrors=12
+2026-01-13 19:03:20.329 13377 AoaErrorHandler com...apro.taplink.demo  D  [ (AoaErrorHandler.kt:100)#HandleReceiveError ] Transfer error, retrying after delay
+2026-01-13 19:03:20.330 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:723)#InvokeSuspend ] Error handling result: shouldContinue=true, shouldBreak=false, delayMs=100
+2026-01-13 19:03:20.937 13377 AoaErrorHandler com...apro.taplink.demo  W  [ (AoaErrorHandler.kt:66)#HandleReceiveError ] Handling receive error: type=TRANSFER_ERROR, bytesRead=-1, consecutiveErrors=2, totalErrors=13
+2026-01-13 19:03:20.937 13377 AoaErrorHandler com...apro.taplink.demo  D  [ (AoaErrorHandler.kt:100)#HandleReceiveError ] Transfer error, retrying after delay
+2026-01-13 19:03:20.938 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:723)#InvokeSuspend ] Error handling result: shouldContinue=true, shouldBreak=false, delayMs=100
+2026-01-13 19:03:21.545 13377 AoaErrorHandler com...apro.taplink.demo  W  [ (AoaErrorHandler.kt:66)#HandleReceiveError ] Handling receive error: type=TRANSFER_ERROR, bytesRead=-1, consecutiveErrors=3, totalErrors=14
+2026-01-13 19:03:21.545 13377 AoaErrorHandler com...apro.taplink.demo  D  [ (AoaErrorHandler.kt:100)#HandleReceiveError ] Transfer error, retrying after delay
+2026-01-13 19:03:21.545 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:723)#InvokeSuspend ] Error handling result: shouldContinue=true, shouldBreak=false, delayMs=100
+2026-01-13 19:03:22.154 13377 AoaErrorHandler com...apro.taplink.demo  W  [ (AoaErrorHandler.kt:66)#HandleReceiveError ] Handling receive error: type=TRANSFER_ERROR, bytesRead=-1, consecutiveErrors=4, totalErrors=15
+2026-01-13 19:03:22.155 13377 AoaErrorHandler com...apro.taplink.demo  E  [ (AoaErrorHandler.kt:92)#HandleReceiveError ] Too many consecutive transfer errors (5)
+2026-01-13 19:03:22.155 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:723)#InvokeSuspend ] Error handling result: shouldContinue=false, shouldBreak=true, delayMs=0
+2026-01-13 19:03:22.156 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTED -> ERROR
+2026-01-13 19:03:22.157 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1368)#SetupKernelStatusListener$lambda$13 ] Kernel status changed: ERROR -> syncing to ConnectionManager: ERROR (was: CONNECTED)
+2026-01-13 19:03:22.157 13377 UsbAoa...Kernel com...apro.taplink.demo  W  [ (UsbStandardHostKernel.kt:735)#InvokeSuspend ] Breaking receive loop due to error handling result
+2026-01-13 19:03:22.158 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:789)#InvokeSuspend ] AOA data receive loop ended (Host端)
+2026-01-13 19:03:22.158 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:790)#InvokeSuspend ] Final status: ERROR
+2026-01-13 19:03:22.158 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:791)#InvokeSuspend ] Final error stats: Consecutive: 5, Total: 15
+2026-01-13 19:03:22.205 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:650)#ValidateEndpointConfiguration ] Validating endpoint configuration:
+2026-01-13 19:03:22.206 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:651)#ValidateEndpointConfiguration ]   Interface class: 255 (expected: 255)
+2026-01-13 19:03:22.206 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:652)#ValidateEndpointConfiguration ]   Interface subclass: 66 (expected: 66)
+2026-01-13 19:03:22.206 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:653)#ValidateEndpointConfiguration ]   Interface protocol: 1 (expected: 1)
+2026-01-13 19:03:22.207 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:654)#ValidateEndpointConfiguration ]   OUT endpoint: 0x02 (expected: 0x02)
+2026-01-13 19:03:22.208 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:655)#ValidateEndpointConfiguration ]   IN endpoint: 0x82 (expected: 0x82)
+2026-01-13 19:03:22.208 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:628)#ValidateConnectionState ] Connection validation:
+2026-01-13 19:03:22.209 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:629)#ValidateConnectionState ]   Device connected: true
+2026-01-13 19:03:22.209 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:630)#ValidateConnectionState ]   Endpoints valid: true
+2026-01-13 19:03:22.209 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:631)#ValidateConnectionState ]   Endpoint config valid: true
+2026-01-13 19:03:22.210 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:594)#InvokeSuspend ] Connection validated successfully after stabilization
+2026-01-13 19:03:24.204 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:583)#InvokeSuspend ] Accessory should be ready now, calling connection success callback...
+2026-01-13 19:03:24.205 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: ERROR -> CONNECTED
+2026-01-13 19:03:24.205 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1368)#SetupKernelStatusListener$lambda$13 ] Kernel status changed: CONNECTED -> syncing to ConnectionManager: CONNECTED (was: ERROR)
+2026-01-13 19:03:24.206 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:139)#RegisterDataReceiver ] Data receiver registered
+2026-01-13 19:03:24.207 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:622)#SendInitCommand ] Sending INIT command to initialize tapro application
+2026-01-13 19:03:24.214 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:639)#SendInitCommand ] INIT command prepared: traceId=38328135cab94f9594c44e16893c5baf
+2026-01-13 19:03:24.215 13377 Connec...anager com...apro.taplink.demo  D  [ (LocalCallbackManager.kt:93)#AddCallbackByTraceId ] Callback added by traceId: 38328135cab94f9594c44e16893c5baf, timeout: 180000ms
+2026-01-13 19:03:24.216 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:721)#SendInitCommand ] INIT callback registered with traceId: 38328135cab94f9594c44e16893c5baf
+2026-01-13 19:03:24.218 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:738)#SendInitCommand ] INIT command sent successfully
+2026-01-13 19:03:24.219 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (AsyncServiceKernel.kt:113)#InvokeSuspend ] Sending data via USB AOA: traceId=38328135cab94f9594c44e16893c5baf, dataSize=247 bytes
+2026-01-13 19:03:24.219 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:895)#SendDataToDevice ] === AOA Data Send Analysis ===
+2026-01-13 19:03:24.220 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:896)#SendDataToDevice ] AOA sending raw data (HexFrame disabled):
+2026-01-13 19:03:24.220 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:897)#SendDataToDevice ]   Size: 247 bytes
+2026-01-13 19:03:24.220 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:905)#SendDataToDevice ]   Content (UTF-8): FF123456
+2026-01-13 19:03:24.220 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:917)#SendDataToDevice ] === End AOA Data Analysis ===
+2026-01-13 19:03:24.223 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:962)#IsConnectionHealthy ] Connection health check: basic=true, deviceExists=true
+2026-01-13 19:03:24.244 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:987)#SendDataToAoaDevice ] Pre-send stabilization delay completed (20ms)
+2026-01-13 19:03:24.247 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1008)#SendDataToAoaDevice ] Device still in system list, proceeding with data send
+2026-01-13 19:03:24.250 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1055)#SendDataToAoaDevice ] USB device permission verified: /dev/bus/usb/001/014
+2026-01-13 19:03:24.250 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1058)#SendDataToAoaDevice ] Sending data to AOA device:
+2026-01-13 19:03:24.251 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1059)#SendDataToAoaDevice ]   Device: /dev/bus/usb/001/014
+2026-01-13 19:03:24.251 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1060)#SendDataToAoaDevice ]   Data size: 4 bytes
+2026-01-13 19:03:24.252 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1061)#SendDataToAoaDevice ]   Endpoint: 0x02 (maxPacketSize: 512)
+2026-01-13 19:03:24.252 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1070)#SendDataToAoaDevice ]   Interface: 1
+2026-01-13 19:03:24.253 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1083)#SendDataToAoaDevice ] USB interface check passed (interface ID: 1), interface should already be claimed during connection
+2026-01-13 19:03:24.253 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1094)#SendDataToAoaDevice ] Attempting to send data (attempt 1/3):
+2026-01-13 19:03:24.253 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1095)#SendDataToAoaDevice ]   Data size: 4 bytes
+2026-01-13 19:03:24.254 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1096)#SendDataToAoaDevice ]   Endpoint: 0x02
+2026-01-13 19:03:24.255 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1097)#SendDataToAoaDevice ]   Interface: 1
+2026-01-13 19:03:24.255 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1098)#SendDataToAoaDevice ]   Device: /dev/bus/usb/001/014
+2026-01-13 19:03:24.257 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1099)#SendDataToAoaDevice ]   Data preview (first 32 bytes): FF 12 34 56
+2026-01-13 19:03:24.258 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1110)#SendDataToAoaDevice ] Verifying interface state before bulk transfer: interfaceId=1
+2026-01-13 19:03:24.258 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1111)#SendDataToAoaDevice ] Connection state: connection=true, endpoint=true
+2026-01-13 19:03:24.259 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1120)#SendDataToAoaDevice ] Bulk transfer result: 4 (expected: 4), transferTime=1ms
+2026-01-13 19:03:24.259 13377 AoaErrorHandler com...apro.taplink.demo  D  [ (AoaErrorHandler.kt:329)#ResetErrorCount ] Resetting consecutive error count (was 5)
+2026-01-13 19:03:24.260 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1131)#SendDataToAoaDevice ] AOA data sent successfully: 4 bytes (attempt 1)
+2026-01-13 19:03:24.311 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:1138)#SendDataToAoaDevice ] Post-send stabilization delay completed (50ms)
+2026-01-13 19:03:24.371 13377 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:132)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_DETACHED
+2026-01-13 19:03:24.372 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:145)#OnReceive ] USB device detached: /dev/bus/usb/001/014
+2026-01-13 19:03:24.373 13377 UsbAoa...Kernel com...apro.taplink.demo  W  [ (BaseUsbHostKernel.kt:149)#OnReceive ] Connected device detached, starting delayed disconnect check
+2026-01-13 19:03:24.374 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:131)#OnDeviceDetached ] === USB DEVICE DETACHED ===
+2026-01-13 19:03:24.375 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:132)#OnDeviceDetached ] Device detached: /dev/bus/usb/001/014
+2026-01-13 19:03:24.377 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:133)#OnDeviceDetached ] VID: 0x18D1, PID: 0x2D01
+2026-01-13 19:03:24.377 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:138)#OnDeviceDetached ] AOA device detached
+2026-01-13 19:03:24.377 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:147)#OnDeviceDetached ] === END USB DEVICE DETACHED ===
+2026-01-13 19:03:24.681 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:165)#InvokeSuspend ] Device confirmed disconnected after delay check
+2026-01-13 19:03:24.681 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:259)#DisconnectInternal ] === USB Host Disconnect Internal Started ===
+2026-01-13 19:03:24.681 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:263)#DisconnectInternal ] Stopping data receive job...
+2026-01-13 19:03:24.682 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:268)#DisconnectInternal ] Releasing USB interface and connection...
+2026-01-13 19:03:24.682 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:272)#DisconnectInternal ] USB interface released successfully
+2026-01-13 19:03:24.682 13377 UsbDev...ionJNI com...apro.taplink.demo  D  close
+2026-01-13 19:03:24.683 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:281)#DisconnectInternal ] USB device connection closed successfully
+2026-01-13 19:03:24.683 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:295)#DisconnectInternal ] Disconnected from USB device: /dev/bus/usb/001/014
+2026-01-13 19:03:24.683 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:299)#DisconnectInternal ] AOA Host disconnected successfully
+2026-01-13 19:03:24.683 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:305)#DisconnectInternal ] === USB Host Disconnect Internal Finished ===
+2026-01-13 19:03:24.684 13377 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTED -> DISCONNECTED
+2026-01-13 19:03:24.685 13377 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1368)#SetupKernelStatusListener$lambda$13 ] Kernel status changed: DISCONNECTED -> syncing to ConnectionManager: DISCONNECTED (was: CONNECTED)
+2026-01-13 19:03:25.896 13377 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:132)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_ATTACHED
+2026-01-13 19:03:25.897 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:137)#OnReceive ] USB device attached: /dev/bus/usb/001/016
+2026-01-13 19:03:25.898 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:103)#OnDeviceAttached ] === USB DEVICE ATTACHED ===
+2026-01-13 19:03:25.898 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:104)#OnDeviceAttached ] Device attached: /dev/bus/usb/001/016
+2026-01-13 19:03:25.900 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:105)#OnDeviceAttached ] VID: 0x0E8D, PID: 0x201C
+2026-01-13 19:03:25.901 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:106)#OnDeviceAttached ] Current status: DISCONNECTED
+2026-01-13 19:03:25.901 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:122)#OnDeviceAttached ] Non-AOA device attached: /dev/bus/usb/001/016
+2026-01-13 19:03:25.902 13377 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:124)#OnDeviceAttached ] === END USB DEVICE ATTACHED ===

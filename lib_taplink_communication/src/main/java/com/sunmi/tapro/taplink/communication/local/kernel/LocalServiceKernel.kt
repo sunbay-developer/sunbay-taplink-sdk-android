@@ -147,7 +147,7 @@ class LocalServiceKernel constructor(
         }
     }
 
-    override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
+    override suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         if (iTransaction == null) {
             LogUtil.e(TAG, "ITransaction is null, cannot send data")
             callback?.onError(InnerErrorCode.E304.code, InnerErrorCode.E304.description)

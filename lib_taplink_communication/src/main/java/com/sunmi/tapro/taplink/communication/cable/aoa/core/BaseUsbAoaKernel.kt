@@ -91,6 +91,7 @@ abstract class BaseUsbAoaKernel(
 
     /**
      * 断开连接（内部方法，由子类实现）
+     * 默认使用当前 token，避免旧流程断开新连接
      */
     protected abstract fun disconnectInternal()
 
