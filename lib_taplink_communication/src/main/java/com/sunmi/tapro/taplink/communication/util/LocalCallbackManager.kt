@@ -319,7 +319,7 @@ class LocalCallbackManager<T>(
                 if (elapsed >= wrapper.timeoutMillis) {
                     val removedCallback = traceIdCallbackMap.remove(traceId)
                     LogUtil.i(tag, "Callback timeout and removed by traceId: $traceId, elapsed=${elapsed}ms")
-                    (removedCallback?.callback as InnerCallback).onError(InnerErrorCode.Timeout.code, "Callback timeout")
+                    (removedCallback?.callback as InnerCallback).onError(InnerErrorCode.E306.code, "Callback timeout")
                 }
             }
         }

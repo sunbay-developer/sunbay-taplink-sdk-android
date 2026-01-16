@@ -234,16 +234,43 @@ abstract class BaseUsbHostKernel(
     protected open fun onDeviceDetached(device: UsbDevice) {}
 
     /**
+     * 为指定设备创建独立的 PendingIntent
+     * 
+     * 使用设备名称的哈希码作为请求码，确保每个设备有独立的 PendingIntent
+     * 这样可以避免使用同一个 PendingIntent 导致获取到旧设备的问题
+     */
+    private fun createDevicePendingIntent(device: UsbDevice): PendingIntent {
+        // 使用设备名称的哈希码作为请求码（设备名称是唯一的）
+        val requestCode = device.deviceName.hashCode() and 0x7FFFFFFF // 确保是正数
+        
+        return PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            Intent(permissionAction).apply {
+                setPackage(context.packageName)
+                // 在 Intent 中添加设备信息作为额外检查
+                putExtra(UsbManager.EXTRA_DEVICE, device)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+    }
+
+    /**
      * 请求设备权限
+     * 
+     * 为每个设备动态创建独立的 PendingIntent，避免使用同一个 PendingIntent
+     * 导致获取到旧设备的问题
      */
     protected fun requestPermission(device: UsbDevice, connectionCallback: ConnectionCallback) {
         synchronized(this) {
             pendingDevice = device
-            currentConnectionCallback = connectionCallback
+            // currentConnectionCallback 已在 AsyncServiceKernel.connect() 中设置，无需重复赋值
 
             try {
-                usbManager.requestPermission(device, permissionPendingIntent)
-                LogUtil.d(TAG, "USB permission request sent for device: ${device.deviceName}")
+                // 为每个设备创建独立的 PendingIntent
+                val devicePendingIntent = createDevicePendingIntent(device)
+                usbManager.requestPermission(device, devicePendingIntent)
+                LogUtil.d(TAG, "USB permission request sent for device: ${device.deviceName} with requestCode: ${device.deviceName.hashCode() and 0x7FFFFFFF}")
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to request USB permission: ${e.message}")
                 pendingDevice = null

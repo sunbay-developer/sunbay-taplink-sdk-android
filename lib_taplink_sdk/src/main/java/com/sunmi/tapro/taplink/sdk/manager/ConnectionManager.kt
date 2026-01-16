@@ -277,19 +277,6 @@ class ConnectionManager(
             this.config.secretKey,
             object : ServiceConnectionCallback {
                 override fun onConnected(extraInfoMap: Map<String, String?>?) {
-                    // Prevent duplicate INIT command sending
-                    // Check if INIT is already in progress by checking if there are pending callbacks
-                    // This prevents duplicate INIT commands when onConnected is called multiple times
-                    // Note: We check callback count instead of connection status because:
-                    // 1. In app-to-app mode, onServiceConnected may be called again during reconnection
-                    //    even if status is still CONNECTED (disconnect is async)
-                    // 2. Checking callback count is more accurate - if INIT is already sent, 
-                    //    there should be a pending callback
-                    if (callbackManager.getTraceIdCallbackCount() > 0) {
-                        LogUtil.w(TAG, "INIT command already in progress (pending callbacks exist), ignoring duplicate onConnected callback")
-                        return
-                    }
-
                     // Sync status after connection success
                     syncStatusFromKernel()
 

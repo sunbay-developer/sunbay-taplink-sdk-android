@@ -200,7 +200,7 @@ class UsbStandardHostKernel(
             LogUtil.d(TAG, "AOA protocol sent, waiting for device to switch")
 
             updateStatus(InnerConnectionStatus.WAITING_CONNECT)
-            currentConnectionCallback = connectionCallback
+            // currentConnectionCallback 已在 AsyncServiceKernel.connect() 中设置，无需重复赋值
             waitForAoaAccessory(connectionCallback)
 
         } catch (e: Exception) {
