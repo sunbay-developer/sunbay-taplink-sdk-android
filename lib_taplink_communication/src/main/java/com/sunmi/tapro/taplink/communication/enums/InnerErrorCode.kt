@@ -15,7 +15,7 @@ import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
  * - 23x: 本地模式连接失败
  * - 24x: 局域网模式连接失败
  * - 25x: USB模式连接失败
- * - 30x + 399: 交易处理错误
+ * - 30x: 交易处理错误
  *
  * @author TaPro Team
  * @since 2025-01-14
@@ -101,7 +101,7 @@ sealed class InnerErrorCode(
     /** 255 - 串口设备未就绪 */
     object E255 : InnerErrorCode("255")
 
-    // ==================== 交易处理错误 (30x + 399) ====================
+    // ==================== 交易处理错误 (30x) ====================
     /** 301 - 缺少必填参数 */
     object E301 : InnerErrorCode("301")
 
@@ -137,129 +137,6 @@ sealed class InnerErrorCode(
 
     /** 312 - 查询交易失败 */
     object E312 : InnerErrorCode("312")
-
-    /** 399 - 交易失败（必须使用新ID重试） */
-    object E399 : InnerErrorCode("399")
-
-    // ==================== 向后兼容：旧错误码 ====================
-    // T 系列错误码（向后兼容，已映射到新的3位数字错误码）
-    @Deprecated("使用新的错误码 E201", ReplaceWith("E201"))
-    object T01 : InnerErrorCode("T01") // SDK not initialized -> 201
-
-    @Deprecated("使用新的错误码 E231", ReplaceWith("E231"))
-    object T02 : InnerErrorCode("T02") // Tapro application not installed -> 231
-
-    @Deprecated("使用新的错误码 E232", ReplaceWith("E232"))
-    object T03 : InnerErrorCode("T03") // IPC service binding failed -> 232
-
-    @Deprecated("使用新的错误码 E251", ReplaceWith("E251"))
-    object T04 : InnerErrorCode("T04") // WebSocket connection failed -> 251
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T05 : InnerErrorCode("T05") // mDNS discovery failed -> 271 (已移除)
-
-    @Deprecated("使用新的错误码 E213", ReplaceWith("E213"))
-    object T06 : InnerErrorCode("T06") // Connection disconnected -> 213
-
-    @Deprecated("使用新的错误码 E212", ReplaceWith("E212"))
-    object T07 : InnerErrorCode("T07") // No connection established -> 212
-
-    @Deprecated("使用新的错误码 E214", ReplaceWith("E214"))
-    object T08 : InnerErrorCode("T08") // Manual disconnect -> 214
-
-    @Deprecated("使用新的错误码 E211", ReplaceWith("E211"))
-    object T09 : InnerErrorCode("T09") // Connection already established -> 211
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T10 : InnerErrorCode("T10") // Invalid USB protocol -> 291 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T11 : InnerErrorCode("T11") // USB device access denied -> 283 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T12 : InnerErrorCode("T12") // USB device connection timeout -> 286 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T13 : InnerErrorCode("T13") // Serial device not ready -> 294 (已移除)
-
-    @Deprecated("使用新的错误码 E202", ReplaceWith("E202"))
-    object T14 : InnerErrorCode("T14") // VSP client not ready -> 202
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T15 : InnerErrorCode("T15") // Missing request parameters -> 311 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T16 : InnerErrorCode("T16") // Request JSON format error -> 312 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T17 : InnerErrorCode("T17") // Protocol data is invalid or parsing failed -> 313 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T18 : InnerErrorCode("T18") // Invalid amount parameters -> 314 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T19 : InnerErrorCode("T19") // Protocol type mismatch -> 315 (已移除)
-
-    @Deprecated("使用新的错误码 E203", ReplaceWith("E203"))
-    object T20 : InnerErrorCode("T20") // No service kernel available -> 203
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T21 : InnerErrorCode("T21") // Failed to send data -> 321 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T22 : InnerErrorCode("T22") // Cannot send data, not connected -> 322 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T23 : InnerErrorCode("T23") // Failed to send data -> 321 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T24 : InnerErrorCode("T24") // Unexpected error sending data -> 323 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T25 : InnerErrorCode("T25") // ITransaction is null -> 282 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T27 : InnerErrorCode("T27") // Transaction locked -> 331 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T28 : InnerErrorCode("T28") // Unsupported transaction type -> 316 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T29 : InnerErrorCode("T29") // Transaction cancelled -> 335 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T30 : InnerErrorCode("T30") // System is processing another transaction -> 331 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T31 : InnerErrorCode("T31") // Init Failed: System is processing another transaction -> 287 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T34 : InnerErrorCode("T34") // Tapro 响应超时 -> 332 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T35 : InnerErrorCode("T35") // 线缆未连接 -> 281 (已移除)
-
-    @Deprecated("使用新的错误码 E212", ReplaceWith("E212"))
-    object T37 : InnerErrorCode("T37") // 未建立连接 -> 212
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T38 : InnerErrorCode("T38") // host交易拒绝 -> 333 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T39 : InnerErrorCode("T39") // Host交易处理中，需要查询 -> 334 (已移除)
-
-    @Deprecated("T系列错误码已废弃，请使用新的错误码系统")
-    object T40 : InnerErrorCode("T40") // 终止失败 -> 336 (已移除)
-
-    @Deprecated("使用新的错误码 E221", ReplaceWith("E221"))
-    object T41 : InnerErrorCode("T41") // 连接认证失败 -> 221
-
-    // ==================== 其他错误码 ====================
-    object Exception : InnerErrorCode("E04")
-
-    @Deprecated("使用新的错误码 E306", ReplaceWith("E306"))
-    object Timeout : InnerErrorCode("996")
-
 
     // ==================== 未知错误码 ====================
     class Unknown(
@@ -317,7 +194,7 @@ sealed class InnerErrorCode(
                 "254" -> E254
                 "255" -> E255
 
-                // 交易处理错误 (30x + 399)
+                // 交易处理错误 (30x)
                 "301" -> E301
                 "302" -> E302
                 "303" -> E303
@@ -330,51 +207,6 @@ sealed class InnerErrorCode(
                 "310" -> E310
                 "311" -> E311
                 "312" -> E312
-                "399" -> E399
-
-                // 向后兼容：T 系列错误码
-                "T01" -> T01
-                "T02" -> T02
-                "T03" -> T03
-                "T04" -> T04
-                "T05" -> T05
-                "T06" -> T06
-                "T07" -> T07
-                "T08" -> T08
-                "T09" -> T09
-                "T10" -> T10
-                "T11" -> T11
-                "T12" -> T12
-                "T13" -> T13
-                "T14" -> T14
-                "T15" -> T15
-                "T16" -> T16
-                "T17" -> T17
-                "T18" -> T18
-                "T19" -> T19
-                "T20" -> T20
-                "T21" -> T21
-                "T22" -> T22
-                "T23" -> T23
-                "T24" -> T24
-                "T25" -> T25
-                "T27" -> T27
-                "T28" -> T28
-                "T29" -> T29
-                "T30" -> T30
-                "T31" -> T31
-                "T34" -> T34
-                "T35" -> T35
-                "T37" -> T37
-                "T38" -> T38
-                "T39" -> T39
-                "T40" -> T40
-                "T41" -> T41
-
-                "996" -> Timeout
-
-                // 其他错误码
-                "E04" -> Exception
 
                 // 未知错误码
                 else -> Unknown(code, customDescription = errorMsg)
@@ -395,14 +227,7 @@ sealed class InnerErrorCode(
                 E231, E232,
                 E241, E242,
                 E251, E252, E253, E254, E255,
-                E301, E302, E303, E304, E305, E306, E307, E308, E309, E310, E311, E312, E399,
-                // 其他错误码
-                Exception, Timeout,
-                // T 系列错误码（向后兼容）
-                T01, T02, T03, T04, T05, T06, T07, T08, T09, T10,
-                T11, T12, T13, T14, T15, T16, T17, T18, T19, T20,
-                T21, T22, T23, T24, T25, T27, T28, T29, T30, T31, T34,
-                T35, T37, T38, T39, T40, T41
+                E301, E302, E303, E304, E305, E306, E307, E308, E309, E310, E311, E312
             )
         }
 
@@ -442,10 +267,10 @@ sealed class InnerErrorCode(
         }
 
         /**
-         * 判断错误码是否为交易处理错误 (30x + 399)
+         * 判断错误码是否为交易处理错误 (30x)
          */
         fun isTransactionProcessingError(code: String?): Boolean {
-            return code in listOf("301", "302", "303", "304", "305", "306", "307", "308", "309", "310", "311", "312", "399")
+            return code in listOf("301", "302", "303", "304", "305", "306", "307", "308", "309", "310", "311", "312")
         }
 
         /**
@@ -458,10 +283,10 @@ sealed class InnerErrorCode(
 
         /**
          * 判断是否必须使用新的 transactionRequestId 重试
-         * 错误码 307, 310, 311, 399 必须使用新ID
+         * 错误码 307, 310, 311 必须使用新ID
          */
         fun mustUseNewTransactionId(code: String?): Boolean {
-            return code in listOf("307", "310", "311", "399")
+            return code in listOf("307", "310", "311")
         }
 
         /**
@@ -478,54 +303,6 @@ sealed class InnerErrorCode(
          */
         fun shouldNotRetry(code: String?): Boolean {
             return code == "309"
-        }
-
-        // ==================== 向后兼容的辅助方法 ====================
-
-        /**
-         * 判断错误码是否为T系列错误码
-         */
-        @Deprecated("T系列错误码已废弃，请使用新的错误码分类方法")
-        fun isTSeriesError(code: String?): Boolean {
-            return code?.uppercase()?.startsWith("T") == true
-        }
-
-        /**
-         * 判断错误码是否为连接相关错误 (T01-T14)
-         */
-        @Deprecated("使用 isConnectionStateError, isLocalModeConnectionError, isLanModeConnectionError, isUsbModeConnectionError")
-        fun isConnectionError(code: String?): Boolean {
-            val upperCode = code?.uppercase()
-            return upperCode != null && upperCode.startsWith("T") &&
-                    upperCode.substring(1).toIntOrNull()?.let { it in 1..14 } == true
-        }
-
-        /**
-         * 判断错误码是否为参数校验错误 (T15-T19)
-         */
-        @Deprecated("使用 isTransactionProcessingError")
-        fun isParameterValidationError(code: String?): Boolean {
-            val upperCode = code?.uppercase()
-            return upperCode != null && upperCode.startsWith("T") &&
-                    upperCode.substring(1).toIntOrNull()?.let { it in 15..19 } == true
-        }
-
-        /**
-         * 判断错误码是否为数据传输错误 (T20-T25)
-         */
-        @Deprecated("使用 isTransactionProcessingError")
-        fun isDataTransmissionError(code: String?): Boolean {
-            val upperCode = code?.uppercase()
-            return upperCode != null && upperCode.startsWith("T") &&
-                    upperCode.substring(1).toIntOrNull()?.let { it in 20..25 } == true
-        }
-
-        /**
-         * 判断错误码是否为系统超时错误 (T34)
-         */
-        @Deprecated("使用 needsQueryBeforeRetry")
-        fun isSystemTimeoutError(code: String?): Boolean {
-            return code?.uppercase() == "T34"
         }
     }
 }

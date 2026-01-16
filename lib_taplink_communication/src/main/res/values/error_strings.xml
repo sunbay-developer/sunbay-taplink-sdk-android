@@ -234,4 +234,20 @@
     <string name="error_unknown_description">Unknown error code</string>
     <string name="error_empty_description">Error code is empty</string>
 
+    <!-- Error Category -->
+    <string name="category_initialization_display_name">Initialization Error</string>
+    <string name="category_initialization_description">SDK initialization related errors</string>
+    
+    <string name="category_connection_display_name">Connection Error</string>
+    <string name="category_connection_description">Connection state and connection failure errors</string>
+    
+    <string name="category_authentication_display_name">Authentication Error</string>
+    <string name="category_authentication_description">Authentication failure errors</string>
+    
+    <string name="category_transaction_display_name">Transaction Error</string>
+    <string name="category_transaction_description">Transaction processing related errors</string>
+    
+    <string name="category_unknown_display_name">Unknown Error</string>
+    <string name="category_unknown_description">Unclassified error codes</string>
+
 </resources>

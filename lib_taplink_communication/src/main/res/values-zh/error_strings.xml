@@ -234,4 +234,20 @@
     <string name="error_unknown_description">未知错误码</string>
     <string name="error_empty_description">错误码为空</string>
 
+    <!-- 错误分类 -->
+    <string name="category_initialization_display_name">初始化错误</string>
+    <string name="category_initialization_description">SDK初始化相关错误</string>
+    
+    <string name="category_connection_display_name">连接错误</string>
+    <string name="category_connection_description">连接状态和连接失败错误</string>
+    
+    <string name="category_authentication_display_name">认证错误</string>
+    <string name="category_authentication_description">认证失败错误</string>
+    
+    <string name="category_transaction_display_name">交易错误</string>
+    <string name="category_transaction_description">交易处理相关错误</string>
+    
+    <string name="category_unknown_display_name">未知错误</string>
+    <string name="category_unknown_description">未分类的错误码</string>
+
 </resources>

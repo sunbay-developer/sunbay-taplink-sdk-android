@@ -669,7 +669,7 @@ class ConnectionManager(
                         }
 
                         // Determine success
-                        if (code == ResponseProcessor.SUCCESS_CODE &&
+                        if ((code == ResponseProcessor.SUCCESS_CODE || code == "0" || code == "000") &&
                             basicResponse.event is PaymentEvent.Completed
                         ) {
                             LogUtil.d(TAG, "INIT command completed successfully")

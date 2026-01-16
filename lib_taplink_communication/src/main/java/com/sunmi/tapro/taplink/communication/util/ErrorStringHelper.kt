@@ -93,4 +93,70 @@ object ErrorStringHelper {
     private fun getDefaultSolution(code: String): String? {
         return null // 当资源文件不可用时，不提供默认解决方案
     }
+    
+    /**
+     * 获取错误分类的显示名称
+     * 
+     * @param categoryName 分类名称（如 "initialization", "connection"）
+     * @return 分类显示名称，如果未找到则返回默认值
+     */
+    fun getCategoryDisplayName(categoryName: String): String {
+        val context = getContext() ?: return getDefaultCategoryDisplayName(categoryName)
+        
+        val resourceName = "category_${categoryName.lowercase()}_display_name"
+        val resourceId = getStringResourceId(context, resourceName)
+        
+        return if (resourceId != 0) {
+            context.getString(resourceId)
+        } else {
+            getDefaultCategoryDisplayName(categoryName)
+        }
+    }
+    
+    /**
+     * 获取错误分类的描述
+     * 
+     * @param categoryName 分类名称（如 "initialization", "connection"）
+     * @return 分类描述，如果未找到则返回默认值
+     */
+    fun getCategoryDescription(categoryName: String): String {
+        val context = getContext() ?: return getDefaultCategoryDescription(categoryName)
+        
+        val resourceName = "category_${categoryName.lowercase()}_description"
+        val resourceId = getStringResourceId(context, resourceName)
+        
+        return if (resourceId != 0) {
+            context.getString(resourceId)
+        } else {
+            getDefaultCategoryDescription(categoryName)
+        }
+    }
+    
+    /**
+     * 获取默认分类显示名称（当资源文件不可用时的后备方案）
+     */
+    private fun getDefaultCategoryDisplayName(categoryName: String): String {
+        return when (categoryName.lowercase()) {
+            "initialization" -> "Initialization Error"
+            "connection" -> "Connection Error"
+            "authentication" -> "Authentication Error"
+            "transaction" -> "Transaction Error"
+            "unknown" -> "Unknown Error"
+            else -> "Unknown Category"
+        }
+    }
+    
+    /**
+     * 获取默认分类描述（当资源文件不可用时的后备方案）
+     */
+    private fun getDefaultCategoryDescription(categoryName: String): String {
+        return when (categoryName.lowercase()) {
+            "initialization" -> "SDK initialization related errors"
+            "connection" -> "Connection state and connection failure errors"
+            "authentication" -> "Authentication failure errors"
+            "transaction" -> "Transaction processing related errors"
+            "unknown" -> "Unclassified error codes"
+            else -> "Unknown error category"
+        }
+    }
 }

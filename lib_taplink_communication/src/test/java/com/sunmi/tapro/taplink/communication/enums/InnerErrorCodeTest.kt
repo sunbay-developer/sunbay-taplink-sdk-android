@@ -93,6 +93,5 @@ class InnerErrorCodeTest {
         assertTrue(allErrorCodes.isNotEmpty())
         assertTrue(allErrorCodes.contains(InnerErrorCode.Success))
         assertTrue(allErrorCodes.contains(InnerErrorCode.C20))
-        assertTrue(allErrorCodes.contains(InnerErrorCode.Exception))
     }
 }
