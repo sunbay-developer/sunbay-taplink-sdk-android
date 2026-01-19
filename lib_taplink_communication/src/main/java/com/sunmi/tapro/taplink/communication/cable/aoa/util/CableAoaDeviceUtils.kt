@@ -19,7 +19,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * @author TaPro Team
  * @since 2025-01-XX
  */
-object AoaDeviceUtils {
+object CableAoaDeviceUtils {
     
     private const val TAG = "AoaDeviceUtils"
     

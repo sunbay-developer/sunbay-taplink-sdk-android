@@ -38,6 +38,11 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    
+    // Taplink SDK 依赖
+    implementation(project(":lib_taplink_sdk"))
+    compileOnly(project(":lib_taplink_communication"))
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

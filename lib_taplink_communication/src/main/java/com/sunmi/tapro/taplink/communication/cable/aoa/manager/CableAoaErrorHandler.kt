@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.communication.cable.aoa.manager
 
+import com.sunmi.tapro.taplink.communication.cable.aoa.core.AoaSessionPhase
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
@@ -16,18 +17,20 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * @author TaPro Team
  * @since 2025-01-XX
  */
-class AoaErrorHandler {
+class CableAoaErrorHandler {
     
     companion object {
         private const val TAG = "AoaErrorHandler"
         private const val MAX_CONSECUTIVE_ERRORS = 5
         private const val ERROR_RECOVERY_DELAY = 100L
         private const val CRITICAL_ERROR_DELAY = 500L
+        private const val CONNECTION_GRACE_PERIOD_MS = 1000L // 连接后1秒内的断开可能是AOA切换导致
     }
     
     private var consecutiveErrors = 0
     private var totalErrors = 0
     private var lastErrorTime = 0L
+    private var connectionEstablishedTime = 0L
     
     /**
      * 错误类型枚举
@@ -53,18 +56,43 @@ class AoaErrorHandler {
     
     /**
      * 处理数据接收错误
+     * 
+     * @param bytesRead 读取的字节数
+     * @param isDeviceConnected 设备是否仍然连接
+     * @param currentStatus 当前连接状态
+     * @param sessionPhase 当前会话阶段（可选，用于判断是否在AOA切换期）
      */
     suspend fun handleReceiveError(
         bytesRead: Int,
         isDeviceConnected: Boolean,
-        currentStatus: InnerConnectionStatus
+        currentStatus: InnerConnectionStatus,
+        sessionPhase: AoaSessionPhase? = null
     ): ErrorHandlingResult {
         
         val errorType = classifyReceiveError(bytesRead, isDeviceConnected)
         totalErrors++
         
         LogUtil.w(TAG, "Handling receive error: type=$errorType, bytesRead=$bytesRead, " +
-                "consecutiveErrors=$consecutiveErrors, totalErrors=$totalErrors")
+                "consecutiveErrors=$consecutiveErrors, totalErrors=$totalErrors, phase=$sessionPhase")
+        
+        // 【修复】AOA协议切换期间，设备断开是正常现象，不应该中断接收循环
+        val isAoaSwitchPhase = sessionPhase == AoaSessionPhase.SENDING_AOA || 
+                               sessionPhase == AoaSessionPhase.WAIT_AOA_ATTACH
+        
+        // 【修复】连接建立后的短时间内（grace period），设备断开可能是AOA切换导致，应该容忍
+        val isWithinGracePeriod = connectionEstablishedTime > 0 && 
+                                  (System.currentTimeMillis() - connectionEstablishedTime) < CONNECTION_GRACE_PERIOD_MS
+        
+        if ((isAoaSwitchPhase || isWithinGracePeriod) && errorType == ErrorType.DEVICE_DISCONNECTED) {
+            val reason = if (isAoaSwitchPhase) "AOA switch phase" else "grace period"
+            LogUtil.d(TAG, "Device disconnected during $reason - this may be expected, continuing...")
+            return ErrorHandlingResult(
+                shouldContinue = true,
+                shouldBreak = false,
+                delayMs = ERROR_RECOVERY_DELAY,
+                newStatus = null
+            )
+        }
         
         return when (errorType) {
             ErrorType.TIMEOUT_ERROR -> {
@@ -329,6 +357,21 @@ class AoaErrorHandler {
             LogUtil.d(TAG, "Resetting consecutive error count (was $consecutiveErrors)")
             consecutiveErrors = 0
         }
+    }
+    
+    /**
+     * 标记连接已建立（用于grace period计算）
+     */
+    fun markConnectionEstablished() {
+        connectionEstablishedTime = System.currentTimeMillis()
+        LogUtil.d(TAG, "Connection established, starting grace period")
+    }
+    
+    /**
+     * 重置连接时间（断开连接时调用）
+     */
+    fun resetConnectionTime() {
+        connectionEstablishedTime = 0L
     }
     
     /**

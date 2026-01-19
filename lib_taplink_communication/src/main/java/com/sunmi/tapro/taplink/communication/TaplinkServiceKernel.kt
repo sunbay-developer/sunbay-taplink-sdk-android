@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.communication
 
 import android.content.Context
+import com.sunmi.tapro.taplink.communication.cable.aoa.host.CableAoaHostKernel
 import com.sunmi.tapro.taplink.communication.cable.aoa.host.UsbStandardHostKernel
 import com.sunmi.tapro.taplink.communication.cable.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
@@ -160,7 +161,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
     private fun isServiceKernelOfType(kernel: IServiceKernel, serviceKey: String): Boolean {
         return when (serviceKey) {
             SERVICE_KEY_LAN -> kernel is LanClientKernel
-            SERVICE_KEY_USB -> kernel is UsbStandardHostKernel
+            SERVICE_KEY_USB -> kernel is CableAoaHostKernel
             SERVICE_KEY_SERIAL -> kernel is SerialServiceKernel
             SERVICE_KEY_VSP -> kernel is VSPClientKernel
             SERVICE_KEY_LOCAL -> kernel is LocalServiceKernel

@@ -5,24 +5,28 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import android.os.ParcelFileDescriptor
 import androidx.core.content.ContextCompat
+import com.sunmi.tapro.taplink.communication.cable.aoa.core.AoaSessionPhase
 import com.sunmi.tapro.taplink.communication.cable.aoa.core.BaseUsbAoaKernel
+import com.sunmi.tapro.taplink.communication.cable.aoa.manager.CableAoaErrorHandler
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * USB AOA Host模式基类
@@ -44,6 +48,13 @@ abstract class BaseUsbHostKernel(
     permissionAction: String,
     permissionPendingIntent: PendingIntent
 ) : BaseUsbAoaKernel(appId, appSecretKey, context, usbStandardInfo, permissionAction, permissionPendingIntent) {
+
+    /**
+     * AOA错误处理器（重连由SDK层统一管理）
+     * 
+     * 放在 BaseUsbHostKernel 中，使得所有 Host 子类都可以访问
+     */
+    protected val cableAoaErrorHandler = CableAoaErrorHandler()
 
     /**
      * USB bulk OUT 发送互斥锁
@@ -72,51 +83,43 @@ abstract class BaseUsbHostKernel(
     protected val connectMutex = Mutex()
 
     /**
-     * 操作序列号生成器（使用 AtomicLong 确保线程安全且唯一）
-     */
-    private val opSeq = AtomicLong(0L)
-
-    /**
-     * 当前活跃的操作令牌（连接代号）
-     * 
-     * 用于防止旧协程/旧广播误伤新连接：
-     * - 每次连接时生成新的 token
-     * - permissionReceiver、deviceReceiver、disconnectInternal、send 都检查 token
-     * - 如果 token 不匹配，说明连接已切换，忽略旧操作
+     * Device Permission 请求属于哪个操作（用于权限广播时验证）
      */
     @Volatile
-    private var activeOpToken: Long = 0L
+    private var pendingDevicePermissionToken: Long = 0L
 
     /**
-     * Permission 请求属于哪个操作（用于权限广播时验证）
+     * Accessory Permission 请求属于哪个操作（用于权限广播时验证）
      */
     @Volatile
-    private var pendingPermissionOpToken: Long = 0L
+    private var pendingAccessoryPermissionToken: Long = 0L
 
     /**
-     * 开始一次新的连接/流程时调用
+     * 重写父类的 createSession 方法，添加 Host 特有的逻辑：清除权限广播去重记录和原始设备引用
      * 
      * @param reason 操作原因（用于日志）
-     * @return 新的操作令牌
+     * @return 新的会话
      */
-    protected fun beginNewOperation(reason: String): Long {
-        val token = opSeq.incrementAndGet()
-        activeOpToken = token
-        // 清除权限广播去重记录，允许新连接处理权限广播
-        lastProcessedPermission = null
-        LogUtil.i(TAG, "beginNewOperation token=$token reason=$reason")
-        return token
+    override fun createSession(reason: String): com.sunmi.tapro.taplink.communication.cable.aoa.core.UsbAoaSession {
+        // Host 特有：清除权限广播去重记录，允许新连接处理权限广播
+        lastProcessedDevicePermission = null
+        lastProcessedAccessoryPermission = null
+        // 清除原始设备引用
+        originalDevice = null
+        return super.createSession(reason)
     }
 
     /**
-     * 获取当前活跃的操作令牌
+     * 设置原始设备（发送 AOA 协议前的设备）
+     * 
+     * 用于区分 AOA 切换期的 DETACHED 事件
+     * 
+     * @param device 原始设备
      */
-    protected fun currentOpToken(): Long = activeOpToken
-
-    /**
-     * 检查操作令牌是否活跃（是否为当前连接）
-     */
-    protected fun isTokenActive(token: Long): Boolean = token == activeOpToken && token != 0L
+    protected fun setOriginalDevice(device: UsbDevice?) {
+        originalDevice = device
+        LogUtil.d(TAG, "Original device set: ${getDeviceDisplayKey(device)}")
+    }
 
     /**
      * 生成设备的稳定标识键（用于比对和日志）
@@ -165,6 +168,84 @@ abstract class BaseUsbHostKernel(
         return getDeviceKey(device1) == getDeviceKey(device2)
     }
 
+    /**
+     * 生成 Accessory 的稳定标识键（用于比对和去重）
+     * 
+     * 【修复 P2】不使用 serial，因为权限前后 serial 可能变化或抛异常
+     * 只使用 manufacturer + model + version，这些字段在权限前后保持一致
+     * 
+     * @param accessory USB Accessory（可为 null）
+     * @return Accessory 的稳定标识键，如果 accessory 为 null 则返回 "null"
+     */
+    protected fun getAccessoryKey(accessory: UsbAccessory?): String {
+        return if (accessory == null) {
+            "null"
+        } else {
+            // 【修复 P2】只使用 manufacturer + model + version，不包含 serial
+            // serial 仅在 getAccessoryDisplayKey() 中用于日志显示
+            "${accessory.manufacturer}_${accessory.model}_${accessory.version}"
+        }
+    }
+
+    /**
+     * 生成 Accessory 的稳定标识键（用于 PendingIntent data URI）
+     * 
+     * 使用 manufacturer|model|version|description 作为分隔符，确保权限前后一致
+     * 不包含 serial，因为权限前后 serial 可能变化或抛异常
+     * 
+     * @param accessory USB Accessory
+     * @return Accessory 的稳定标识键
+     */
+    private fun getAccessoryStableKey(accessory: UsbAccessory): String {
+        // serial 不要参与：无权限时不可读，授权后可读，会导致 key 变化
+        return listOf(
+            accessory.manufacturer ?: "",
+            accessory.model ?: "",
+            accessory.version ?: "",
+            accessory.description ?: ""
+        ).joinToString("|")
+    }
+
+    /**
+     * 获取 Accessory 的显示标识（用于日志）
+     * 
+     * 注意：在 Accessory detach 后，可能没有权限访问 serial，需要安全处理
+     * serial 仅用于日志显示，不参与比对
+     * 
+     * @param accessory USB Accessory（可为 null）
+     * @return Accessory 的显示标识
+     */
+    protected fun getAccessoryDisplayKey(accessory: UsbAccessory?): String {
+        return if (accessory == null) {
+            "null"
+        } else {
+            val serial = try {
+                accessory.serial ?: "null"
+            } catch (e: SecurityException) {
+                // Accessory detach 后可能没有权限访问 serial
+                "no_permission"
+            }
+            "${accessory.manufacturer}/${accessory.model} (v${accessory.version}, serial=$serial)"
+        }
+    }
+
+    /**
+     * 使用稳定的标识比对两个 USB Accessory 是否相同
+     * 
+     * 【修复 P2】使用 getAccessoryKey() 进行比对，不依赖 serial
+     * 
+     * @param accessory1 第一个 Accessory（可为 null）
+     * @param accessory2 第二个 Accessory（可为 null）
+     * @return 如果两个 Accessory 相同（基于稳定标识）返回 true，否则返回 false
+     */
+    private fun isSameAccessory(accessory1: UsbAccessory?, accessory2: UsbAccessory?): Boolean {
+        if (accessory1 == null || accessory2 == null) {
+            return accessory1 == accessory2
+        }
+        // getAccessoryKey() 现在只使用 manufacturer_model_version，不包含 serial
+        return getAccessoryKey(accessory1) == getAccessoryKey(accessory2)
+    }
+
     // USB设备连接相关
     var connectedDevice: UsbDevice? = null
     var usbDeviceConnection: UsbDeviceConnection? = null
@@ -172,77 +253,128 @@ abstract class BaseUsbHostKernel(
     protected var usbEndpointIn: UsbEndpoint? = null
     var usbEndpointOut: UsbEndpoint? = null
 
+    // USB Accessory 连接相关（AOA 设备可能以 Accessory 形式出现）
+    var connectedAccessory: UsbAccessory? = null
+    var accessoryFileDescriptor: ParcelFileDescriptor? = null
+
+    // 原始设备（发送 AOA 协议前的设备）
+    // 用于区分 AOA 切换期的 DETACHED 事件
+    @Volatile
+    private var originalDevice: UsbDevice? = null
+
     // 权限请求相关
     protected var pendingDevice: UsbDevice? = null
-    // 权限广播去重：使用 (token + deviceKey) 作为唯一标识，避免重复处理
-    // 格式：Pair<token, deviceKey>
-    private var lastProcessedPermission: Pair<Long, String>? = null
+    protected var pendingAccessory: UsbAccessory? = null
+    // 【修复 P0-4】权限广播去重：Device 和 Accessory 分别记录
+    // Device 权限广播去重：使用 (token + deviceKey) 作为唯一标识
+    private var lastProcessedDevicePermission: Pair<Long, String>? = null
+    // Accessory 权限广播去重：使用 (token + accessoryKey) 作为唯一标识
+    private var lastProcessedAccessoryPermission: Pair<Long, String>? = null
 
     // 权限请求广播接收器
     protected val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (permissionAction != intent.action) return
+            // 【诊断】第一行日志，确认 receiver 是否被调用
+            LogUtil.i(TAG, "=== permissionReceiver.onReceive CALLED: action=${intent.action}, package=${intent.`package`} ===")
+            LogUtil.i(TAG, "=== permissionReceiver: Intent extras keys=${intent.extras?.keySet()} ===")
+            
+            // 接受系统标准 action
+            if ("android.hardware.usb.action.USB_PERMISSION" != intent.action) {
+                LogUtil.i(TAG, "permissionReceiver: action mismatch, ignoring. Expected: android.hardware.usb.action.USB_PERMISSION, Got: ${intent.action}")
+                return
+            }
+            
+            LogUtil.i(TAG, "permissionReceiver: action matched")
 
             synchronized(this@BaseUsbHostKernel) {
-                val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                try {
+                    // 【修复】使用 EXTRA_DEVICE 和 EXTRA_ACCESSORY 来识别请求类型
+                    val hasDevice = intent.hasExtra(UsbManager.EXTRA_DEVICE)
+                    val hasAccessory = intent.hasExtra(UsbManager.EXTRA_ACCESSORY)
+                    
+                    LogUtil.i(TAG, "permissionReceiver: hasDevice=$hasDevice, hasAccessory=$hasAccessory")
 
-                val token = pendingPermissionOpToken
-                if (device == null) {
-                    LogUtil.w(TAG, "Received permission broadcast with null device, ignoring")
-                    return
-                }
+                    // 如果有 EXTRA_ACCESSORY，交给 accessoryPermissionReceiver 处理
+                    if (hasAccessory) {
+                        LogUtil.i(TAG, "permissionReceiver: Has EXTRA_ACCESSORY, delegating to accessoryPermissionReceiver")
+                        return
+                    }
 
-                // Token 门禁：不是当前这次 connect 的 permission，直接忽略
-                if (!isTokenActive(token)) {
-                    LogUtil.w(TAG, "Permission broadcast ignored: stale token=$token active=$activeOpToken device=${device.deviceName}")
-                    return
-                }
+                    // 获取 EXTRA_DEVICE
+                    val device: UsbDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
 
-                // Device 门禁：设备不匹配，忽略（使用稳定标识比对，避免对象引用不同导致的误判）
-                if (!isSameDevice(device, pendingDevice)) {
-                    LogUtil.w(TAG, "Permission broadcast ignored: device mismatch expected=${pendingDevice?.deviceName} (VID=${pendingDevice?.vendorId}, PID=${pendingDevice?.productId}, ID=${pendingDevice?.deviceId}) got=${device.deviceName} (VID=${device.vendorId}, PID=${device.productId}, ID=${device.deviceId})")
-                    return
-                }
+                    LogUtil.i(TAG, "permissionReceiver: device=${device?.deviceName}, pendingDevice=${pendingDevice?.deviceName}")
 
-                // 去重处理：按 (token + deviceKey) 去重，而不是按时间
-                // 这样可以避免时间窗口去重可能吞掉真正有效的第二条广播
-                val deviceKey = getDeviceKey(device)
-                val currentPermission = Pair(token, deviceKey)
-                if (lastProcessedPermission == currentPermission) {
-                    LogUtil.w(TAG, "Ignoring duplicate permission broadcast: token=$token deviceKey=$deviceKey")
-                    return
-                }
-                lastProcessedPermission = currentPermission
+                    // 如果没有 EXTRA_DEVICE，忽略
+                    if (device == null) {
+                        LogUtil.i(TAG, "permissionReceiver: device is null, ignoring")
+                        return
+                    }
 
-                val callback = currentConnectionCallback
-                pendingDevice = null
-                pendingPermissionOpToken = 0L
-                // 注意：不清除 lastProcessedPermission，因为同一个 (token + deviceKey) 的广播应该只处理一次
-                // 如果 token 变化（新连接），新的 (token + deviceKey) 组合会不同，可以正常处理
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    // 【修复 P0-4】使用独立的 Device token
+                    val token = pendingDevicePermissionToken
+                    LogUtil.i(TAG, "permissionReceiver: granted=$granted, token=$token, activeToken=${currentOpToken()}")
 
-                if (granted) {
-                    LogUtil.d(TAG, "USB device permission granted: ${getDeviceDisplayKey(device)}")
-                    if (callback != null) {
-                        scope.launch {
-                            // 再次门禁，防止 launch 延迟后 token 已变
-                            if (!isTokenActive(token)) {
-                                LogUtil.w(TAG, "onPermissionGranted skipped: stale token=$token")
-                                return@launch
+                    // Token 门禁：不是当前这次 connect 的 permission，直接忽略
+                    if (!isTokenActive(token)) {
+                        LogUtil.w(TAG, "Permission broadcast ignored: stale token=$token active=${currentOpToken()} device=${device.deviceName}")
+                        return
+                    }
+
+                    // Device 门禁：设备不匹配，忽略
+                    if (!isSameDevice(device, pendingDevice)) {
+                        LogUtil.w(TAG, "Permission broadcast ignored: device mismatch expected=${pendingDevice?.deviceName} (VID=${pendingDevice?.vendorId}, PID=${pendingDevice?.productId}, ID=${pendingDevice?.deviceId}) got=${device.deviceName} (VID=${device.vendorId}, PID=${device.productId}, ID=${device.deviceId})")
+                        return
+                    }
+
+                    // 【修复 P0-4】去重处理：使用独立的 Device 去重记录
+                    val deviceKey = getDeviceKey(device)
+                    val currentPermission = Pair(token, deviceKey)
+                    if (lastProcessedDevicePermission == currentPermission) {
+                        LogUtil.w(TAG, "Ignoring duplicate permission broadcast: token=$token deviceKey=$deviceKey")
+                        return
+                    }
+                    lastProcessedDevicePermission = currentPermission
+
+                    val callback = currentConnectionCallback
+                    pendingDevice = null
+                    // 【修复 P0-4】清除独立的 Device token
+                    pendingDevicePermissionToken = 0L
+
+                    if (granted) {
+                        LogUtil.i(TAG, "=== USB device permission granted: ${getDeviceDisplayKey(device)}, token=$token ===")
+                        if (callback != null) {
+                            val session = currentSession()
+                            LogUtil.i(TAG, "permissionReceiver: Launching onPermissionGranted, session=${session?.token}, token=$token")
+                            session?.scope?.launch {
+                                if (!isTokenActive(token)) {
+                                    LogUtil.w(TAG, "onPermissionGranted skipped: stale token=$token")
+                                    return@launch
+                                }
+                                LogUtil.i(TAG, "permissionReceiver: Acquiring connectMutex for onPermissionGranted, token=$token")
+                                connectMutex.withLock {
+                                    LogUtil.i(TAG, "permissionReceiver: connectMutex acquired, calling onPermissionGranted, token=$token")
+                                    onPermissionGranted(device, callback)
+                                    LogUtil.i(TAG, "permissionReceiver: onPermissionGranted completed, token=$token")
+                                }
                             }
-                            // 在 connectMutex 内执行连接建立，避免并发连接
-                            connectMutex.withLock {
-                                onPermissionGranted(device, callback)
-                            }
+                        } else {
+                            LogUtil.w(TAG, "Permission granted but no callback available")
                         }
                     } else {
-                        LogUtil.w(TAG, "Permission granted but no callback available")
+                        LogUtil.i(TAG, "USB device permission denied by user: ${getDeviceDisplayKey(device)}")
+                        callback?.let {
+                            handleConnectionError(InnerErrorCode.E252.description, it, InnerErrorCode.E252.code)
+                        }
                     }
-                } else {
-                    LogUtil.d(TAG, "USB device permission denied by user: ${getDeviceDisplayKey(device)}")
-                    callback?.let {
-                        handleConnectionError(InnerErrorCode.E252.description, it, InnerErrorCode.E252.code)
-                    }
+                } catch (e: Exception) {
+                    LogUtil.e(TAG, "Error in permissionReceiver: ${e.message}, exception: ${e.javaClass.simpleName}")
                 }
             }
         }
@@ -251,64 +383,110 @@ abstract class BaseUsbHostKernel(
     // USB设备插拔广播接收器
     protected val deviceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            LogUtil.i(TAG, "=========onReceive========intent:${intent.action}")
+            LogUtil.i(TAG, "=========onReceive Device========intent:${intent.action}")
             when (intent.action) {
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                    val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                    device?.let {
-                        LogUtil.d(TAG, "USB device attached: ${getDeviceDisplayKey(it)}")
-                        onDeviceAttached(it)
+                    val device: UsbDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
+                    if (device == null) {
+                        LogUtil.w(TAG, "USB_DEVICE_ATTACHED broadcast received but device is null")
+                        return
+                    }
+                    LogUtil.d(TAG, "USB device attached: ${getDeviceDisplayKey(device)}")
+                    onDeviceAttached(device)
                 }
 
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    val device: UsbDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
                     device?.let { detached ->
                         LogUtil.d(TAG, "USB device detached: ${getDeviceDisplayKey(detached)}")
                         
-                        // 捕获当时的 token 和设备对象，用于延迟检查时验证
-                        val tokenAtDetach = currentOpToken()
-                        val detachedAtTime = detached // 保存当时的设备对象，用于后续比对
-                        val detachedKey = getDeviceKey(detached) // 保存设备 key，用于比对和日志
+                        val session = currentSession()
+                        val currentPhase = session?.phase?.get() ?: AoaSessionPhase.IDLE
+                        val isAoaDevice = UsbStandardProtocol.isAoaCompatible(detached.vendorId, detached.productId)
+                        val isOriginalDevice = isSameDevice(detached, originalDevice)
                         
-                        // 添加智能断开检测，避免误判临时断开（使用稳定标识比对）
-                        if (isSameDevice(detached, connectedDevice)) {
-                            LogUtil.w(TAG, "Connected device detached, starting delayed disconnect check (token: $tokenAtDetach, device: ${getDeviceDisplayKey(detached)})")
+                        LogUtil.d(TAG, "Detach analysis: phase=$currentPhase, isAoaDevice=$isAoaDevice, isOriginalDevice=$isOriginalDevice")
+                        
+                        // 核心修复：根据 phase 和设备类型判断是否应该触发断线
+                        when {
+                            // 情况1：在 SENDING_AOA 或 WAIT_AOA_ATTACH 阶段，原始设备 detach 是正常的（AOA 切换过程）
+                            (currentPhase == AoaSessionPhase.SENDING_AOA || currentPhase == AoaSessionPhase.WAIT_AOA_ATTACH) 
+                                    && isOriginalDevice -> {
+                                LogUtil.d(TAG, "Original device detached during AOA switch (phase=$currentPhase), this is normal, ignoring")
+                                // 不触发断线，这是 AOA 切换的正常过程
+                            }
                             
-                            // 延迟检查，避免因为临时USB信号问题导致的误断开
-                            scope.launch {
-                                delay(300) // 等待300ms
-                                
-                                // Token 门禁：如果这 300ms 内发生了新 connect，直接忽略旧 detach
-                                if (!isTokenActive(tokenAtDetach)) {
-                                    LogUtil.w(TAG, "Detach check ignored: stale token=$tokenAtDetach")
-                                    return@launch
-                                }
-                                
-                                // 设备门禁：如果 connectedDevice 已经变了，也忽略（使用稳定标识比对）
-                                if (!isSameDevice(detachedAtTime, connectedDevice)) {
-                                    LogUtil.w(TAG, "Detach check ignored: connectedDevice changed")
-                                    return@launch
-                                }
-                                
-                                // 再次检查设备是否真的断开（使用稳定标识比对）
-                                val stillExists = try {
-                                    val currentConnectedKey = getDeviceKey(connectedDevice)
-                                    currentConnectedKey == detachedKey && usbManager.deviceList.values.any { existingDevice ->
-                                        getDeviceKey(existingDevice) == detachedKey
+                            // 【修复 P1-3】情况2：在 REQUEST_AOA_PERMISSION 阶段，AOA 设备 detach 应触发连接失败
+                            currentPhase == AoaSessionPhase.REQUEST_AOA_PERMISSION && isAoaDevice -> {
+                                LogUtil.w(TAG, "AOA device detached during permission request (phase=$currentPhase)")
+                                val tokenAtDetach = session?.token ?: 0L
+                                if (isTokenActive(tokenAtDetach) && session != null) {
+                                    session.scope.launch {
+                                        disconnectInternal(tokenAtDetach, reason = "AOA_DEVICE_DETACHED_DURING_PERMISSION")
+                                        updateStatus(InnerConnectionStatus.DISCONNECTED)
+                                        currentConnectionCallback?.let { callback ->
+                                            handleConnectionError(InnerErrorCode.E253.description, callback, InnerErrorCode.E253.code)
+                                        }
                                     }
-                                } catch (_: Exception) {
-                                    false
                                 }
+                            }
+                            
+                            // 情况3：在 RUNNING 阶段，AOA 设备 detach 才是真正的断线
+                            currentPhase == AoaSessionPhase.RUNNING && isAoaDevice && isSameDevice(detached, connectedDevice) -> {
+                                val tokenAtDetach = session?.token ?: 0L
+                                LogUtil.w(TAG, "AOA device detached during RUNNING phase, starting delayed disconnect check (token: $tokenAtDetach, device: ${getDeviceDisplayKey(detached)})")
                                 
-                                if (!stillExists) {
-                                    LogUtil.d(TAG, "Device confirmed disconnected after delay, token=$tokenAtDetach, device=${getDeviceDisplayKey(detachedAtTime)}")
-                                    // disconnectInternal 现在是 suspend 函数，可以直接调用
-                                    disconnectInternal(tokenAtDetach, reason = "DETACHED")
-                                    updateStatus(InnerConnectionStatus.DISCONNECTED)
-                                } else {
-                                    LogUtil.d(TAG, "Device still exists, ignoring detach event (possible temporary signal issue), device=${getDeviceDisplayKey(detachedAtTime)}")
+                                // 延迟检查，避免因为临时USB信号问题导致的误断开
+                                // 使用 session.scope，确保 session 结束时协程会被取消
+                                session?.scope?.launch {
+                                    delay(300) // 等待300ms
+                                    
+                                    // Token 门禁：如果这 300ms 内发生了新 connect，直接忽略旧 detach
+                                    if (!isTokenActive(tokenAtDetach)) {
+                                        LogUtil.w(TAG, "Detach check ignored: stale token=$tokenAtDetach")
+                                        return@launch
+                                    }
+                                    
+                                    // 设备门禁：如果 connectedDevice 已经变了，也忽略（使用稳定标识比对）
+                                    if (!isSameDevice(detached, connectedDevice)) {
+                                        LogUtil.w(TAG, "Detach check ignored: connectedDevice changed")
+                                        return@launch
+                                    }
+                                    
+                                    // 再次检查设备是否真的断开（使用稳定标识比对）
+                                    val stillExists = try {
+                                        val detachedKey = getDeviceKey(detached)
+                                        usbManager.deviceList.values.any { existingDevice ->
+                                            getDeviceKey(existingDevice) == detachedKey
+                                        }
+                                    } catch (_: Exception) {
+                                        false
+                                    }
+                                    
+                                    if (!stillExists) {
+                                        LogUtil.d(TAG, "AOA device confirmed disconnected after delay, token=$tokenAtDetach, device=${getDeviceDisplayKey(detached)}")
+                                        // disconnectInternal 现在是 suspend 函数，可以直接调用
+                                        disconnectInternal(tokenAtDetach, reason = "AOA_DEVICE_DETACHED")
+                                        updateStatus(InnerConnectionStatus.DISCONNECTED)
+                                    } else {
+                                        LogUtil.d(TAG, "AOA device still exists, ignoring detach event (possible temporary signal issue), device=${getDeviceDisplayKey(detached)}")
+                                    }
                                 }
+                            }
+                            
+                            // 情况4：其他阶段的 detach，记录日志但不触发断线
+                            else -> {
+                                LogUtil.d(TAG, "Device detached but not in critical phase or not target device, ignoring (phase=$currentPhase, isAoaDevice=$isAoaDevice)")
                             }
                         }
                         
@@ -318,9 +496,10 @@ abstract class BaseUsbHostKernel(
                             // 使用稳定标识比对，避免对象引用不同导致的误判
                             if (isSameDevice(detached, pendingDevice)) {
                                 pendingDevice = null
-                                pendingPermissionOpToken = 0L
+                                // 【修复 P0-4】清除独立的 Device token
+                                pendingDevicePermissionToken = 0L
                                 // 清除权限广播去重记录
-                                lastProcessedPermission = null
+                                lastProcessedDevicePermission = null
                                 currentConnectionCallback?.let { callback ->
                                     handleConnectionError(InnerErrorCode.E253.description, callback, InnerErrorCode.E253.code)
                                 }
@@ -333,12 +512,214 @@ abstract class BaseUsbHostKernel(
         }
     }
 
+    // USB Accessory 权限请求广播接收器
+    protected val accessoryPermissionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            LogUtil.i(TAG, "=== accessoryPermissionReceiver received: action=${intent.action}, package=${intent.`package`} ===")
+            
+            // 接受系统标准 action
+            if ("android.hardware.usb.action.USB_PERMISSION" != intent.action) {
+                LogUtil.i(TAG, "accessoryPermissionReceiver: action mismatch, ignoring. Expected: android.hardware.usb.action.USB_PERMISSION, Got: ${intent.action}")
+                return
+            }
+            
+            LogUtil.i(TAG, "accessoryPermissionReceiver: action matched")
+
+            synchronized(this@BaseUsbHostKernel) {
+                try {
+                    // 【修复】使用 EXTRA_DEVICE 和 EXTRA_ACCESSORY 来识别请求类型
+                    val hasDevice = intent.hasExtra(UsbManager.EXTRA_DEVICE)
+                    val hasAccessory = intent.hasExtra(UsbManager.EXTRA_ACCESSORY)
+
+                    // 如果有 EXTRA_DEVICE，交给 permissionReceiver 处理
+                    if (hasDevice) {
+                        return
+                    }
+
+                    // 获取 EXTRA_ACCESSORY
+                    val accessory: UsbAccessory? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY, UsbAccessory::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY)
+                    }
+
+                    // 如果没有 EXTRA_ACCESSORY，忽略
+                    if (accessory == null) {
+                        return
+                    }
+
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    // 【修复 P0-4】使用独立的 Accessory token
+                    val token = pendingAccessoryPermissionToken
+
+                    // Token 门禁：不是当前这次 connect 的 permission，直接忽略
+                    if (!isTokenActive(token)) {
+                        LogUtil.w(TAG, "Accessory permission broadcast ignored: stale token=$token active=${currentOpToken()} accessory=${getAccessoryDisplayKey(accessory)}")
+                        return
+                    }
+
+                    // Accessory 门禁：Accessory 不匹配，忽略
+                    if (!isSameAccessory(accessory, pendingAccessory)) {
+                        LogUtil.w(TAG, "Accessory permission broadcast ignored: accessory mismatch expected=${getAccessoryDisplayKey(pendingAccessory)} got=${getAccessoryDisplayKey(accessory)}")
+                        return
+                    }
+
+                    // 【修复 P0-4】去重处理：使用独立的 Accessory 去重记录
+                    val accessoryKey = getAccessoryKey(accessory)
+                    val currentPermission = Pair(token, accessoryKey)
+                    if (lastProcessedAccessoryPermission == currentPermission) {
+                        LogUtil.w(TAG, "Ignoring duplicate accessory permission broadcast: token=$token accessoryKey=$accessoryKey")
+                        return
+                    }
+                    lastProcessedAccessoryPermission = currentPermission
+
+                    val callback = currentConnectionCallback
+                    pendingAccessory = null
+                    // 【修复 P0-4】清除独立的 Accessory token
+                    pendingAccessoryPermissionToken = 0L
+
+                    if (granted) {
+                        LogUtil.i(TAG, "=== USB accessory permission granted: ${getAccessoryDisplayKey(accessory)}, token=$token ===")
+                        if (callback != null) {
+                            val session = currentSession()
+                            LogUtil.i(TAG, "Launching onAccessoryPermissionGranted, session=${session?.token}, token=$token")
+                            session?.scope?.launch {
+                                if (!isTokenActive(token)) {
+                                    LogUtil.w(TAG, "onAccessoryPermissionGranted skipped: stale token=$token")
+                                    return@launch
+                                }
+                                LogUtil.i(TAG, "Acquiring connectMutex for onAccessoryPermissionGranted, token=$token")
+                                connectMutex.withLock {
+                                    LogUtil.i(TAG, "connectMutex acquired, calling onAccessoryPermissionGranted, token=$token")
+                                    onAccessoryPermissionGranted(accessory, callback)
+                                    LogUtil.i(TAG, "onAccessoryPermissionGranted completed, token=$token")
+                                }
+                            }
+                        } else {
+                            LogUtil.w(TAG, "Accessory permission granted but no callback available")
+                        }
+                    } else {
+                        LogUtil.d(TAG, "USB accessory permission denied by user: ${getAccessoryDisplayKey(accessory)}")
+                        callback?.let {
+                            handleConnectionError(InnerErrorCode.E252.description, it, InnerErrorCode.E252.code)
+                        }
+                    }
+                } catch (e: Exception) {
+                    LogUtil.e(TAG, "Error in accessoryPermissionReceiver: ${e.message}, exception: ${e.javaClass.simpleName}")
+                }
+            }
+        }
+    }
+
+    // USB Accessory 插拔广播接收器
+    protected val accessoryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            LogUtil.i(TAG, "=========onReceive Accessory========intent:${intent.action}")
+            when (intent.action) {
+                UsbManager.ACTION_USB_ACCESSORY_ATTACHED -> {
+                    val accessory: UsbAccessory? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY, UsbAccessory::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY)
+                    }
+                    accessory?.let {
+                        LogUtil.d(TAG, "USB accessory attached: ${getAccessoryDisplayKey(it)}")
+                        onAccessoryAttached(it)
+                    }
+                }
+
+                UsbManager.ACTION_USB_ACCESSORY_DETACHED -> {
+                    val accessory: UsbAccessory? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY, UsbAccessory::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY)
+                    }
+                    accessory?.let { detached ->
+                        LogUtil.d(TAG, "USB accessory detached: ${getAccessoryDisplayKey(detached)}")
+                        
+                        val session = currentSession()
+                        val currentPhase = session?.phase?.get() ?: AoaSessionPhase.IDLE
+                        
+                        LogUtil.d(TAG, "Accessory detach analysis: phase=$currentPhase")
+                        
+                        // 在 RUNNING 阶段，Accessory detach 才是真正的断线
+                        if (currentPhase == AoaSessionPhase.RUNNING && isSameAccessory(detached, connectedAccessory)) {
+                            val tokenAtDetach = session?.token ?: 0L
+                            LogUtil.w(TAG, "AOA accessory detached during RUNNING phase, starting delayed disconnect check (token: $tokenAtDetach, accessory: ${getAccessoryDisplayKey(detached)})")
+                            
+                            // 延迟检查，避免因为临时USB信号问题导致的误断开
+                            // 使用 session.scope，确保 session 结束时协程会被取消
+                            session?.scope?.launch {
+                                delay(300) // 等待300ms
+                                
+                                // Token 门禁：如果这 300ms 内发生了新 connect，直接忽略旧 detach
+                                if (!isTokenActive(tokenAtDetach)) {
+                                    LogUtil.w(TAG, "Accessory detach check ignored: stale token=$tokenAtDetach")
+                                    return@launch
+                                }
+                                
+                                // Accessory 门禁：如果 connectedAccessory 已经变了，也忽略
+                                if (!isSameAccessory(detached, connectedAccessory)) {
+                                    LogUtil.w(TAG, "Accessory detach check ignored: connectedAccessory changed")
+                                    return@launch
+                                }
+                                
+                                // 再次检查 Accessory 是否真的断开
+                                val stillExists = try {
+                                    val detachedKey = getAccessoryKey(detached)
+                                    usbManager.accessoryList.any { existingAccessory ->
+                                        getAccessoryKey(existingAccessory) == detachedKey
+                                    }
+                                } catch (_: Exception) {
+                                    false
+                                }
+                                
+                                if (!stillExists) {
+                                    LogUtil.d(TAG, "AOA accessory confirmed disconnected after delay, token=$tokenAtDetach, accessory=${getAccessoryDisplayKey(detached)}")
+                                    disconnectInternal(tokenAtDetach, reason = "AOA_ACCESSORY_DETACHED")
+                                    updateStatus(InnerConnectionStatus.DISCONNECTED)
+                                } else {
+                                    LogUtil.d(TAG, "AOA accessory still exists, ignoring detach event (possible temporary signal issue), accessory=${getAccessoryDisplayKey(detached)}")
+                                }
+                            }
+                        }
+                        
+                        // 处理 pendingAccessory 的 detach（正在请求权限时 Accessory 断开）
+                        synchronized(this@BaseUsbHostKernel) {
+                            if (isSameAccessory(detached, pendingAccessory)) {
+                                pendingAccessory = null
+                                // 【修复 P0-4】清除独立的 Accessory token
+                                pendingAccessoryPermissionToken = 0L
+                                lastProcessedAccessoryPermission = null
+                                currentConnectionCallback?.let { callback ->
+                                    handleConnectionError(InnerErrorCode.E253.description, callback, InnerErrorCode.E253.code)
+                                }
+                            }
+                        }
+                        onAccessoryDetached(detached)
+                    }
+                }
+            }
+        }
+    }
+
     init {
-        // Host端不需要注册Accessory权限接收器，因为Host端使用设备权限
-        // 只注册设备权限请求广播接收器
+        // 注册设备权限请求广播接收器
         // 注意：使用 NOT_EXPORTED 更安全，因为权限广播的 Intent 已设置 setPackage(context.packageName)，
         // 只有本应用能收到此广播，不需要导出给其他应用
-        val permissionFilter = IntentFilter(permissionAction)
+        // 注意：系统可能会使用默认的 android.hardware.usb.action.USB_PERMISSION action
+        // 而不是我们在 PendingIntent 中设置的自定义 action，所以需要同时监听两个 action
+        val permissionFilter = IntentFilter().apply {
+            // 监听自定义 action（如果系统使用我们设置的 action）
+            addAction(permissionAction)
+            // 同时监听系统默认的 USB 权限广播 action
+            addAction("android.hardware.usb.action.USB_PERMISSION")
+        }
+        LogUtil.i(TAG, "=== Registering USB device permission receiver, permissionAction=$permissionAction ===")
+        LogUtil.i(TAG, "=== IntentFilter: actions=[$permissionAction, android.hardware.usb.action.USB_PERMISSION] ===")
         try {
             ContextCompat.registerReceiver(
                 context,
@@ -346,13 +727,73 @@ abstract class BaseUsbHostKernel(
                 permissionFilter,
                 ContextCompat.RECEIVER_NOT_EXPORTED
             )
-            LogUtil.d(TAG, "USB device permission receiver registered")
+            LogUtil.i(TAG, "=== USB device permission receiver registered successfully ===")
         } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to register USB device permission receiver: ${e.message}")
+            LogUtil.e(TAG, "Failed to register USB device permission receiver: ${e.message}, exception: ${e.javaClass.simpleName}")
+            e.printStackTrace()
+        }
+
+        // 注册 Accessory 权限请求广播接收器（使用相同的 permissionAction）
+        try {
+            ContextCompat.registerReceiver(
+                context,
+                accessoryPermissionReceiver,
+                permissionFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            LogUtil.d(TAG, "USB accessory permission receiver registered")
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to register USB accessory permission receiver: ${e.message}")
+        }
+        
+        // 【诊断】添加诊断 receiver，捕获所有可能的 USB 权限广播
+        val diagnosticFilter = IntentFilter().apply {
+            addAction("android.hardware.usb.action.USB_PERMISSION")
+            addAction(permissionAction)
+            // 也捕获其他可能的 action
+            addAction("com.android.systemui.usb.USB_PERMISSION")
+        }
+        val diagnosticReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                LogUtil.i(TAG, "=== DIAGNOSTIC RECEIVER: Received broadcast ===")
+                LogUtil.i(TAG, "=== DIAGNOSTIC: action=${intent.action}, package=${intent.`package`}, data=${intent.data} ===")
+                LogUtil.i(TAG, "=== DIAGNOSTIC: Intent extras keys=${intent.extras?.keySet()} ===")
+                if (intent.hasExtra(UsbManager.EXTRA_DEVICE)) {
+                    val device = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    LogUtil.i(TAG, "=== DIAGNOSTIC: Device=${device?.deviceName}, granted=$granted ===")
+                }
+                if (intent.hasExtra(UsbManager.EXTRA_ACCESSORY)) {
+                    val accessory = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY, UsbAccessory::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY)
+                    }
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    LogUtil.i(TAG, "=== DIAGNOSTIC: Accessory=${accessory?.manufacturer} ${accessory?.model}, granted=$granted ===")
+                }
+            }
+        }
+        try {
+            ContextCompat.registerReceiver(
+                context,
+                diagnosticReceiver,
+                diagnosticFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            LogUtil.i(TAG, "=== Diagnostic receiver registered successfully ===")
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Failed to register diagnostic receiver: ${e.message}")
         }
 
         // 注册USB设备插拔广播接收器
-        val filter = IntentFilter().apply {
+        val deviceFilter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
         }
@@ -360,12 +801,29 @@ abstract class BaseUsbHostKernel(
             ContextCompat.registerReceiver(
                 context,
                 deviceReceiver,
-                filter,
+                deviceFilter,
                 ContextCompat.RECEIVER_EXPORTED
             )
-            LogUtil.d(TAG, "USB device receiver registered")
+            LogUtil.d(TAG, "USB device receiver registered successfully (actions: ${deviceFilter.actionsIterator().asSequence().joinToString()})")
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to register USB device receiver: ${e.message}")
+        }
+
+        // 注册USB Accessory插拔广播接收器（AOA设备可能以Accessory形式出现）
+        val accessoryFilter = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_ACCESSORY_ATTACHED)
+            addAction(UsbManager.ACTION_USB_ACCESSORY_DETACHED)
+        }
+        try {
+            ContextCompat.registerReceiver(
+                context,
+                accessoryReceiver,
+                accessoryFilter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            LogUtil.d(TAG, "USB accessory receiver registered successfully (actions: ${accessoryFilter.actionsIterator().asSequence().joinToString()})")
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to register USB accessory receiver: ${e.message}")
         }
     }
 
@@ -373,6 +831,11 @@ abstract class BaseUsbHostKernel(
      * 权限授予后的回调（由子类实现）
      */
     protected abstract suspend fun onPermissionGranted(device: UsbDevice, callback: ConnectionCallback)
+
+    /**
+     * Accessory 权限授予后的回调（由子类实现）
+     */
+    protected abstract suspend fun onAccessoryPermissionGranted(accessory: UsbAccessory, callback: ConnectionCallback)
 
     /**
      * 设备连接时的回调（由子类实现）
@@ -385,6 +848,16 @@ abstract class BaseUsbHostKernel(
     protected open fun onDeviceDetached(device: UsbDevice) {}
 
     /**
+     * Accessory 连接时的回调（由子类实现）
+     */
+    protected open fun onAccessoryAttached(accessory: UsbAccessory) {}
+
+    /**
+     * Accessory 断开时的回调（由子类实现）
+     */
+    protected open fun onAccessoryDetached(accessory: UsbAccessory) {}
+
+    /**
      * 为指定设备创建独立的 PendingIntent
      * 
      * 使用设备名称的哈希码作为请求码，确保每个设备有独立的 PendingIntent
@@ -392,25 +865,37 @@ abstract class BaseUsbHostKernel(
      * 
      * 注意：
      * - 不依赖 Intent 中的 extras 做校验（系统回调时可能不会保留自定义 extras）
-     * - 设备校验依赖进程内的 token（pendingPermissionOpToken）和稳定标识比对（isSameDevice）
+     * - 设备校验依赖进程内的 token（pendingDevicePermissionToken）和稳定标识比对（isSameDevice）
      * - 系统回调时会自动填充 UsbManager.EXTRA_DEVICE，无需手动添加
+     * 
+     * 【修复】移除 data URI，使用系统标准 action
+     * - 原因：Intent 有 data 时，IntentFilter 必须声明对应的 data scheme，否则无法匹配
+     * - 使用系统标准 action 确保广播能被接收
+     * - 通过 EXTRA_DEVICE 和 EXTRA_ACCESSORY 区分请求类型
      */
     private fun createDevicePendingIntent(device: UsbDevice): PendingIntent {
-        // 使用设备名称的哈希码作为请求码（设备名称是唯一的）
-        val requestCode = device.deviceName.hashCode() and 0x7FFFFFFF // 确保是正数
+        val requestCode = device.deviceName.hashCode() and 0x7FFFFFFF
+        val deviceKey = getDeviceKey(device)
         
-        return PendingIntent.getBroadcast(
+        LogUtil.i(TAG, "createDevicePendingIntent: device=${device.deviceName}, requestCode=$requestCode, deviceKey=$deviceKey")
+        
+        // 【修复】使用系统标准 action，不添加 data URI
+        val intent = Intent("android.hardware.usb.action.USB_PERMISSION").apply {
+            setPackage(context.packageName)
+            // 不添加 data，避免 IntentFilter 匹配失败
+        }
+        
+        LogUtil.i(TAG, "createDevicePendingIntent: Intent action=${intent.action}, package=${intent.`package`}")
+        
+        val pendingIntent = PendingIntent.getBroadcast(
             context,
             requestCode,
-            Intent(permissionAction).apply {
-                setPackage(context.packageName)
-                // 注意：不在这里 putExtra(EXTRA_DEVICE)，因为：
-                // 1. 系统回调时会自动填充 EXTRA_DEVICE
-                // 2. 自定义 extras 可能不会被系统保留（很多 ROM/实现不会回传原 intent extras）
-                // 3. 设备校验依赖进程内的 token 和稳定标识比对，更可靠
-            },
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
+        
+        LogUtil.i(TAG, "createDevicePendingIntent: PendingIntent created successfully, requestCode=$requestCode")
+        return pendingIntent
     }
 
     /**
@@ -423,64 +908,160 @@ abstract class BaseUsbHostKernel(
      */
     protected fun requestPermission(device: UsbDevice, connectionCallback: ConnectionCallback) {
         synchronized(this) {
+            // 【修复 P0-4】开始新的 permission 流程时清掉 Device 去重记录
+            lastProcessedDevicePermission = null
+            
             pendingDevice = device
-            // 绑定当前操作 token，用于权限广播时验证
-            // 如果连接已切换（token 已变化），旧的 permission 广播会被忽略
-            pendingPermissionOpToken = activeOpToken
+            // 【修复 P0-4】绑定当前操作 token 到独立的 Device token
+            pendingDevicePermissionToken = currentOpToken()
             val deviceKey = getDeviceKey(device)
-            LogUtil.d(TAG, "Requesting permission for device: ${getDeviceDisplayKey(device)}, key=$deviceKey, binding token: $pendingPermissionOpToken")
-            // currentConnectionCallback 已在 AsyncServiceKernel.connect() 中设置，无需重复赋值
+            LogUtil.i(TAG, "=== Requesting permission for device: ${getDeviceDisplayKey(device)}, key=$deviceKey, binding token: $pendingDevicePermissionToken ===")
 
             try {
-                // 为每个设备创建独立的 PendingIntent
+                LogUtil.i(TAG, "Creating device PendingIntent, token=$pendingDevicePermissionToken")
                 val devicePendingIntent = createDevicePendingIntent(device)
+                LogUtil.i(TAG, "Device PendingIntent created, calling usbManager.requestPermission, token=$pendingDevicePermissionToken")
                 usbManager.requestPermission(device, devicePendingIntent)
-                LogUtil.d(TAG, "USB permission request sent for device: ${getDeviceDisplayKey(device)}, key=$deviceKey, requestCode: ${device.deviceName.hashCode() and 0x7FFFFFFF}, token: $pendingPermissionOpToken")
+                LogUtil.i(TAG, "=== USB permission request sent for device: ${getDeviceDisplayKey(device)}, key=$deviceKey, requestCode: ${device.deviceName.hashCode() and 0x7FFFFFFF}, token: $pendingDevicePermissionToken ===")
+                
+                // 【修复】启动权限超时检查（30秒）
+                val permissionToken = pendingDevicePermissionToken
+                val session = currentSession()
+                session?.scope?.launch {
+                    delay(30000) // 30秒超时
+                    
+                    // 检查是否仍在等待权限响应
+                    synchronized(this@BaseUsbHostKernel) {
+                        if (pendingDevicePermissionToken == permissionToken && 
+                            pendingDevice != null && 
+                            isSameDevice(pendingDevice, device)) {
+                            LogUtil.w(TAG, "=== Permission request TIMEOUT after 30s, device: ${getDeviceDisplayKey(device)}, token=$permissionToken ===")
+                            
+                            // 清理状态
+                            pendingDevice = null
+                            pendingDevicePermissionToken = 0L
+                            lastProcessedDevicePermission = null
+                            
+                            // 报告超时错误
+                            handleConnectionError(
+                                "USB权限请求超时（30秒无响应）",
+                                connectionCallback,
+                                InnerErrorCode.E254.code
+                            )
+                        }
+                    }
+                }
             } catch (e: Exception) {
-                LogUtil.e(TAG, "Failed to request USB permission: ${e.message}")
+                LogUtil.e(TAG, "Failed to request USB permission: ${e.message}, exception: ${e.javaClass.simpleName}")
+                e.printStackTrace()
                 pendingDevice = null
-                pendingPermissionOpToken = 0L
+                // 【修复 P0-4】清除独立的 Device token
+                pendingDevicePermissionToken = 0L
                 handleConnectionError("USB permission request failed: ${e.message}", connectionCallback, InnerErrorCode.E252.code)
             }
         }
     }
 
     /**
-     * 断开连接（内部方法）
-     * 默认使用当前 token，避免旧流程断开新连接
+     * 为指定 Accessory 创建独立的 PendingIntent
+     * 
+     * 使用 stableKey（不包含 serial）确保权限前后 key 不变
+     * 
+     * 注意：
+     * - Accessory 校验依赖进程内的 token（pendingAccessoryPermissionToken）和稳定标识比对（isSameAccessory）
+     * - 系统回调时会自动填充 UsbManager.EXTRA_ACCESSORY，无需手动添加
+     * 
+     * 【修复】移除 data URI，使用系统标准 action
+     * - 原因：Intent 有 data 时，IntentFilter 必须声明对应的 data scheme，否则无法匹配
+     * - 使用系统标准 action 确保广播能被接收
+     * - 通过 EXTRA_DEVICE 和 EXTRA_ACCESSORY 区分请求类型
      */
-    override fun disconnectInternal() {
-        // 默认用当前 token，在协程中执行断开操作
-        scope.launch {
-            disconnectInternal(currentOpToken(), reason = "disconnectInternal()")
+    private fun createAccessoryPendingIntent(accessory: UsbAccessory): PendingIntent {
+        val stableKey = getAccessoryStableKey(accessory) // 不要用 serial
+        val requestCode = stableKey.hashCode() and 0x7FFFFFFF // 确保是正数
+
+        LogUtil.d(TAG, "Creating Accessory PendingIntent: stableKey=$stableKey, requestCode=$requestCode")
+
+        // 【修复】使用系统标准 action，不添加 data URI
+        val intent = Intent("android.hardware.usb.action.USB_PERMISSION").apply {
+            setPackage(context.packageName)
+            // 不添加 data，避免 IntentFilter 匹配失败
+        }
+
+        return try {
+            PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            )
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to create PendingIntent: ${e.message}, requestCode=$requestCode")
+            throw e
+        }
+    }
+
+    /**
+     * 请求 Accessory 权限
+     * 
+     * 为每个 Accessory 动态创建独立的 PendingIntent，避免使用同一个 PendingIntent
+     * 导致获取到旧 Accessory 的问题
+     * 
+     * 重要：绑定当前操作 token，避免旧的 permission 广播推进新连接
+     */
+    protected fun requestAccessoryPermission(accessory: UsbAccessory, connectionCallback: ConnectionCallback) {
+        synchronized(this) {
+            // 【修复 P0-4】开始新的 permission 流程时清掉 Accessory 去重记录
+            lastProcessedAccessoryPermission = null
+            
+            pendingAccessory = accessory
+            // 【修复 P0-4】绑定当前操作 token 到独立的 Accessory token
+            pendingAccessoryPermissionToken = currentOpToken()
+            val accessoryKey = getAccessoryKey(accessory)
+            LogUtil.d(TAG, "Requesting permission for accessory: ${getAccessoryDisplayKey(accessory)}, key=$accessoryKey, binding token: $pendingAccessoryPermissionToken")
+
+            try {
+                val accessoryPendingIntent = createAccessoryPendingIntent(accessory)
+                usbManager.requestPermission(accessory, accessoryPendingIntent)
+                LogUtil.d(TAG, "USB accessory permission request sent for: ${getAccessoryDisplayKey(accessory)}, key=$accessoryKey, requestCode: ${accessoryKey.hashCode() and 0x7FFFFFFF}, token: $pendingAccessoryPermissionToken")
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Failed to request USB accessory permission: ${e.message}")
+                pendingAccessory = null
+                // 【修复 P0-4】清除独立的 Accessory token
+                pendingAccessoryPermissionToken = 0L
+                handleConnectionError("USB accessory permission request failed: ${e.message}", connectionCallback, InnerErrorCode.E252.code)
+            }
         }
     }
 
     /**
      * 断开连接（内部实现，带 token 和 reason）
      * 
-     * 重要：先完成资源清理，再清零 token，避免断开流程被自己的门禁拦截
+     * 重要：先完成资源清理，再结束 session，避免断开流程被自己的门禁拦截
      * 使用 disconnectMutex 防止并发断开
      * 
-     * @param opToken 操作令牌，如果不活跃则忽略断开操作
+     * @param token 会话 token，如果不活跃则忽略断开操作
      * @param reason 断开原因（用于日志）
      */
-    protected suspend fun disconnectInternal(opToken: Long, reason: String) {
+    override suspend fun disconnectInternal(token: Long, reason: String) {
         // 使用 disconnectMutex 防止并发断开
         disconnectMutex.withLock {
-            // Token 校验：如果 token 不活跃，说明连接已切换，忽略旧操作
-            if (!isTokenActive(opToken)) {
-                LogUtil.w(TAG, "disconnectInternal ignored: stale token=$opToken active=$activeOpToken reason=$reason")
-                return@withLock
+            val isTokenActive = isTokenActive(token)
+            
+            // Token 校验：如果 token 不活跃，说明连接已切换
+            // 但仍然需要清理资源（如果资源还存在），但跳过 session 相关操作
+            if (!isTokenActive) {
+                LogUtil.w(TAG, "disconnectInternal: stale token=$token active=${currentOpToken()} reason=$reason, but will still cleanup resources")
+            } else {
+                LogUtil.d(TAG, "=== USB Host Disconnect Internal Started token=$token reason=$reason ===")
             }
             
-            LogUtil.d(TAG, "=== USB Host Disconnect Internal Started token=$opToken reason=$reason ===")
+            // 重置错误处理器的连接时间
+            cableAoaErrorHandler.resetConnectionTime()
             
             try {
-                // 停止数据接收
-                LogUtil.d(TAG, "Stopping data receive job...")
-                dataReceiveJob?.cancel()
-                dataReceiveJob = null
+                // 注意：dataReceiveJob 的清理已经在 BaseUsbAoaKernel.cleanupCommonResources() 中完成
+                // 这里不需要重复清理，只需要清理 USB Host 特有的资源
 
                 // 断开设备连接
                 LogUtil.d(TAG, "Releasing USB interface and connection...")
@@ -512,19 +1093,48 @@ abstract class BaseUsbHostKernel(
                     LogUtil.d(TAG, "Disconnected from USB device: ${getDeviceDisplayKey(device)}")
                 }
                 connectedDevice = null
+                originalDevice = null
+
+                // 清理 Accessory 资源
+                accessoryFileDescriptor?.let { fd ->
+                    try {
+                        fd.close()
+                        LogUtil.d(TAG, "USB accessory file descriptor closed successfully")
+                    } catch (e: Exception) {
+                        LogUtil.w(TAG, "Error closing USB accessory file descriptor: ${e.message}")
+                    }
+                }
+                accessoryFileDescriptor = null
+                
+                connectedAccessory?.let { accessory ->
+                    LogUtil.d(TAG, "Disconnected from USB accessory: ${getAccessoryDisplayKey(accessory)}")
+                }
+                connectedAccessory = null
 
                 LogUtil.d(TAG, "AOA Host disconnected successfully")
                 
-                // 重要：先完成资源清理，再清零 token，避免断开流程被自己的门禁拦截
-                activeOpToken = 0L
+                // 【修复】更新状态为 DISCONNECTED，确保下次连接时不会被 connectToAoaDeviceDirectly 的幂等门禁拦截
+                updateStatus(InnerConnectionStatus.DISCONNECTED)
+                
+                // 只有在 token 活跃时才结束 session（避免影响新连接）
+                if (isTokenActive) {
+                    // 结束 session（会自动关闭 IO 资源和取消所有子任务）
+                    endSession(token, reason)
+                } else {
+                    LogUtil.d(TAG, "Skipping endSession for stale token=$token")
+                }
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Error during Host disconnect: ${e.message}")
                 e.printStackTrace()
-                // 即使出错也要清零 token
-                activeOpToken = 0L
+                // 只有在 token 活跃时才结束 session
+                if (isTokenActive) {
+                    endSession(token, "disconnect error: ${e.message}")
+                }
             }
             
-            LogUtil.d(TAG, "=== USB Host Disconnect Internal Finished ===")
+            if (isTokenActive) {
+                LogUtil.d(TAG, "=== USB Host Disconnect Internal Finished ===")
+            }
         }
     }
 
@@ -538,7 +1148,7 @@ abstract class BaseUsbHostKernel(
      */
     override suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         // 保存当前 token，用于发送时验证
-        val currentToken = activeOpToken
+        val currentToken = currentOpToken()
         
         // Token 校验：如果 token 无效，说明连接已断开或切换，直接失败
         if (!isTokenActive(currentToken)) {
@@ -552,7 +1162,7 @@ abstract class BaseUsbHostKernel(
         usbSendMutex.withLock {
             // 再次检查 token，确保连接未切换
             if (!isTokenActive(currentToken)) {
-                LogUtil.w(TAG, "Send data failed: operation token changed during lock acquisition (old: $currentToken, current: $activeOpToken)")
+                LogUtil.w(TAG, "Send data failed: operation token changed during lock acquisition (old: $currentToken, current: ${currentOpToken()})")
                 callback?.onError(InnerErrorCode.E304.code, "Connection switched during send")
                 return@withLock
             }
@@ -609,7 +1219,7 @@ abstract class BaseUsbHostKernel(
      * 
      * 执行顺序：
      * 1. 断开连接：取消所有协程、停止数据接收、释放 USB 接口和连接
-     * 2. 清理待处理的状态（pendingDevice、pendingPermissionOpToken 等）
+     * 2. 清理待处理的状态（pendingDevice、pendingAccessory、pendingDevicePermissionToken、pendingAccessoryPermissionToken 等）
      * 3. 取消注册接收器（unregisterReceiver）：避免广播回调落到已释放对象
      */
     override fun release() {
@@ -625,10 +1235,8 @@ abstract class BaseUsbHostKernel(
                 // 直接执行断开逻辑（同步方式，不使用 scope.launch）
                 // 这样可以确保断开操作在 release 中完成
                 try {
-                    // 停止数据接收
-                    LogUtil.d(TAG, "Stopping data receive job...")
-                    dataReceiveJob?.cancel()
-                    dataReceiveJob = null
+                    // 注意：dataReceiveJob 的清理已经在 BaseUsbAoaKernel.cleanupCommonResources() 中完成
+                    // 这里不需要重复清理，只需要清理 USB Host 特有的资源
 
                     // 断开设备连接
                     LogUtil.d(TAG, "Releasing USB interface and connection...")
@@ -660,16 +1268,12 @@ abstract class BaseUsbHostKernel(
                         LogUtil.d(TAG, "Disconnected from USB device: ${getDeviceDisplayKey(device)}")
                     }
                     connectedDevice = null
-                    
-                    // 清零 token
-                    activeOpToken = 0L
+                    originalDevice = null
                     
                     LogUtil.d(TAG, "AOA Host disconnected successfully in release")
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Error during disconnect in release: ${e.message}")
                     e.printStackTrace()
-                    // 即使出错也要清理
-                    activeOpToken = 0L
                 }
             }
             
@@ -678,14 +1282,21 @@ abstract class BaseUsbHostKernel(
             LogUtil.e(TAG, "Error during disconnect in release: ${e.message}")
         }
         
-        // 2. 清理待处理的状态
+        // 2. 清理公共资源（包括 session）
+        cleanupCommonResources()
+        
+        // 3. 清理待处理的状态
         synchronized(this) {
             pendingDevice = null
-            pendingPermissionOpToken = 0L
-            lastProcessedPermission = null
+            pendingAccessory = null
+            // 【修复 P0-4】清除所有独立的 token
+            pendingDevicePermissionToken = 0L
+            pendingAccessoryPermissionToken = 0L
+            lastProcessedDevicePermission = null
+            lastProcessedAccessoryPermission = null
         }
         
-        // 3. 再 unregisterReceiver（避免广播回调落到已释放对象）
+        // 4. 再 unregisterReceiver（避免广播回调落到已释放对象）
         // 注意：即使 disconnect() 已经执行，仍可能有延迟的广播在途中
         // 先 unregisterReceiver 可以确保后续的广播不会被处理
         try {
@@ -695,11 +1306,27 @@ abstract class BaseUsbHostKernel(
             LogUtil.e(TAG, "Error unregistering USB device permission receiver: ${e.message}")
         }
 
+        // 【修复 P0】注销 Accessory 权限广播接收器
+        try {
+            context.unregisterReceiver(accessoryPermissionReceiver)
+            LogUtil.d(TAG, "USB accessory permission receiver unregistered")
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Error unregistering USB accessory permission receiver: ${e.message}")
+        }
+
         try {
             context.unregisterReceiver(deviceReceiver)
             LogUtil.d(TAG, "USB device receiver unregistered")
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error unregistering USB device receiver: ${e.message}")
+        }
+
+        // 【修复 P0】注销 Accessory 插拔广播接收器
+        try {
+            context.unregisterReceiver(accessoryReceiver)
+            LogUtil.d(TAG, "USB accessory receiver unregistered")
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Error unregistering USB accessory receiver: ${e.message}")
         }
         
         LogUtil.d(TAG, "=== USB Host Release Finished ===")

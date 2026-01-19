@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- USB Accessory 过滤器配置 -->
+    <!-- 必须与 UsbStandardProtocol.UsbStandardInfo 的默认值一致 -->
+    <usb-accessory
+        manufacturer="SUNMI"
+        model="TAPLINK_SDK"
+        version="1.0" />
+</resources>

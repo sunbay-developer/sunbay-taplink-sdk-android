@@ -304,7 +304,9 @@ class LanClientKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
-        launchInScope {
+        // 取消旧连接任务，避免并发连接
+        connectJob?.cancel()
+        connectJob = launchInScope {
             executeConnectionOperation("CONNECT", connectionCallback) { operationId ->
                 try {
                     val lanResult = parseResult as ProtocolParseResult.LanProtocol
