@@ -50,9 +50,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.usb.serial.android)
     implementation(fileTree("libs") { include("*.jar") })
-    // TODO: 添加 mDNS 依赖或使用 Android NSD API
-    // implementation(libs.jmdns)
-//    embed(libs.sunmiprotocolsdk)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
