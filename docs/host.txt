@@ -1,0 +1,157 @@
+--------- beginning of main
+--------- beginning of system
+2026-01-19 14:15:31.594 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (AsyncServiceKernel.kt:137)#InvokeSuspend ] Sending data via SimplifiedAoaHost: traceId=test_1768803331590, dataSize=36 bytes
+2026-01-19 14:15:31.597 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:275)#PerformSendData ] 📤 [Host] Sending 36 bytes
+2026-01-19 14:15:31.598 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:276)#PerformSendData ]   Hex: 48656C6C6F2066726F6D20486F737420546573742061742031343A31353A33312E353632
+2026-01-19 14:15:31.598 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:277)#PerformSendData ]   Text: Hello from Host Test at 14:15:31.562
+2026-01-19 14:15:31.601 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:284)#PerformSendData ] ✅ Data sent successfully: 36 bytes
+2026-01-19 14:19:28.459 6566  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1051)#OnReceive ] Device detached: /dev/bus/usb/001/088 (VID=0x18D1, PID=0x2D01)
+2026-01-19 14:19:28.461 6566  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaHostKernel.kt:1055)#OnReceive ] Current device detached, disconnecting
+2026-01-19 14:19:28.466 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (AsyncServiceKernel.kt:167)#Disconnect ] Disconnecting SimplifiedAoaHost
+2026-01-19 14:19:28.474 6566  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:204)#PerformDisconnect ] === Disconnect requested, current state: CONNECTED ===
+2026-01-19 14:19:28.476 6566  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:219)#PerformDisconnect ] Starting disconnect from state: CONNECTED
+2026-01-19 14:19:28.477 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:552)#CleanupResources ] Cleaning up resources...
+2026-01-19 14:19:28.480 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:580)#CleanupResources ] Receive job stopped successfully
+2026-01-19 14:19:28.483 6566  HexFrameBuffer  com....taplink.sdk.demo  D  [ (HexFrameBuffer.kt:99)#Clear ] Buffer cleared
+2026-01-19 14:19:28.484 6566  HexFrameBuffer  com....taplink.sdk.demo  D  [ (HexFrameBuffer.kt:129)#Stop ] Buffer stopped
+2026-01-19 14:19:28.488 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:591)#CleanupResources ] Interface released
+2026-01-19 14:19:28.488 6566  UsbDev...ionJNI com....taplink.sdk.demo  D  close
+2026-01-19 14:19:28.490 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:601)#CleanupResources ] Connection closed
+2026-01-19 14:19:28.491 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:607)#CleanupResources ] Resources cleaned up
+2026-01-19 14:19:28.492 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTED -> DISCONNECTED
+2026-01-19 14:19:28.510 6566  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:239)#PerformDisconnect ] === Disconnect completed ===
+2026-01-19 14:19:28.511 6566  Simpli...Kernel com....taplink.sdk.demo  D  [ (AsyncServiceKernel.kt:191)#Disconnect ] SimplifiedAoaHost disconnected successfully
+2026-01-19 14:19:29.934 6566  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1032)#OnReceive ] Device attached: /dev/bus/usb/001/090 (VID=0x0E8D, PID=0x201C)
+2026-01-19 14:19:38.877 1397  AppAut...rnalV2 system_server            E  debug status,allow install com.sunmi.tapro.taplink.sdk.demo
+2026-01-19 14:20:08.234 700   Buffer...eDebug surfaceflinger           E  [ActivityRecord{847c076 u0 com.sunmi.tapro.taplink.sdk.demo/.MainActivity#918](this:0xb4000076f5387bf8,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'ActivityRecord{847c076 u0 com.sunmi.tapro.taplink.sdk.demo/.MainActivity#918'
+2026-01-19 14:20:08.263 700   Buffer...eDebug surfaceflinger           E  [2676e02 Splash Screen com.sunmi.tapro.taplink.sdk.demo#919](this:0xb4000076f53820d8,id:-1,api:0,p:-1,c:-1) id info cannot be read from '2676e02 Splash Screen com.sunmi.tapro.taplink.sdk.demo#919'
+2026-01-19 14:20:08.273 700   Buffer...eDebug surfaceflinger           E  [Splash Screen com.sunmi.tapro.taplink.sdk.demo#920](this:0xb4000076f536e1e8,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Splash Screen com.sunmi.tapro.taplink.sdk.demo#920'
+2026-01-19 14:20:08.312 700   Buffer...eDebug surfaceflinger           E  [7b8e711 ActivityRecordInputSink com.sunmi.tapro.taplink.sdk.demo/.MainActivity#922](this:0xb4000076f53acc48,id:-1,api:0,p:-1,c:-1) id info cannot be read from '7b8e711 ActivityRecordInputSink com.sunmi.tapro.taplink.sdk.demo/.MainActivity#922'
+---------------------------- PROCESS STARTED (6863) for package com.sunmi.tapro.taplink.sdk.demo ----------------------------
+2026-01-19 14:20:08.845 6863  nativeloader    com....taplink.sdk.demo  D  Configuring clns-6 for other apk /data/app/~~BejbozYip43M2BE-Zhhptw==/com.sunmi.tapro.taplink.sdk.demo-b3hZWm_Ch3sOwn6PVBahbw==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~BejbozYip43M2BE-Zhhptw==/com.sunmi.tapro.taplink.sdk.demo-b3hZWm_Ch3sOwn6PVBahbw==/lib/arm64, permitted_path=/data:/mnt/expand:/data/user/0/com.sunmi.tapro.taplink.sdk.demo
+2026-01-19 14:20:08.878 6863  Graphi...onment com....taplink.sdk.demo  V  Currently set values for:
+2026-01-19 14:20:08.878 6863  Graphi...onment com....taplink.sdk.demo  V    angle_gl_driver_selection_pkgs=[]
+2026-01-19 14:20:08.878 6863  Graphi...onment com....taplink.sdk.demo  V    angle_gl_driver_selection_values=[]
+2026-01-19 14:20:08.879 6863  Graphi...onment com....taplink.sdk.demo  V  ANGLE GameManagerService for com.sunmi.tapro.taplink.sdk.demo: false
+2026-01-19 14:20:08.880 6863  Graphi...onment com....taplink.sdk.demo  V  com.sunmi.tapro.taplink.sdk.demo is not listed in per-application setting
+2026-01-19 14:20:08.880 6863  Graphi...onment com....taplink.sdk.demo  V  Neither updatable production driver nor prerelease driver is supported.
+2026-01-19 14:20:08.893 6863  LoadedApk       com....taplink.sdk.demo  I  No resource references to update in package com.sunmi
+2026-01-19 14:20:08.903 6863  Compat...porter com....taplink.sdk.demo  D  Compat change id reported: 183155436; UID 10143; state: ENABLED
+2026-01-19 14:20:08.930 6863  Mbrain...erImpl com....taplink.sdk.demo  D  getService failed
+2026-01-19 14:20:08.991 6863  M-ProMotion     com....taplink.sdk.demo  I  M-ProMotion is disabled
+2026-01-19 14:20:09.118 6863  AppCom...legate com....taplink.sdk.demo  D  Checking for metadata for AppLocalesMetadataHolderService : Service not found
+2026-01-19 14:20:09.409 6863  aplink.sdk.demo com....taplink.sdk.demo  W  Accessing hidden method Landroid/view/ViewGroup;->makeOptionalFitsSystemWindows()V (unsupported, reflection, allowed)
+2026-01-19 14:20:09.421 6863  Compat...porter com....taplink.sdk.demo  D  Compat change id reported: 210923482; UID 10143; state: ENABLED
+2026-01-19 14:20:09.677 6863  SurfaceFactory  com....taplink.sdk.demo  I  [static] sSurfaceFactory = com.mediatek.view.impl.SurfaceFactoryImpl@40ccd2e
+2026-01-19 14:20:09.677 6863  PowerHalWrapper com....taplink.sdk.demo  I  PowerHalWrapper.getInstance 
+2026-01-19 14:20:09.683 6863  Compat...porter com....taplink.sdk.demo  D  Compat change id reported: 237531167; UID 10143; state: DISABLED
+2026-01-19 14:20:09.692 6863  OpenGLRenderer  com....taplink.sdk.demo  W  Unknown dataspace 0
+2026-01-19 14:20:09.699 6863  VRI[Ma...ivity] com....taplink.sdk.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-19 14:20:09.704 700   Buffer...eDebug surfaceflinger           E  [93e1562 com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.MainActivity#925](this:0xb4000076f534ecb8,id:-1,api:0,p:-1,c:-1) id info cannot be read from '93e1562 com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.MainActivity#925'
+2026-01-19 14:20:09.714 6863  InputTransport  com....taplink.sdk.demo  D  Create ARC handle: 0xb4000072d4a4e570
+2026-01-19 14:20:09.714 6863  InputE...ceiver com....taplink.sdk.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-19 14:20:09.714 6863  InputTransport  com....taplink.sdk.demo  D  Input log is disabled in InputChannel.
+2026-01-19 14:20:09.719 6863  Choreographer   com....taplink.sdk.demo  I  Skipped 43 frames!  The application may be doing too much work on its main thread.
+2026-01-19 14:20:09.790 700   Buffer...eDebug surfaceflinger           E  [com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.MainActivity#926](this:0xb4000076f53b54f8,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.MainActivity#926'
+2026-01-19 14:20:09.807 6863  Buffer...nsumer com....taplink.sdk.demo  D  [](id:1acf00000000,api:0,p:-1,c:6863) connect: controlledByApp=false
+2026-01-19 14:20:09.814 6863  FBI             com....taplink.sdk.demo  E  Can't load library: dlopen failed: library "libmagtsync.so" not found
+2026-01-19 14:20:09.844 6863  OpenGLRenderer  com....taplink.sdk.demo  E  Unable to match the desired swap behavior.
+2026-01-19 14:20:09.853 6863  ion             com....taplink.sdk.demo  E  ioctl c0044901 failed with code -1: Invalid argument
+2026-01-19 14:20:09.918 6863  BLASTB...rQueue com....taplink.sdk.demo  D  [VRI[MainActivity]#0](f:0,a:1) acquireNextBufferLocked size=720x1600 mFrameNumber=1 applyTransaction=true mTimestamp=9981949121361(auto) mPendingTransactions.size=0 graphicBufferId=29476360552452 transform=0
+2026-01-19 14:20:09.925 700   Buffer...eDebug surfaceflinger           E  [Surface(name=93e1562 com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.MainActivity)/@0x3a5e4c8 - animation-leash of starting_reveal#929](this:0xb4000076f53bb018,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Surface(name=93e1562 com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.MainActivity)/@0x3a5e4c8 - animation-leash of starting_reveal#929'
+2026-01-19 14:20:09.935 6863  OpenGLRenderer  com....taplink.sdk.demo  I  Davey! duration=977ms; Flags=1, FrameTimelineVsyncId=143974, IntendedVsync=9980971841996, Vsync=9981734575953, InputEventId=0, HandleInputStart=9981753331746, AnimationStart=9981753370285, PerformTraversalsStart=9981754003823, DrawStart=9981877621977, FrameDeadline=9980991841996, FrameInterval=9981751650208, FrameStartTime=17737999, SyncQueued=9981915924977, SyncStart=9981919427823, IssueDrawCommandsStart=9981920179823, SwapBuffers=9981947458285, FrameCompleted=9981952836438, DequeueBufferDuration=0, QueueBufferDuration=1197539, GpuCompleted=9981952836438, SwapBuffersCompleted=9981950778592, DisplayPresentTime=0, CommandSubmissionCompleted=9981947458285, 
+2026-01-19 14:20:10.149 700   Buffer...eDebug surfaceflinger           E  [Surface(name=2676e02 Splash Screen com.sunmi.tapro.taplink.sdk.demo)/@0x2f09a3f - animation-leash of window_animation#931](this:0xb4000076f5304c18,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Surface(name=2676e02 Splash Screen com.sunmi.tapro.taplink.sdk.demo)/@0x2f09a3f - animation-leash of window_animation#931'
+2026-01-19 14:20:11.396 700   Buffer...eDebug surfaceflinger           E  [ActivityRecord{12233a4 u0 com.sunmi.tapro.taplink.sdk.demo/.UsbHostKernelTestActivity#932](this:0xb4000076f536b458,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'ActivityRecord{12233a4 u0 com.sunmi.tapro.taplink.sdk.demo/.UsbHostKernelTestActivity#932'
+2026-01-19 14:20:11.601 6863  aplink.sdk.demo com....taplink.sdk.demo  I  Compiler allocated 4271KB to compile void android.widget.TextView.<init>(android.content.Context, android.util.AttributeSet, int, int)
+2026-01-19 14:20:11.754 6863  Compat...porter com....taplink.sdk.demo  D  Compat change id reported: 171228096; UID 10143; state: ENABLED
+2026-01-19 14:20:11.839 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1111)#<init> ] Permission receiver registered
+2026-01-19 14:20:11.842 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1128)#<init> ] Device receiver registered
+2026-01-19 14:20:11.842 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1133)#<init> ] SimplifiedAoaHostKernel initialized
+2026-01-19 14:20:11.843 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (BaseServiceKernel.kt:139)#RegisterDataReceiver ] Data receiver registered
+2026-01-19 14:20:11.902 6863  VRI[Us...ivity] com....taplink.sdk.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-19 14:20:11.905 700   Buffer...eDebug surfaceflinger           E  [639114b com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.UsbHostKernelTestActivity#933](this:0xb4000076f53820d8,id:-1,api:0,p:-1,c:-1) id info cannot be read from '639114b com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.UsbHostKernelTestActivity#933'
+2026-01-19 14:20:11.912 6863  InputTransport  com....taplink.sdk.demo  D  Create ARC handle: 0xb4000072d4a593a0
+2026-01-19 14:20:11.913 6863  InputE...ceiver com....taplink.sdk.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-19 14:20:11.913 6863  InputTransport  com....taplink.sdk.demo  D  Input log is disabled in InputChannel.
+2026-01-19 14:20:12.025 700   Buffer...eDebug surfaceflinger           E  [com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.UsbHostKernelTestActivity#934](this:0xb4000076f5304c18,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'com.sunmi.tapro.taplink.sdk.demo/com.sunmi.tapro.taplink.sdk.demo.UsbHostKernelTestActivity#934'
+2026-01-19 14:20:12.060 6863  Buffer...nsumer com....taplink.sdk.demo  D  [](id:1acf00000001,api:0,p:-1,c:6863) connect: controlledByApp=false
+2026-01-19 14:20:12.079 6863  OpenGLRenderer  com....taplink.sdk.demo  E  Unable to match the desired swap behavior.
+2026-01-19 14:20:12.202 6863  BLASTB...rQueue com....taplink.sdk.demo  D  [VRI[UsbHostKernelTestActivity]#1](f:0,a:1) acquireNextBufferLocked size=720x1600 mFrameNumber=1 applyTransaction=true mTimestamp=9984233782823(auto) mPendingTransactions.size=0 graphicBufferId=29476360552460 transform=0
+2026-01-19 14:20:12.212 6863  OpenGLRenderer  com....taplink.sdk.demo  I  Davey! duration=729ms; Flags=1, FrameTimelineVsyncId=144544, IntendedVsync=9983485291850, Vsync=9983935291859, InputEventId=0, HandleInputStart=9983950534900, AnimationStart=9983950567131, PerformTraversalsStart=9983952943439, DrawStart=9984128956362, FrameDeadline=9983505291850, FrameInterval=9983949729592, FrameStartTime=17738105, SyncQueued=9984192906900, SyncStart=9984214899439, IssueDrawCommandsStart=9984215144669, SwapBuffers=9984233201592, FrameCompleted=9984237224746, DequeueBufferDuration=0, QueueBufferDuration=911693, GpuCompleted=9984237224746, SwapBuffersCompleted=9984235050823, DisplayPresentTime=288234774265332736, CommandSubmissionCompleted=9984233201592, 
+2026-01-19 14:20:12.214 700   Buffer...eDebug surfaceflinger           E  [Transition Root: ActivityRecord{12233a4 u0 com.sunmi.tapro.taplink.sdk.demo/.UsbHostKernelTestActivity t30}#937](this:0xb4000076f5384e68,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Transition Root: ActivityRecord{12233a4 u0 com.sunmi.tapro.taplink.sdk.demo/.UsbHostKernelTestActivity t30}#937'
+2026-01-19 14:20:12.220 700   Buffer...eDebug surfaceflinger           E  [de19237 ActivityRecordInputSink com.sunmi.tapro.taplink.sdk.demo/.UsbHostKernelTestActivity#938](this:0xb4000076f539bae8,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'de19237 ActivityRecordInputSink com.sunmi.tapro.taplink.sdk.demo/.UsbHostKernelTestActivity#938'
+2026-01-19 14:20:12.370 6863  BLASTB...rQueue com....taplink.sdk.demo  D  [VRI[MainActivity]#0](f:0,a:1) destructor()
+2026-01-19 14:20:12.371 6863  Buffer...nsumer com....taplink.sdk.demo  D  [VRI[MainActivity]#0(BLAST Consumer)0](id:1acf00000000,api:0,p:-1,c:6863) disconnect
+2026-01-19 14:20:12.694 6863  aplink.sdk.demo com....taplink.sdk.demo  I  Compiler allocated 6480KB to compile void android.view.ViewRootImpl.performTraversals()
+2026-01-19 14:20:13.325 6863  tag             com....taplink.sdk.demo  I  [ (AsyncServiceKernel.kt:72)#Connect ] =======AsyncServiceKernel:::connect:protocol:usb://
+2026-01-19 14:20:13.326 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (AsyncServiceKernel.kt:83)#Connect ] Starting connection with protocol: usb://
+2026-01-19 14:20:13.327 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: DISCONNECTED -> CONNECTING
+2026-01-19 14:20:13.369 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:155)#PerformConnect ] === Connect requested, current state: IDLE ===
+2026-01-19 14:20:13.371 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:182)#PerformConnect ] Idle, starting connection
+2026-01-19 14:20:13.385 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:746)#FindTargetDevice ] Found 1 USB device(s)
+2026-01-19 14:20:13.389 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:748)#FindTargetDevice ]   - /dev/bus/usb/001/092 (VID=0x0E8D, PID=0x201C)
+2026-01-19 14:20:13.414 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:344)#StartConnection ] Found device: /dev/bus/usb/001/092 (VID=0x0E8D, PID=0x201C)
+2026-01-19 14:20:13.415 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:351)#StartConnection ] Device not in AOA mode, need to switch
+2026-01-19 14:20:13.417 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:372)#SwitchToAoaMode ] Requesting permission for device
+2026-01-19 14:20:13.420 6863  Compat...porter com....taplink.sdk.demo  D  Compat change id reported: 160794467; UID 10143; state: ENABLED
+2026-01-19 14:20:13.454 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:648)#RequestPermissionAndWait ] Permission request sent, waiting for response...
+2026-01-19 14:20:14.792 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1007)#OnReceive ] Permission broadcast: device=/dev/bus/usb/001/092, granted=true
+2026-01-19 14:20:14.796 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:662)#RequestPermissionAndWait ] Permission granted
+2026-01-19 14:20:14.797 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:374)#SwitchToAoaMode ] Permission granted
+2026-01-19 14:20:14.804 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:384)#SwitchToAoaMode ] Sending AOA protocol
+2026-01-19 14:20:14.884 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:698)#SendAoaProtocol ] AOA protocol sequence sent successfully
+2026-01-19 14:20:14.884 6863  UsbDev...ionJNI com....taplink.sdk.demo  D  close
+2026-01-19 14:20:14.885 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:386)#SwitchToAoaMode ] AOA protocol sent, waiting for device to switch
+2026-01-19 14:20:14.891 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:717)#WaitForAoaDevice ] Waiting for AOA device to appear (timeout: 15000ms)...
+2026-01-19 14:20:14.976 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1051)#OnReceive ] Device detached: /dev/bus/usb/001/092 (VID=0x0E8D, PID=0x201C)
+2026-01-19 14:20:15.079 6863  Profil...taller com....taplink.sdk.demo  D  Installing profile for com.sunmi.tapro.taplink.sdk.demo
+2026-01-19 14:20:15.761 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1032)#OnReceive ] Device attached: /dev/bus/usb/001/093 (VID=0x18D1, PID=0x2D01)
+2026-01-19 14:20:15.762 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1036)#OnReceive ] AOA device appeared, notifying waiter
+2026-01-19 14:20:15.788 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:395)#SwitchToAoaMode ] AOA device appeared: /dev/bus/usb/001/093 (VID=0x18D1, PID=0x2D01)
+2026-01-19 14:20:15.790 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:422)#ConnectToAoaDevice ] Connecting to AOA device: /dev/bus/usb/001/093 (VID=0x18D1, PID=0x2D01)
+2026-01-19 14:20:15.797 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:426)#ConnectToAoaDevice ] Requesting permission for AOA device
+2026-01-19 14:20:15.824 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:648)#RequestPermissionAndWait ] Permission request sent, waiting for response...
+2026-01-19 14:20:16.022 6863  aplink.sdk.demo com....taplink.sdk.demo  I  Compiler allocated 6480KB to compile void android.view.ViewRootImpl.performTraversals()
+2026-01-19 14:20:21.341 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:1007)#OnReceive ] Permission broadcast: device=/dev/bus/usb/001/093, granted=true
+2026-01-19 14:20:21.345 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:662)#RequestPermissionAndWait ] Permission granted
+2026-01-19 14:20:21.346 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:428)#ConnectToAoaDevice ] AOA device permission granted
+2026-01-19 14:20:21.349 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:435)#ConnectToAoaDevice ] Device opened successfully
+2026-01-19 14:20:21.362 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:804)#FindAoaInterface ] Found AOA interface[0] with vendor specific descriptor
+2026-01-19 14:20:21.367 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:445)#ConnectToAoaDevice ] Found AOA interface with endpoints
+2026-01-19 14:20:21.368 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:453)#ConnectToAoaDevice ] Interface claimed successfully
+2026-01-19 14:20:21.368 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:457)#ConnectToAoaDevice ] === Endpoint Information ===
+2026-01-19 14:20:21.369 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:458)#ConnectToAoaDevice ] Endpoint IN:
+2026-01-19 14:20:21.369 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:460)#ConnectToAoaDevice ]   Address: 0x81
+2026-01-19 14:20:21.370 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:461)#ConnectToAoaDevice ]   Direction: 128 (USB_DIR_IN=128)
+2026-01-19 14:20:21.370 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:462)#ConnectToAoaDevice ]   Max Packet Size: 512
+2026-01-19 14:20:21.371 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:466)#ConnectToAoaDevice ] Endpoint OUT:
+2026-01-19 14:20:21.371 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:467)#ConnectToAoaDevice ]   Address: 0x1
+2026-01-19 14:20:21.371 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:468)#ConnectToAoaDevice ]   Direction: 0 (USB_DIR_OUT=0)
+2026-01-19 14:20:21.372 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:469)#ConnectToAoaDevice ]   Max Packet Size: 512
+2026-01-19 14:20:21.372 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:470)#ConnectToAoaDevice ] ===========================
+2026-01-19 14:20:21.373 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:525)#FlushEndpoint ] Flushing endpoint 0x81...
+2026-01-19 14:20:21.477 6863  aplink.sdk.demo com....taplink.sdk.demo  I  ThreadFlipBegin blocked for 98.296ms
+2026-01-19 14:20:21.478 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:541)#FlushEndpoint ] Endpoint 0x81 is clean (no data to flush)
+2026-01-19 14:20:21.478 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTING -> CONNECTED
+2026-01-19 14:20:21.479 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:489)#ConnectToAoaDevice ] Connection resources saved, state=CONNECTED
+2026-01-19 14:20:21.490 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:863)#StartReceive ] 📡 Starting receive loop with connectionId=1768803621489
+2026-01-19 14:20:21.496 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:503)#ConnectToAoaDevice ] === Connection established successfully ===
+2026-01-19 14:20:21.497 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:868)#InvokeSuspend ] 📡 Data receive loop started (Host mode) on thread: DefaultDispatcher-worker-2
+2026-01-19 14:20:21.498 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:869)#InvokeSuspend ] 📡 Connection: true, EndpointIn: true, State: CONNECTED
+2026-01-19 14:20:21.504 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:870)#InvokeSuspend ] 📡 Device: /dev/bus/usb/001/093 (VID=0x18D1, PID=0x2D01), ConnectionId: 1768803621489
+2026-01-19 14:20:21.505 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:887)#InvokeSuspend ] 💓 Receive loop heartbeat #1 (connectionId=1768803621489)
+2026-01-19 14:20:21.531 6863  HexFrameBuffer  com....taplink.sdk.demo  D  [ (HexFrameBuffer.kt:140)#StartSequentialDataProcessor$lambda$5 ] Sequential hex data processor started
+2026-01-19 14:20:21.609 6863  aplink.sdk.demo com....taplink.sdk.demo  I  Background concurrent copying GC freed 24430(1786KB) AllocSpace objects, 1(20KB) LOS objects, 49% free, 3735KB/7471KB, paused 422us,54us total 259.329ms
+2026-01-19 14:20:22.013 6863  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaHostKernel.kt:918)#InvokeSuspend ] Bulk transfer error: -1 (consecutive errors: 1, connectionId=1768803621489)
+2026-01-19 14:20:22.620 6863  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaHostKernel.kt:918)#InvokeSuspend ] Bulk transfer error: -1 (consecutive errors: 2, connectionId=1768803621489)
+2026-01-19 14:20:23.229 6863  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaHostKernel.kt:918)#InvokeSuspend ] Bulk transfer error: -1 (consecutive errors: 3, connectionId=1768803621489)
+2026-01-19 14:20:23.837 6863  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaHostKernel.kt:918)#InvokeSuspend ] Bulk transfer error: -1 (consecutive errors: 4, connectionId=1768803621489)
+2026-01-19 14:20:24.306 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (AsyncServiceKernel.kt:137)#InvokeSuspend ] Sending data via SimplifiedAoaHost: traceId=test_1768803624303, dataSize=36 bytes
+2026-01-19 14:20:24.309 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:275)#PerformSendData ] 📤 [Host] Sending 36 bytes
+2026-01-19 14:20:24.310 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:276)#PerformSendData ]   Hex: 48656C6C6F2066726F6D20486F737420546573742061742031343A32303A32342E323839
+2026-01-19 14:20:24.310 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:277)#PerformSendData ]   Text: Hello from Host Test at 14:20:24.289
+2026-01-19 14:20:24.311 6863  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaHostKernel.kt:284)#PerformSendData ] ✅ Data sent successfully: 36 bytes
+2026-01-19 14:20:24.444 6863  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaHostKernel.kt:918)#InvokeSuspend ] Bulk transfer error: -1 (consecutive errors: 5, connectionId=1768803621489)
+2026-01-19 14:20:24.445 6863  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaHostKernel.kt:922)#InvokeSuspend ] ❌ Too many consecutive errors (5), assuming disconnected
+2026-01-19 14:20:24.448 6863  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaHostKernel.kt:930)#InvokeSuspend ] ⚠️ Device still connected but transfer failing, may be stale connection
+2026-01-19 14:20:24.449 6863  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaHostKernel.kt:969)#InvokeSuspend ] 📡 Data receive loop stopped (Host mode) after 5 iterations (connectionId=1768803621489)
