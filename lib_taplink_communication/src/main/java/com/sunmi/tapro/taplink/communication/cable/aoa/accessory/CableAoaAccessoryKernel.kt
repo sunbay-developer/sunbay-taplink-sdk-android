@@ -41,7 +41,7 @@ import java.util.concurrent.CountDownLatch
  * @author TaPro Team
  * @since 2025-01-18
  */
-class AoaAccessoryKernel(
+class CableAoaAccessoryKernel(
     appId: String,
     appSecretKey: String,
     private val context: Context
@@ -69,6 +69,10 @@ class AoaAccessoryKernel(
     
     // 状态锁（保护状态转换）
     private val stateLock = Any()
+    
+    // 是否应该继续等待连接（用于区分主动/被动断开）
+    @Volatile
+    private var shouldKeepWaiting: Boolean = false
     
     // USB Manager
     private val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -152,6 +156,9 @@ class AoaAccessoryKernel(
                     LogUtil.i(TAG, "Idle, starting connection")
                 }
             }
+            
+            // 设置为应该继续等待（用户主动调用 connect）
+            shouldKeepWaiting = true
         }
         
         // 保存回调
@@ -170,8 +177,8 @@ class AoaAccessoryKernel(
      * 断开连接（唯一的断开入口）
      * 
      * 注意：Accessory 模式的特殊性
-     * - 如果是主动断开（用户操作），状态变为 DISCONNECTED
-     * - 如果是被动断开（Host 断开/拔线），状态变为 WAITING_CONNECT
+     * - 如果是主动断开（用户操作），状态变为 DISCONNECTED，停止等待
+     * - 如果是被动断开（Host 断开/拔线），状态变为 WAITING_CONNECT，继续等待
      * - 只有在 release() 时才真正停止
      */
     override fun performDisconnect() {
@@ -190,6 +197,12 @@ class AoaAccessoryKernel(
             when (state) {
                 ConnectionState.IDLE -> {
                     LogUtil.i(TAG, "Already disconnected")
+                    
+                    // 如果是主动断开，停止等待
+                    if (isUserInitiated) {
+                        shouldKeepWaiting = false
+                        LogUtil.i(TAG, "User initiated disconnect, stopping wait loop")
+                    }
                     return
                 }
                 ConnectionState.DISCONNECTING -> {
@@ -199,6 +212,12 @@ class AoaAccessoryKernel(
                 else -> {
                     LogUtil.i(TAG, "Starting disconnect from state: $state")
                     state = ConnectionState.DISCONNECTING
+                    
+                    // 如果是主动断开，停止等待
+                    if (isUserInitiated) {
+                        shouldKeepWaiting = false
+                        LogUtil.i(TAG, "User initiated disconnect, stopping wait loop")
+                    }
                 }
             }
         }
@@ -210,13 +229,26 @@ class AoaAccessoryKernel(
             state = ConnectionState.IDLE
             
             if (isUserInitiated) {
-                // 用户主动断开：状态变为 DISCONNECTED
+                // 用户主动断开：状态变为 DISCONNECTED，停止等待
                 updateStatus(InnerConnectionStatus.DISCONNECTED)
                 LogUtil.i(TAG, "User initiated disconnect, status set to DISCONNECTED")
             } else {
-                // Host 断开/拔线：状态变为 WAITING_CONNECT，继续等待
-                updateStatus(InnerConnectionStatus.WAITING_CONNECT)
-                LogUtil.i(TAG, "Host disconnected, status set to WAITING_CONNECT")
+                // Host 断开/拔线：状态变为 WAITING_CONNECT，继续等待（如果 shouldKeepWaiting=true）
+                if (shouldKeepWaiting) {
+                    updateStatus(InnerConnectionStatus.WAITING_CONNECT)
+                    LogUtil.i(TAG, "Host disconnected, status set to WAITING_CONNECT, will continue waiting")
+                    
+                    // 重新启动等待流程
+                    val callback = currentCallback
+                    if (callback != null) {
+                        scope.launch {
+                            startConnection(callback)
+                        }
+                    }
+                } else {
+                    updateStatus(InnerConnectionStatus.DISCONNECTED)
+                    LogUtil.i(TAG, "Host disconnected but shouldKeepWaiting=false, status set to DISCONNECTED")
+                }
             }
         }
         
@@ -224,7 +256,11 @@ class AoaAccessoryKernel(
         val message = if (isUserInitiated) {
             "User disconnected"
         } else {
-            "Host disconnected, waiting for next connection"
+            if (shouldKeepWaiting) {
+                "Host disconnected, waiting for next connection"
+            } else {
+                "Host disconnected"
+            }
         }
         
         notifyConnectionDisconnected(
@@ -287,6 +323,9 @@ class AoaAccessoryKernel(
     fun release() {
         LogUtil.i(TAG, "=== Release started ===")
         
+        // 停止等待
+        shouldKeepWaiting = false
+        
         // 取消所有协程
         scope.coroutineContext.cancelChildren()
         
@@ -325,10 +364,14 @@ class AoaAccessoryKernel(
             // 设置为等待连接状态
             updateStatus(InnerConnectionStatus.WAITING_CONNECT)
             
-            // 1. 查找 Accessory
-            val accessory = findAccessory()
+            // 通知应用层正在等待连接
+            callback.onWaitingConnect()
+            
+            // 1. 持续查找 Accessory，直到找到或被取消
+            val accessory = waitForAccessory()
             if (accessory == null) {
-                handleConnectionError("No USB accessory found", callback, InnerErrorCode.E212.code)
+                // 被取消或超时
+                LogUtil.i(TAG, "Accessory wait cancelled or timed out")
                 return
             }
             
@@ -351,6 +394,39 @@ class AoaAccessoryKernel(
             LogUtil.e(TAG, "Connection failed: ${e.message}")
             handleConnectionError("Connection failed: ${e.message}", callback, InnerErrorCode.E212.code)
         }
+    }
+    
+    /**
+     * 等待 Accessory 出现
+     * 
+     * 持续查找 Accessory，直到找到或状态改变或用户主动断开
+     * 
+     * @return 找到的 Accessory，如果被取消则返回 null
+     */
+    private suspend fun waitForAccessory(): UsbAccessory? {
+        val checkInterval = 500L  // 每 500ms 检查一次
+        
+        LogUtil.i(TAG, "Waiting for USB accessory to appear...")
+        
+        while (state == ConnectionState.IDLE && shouldKeepWaiting) {
+            // 检查是否有 Accessory
+            val accessory = findAccessory()
+            if (accessory != null) {
+                LogUtil.i(TAG, "Accessory found: ${getAccessoryDisplayKey(accessory)}")
+                return accessory
+            }
+            
+            // 等待一段时间后再次检查
+            delay(checkInterval)
+        }
+        
+        // 状态改变或用户主动断开，返回 null
+        if (!shouldKeepWaiting) {
+            LogUtil.i(TAG, "Accessory wait cancelled by user (shouldKeepWaiting=false)")
+        } else {
+            LogUtil.i(TAG, "Accessory wait cancelled, state changed to: $state")
+        }
+        return null
     }
     
     /**
@@ -427,16 +503,40 @@ class AoaAccessoryKernel(
     private fun cleanupResources() {
         LogUtil.d(TAG, "Cleaning up resources...")
         
-        // 停止接收
-        receiveJob?.cancel()
+        // 1. 先清空引用（防止新的操作使用旧资源）
+        val oldInputStream = inputStream
+        val oldOutputStream = outputStream
+        val oldFileDescriptor = fileDescriptor
+        val oldReceiveJob = receiveJob
+        
+        // 立即清空引用
+        currentAccessory = null
+        fileDescriptor = null
+        inputStream = null
+        outputStream = null
+        
+        // 2. 停止接收协程（使用本地引用）
+        oldReceiveJob?.cancel()
         receiveJob = null
         
-        // 停止 HexFrame 缓冲区
+        // 等待接收协程完全停止（最多 500ms）
+        val startTime = System.currentTimeMillis()
+        while (oldReceiveJob?.isActive == true && System.currentTimeMillis() - startTime < 500) {
+            Thread.sleep(10)
+        }
+        
+        if (oldReceiveJob?.isActive == true) {
+            LogUtil.w(TAG, "Receive job still active after 500ms, forcing cleanup")
+        } else {
+            LogUtil.d(TAG, "Receive job stopped successfully")
+        }
+        
+        // 3. 停止 HexFrame 缓冲区
         hexFrameBuffer?.stop()
         hexFrameBuffer = null
         
-        // 关闭输入流
-        inputStream?.let { stream ->
+        // 4. 关闭输入流（使用本地引用）
+        oldInputStream?.let { stream ->
             try {
                 stream.close()
                 LogUtil.d(TAG, "Input stream closed")
@@ -445,8 +545,8 @@ class AoaAccessoryKernel(
             }
         }
         
-        // 关闭输出流
-        outputStream?.let { stream ->
+        // 5. 关闭输出流（使用本地引用）
+        oldOutputStream?.let { stream ->
             try {
                 stream.close()
                 LogUtil.d(TAG, "Output stream closed")
@@ -455,8 +555,8 @@ class AoaAccessoryKernel(
             }
         }
         
-        // 关闭文件描述符
-        fileDescriptor?.let { fd ->
+        // 6. 关闭文件描述符（使用本地引用）
+        oldFileDescriptor?.let { fd ->
             try {
                 fd.close()
                 LogUtil.d(TAG, "File descriptor closed")
@@ -464,12 +564,6 @@ class AoaAccessoryKernel(
                 LogUtil.w(TAG, "Failed to close file descriptor: ${e.message}")
             }
         }
-        
-        // 清空引用
-        currentAccessory = null
-        fileDescriptor = null
-        inputStream = null
-        outputStream = null
         
         LogUtil.d(TAG, "Resources cleaned up")
     }
@@ -571,42 +665,66 @@ class AoaAccessoryKernel(
      * 启动数据接收
      */
     private fun startReceive() {
-        receiveJob?.cancel()
+        // 取消旧的接收协程
+        val oldJob = receiveJob
+        receiveJob = null
+        oldJob?.cancel()
+        
+        // 获取当前连接资源的快照（在启动新协程前）
+        val currentInput = inputStream
+        val currentAccessory = currentAccessory
+        
+        // 验证资源有效性
+        if (currentInput == null || currentAccessory == null) {
+            LogUtil.w(TAG, "Cannot start receive: resources not ready")
+            return
+        }
+        
+        // 生成连接ID（用于验证资源是否过期）
+        val connectionId = System.currentTimeMillis()
+        LogUtil.i(TAG, "📡 Starting receive loop with connectionId=$connectionId")
         
         receiveJob = scope.launch(Dispatchers.IO) {  // 使用 IO 调度器，避免阻塞主线程
             val buffer = ByteArray(16384)
             
             LogUtil.i(TAG, "📡 Data receive loop started (Accessory mode) on thread: ${Thread.currentThread().name}")
-            LogUtil.i(TAG, "📡 InputStream available: ${inputStream != null}, State: $state")
+            LogUtil.i(TAG, "📡 InputStream available: ${currentInput != null}, State: $state")
+            LogUtil.i(TAG, "📡 Accessory: ${getAccessoryDisplayKey(currentAccessory)}, ConnectionId: $connectionId")
             
             var loopCount = 0
+            var consecutiveErrors = 0
+            
             while (isActive && state == ConnectionState.CONNECTED) {
                 loopCount++
-                val input = inputStream
                 
-                if (input == null) {
-                    LogUtil.w(TAG, "Input stream is null, stopping receive")
+                // 每次循环都验证资源是否仍然有效（防止使用过期资源）
+                if (inputStream != currentInput || this@CableAoaAccessoryKernel.currentAccessory != currentAccessory) {
+                    LogUtil.w(TAG, "⚠️ Connection resources changed, stopping stale receive loop (connectionId=$connectionId)")
                     break
                 }
                 
                 try {
                     // 每 10 次循环打印一次心跳日志
                     if (loopCount % 10 == 1) {
-                        LogUtil.d(TAG, "💓 Receive loop heartbeat #$loopCount, waiting for data...")
+                        LogUtil.d(TAG, "💓 Receive loop heartbeat #$loopCount (connectionId=$connectionId)")
                     }
                     
                     // 使用带超时的阻塞读取
                     // withTimeoutOrNull 会在超时后返回 null，这样我们可以定期检查状态
                     val bytesRead = withTimeoutOrNull(500) {
-                        input.read(buffer)
+                        currentInput.read(buffer)
                     }
                     
                     when {
                         bytesRead == null -> {
-                            // 超时，继续下一次循环
+                            // 超时，重置错误计数
+                            consecutiveErrors = 0
                             delay(10)
                         }
                         bytesRead > 0 -> {
+                            // 成功接收数据，重置错误计数
+                            consecutiveErrors = 0
+                            
                             val data = buffer.copyOf(bytesRead)
                             val hexStr = InnerUtil.bytes2HexStr(data)
                             val textStr = try {
@@ -615,7 +733,7 @@ class AoaAccessoryKernel(
                                 "[non-UTF8 data]"
                             }
                             
-                            LogUtil.i(TAG, "📥 [Accessory] Received $bytesRead bytes (loop #$loopCount)")
+                            LogUtil.i(TAG, "📥 [Accessory] Received $bytesRead bytes (loop #$loopCount, connectionId=$connectionId)")
                             LogUtil.d(TAG, "  Hex: $hexStr")
                             LogUtil.d(TAG, "  Text: $textStr")
                             
@@ -626,28 +744,51 @@ class AoaAccessoryKernel(
                         }
                         else -> {
                             // bytesRead < 0: 流结束
-                            LogUtil.w(TAG, "❌ Input stream ended (bytesRead=$bytesRead), stopping receive")
-                            break
+                            consecutiveErrors++
+                            LogUtil.w(TAG, "❌ Input stream ended (bytesRead=$bytesRead, consecutive errors: $consecutiveErrors, connectionId=$connectionId)")
+                            
+                            // 如果连续错误超过 3 次，停止接收
+                            if (consecutiveErrors >= 3) {
+                                LogUtil.w(TAG, "❌ Too many consecutive stream end errors, stopping receive")
+                                break
+                            }
+                            delay(100)
                         }
                     }
                 } catch (e: java.io.InterruptedIOException) {
-                    LogUtil.w(TAG, "⚠️ Read interrupted: ${e.message}")
+                    LogUtil.w(TAG, "⚠️ Read interrupted: ${e.message} (connectionId=$connectionId)")
                     if (!isActive || state != ConnectionState.CONNECTED) {
                         break
                     }
                 } catch (e: java.io.IOException) {
                     if (isActive && state == ConnectionState.CONNECTED) {
-                        LogUtil.e(TAG, "❌ IO error during receive: ${e.message}")
+                        consecutiveErrors++
+                        LogUtil.e(TAG, "❌ IO error during receive: ${e.message} (consecutive errors: $consecutiveErrors, connectionId=$connectionId)")
                         e.printStackTrace()
+                        
+                        // 如果连续错误超过 5 次，停止接收
+                        if (consecutiveErrors >= 5) {
+                            LogUtil.w(TAG, "❌ Too many consecutive IO errors, stopping receive loop")
+                            break
+                        }
+                        
                         delay(100)
                     } else {
-                        LogUtil.i(TAG, "IO error after disconnect, stopping receive")
+                        LogUtil.i(TAG, "IO error after disconnect, stopping receive (connectionId=$connectionId)")
                         break
                     }
                 } catch (e: Exception) {
                     if (isActive && state == ConnectionState.CONNECTED) {
-                        LogUtil.e(TAG, "❌ Unexpected error during receive: ${e.message}")
+                        consecutiveErrors++
+                        LogUtil.e(TAG, "❌ Unexpected error during receive: ${e.message} (consecutive errors: $consecutiveErrors, connectionId=$connectionId)")
                         e.printStackTrace()
+                        
+                        // 如果连续错误超过 5 次，停止接收
+                        if (consecutiveErrors >= 5) {
+                            LogUtil.w(TAG, "❌ Too many consecutive exceptions, stopping receive loop")
+                            break
+                        }
+                        
                         delay(100)
                     } else {
                         break
@@ -655,7 +796,7 @@ class AoaAccessoryKernel(
                 }
             }
             
-            LogUtil.i(TAG, "📡 Data receive loop stopped (Accessory mode) after $loopCount iterations")
+            LogUtil.i(TAG, "📡 Data receive loop stopped (Accessory mode) after $loopCount iterations (connectionId=$connectionId)")
         }
     }
     
@@ -704,7 +845,37 @@ class AoaAccessoryKernel(
                     }
                     
                     if (accessory != null) {
-                        LogUtil.i(TAG, "Accessory attached: ${getAccessoryDisplayKey(accessory)}")
+                        LogUtil.i(TAG, "Accessory attached via broadcast: ${getAccessoryDisplayKey(accessory)}")
+                        
+                        // 如果正在等待连接（IDLE 状态 + shouldKeepWaiting=true），尝试连接
+                        if (state == ConnectionState.IDLE && 
+                            shouldKeepWaiting &&
+                            currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT) {
+                            LogUtil.i(TAG, "Currently waiting for accessory, attempting to connect...")
+                            
+                            val callback = currentCallback
+                            if (callback != null) {
+                                scope.launch {
+                                    try {
+                                        // 检查权限
+                                        if (!usbManager.hasPermission(accessory)) {
+                                            synchronized(stateLock) {
+                                                state = ConnectionState.REQUESTING_PERMISSION
+                                            }
+                                            LogUtil.i(TAG, "Requesting permission for attached accessory")
+                                            requestPermissionAndWait(accessory)
+                                            LogUtil.i(TAG, "Permission granted for attached accessory")
+                                        }
+                                        
+                                        // 连接到 Accessory
+                                        connectToAccessory(accessory, callback)
+                                    } catch (e: Exception) {
+                                        LogUtil.e(TAG, "Failed to connect to attached accessory: ${e.message}")
+                                        // 继续等待其他 accessory（如果 shouldKeepWaiting=true）
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 

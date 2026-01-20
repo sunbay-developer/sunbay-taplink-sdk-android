@@ -42,7 +42,7 @@ import java.io.IOException
  * @author TaPro Team
  * @since 2025-01-XX
  */
-abstract class BaseUsbAccessoryKernel(
+abstract class BaseCableAoaAccessoryKernel(
     appId: String,
     appSecretKey: String,
     context: Context,
@@ -159,7 +159,7 @@ abstract class BaseUsbAccessoryKernel(
         override fun onReceive(context: Context, intent: Intent) {
             if (permissionAction != intent.action) return
 
-            synchronized(this@BaseUsbAccessoryKernel) {
+            synchronized(this@BaseCableAoaAccessoryKernel) {
                 // 使用类型安全的 API 获取 Parcelable（Android 13+ 兼容）
                 val accessory: UsbAccessory? =
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -310,7 +310,7 @@ abstract class BaseUsbAccessoryKernel(
                         }
                         
                         // 处理 pendingAccessory 的 detach
-                        synchronized(this@BaseUsbAccessoryKernel) {
+                        synchronized(this@BaseCableAoaAccessoryKernel) {
                             if (isSameAccessory(detached, pendingAccessory)) {
                                 pendingAccessory = null
                                 pendingPermissionOpToken = 0L

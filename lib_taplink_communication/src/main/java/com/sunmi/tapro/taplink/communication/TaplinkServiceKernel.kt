@@ -2,7 +2,6 @@ package com.sunmi.tapro.taplink.communication
 
 import android.content.Context
 import com.sunmi.tapro.taplink.communication.cable.aoa.host.CableAoaHostKernel
-import com.sunmi.tapro.taplink.communication.cable.aoa.host.UsbStandardHostKernel
 import com.sunmi.tapro.taplink.communication.cable.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
@@ -15,7 +14,6 @@ import com.sunmi.tapro.taplink.communication.cable.vsp.VSPClientKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
-import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
 
 /**
  * Taplink服务内核类
@@ -187,11 +185,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
 
             SERVICE_KEY_USB -> {
                 LogUtil.d(TAG, "Creating USB service")
-                UsbStandardHostKernel(
+                CableAoaHostKernel(
                     appId, appSecretKey, mContext,
-                    UsbStandardProtocol.UsbStandardInfo(),
-                    UsbStandardHostKernel.ACTION_USB_STANDARD_HOST_KERNEL,
-                    UsbStandardHostKernel.createRequestPermissionPendingIntent(mContext)
                 )
             }
 

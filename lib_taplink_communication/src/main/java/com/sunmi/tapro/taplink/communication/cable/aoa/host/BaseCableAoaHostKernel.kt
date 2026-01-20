@@ -40,7 +40,7 @@ import kotlinx.coroutines.sync.withLock
  * @author TaPro Team
  * @since 2025-01-XX
  */
-abstract class BaseUsbHostKernel(
+abstract class BaseCableAoaHostKernel(
     appId: String,
     appSecretKey: String,
     context: Context,
@@ -286,7 +286,7 @@ abstract class BaseUsbHostKernel(
             
             LogUtil.i(TAG, "permissionReceiver: action matched")
 
-            synchronized(this@BaseUsbHostKernel) {
+            synchronized(this@BaseCableAoaHostKernel) {
                 try {
                     // 【修复】使用 EXTRA_DEVICE 和 EXTRA_ACCESSORY 来识别请求类型
                     val hasDevice = intent.hasExtra(UsbManager.EXTRA_DEVICE)
@@ -492,7 +492,7 @@ abstract class BaseUsbHostKernel(
                         
                         // 处理 pendingDevice 的 detach（正在请求权限时设备断开）
                         // 必须在 synchronized 块中操作，避免与 permissionReceiver 竞态
-                        synchronized(this@BaseUsbHostKernel) {
+                        synchronized(this@BaseCableAoaHostKernel) {
                             // 使用稳定标识比对，避免对象引用不同导致的误判
                             if (isSameDevice(detached, pendingDevice)) {
                                 pendingDevice = null
@@ -525,7 +525,7 @@ abstract class BaseUsbHostKernel(
             
             LogUtil.i(TAG, "accessoryPermissionReceiver: action matched")
 
-            synchronized(this@BaseUsbHostKernel) {
+            synchronized(this@BaseCableAoaHostKernel) {
                 try {
                     // 【修复】使用 EXTRA_DEVICE 和 EXTRA_ACCESSORY 来识别请求类型
                     val hasDevice = intent.hasExtra(UsbManager.EXTRA_DEVICE)
@@ -688,7 +688,7 @@ abstract class BaseUsbHostKernel(
                         }
                         
                         // 处理 pendingAccessory 的 detach（正在请求权限时 Accessory 断开）
-                        synchronized(this@BaseUsbHostKernel) {
+                        synchronized(this@BaseCableAoaHostKernel) {
                             if (isSameAccessory(detached, pendingAccessory)) {
                                 pendingAccessory = null
                                 // 【修复 P0-4】清除独立的 Accessory token
@@ -931,7 +931,7 @@ abstract class BaseUsbHostKernel(
                     delay(30000) // 30秒超时
                     
                     // 检查是否仍在等待权限响应
-                    synchronized(this@BaseUsbHostKernel) {
+                    synchronized(this@BaseCableAoaHostKernel) {
                         if (pendingDevicePermissionToken == permissionToken && 
                             pendingDevice != null && 
                             isSameDevice(pendingDevice, device)) {

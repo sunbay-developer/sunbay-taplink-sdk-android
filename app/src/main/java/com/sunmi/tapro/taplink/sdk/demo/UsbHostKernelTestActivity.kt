@@ -3,15 +3,12 @@ package com.sunmi.tapro.taplink.sdk.demo
 import android.os.Bundle
 import android.widget.Button
 import android.widget.ScrollView
-import android.widget.Switch
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.sunmi.tapro.taplink.communication.cable.aoa.host.CableAoaHostKernel
-import com.sunmi.tapro.taplink.communication.cable.aoa.host.UsbStandardHostKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
-import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,17 +19,14 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * USB Host Kernel 层测试 Activity
+ * USB Host Kernel 测试 Activity
  * 
- * 用于对比测试新旧 Kernel 实现：
- * - SimplifiedAoaHostKernel（新架构）
- * - UsbStandardHostKernel（旧架构）
+ * 使用新架构的 CableAoaHostKernel 进行测试
  */
 class UsbHostKernelTestActivity : AppCompatActivity() {
 
     private lateinit var logTextView: TextView
     private lateinit var logScrollView: ScrollView
-    private lateinit var switchKernel: Switch
     private lateinit var btnConnect: Button
     private lateinit var btnDisconnect: Button
     private lateinit var btnSendData: Button
@@ -43,7 +37,6 @@ class UsbHostKernelTestActivity : AppCompatActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var kernel: AsyncServiceKernel? = null
-    private var useSimplifiedKernel = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,23 +50,17 @@ class UsbHostKernelTestActivity : AppCompatActivity() {
     private fun initViews() {
         logTextView = findViewById(R.id.tv_log)
         logScrollView = findViewById(R.id.scroll_log)
-        switchKernel = findViewById(R.id.switch_kernel)
         btnConnect = findViewById(R.id.btn_connect)
         btnDisconnect = findViewById(R.id.btn_disconnect)
         btnSendData = findViewById(R.id.btn_send_data)
         btnClearLog = findViewById(R.id.btn_clear_log)
         tvKernelInfo = findViewById(R.id.tv_kernel_info)
 
-        updateButtonStates(false)
+        updateButtonStatesByStatus(InnerConnectionStatus.DISCONNECTED)
         updateKernelInfo()
     }
 
     private fun setupListeners() {
-        switchKernel.setOnCheckedChangeListener { _, isChecked ->
-            useSimplifiedKernel = isChecked
-            recreateKernel()
-        }
-
         btnConnect.setOnClickListener {
             connectToDevice()
         }
@@ -98,40 +85,24 @@ class UsbHostKernelTestActivity : AppCompatActivity() {
             }
         }
 
-        kernel = if (useSimplifiedKernel) {
-            log("创建 SimplifiedAoaHostKernel（新架构）")
-            CableAoaHostKernel(
-                appId = "demo_app_id",
-                appSecretKey = "demo_secret_key",
-                context = this
-            ).apply {
-                // 设置数据接收回调
-                registerDataReceiver { data ->
-                    data?.let {
-                        log("📥 收到数据: ${it.size} bytes - ${String(it, Charsets.UTF_8)}")
-                    }
+        log("创建 CableAoaHostKernel")
+        kernel = CableAoaHostKernel(
+            appId = "demo_app_id",
+            appSecretKey = "demo_secret_key",
+            context = this
+        ).apply {
+            // 设置数据接收回调
+            registerDataReceiver { data ->
+                data?.let {
+                    log("📥 收到数据: ${it.size} bytes - ${String(it, Charsets.UTF_8)}")
                 }
             }
-        } else {
-            log("创建 UsbStandardHostKernel（旧架构）")
-            UsbStandardHostKernel(
-                appId = "demo_app_id",
-                appSecretKey = "demo_secret_key",
-                context = this,
-                usbStandardInfo = UsbStandardProtocol.UsbStandardInfo(),
-                permissionAction = "com.sunmi.tapro.taplink.USB_PERMISSION",
-                permissionPendingIntent = android.app.PendingIntent.getBroadcast(
-                    this,
-                    0,
-                    android.content.Intent("com.sunmi.tapro.taplink.USB_PERMISSION"),
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
-                )
-            ).apply {
-                // 设置数据接收回调
-                registerDataReceiver { data ->
-                    data?.let {
-                        log("📥 收到数据: ${it.size} bytes - ${String(it, Charsets.UTF_8)}")
-                    }
+            
+            // 设置状态变化监听器
+            setStatusChangeListener { status ->
+                runOnUiThread {
+                    updateButtonStatesByStatus(status)
+                    log("📊 状态变化: $status")
                 }
             }
         }
@@ -139,44 +110,29 @@ class UsbHostKernelTestActivity : AppCompatActivity() {
         updateKernelInfo()
     }
 
-
-    private fun recreateKernel() {
-        log("=== 切换 Kernel 实现 ===")
-        
-        // 先断开当前连接
-        if (kernel?.currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
-            scope.launch {
-                kernel?.disconnect()
-            }
-        }
-        
-        // 重新创建 Kernel
-        createKernel()
-    }
-
     private fun connectToDevice() {
         log("=== 开始连接 ===")
-        updateButtonStates(false)
 
         val protocol = "usb://"
 
         val callback = object : ConnectionCallback {
             override fun onWaitingConnect() {
                 log("⏳ 等待连接...")
+                runOnUiThread {
+                    updateButtonStatesByStatus(InnerConnectionStatus.WAITING_CONNECT)
+                }
             }
             
             override fun onConnected(extraInfoMap: Map<String, String?>?) {
                 log("✅ 连接成功")
                 runOnUiThread {
-                    updateButtonStates(true)
+                    updateButtonStatesByStatus(InnerConnectionStatus.CONNECTED)
                 }
             }
 
             override fun onDisconnected(code: String, msg: String) {
-                log("⚠️ 连接断开: [$code] $msg")
-                runOnUiThread {
-                    updateButtonStates(false)
-                }
+                log("⚠️ 断开通知: [$code] $msg")
+                // 注意：状态更新由 StatusChangeListener 处理
             }
         }
 
@@ -186,15 +142,14 @@ class UsbHostKernelTestActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 log("❌ 连接异常: ${e.message}")
                 runOnUiThread {
-                    updateButtonStates(false)
+                    updateButtonStatesByStatus(InnerConnectionStatus.ERROR)
                 }
             }
         }
     }
 
     private fun disconnectFromDevice() {
-        log("=== 开始断开 ===")
-        updateButtonStates(false)
+        log("=== 主动断开连接 ===")
 
         scope.launch {
             try {
@@ -221,34 +176,69 @@ class UsbHostKernelTestActivity : AppCompatActivity() {
         btnConnect.isEnabled = !connected
         btnDisconnect.isEnabled = connected
         btnSendData.isEnabled = connected
-        switchKernel.isEnabled = !connected
+    }
+    
+    /**
+     * 根据连接状态更新按钮状态
+     */
+    private fun updateButtonStatesByStatus(status: InnerConnectionStatus) {
+        when (status) {
+            InnerConnectionStatus.DISCONNECTED -> {
+                btnConnect.isEnabled = true
+                btnConnect.text = "连接"
+                btnDisconnect.isEnabled = false
+                btnSendData.isEnabled = false
+            }
+            InnerConnectionStatus.WAITING_CONNECT -> {
+                btnConnect.isEnabled = false
+                btnConnect.text = "等待中..."
+                btnDisconnect.isEnabled = false
+                btnSendData.isEnabled = false
+            }
+            InnerConnectionStatus.CONNECTING,
+            InnerConnectionStatus.RECONNECTING-> {
+                btnConnect.isEnabled = false
+                btnConnect.text = "连接中..."
+                btnDisconnect.isEnabled = false
+                btnSendData.isEnabled = false
+            }
+            InnerConnectionStatus.CONNECTED -> {
+                btnConnect.isEnabled = false
+                btnConnect.text = "已连接"
+                btnDisconnect.isEnabled = true
+                btnDisconnect.text = "断开"
+                btnSendData.isEnabled = true
+            }
+            InnerConnectionStatus.ERROR -> {
+                btnConnect.isEnabled = true
+                btnConnect.text = "重新连接"
+                btnDisconnect.isEnabled = false
+                btnSendData.isEnabled = false
+            }
+        }
     }
 
     private fun updateKernelInfo() {
-        val kernelName = if (useSimplifiedKernel) {
-            "SimplifiedAoaHostKernel（新架构）"
-        } else {
-            "UsbStandardHostKernel（旧架构）"
-        }
-        
         val info = """
-            当前使用: $kernelName
+            USB Host Kernel 测试
             
             特点:
-            ${if (useSimplifiedKernel) {
-                """
-                ✅ 代码量减少 65%
-                ✅ 状态机驱动，逻辑清晰
-                ✅ 单一入口，幂等操作
-                ✅ 无 session/token 复杂度
-                """.trimIndent()
-            } else {
-                """
-                ⚠️ 使用 session/token 机制
-                ⚠️ 多路径触发连接
-                ⚠️ 状态同步复杂
-                """.trimIndent()
-            }}
+            ✅ 简化的状态机驱动
+            ✅ 单一连接入口
+            ✅ 自动设备检测
+            ✅ AOA 协议切换
+            ✅ 三层断开检测
+            
+            状态说明:
+            • DISCONNECTED: 未连接
+            • WAITING_CONNECT: 等待设备
+            • CONNECTING: 正在连接
+            • CONNECTED: 已连接
+            
+            断开检测:
+            • 系统广播检测 (< 100ms)
+            • 传输错误检测 (< 500ms)
+            • 异常捕获检测 (< 500ms)
         """.trimIndent()
         
         tvKernelInfo.text = info

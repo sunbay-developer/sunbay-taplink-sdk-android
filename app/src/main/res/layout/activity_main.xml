@@ -15,38 +15,20 @@
         android:layout_marginBottom="48dp" />
 
     <Button
-        android:id="@+id/btn_host_demo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="USB Host 模式测试"
-        android:textSize="18sp"
-        android:padding="16dp"
-        android:layout_marginBottom="16dp" />
-
-    <Button
         android:id="@+id/btn_host_kernel_test"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="USB Host Kernel 对比测试 🆕"
+        android:text="USB Host Kernel 测试"
         android:textSize="18sp"
         android:padding="16dp"
         android:layout_marginBottom="16dp"
         android:backgroundTint="#4CAF50" />
 
     <Button
-        android:id="@+id/btn_accessory_demo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="USB Accessory 模式测试"
-        android:textSize="18sp"
-        android:padding="16dp"
-        android:layout_marginBottom="16dp" />
-
-    <Button
         android:id="@+id/btn_accessory_kernel_test"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="USB Accessory Kernel 对比测试 🆕"
+        android:text="USB Accessory Kernel 测试"
         android:textSize="18sp"
         android:padding="16dp"
         android:backgroundTint="#4CAF50" />

@@ -14,16 +14,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        findViewById<Button>(R.id.btn_host_demo).setOnClickListener {
-            startActivity(Intent(this, UsbHostDemoActivity::class.java))
-        }
-
         findViewById<Button>(R.id.btn_host_kernel_test).setOnClickListener {
             startActivity(Intent(this, UsbHostKernelTestActivity::class.java))
-        }
-
-        findViewById<Button>(R.id.btn_accessory_demo).setOnClickListener {
-            startActivity(Intent(this, UsbAccessoryDemoActivity::class.java))
         }
 
         findViewById<Button>(R.id.btn_accessory_kernel_test).setOnClickListener {

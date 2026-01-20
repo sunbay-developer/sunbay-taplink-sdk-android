@@ -26,32 +26,11 @@
             </intent-filter>
         </activity>
 
-        <!-- USB Host 模式测试 -->
-        <activity
-            android:name=".UsbHostDemoActivity"
-            android:exported="false"
-            android:label="USB Host Demo">
-        </activity>
-
         <!-- USB Host Kernel 对比测试 -->
         <activity
             android:name=".UsbHostKernelTestActivity"
             android:exported="false"
             android:label="USB Host Kernel Test">
-        </activity>
-
-        <!-- USB Accessory 模式测试 -->
-        <activity
-            android:name=".UsbAccessoryDemoActivity"
-            android:exported="true"
-            android:label="USB Accessory Demo"
-            android:launchMode="singleTask">
-            <intent-filter>
-                <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
-            </intent-filter>
-            <meta-data
-                android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
-                android:resource="@xml/accessory_filter" />
         </activity>
 
         <!-- USB Accessory Kernel 对比测试 -->
