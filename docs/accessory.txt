@@ -1,0 +1,90 @@
+--------- beginning of main
+---------------------------- PROCESS STARTED (8154) for package com.sunmi.tapro.taplink.sdk.demo ----------------------------
+--------- beginning of system
+2026-01-19 14:19:56.052 988   AppAut...rnalV2 system_server            E  debug status,allow install com.sunmi.tapro.taplink.sdk.demo
+2026-01-19 14:20:04.647 8154  aplink.sdk.dem  com....taplink.sdk.demo  I  Late-enabling -Xcheck:jni
+2026-01-19 14:20:04.682 8154  aplink.sdk.dem  com....taplink.sdk.demo  I  Unquickening 19 vdex files!
+2026-01-19 14:20:05.475 8154  LoadedApk       com....taplink.sdk.demo  I  No resource references to update in package sunmi
+2026-01-19 14:20:05.476 8154  Networ...Config com....taplink.sdk.demo  D  No Network Security Config specified, using platform default
+2026-01-19 14:20:05.478 8154  Networ...Config com....taplink.sdk.demo  D  No Network Security Config specified, using platform default
+2026-01-19 14:20:05.666 8154  AppCom...legate com....taplink.sdk.demo  D  Checking for metadata for AppLocalesMetadataHolderService : Service not found
+2026-01-19 14:20:05.764 8154  aplink.sdk.dem  com....taplink.sdk.demo  E  Invalid ID 0x00000000.
+2026-01-19 14:20:05.941 8154  aplink.sdk.dem  com....taplink.sdk.demo  W  Accessing hidden method Landroid/view/ViewGroup;->makeOptionalFitsSystemWindows()V (greylist, reflection, allowed)
+2026-01-19 14:20:06.168 8154  SurfaceFactory  com....taplink.sdk.demo  I  [static] sSurfaceFactory = com.mediatek.view.impl.SurfaceFactoryImpl@c4cb6a
+2026-01-19 14:20:06.178 8154  ViewRo...ivity] com....taplink.sdk.demo  D  hardware acceleration = true , fakeHwAccelerated = false, sRendererDisabled = false, forceHwAccelerated = false, sSystemRendererDisabled = false
+2026-01-19 14:20:06.185 8154  InputTransport  com....taplink.sdk.demo  I  Create ARC handle: 0xa54d93b0
+2026-01-19 14:20:06.187 8154  PhoneWindow     com....taplink.sdk.demo  V  DecorView setVisiblity: visibility = 0, Parent = android.view.ViewRootImpl@4dc3436, this = DecorView@16edf37[MainActivity]
+2026-01-19 14:20:06.191 8154  Choreographer   com....taplink.sdk.demo  I  Skipped 39 frames!  The application may be doing too much work on its main thread.
+2026-01-19 14:20:06.268 8154  GED             com....taplink.sdk.demo  E  Failed to get GED Log Buf, err(0)
+2026-01-19 14:20:06.322 8154  ion             com....taplink.sdk.demo  E  ioctl c0044901 failed with code -1: Invalid argument
+2026-01-19 14:20:06.431 8154  OpenGLRenderer  com....taplink.sdk.demo  I  Davey! duration=893ms; Flags=1, IntendedVsync=65933422384069, Vsync=65934072384082, OldestInputEvent=9223372036854775807, NewestInputEvent=0, HandleInputStart=65934084609850, AnimationStart=65934084623466, PerformTraversalsStart=65934084935312, DrawStart=65934183625158, SyncQueued=65934207777235, SyncStart=65934215494466, IssueDrawCommandsStart=65934215614850, SwapBuffers=65934320908773, FrameCompleted=65934323157004, DequeueBufferDuration=0, QueueBufferDuration=1364231, GpuCompleted=0, 
+2026-01-19 14:20:08.421 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:941)#<init> ] Permission receiver registered
+2026-01-19 14:20:08.423 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:958)#<init> ] Accessory receiver registered
+2026-01-19 14:20:08.424 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:963)#<init> ] SimplifiedAoaAccessoryKernel initialized
+2026-01-19 14:20:08.424 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (BaseServiceKernel.kt:139)#RegisterDataReceiver ] Data receiver registered
+2026-01-19 14:20:08.443 8154  PhoneWindow     com....taplink.sdk.demo  V  DecorView setVisiblity: visibility = 4, Parent = null, this = DecorView@aa7c9a8[]
+2026-01-19 14:20:08.449 8154  ViewRo...ivity] com....taplink.sdk.demo  D  hardware acceleration = true , fakeHwAccelerated = false, sRendererDisabled = false, forceHwAccelerated = false, sSystemRendererDisabled = false
+2026-01-19 14:20:08.456 8154  InputTransport  com....taplink.sdk.demo  I  Create ARC handle: 0x8dba4da0
+2026-01-19 14:20:08.458 8154  PhoneWindow     com....taplink.sdk.demo  V  DecorView setVisiblity: visibility = 0, Parent = android.view.ViewRootImpl@ec51ba7, this = DecorView@aa7c9a8[UsbAccessoryKernelTestActivity]
+2026-01-19 14:20:09.111 8154  PhoneWindow     com....taplink.sdk.demo  V  DecorView setVisiblity: visibility = 4, Parent = android.view.ViewRootImpl@4dc3436, this = DecorView@16edf37[MainActivity]
+2026-01-19 14:20:10.460 8154  tag             com....taplink.sdk.demo  I  [ (AsyncServiceKernel.kt:72)#Connect ] =======AsyncServiceKernel:::connect:protocol:usb://
+2026-01-19 14:20:10.461 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (AsyncServiceKernel.kt:83)#Connect ] Starting connection with protocol: usb://
+2026-01-19 14:20:10.462 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: DISCONNECTED -> CONNECTING
+2026-01-19 14:20:10.498 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:134)#PerformConnect ] === Connect requested, current state: IDLE ===
+2026-01-19 14:20:10.499 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:156)#PerformConnect ] Idle, starting connection
+2026-01-19 14:20:10.506 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTING -> WAITING_CONNECT
+2026-01-19 14:20:10.512 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:409)#WaitForAccessory ] Waiting for USB accessory to appear...
+2026-01-19 14:20:10.513 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:11.024 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:11.526 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:11.893 8154  Profil...taller com....taplink.sdk.demo  D  Installing profile for com.sunmi.tapro.taplink.sdk.demo
+2026-01-19 14:20:12.028 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:12.530 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:13.034 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:13.538 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:14.042 8154  chatty          com....taplink.sdk.demo  I  uid=10277(com.sunmi.tapro.taplink.sdk.demo) DefaultDispatch identical 1 line
+2026-01-19 14:20:14.546 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:15.050 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:15.554 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:16.023 8154  aplink.sdk.dem  com....taplink.sdk.demo  E  failed to connect to jdwp control socket: Connection refused
+2026-01-19 14:20:16.059 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:16.563 8154  Simpli...Kernel com....taplink.sdk.demo  W  [ (CableAoaAccessoryKernel.kt:649)#FindAccessory ] No USB accessories found
+2026-01-19 14:20:17.068 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:653)#FindAccessory ] Found 1 USB accessory(ies)
+2026-01-19 14:20:17.069 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:655)#FindAccessory ]   - SUNMI/TAPLINK_SDK/1.0
+2026-01-19 14:20:17.182 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:415)#WaitForAccessory ] Accessory found: SUNMI/TAPLINK_SDK/1.0
+2026-01-19 14:20:17.182 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:378)#StartConnection ] Found accessory: SUNMI/TAPLINK_SDK/1.0
+2026-01-19 14:20:17.183 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:385)#StartConnection ] Requesting permission for accessory
+2026-01-19 14:20:17.202 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:607)#RequestPermissionAndWait ] Permission request sent, waiting for response...
+2026-01-19 14:20:18.787 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:823)#OnReceive ] Permission broadcast: accessory=UsbAccessory[mManufacturer=SUNMI, mModel=TAPLINK_SDK, mDescription=Taplink Communication SDK, mVersion=1.0, mUri=https://www.sunmi.com, mSerialNumberReader=android.hardware.usb.IUsbSerialReader$Stub$Proxy@44731d9], granted=true
+2026-01-19 14:20:18.794 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:621)#RequestPermissionAndWait ] Permission granted
+2026-01-19 14:20:18.794 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:387)#StartConnection ] Permission granted
+2026-01-19 14:20:18.794 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:448)#ConnectToAccessory ] Connecting to accessory: SUNMI/TAPLINK_SDK/1.0
+2026-01-19 14:20:18.797 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:454)#ConnectToAccessory ] Accessory opened successfully
+2026-01-19 14:20:18.798 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:460)#ConnectToAccessory ] Input/Output streams created
+2026-01-19 14:20:18.798 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: WAITING_CONNECT -> CONNECTED
+2026-01-19 14:20:18.799 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:472)#ConnectToAccessory ] Connection resources saved, state=CONNECTED
+2026-01-19 14:20:18.809 8154  HexFrameBuffer  com....taplink.sdk.demo  D  [ (HexFrameBuffer.kt:140)#StartSequentialDataProcessor$lambda$5 ] Sequential hex data processor started
+2026-01-19 14:20:18.811 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:482)#ConnectToAccessory ] 📡 About to start receive loop...
+2026-01-19 14:20:18.812 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:685)#StartReceive ] 📡 Starting receive loop with connectionId=1768803618811
+2026-01-19 14:20:18.816 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:487)#ConnectToAccessory ] 📡 Receive loop started, receiveJob=true
+2026-01-19 14:20:18.816 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:690)#InvokeSuspend ] 📡 Data receive loop started (Accessory mode) on thread: DefaultDispatcher-worker-3
+2026-01-19 14:20:18.816 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:490)#ConnectToAccessory ] === Connection established successfully ===
+2026-01-19 14:20:18.817 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:691)#InvokeSuspend ] 📡 InputStream available: true, State: CONNECTED
+2026-01-19 14:20:18.818 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:692)#InvokeSuspend ] 📡 Accessory: SUNMI/TAPLINK_SDK/1.0, ConnectionId: 1768803618811
+2026-01-19 14:20:18.821 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:709)#InvokeSuspend ] 💓 Receive loop heartbeat #1 (connectionId=1768803618811)
+2026-01-19 14:20:21.103 8154  PhoneWindow     com....taplink.sdk.demo  V  DecorView setVisiblity: visibility = 0, Parent = android.view.ViewRootImpl@ec51ba7, this = DecorView@aa7c9a8[UsbAccessoryKernelTestActivity]
+2026-01-19 14:20:21.264 8154  aplink.sdk.dem  com....taplink.sdk.demo  I  Background concurrent copying GC freed 25948(1237KB) AllocSpace objects, 1(20KB) LOS objects, 49% free, 4571KB/9143KB, paused 62us total 100.735ms
+2026-01-19 14:20:25.313 8154  Simpli...Kernel com....taplink.sdk.demo  I  [ (CableAoaAccessoryKernel.kt:736)#InvokeSuspend ] 📥 [Accessory] Received 36 bytes (loop #1, connectionId=1768803618811)
+2026-01-19 14:20:25.314 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:737)#InvokeSuspend ]   Hex: 48656C6C6F2066726F6D20486F737420546573742061742031343A32303A32342E323839
+2026-01-19 14:20:25.315 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:738)#InvokeSuspend ]   Text: Hello from Host Test at 14:20:24.289
+2026-01-19 14:20:25.319 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:743)#InvokeSuspend ] ✅ Data delivered to receiver
+2026-01-19 14:20:27.153 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (AsyncServiceKernel.kt:137)#InvokeSuspend ] Sending data via SimplifiedAoaAccessory: traceId=test_1768803627150, dataSize=41 bytes
+2026-01-19 14:20:27.154 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:306)#PerformSendData ] 📤 [Accessory] Sending 41 bytes
+2026-01-19 14:20:27.155 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:307)#PerformSendData ]   Hex: 48656C6C6F2066726F6D204163636573736F727920546573742061742032323A32303A32372E313338
+2026-01-19 14:20:27.155 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:308)#PerformSendData ]   Text: Hello from Accessory Test at 22:20:27.138
+2026-01-19 14:20:27.155 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:312)#PerformSendData ] ✅ Data sent successfully: 41 bytes
+2026-01-19 14:20:49.545 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (AsyncServiceKernel.kt:137)#InvokeSuspend ] Sending data via SimplifiedAoaAccessory: traceId=test_1768803649537, dataSize=41 bytes
+2026-01-19 14:20:49.547 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:306)#PerformSendData ] 📤 [Accessory] Sending 41 bytes
+2026-01-19 14:20:49.547 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:307)#PerformSendData ]   Hex: 48656C6C6F2066726F6D204163636573736F727920546573742061742032323A32303A34392E353230
+2026-01-19 14:20:49.560 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:308)#PerformSendData ]   Text: Hello from Accessory Test at 22:20:49.520
+2026-01-19 14:20:49.563 8154  Simpli...Kernel com....taplink.sdk.demo  D  [ (CableAoaAccessoryKernel.kt:312)#PerformSendData ] ✅ Data sent successfully: 41 bytes

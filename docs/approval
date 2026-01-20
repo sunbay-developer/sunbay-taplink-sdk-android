@@ -1,0 +1,264 @@
+针对 AsyncServiceKernel 这层，结合你前面 BaseUsbAoaKernel/BaseUsbHostKernel 的 token/Mutex 思路，核心问题是：连接/断开/发送的并发模型目前不够一致，会导致“旧 connect 协程继续推进”“disconnect 取消了子协程但没等资源释放”“callback 被覆盖/错投”等。下面按优先级给可落地的优化点。
+
+1) disconnect() 先 cancelChildren() 再 performDisconnect()：会把子类的清理协程也一起取消（顺序风险）
+你现在：
+
+scope.coroutineContext.cancelChildren()
+performDisconnect()
+cleanupCommonResources()
+如果子类的 performDisconnect() 内部需要 scope.launch { ... } 做异步清理（很多 USB/IO 清理会这么写），会立刻被取消；即使子类不 launch，cancelChildren 也可能把正在进行的 connect/send/receive 取消到“半途”，而你又立刻 updateStatus(DISCONNECTED)，容易出现资源未释放完但状态已断开。
+
+建议改成两种更稳的策略之一：
+
+方案 A（推荐）：disconnect 走“同步清理”，不要依赖 scope.launch
+约束：performDisconnect() 必须是同步完成资源释放（不 launch）
+然后再 cancelChildren（或反过来）
+更合理顺序通常是：
+
+先阻止新操作（状态置 DISCONNECTING 或设置 closing 标记）
+取消正在跑的任务（connectJob/receiveJob/sendJob）
+同步释放底层资源
+cleanup + 更新状态
+即：
+
+override fun disconnect() {
+    if (currentInnerConnectionStatus == DISCONNECTED) return
+    updateStatus(InnerConnectionStatus.DISCONNECTING) // 如果你有这个状态
+
+    // 先取消子任务（但保留 scope 本身）
+    scope.coroutineContext.cancelChildren()
+
+    // 再释放资源（必须同步，不要 scope.launch）
+    performDisconnect()
+
+    cleanupCommonResources()
+    updateStatus(DISCONNECTED)
+}
+方案 B：让 performDisconnect 变成 suspend，在一个 runBlocking/withContext 中完成
+这能保证“取消子任务”和“释放资源”能在同一协程语义下完成，并且你可以在 disconnect 内 withContext(NonCancellable) 做最后清理：
+
+protected abstract suspend fun performDisconnect()
+
+override fun disconnect() {
+    ...
+    runBlocking {
+        withContext(NonCancellable) { performDisconnect() }
+    }
+    ...
+}
+对库代码来说，方案 A 更简单；方案 B 更彻底但会引入阻塞/调用线程语义变化，需要你确认上层调用线程。
+
+2) connect() 会覆盖 currentConnectionCallback：并发 connect 时 callback 可能错投
+你在 connect 一开始就：
+
+currentConnectionCallback = connectionCallback
+如果上层短时间内连续调用 connect（或自动重试），后一次会覆盖前一次 callback。此时前一次 connect 协程如果还在跑，成功/失败可能回调到“新 callback”，造成严重错乱。
+
+建议：引入连接序列号/operation token（你在 Host 已经做了），并把它上移到 AsyncServiceKernel 或 BaseUsbAoaKernel，至少做到：
+
+connect 时生成 opToken
+保存 currentConnectionCallback 与 token 绑定
+所有 notify/handleSuccess/handleError 前检查 token 是否仍是 active
+示例（概念）：
+
+private val opSeq = AtomicLong(0)
+@Volatile private var activeToken = 0L
+@Volatile private var activeCallback: ConnectionCallback? = null
+
+override fun connect(protocol: String, cb: ConnectionCallback) {
+    val token = opSeq.incrementAndGet()
+    activeToken = token
+    activeCallback = cb
+    ...
+    performConnect(parseResult, cb, token)
+}
+
+protected fun withActiveCallback(token: Long, block: (ConnectionCallback) -> Unit) {
+    val cb = activeCallback
+    if (token == activeToken && cb != null) block(cb)
+}
+这样 Host 的 permissionReceiver/deviceReceiver 的 token 门禁就能和上层完全一致，不会出现“Host token 对了，但 callback 已被覆盖”的情况。
+
+3) performConnect() 没有统一的异常兜底：子类协程异常可能丢失回调
+connect() 里 try/catch 只包住了“启动连接”的同步部分；但 performConnect() 通常会 scope.launch { ... }（你在 BaseUsbAoaKernel 就是这样），里面抛异常不会走这里的 catch。
+
+建议在 AsyncServiceKernel 层提供一个统一的“连接 job 启动器”，要求子类不要自己随便 launch，或者至少提供模板方法：
+
+protected fun launchConnect(token, cb) { runCatching { ... }.onFailure { ... } }
+否则每个子类都要自己做 runCatching，容易漏。
+
+4) sendData() 外层 sendMutex + Host 内层 usbSendMutex：锁顺序要固定，避免未来死锁
+目前链路是：sendData() 先拿 sendMutex，然后 performSendData() 里（Host）再拿 usbSendMutex。这没问题。
+
+但要明确约束：任何地方都不要反过来（先拿 usbSendMutex 再调用 sendData/withSendLock），否则未来很容易死锁。
+
+建议：
+
+在注释里写明锁顺序：sendMutex -> usbSendMutex
+或者干脆只保留一把锁：如果 USB Host 永远要串行写，其实可以让 Host override sendData()，直接用 usbSendMutex，不再叠两层（但你之前说“防止外部直接调用 sendDataToDevice”，那就保留 usbSendMutex 也行）。
+5) scope = SupervisorJob() + Dispatchers.IO：建议加 CoroutineExceptionHandler 统一记录“未捕获异常”
+SupervisorJob 会让子协程失败不影响兄弟协程，但如果你没有 handler，很多异常只会静默打印或被默认处理，排查困难。
+
+建议：
+
+private val ceh = CoroutineExceptionHandler { _, t ->
+    LogUtil.e(getTag(), "Coroutine uncaught: ${t.message}")
+}
+protected val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + ceh)
+并且连接/接收协程仍建议 runCatching 做业务回调。
+
+6) disconnect() 里 updateStatus(DISCONNECTED) 过于乐观：应该由“资源释放成功”决定
+现在无论 performDisconnect() 是否真正释放成功，你都会设置 DISCONNECTED（catch 才 ERROR）。但 performDisconnect() 内部如果吞异常或部分失败，状态可能不准确。
+
+建议：
+
+performDisconnect() 返回 Boolean 或抛异常（由上层 catch）
+或者在 disconnect 中用 runCatching { performDisconnect() }，成功才 DISCONNECTED，失败 ERROR，并尽量保证 cleanup 仍执行。
+7) cleanupCommonResources() 清 callback/dataReceiver：但没有清“连接相关 job”
+你在 BaseUsbAoaKernel.cleanupCommonResources() 扩展了 dataReceiveJob cancel，这是好的；但更建议在 AsyncServiceKernel 这一层就提供 connectJob/sendJob 等统一管理（见第 1/3 点），否则每个子类各管各的，容易漏。
+
+建议你采用的整体落地方案（与现有 Host token 设计最兼容）
+把 token/opSeq 上移到 AsyncServiceKernel 或 BaseUsbAoaKernel，并提供 isTokenActive(token)、withActiveCallback(token)
+引入 connectJob：新 connect 取消旧 connect；disconnect 取消 connectJob/receiveJob，再释放资源
+disconnect 顺序调整：不要在 performDisconnect 之前 cancel 掉“执行清理所需的协程”；或者强制 performDisconnect 同步
+连接协程统一 runCatching：确保异常一定回调到当前 token 对应 callback
+如果你愿意我直接给一版“最小侵入式改动”的代码草案，我需要你确认两点（否则容易改错语义）：
+
+BaseServiceKernel 里 updateStatus/canConnect/canSendData/handleConnectionSuccess/handleConnectionError 是否线程安全、是否要求在主线程回调？
+ConnectionCallback 的回调是否允许在 IO 线程调用（目前你全部在 IO scope 里回调）。
+
+结合你现在的三层结构（AsyncServiceKernel → BaseUsbAoaKernel → BaseUsbHostKernel/Accessory），BaseUsbAoaKernel 本身很薄，但它决定了连接协程的启动方式、断开入口、以及接收任务生命周期。下面是针对这个类的优化建议，重点是让你在 Host 里做的 token/Mutex 能“顺着基类链路”真正生效。
+
+1) performConnect() 每次都 scope.launch：需要“连接串行化/取消旧连接”的策略入口
+现在 performConnect() 直接 launch 一个新协程：
+
+scope.launch { performUsbConnect(...) }
+如果上层多次调用 connect（或 UI 重试、广播触发），会并发执行多个 performUsbConnect，这正是你在 Host 里用 token/Mutex 想解决的问题，但基类没有提供“统一门”。
+
+建议在 BaseUsbAoaKernel 提供一个连接 Job 管理（至少做到：新 connect 来时取消旧 connect，或者串行化）。
+
+最小改动版本（取消旧 connect）：
+
+private var connectJob: Job? = null
+
+override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
+    if (parseResult !is ProtocolParseResult.UsbProtocol) { ...; return }
+
+    connectJob?.cancel()
+    connectJob = scope.launch {
+        performUsbConnect(parseResult, connectionCallback)
+    }
+}
+更稳版本（串行化）：提供 connectMutex（放在 BaseUsbAoaKernel 或 BaseUsbHostKernel），所有 performUsbConnect 走同一把锁。
+
+这样 Host 子类就不需要到处 tryLock/Boolean，连接流程天然不会并发。
+
+2) 把“token 生命周期”上移到 BaseUsbAoaKernel（让 Host/Accessory 共用同一套门禁）
+你现在 token 在 BaseUsbHostKernel，Accessory 未来大概率也会遇到类似“旧协程/旧广播误伤”的问题。
+
+建议：把 token 抽到 BaseUsbAoaKernel（或者至少在这里提供抽象/模板方法）：
+
+beginNewOperation(reason): Long
+currentOpToken()
+isTokenActive(token)
+然后 performConnect() 在 launch 前就生成 token，并把 token 传入 performUsbConnect(..., token)：
+
+override fun performConnect(parseResult: ProtocolParseResult, cb: ConnectionCallback) {
+    ...
+    val token = beginNewOperation("performConnect")
+    connectJob?.cancel()
+    connectJob = scope.launch {
+        performUsbConnect(parseResult, cb, token)
+    }
+}
+
+protected abstract suspend fun performUsbConnect(
+    parseResult: ProtocolParseResult.UsbProtocol,
+    connectionCallback: ConnectionCallback,
+    opToken: Long
+)
+收益：
+
+token 的“开始点”统一，避免子类忘记 beginNewOperation
+disconnect/receive/send 都能用同一个 token 语义（Host/Accessory 一致）
+3) performDisconnect() 现在不取消 connectJob：可能出现“断开后又被连接协程拉起来”
+你现在：
+
+override fun performDisconnect() {
+    disconnectInternal()
+}
+但如果 performUsbConnect() 仍在跑（比如 wait AOA、requestPermission、openDevice 卡住），断开后它可能继续执行并最终把状态改回 CONNECTED。
+
+建议：在 performDisconnect() 里先取消 connectJob（以及任何“连接流程 job”），再断开：
+
+override fun performDisconnect() {
+    connectJob?.cancel()
+    connectJob = null
+    disconnectInternal()
+}
+如果你把 token 上移，那么 disconnect 时也可以 endOperation(token) 或把 active token 清掉（但注意清掉时机，建议在资源释放完成后清，见前一轮建议）。
+
+4) cleanupCommonResources() 只 cancel dataReceiveJob，不处理 connectJob/permission 等：资源生命周期不完整
+目前 cleanup 只管接收任务：
+
+dataReceiveJob?.cancel()
+建议把“连接流程 job”也纳入 common cleanup（否则 release/销毁时仍可能有 connect 协程活着）：
+
+override fun cleanupCommonResources() {
+    super.cleanupCommonResources()
+    connectJob?.cancel()
+    connectJob = null
+    dataReceiveJob?.cancel()
+    dataReceiveJob = null
+}
+并建议：release() 的默认实现（如果你允许）可以调用 cleanupCommonResources() + performDisconnect()，子类只处理 receiver unregister 等。
+
+5) startDataReceive() 建议由 Base 统一“先停旧 job 再启动”，避免子类重复/漏掉
+现在 startDataReceive() 由子类实现，容易出现：
+
+重连时旧的 receiveJob 没 cancel
+多次 start 导致多个接收协程并发读同一个 endpoint
+建议 Base 提供一个模板方法：
+
+protected fun restartDataReceive(start: () -> Job) {
+    dataReceiveJob?.cancel()
+    dataReceiveJob = start()
+}
+然后子类的 startDataReceive() 只负责创建 Job，Base 负责替换与取消旧的。
+
+或者更简单：Base 提供 protected fun cancelReceive()，子类 start 前必须调用。
+
+6) 错误处理路径：performUsbConnect 抛异常时应统一转成 handleConnectionError
+现在 performConnect() launch 后，如果 performUsbConnect 抛异常，可能只会走协程异常处理器（取决于 scope 的 SupervisorJob 设置），而 callback 不一定收到错误。
+
+建议 Base 在 launch 内包一层 runCatching，统一回调错误：
+
+connectJob = scope.launch {
+    runCatching {
+        performUsbConnect(parseResult, connectionCallback)
+    }.onFailure { t ->
+        handleConnectionError(
+            t.message ?: InnerErrorCode.E254.description,
+            connectionCallback,
+            InnerErrorCode.E254.code
+        )
+    }
+}
+（错误码你可以换成更合适的“连接异常”码）
+
+7) permissionPendingIntent 在 BaseUsbAoaKernel 里未使用：要么下移，要么在 Base 提供统一权限请求入口
+BaseUsbAoaKernel 持有 permissionPendingIntent，但 Host 里实际上用的是“按设备创建 PendingIntent”。这会造成字段语义混乱。
+
+建议二选一：
+
+下移：把 permissionPendingIntent 从 BaseUsbAoaKernel 移到 Accessory 或 Host（谁真正用谁持有）
+上移统一：Base 提供 protected open fun createPermissionPendingIntent(device?): PendingIntent，Host override 为按设备创建，Accessory 用固定的。
+推荐的最小改造清单（不大动架构但立刻更稳）
+在 BaseUsbAoaKernel 增加 connectJob，并在 performConnect/performDisconnect/cleanupCommonResources 管起来
+在 performConnect 的协程里 runCatching，确保异常一定回调错误
+（可选但强烈建议）把 token 生命周期上移到 BaseUsbAoaKernel，并把 token 作为参数传给 performUsbConnect
+如果你把 AsyncServiceKernel 也贴一下（尤其是：scope 的 Job 类型、currentConnectionCallback 的赋值时机、updateStatus/handleConnectionSuccess/handleConnectionError 的线程约束），我可以给你一版“基类模板法”重构：
+
+Base 统一 connect/disconnect/job/token
+Host 只关心 USB 细节（permission/open/claim/receive/send）
+这样你现在在 Host 里写的 token/门禁会更简洁，而且不会被基类的并发 launch 抵消。

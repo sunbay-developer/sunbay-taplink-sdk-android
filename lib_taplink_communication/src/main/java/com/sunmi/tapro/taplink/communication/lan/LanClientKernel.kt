@@ -304,7 +304,9 @@ class LanClientKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
-        launchInScope {
+        // 取消旧连接任务，避免并发连接
+        connectJob?.cancel()
+        connectJob = launchInScope {
             executeConnectionOperation("CONNECT", connectionCallback) { operationId ->
                 try {
                     val lanResult = parseResult as ProtocolParseResult.LanProtocol
@@ -571,7 +573,7 @@ class LanClientKernel(
         return retryableErrors.any { errorMessage.contains(it) }
     }
 
-    override fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
+    override suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
         try {
             LogUtil.d(TAG, "Sending data via LAN: traceId=$traceId, size=${data.size} bytes")
 
