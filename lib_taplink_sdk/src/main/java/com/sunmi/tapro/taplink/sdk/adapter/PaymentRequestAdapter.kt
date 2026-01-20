@@ -161,7 +161,6 @@ object PaymentRequestAdapter {
         return PaymentRequest(
             action = TransactionAction.ABORT.value,
             description = request.description,
-            originalTransactionId = request.originalTransactionId,
             originalTransactionRequestId = request.originalTransactionRequestId,
             attach = request.attach,
             requestTimeout = request.requestTimeout

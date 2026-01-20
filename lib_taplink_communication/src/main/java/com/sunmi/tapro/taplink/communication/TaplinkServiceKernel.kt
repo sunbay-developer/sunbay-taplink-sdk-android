@@ -1,20 +1,19 @@
 package com.sunmi.tapro.taplink.communication
 
 import android.content.Context
-import com.sunmi.tapro.taplink.communication.cable.aoa.host.UsbStandardHostKernel
+import com.sunmi.tapro.taplink.communication.cable.aoa.host.CableAoaHostKernel
 import com.sunmi.tapro.taplink.communication.cable.serial.SerialServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.IServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
-import com.sunmi.tapro.taplink.communication.lan.WebSocketClientKernel
+import com.sunmi.tapro.taplink.communication.lan.LanClientKernel
 import com.sunmi.tapro.taplink.communication.local.kernel.LocalServiceKernel
 import com.sunmi.tapro.taplink.communication.cable.vsp.VSPClientKernel
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
-import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
 
 /**
  * Taplink服务内核类
@@ -55,8 +54,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
     fun connect(protocol: String, appid: String, appSecretKey: String, connectionCallback: ConnectionCallback) {
         if (!isInitialized()) {
             connectionCallback.onDisconnected(
-                InnerErrorCode.C20.code,
-                InnerErrorCode.C20.description
+                InnerErrorCode.E201.code,
+                InnerErrorCode.E201.description
             )
             return
         }
@@ -64,7 +63,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         // 解析协议，确定使用哪个服务
         val parseResult = ProtocolManager.parseProtocol(protocol)
         if (parseResult is ProtocolParseResult.Error) {
-            connectionCallback.onDisconnected(InnerErrorCode.C41.code, parseResult.message)
+            connectionCallback.onDisconnected(InnerErrorCode.E214.code, parseResult.message)
             return
         }
 
@@ -72,8 +71,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
         val serviceKernel = getServiceKernelByProtocol(parseResult, appid, appSecretKey)
         if (serviceKernel == null) {
             connectionCallback.onDisconnected(
-                InnerErrorCode.C58.code,
-                "${InnerErrorCode.C58.description}: ${parseResult::class.simpleName}"
+                InnerErrorCode.E214.code,
+                "${InnerErrorCode.E214.description}: ${parseResult::class.simpleName}"
             )
             return
         }
@@ -81,15 +80,15 @@ class TaplinkServiceKernel private constructor(context: Context) {
         // 检查当前是否有已连接的服务内核
         val oldServiceKernel = currentServiceKernel
         if (oldServiceKernel != null && oldServiceKernel !== serviceKernel) {
-            // 如果当前连接的服务内核和要连接的不是同一个，且当前服务处于连接状态，先断开旧的
+            // 如果当前连接的服务内核和要连接的不是同一个，先断开旧的
+            // 注意：即使状态是 DISCONNECTED，也要调用 disconnect() 以确保清理资源
+            // （例如正在运行的协程、服务发现等）
             val oldStatus = oldServiceKernel.getConnectionStatus()
-            if (oldStatus != InnerConnectionStatus.DISCONNECTED) {
-                LogUtil.d(TAG, "Disconnecting old service kernel before connecting new one. Old status: $oldStatus")
-                try {
-                    oldServiceKernel.disconnect()
-                } catch (e: Exception) {
-                    LogUtil.e(TAG, "Error disconnecting old service kernel: ${e.message}")
-                }
+            LogUtil.d(TAG, "Disconnecting old service kernel before connecting new one. Old status: $oldStatus")
+            try {
+                oldServiceKernel.disconnect()
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error disconnecting old service kernel: ${e.message}")
             }
             // 清空旧的serviceKernel引用（因为要切换到新的类型）
             currentServiceKernel = null
@@ -159,8 +158,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
      */
     private fun isServiceKernelOfType(kernel: IServiceKernel, serviceKey: String): Boolean {
         return when (serviceKey) {
-            SERVICE_KEY_LAN -> kernel is WebSocketClientKernel
-            SERVICE_KEY_USB -> kernel is UsbStandardHostKernel
+            SERVICE_KEY_LAN -> kernel is LanClientKernel
+            SERVICE_KEY_USB -> kernel is CableAoaHostKernel
             SERVICE_KEY_SERIAL -> kernel is SerialServiceKernel
             SERVICE_KEY_VSP -> kernel is VSPClientKernel
             SERVICE_KEY_LOCAL -> kernel is LocalServiceKernel
@@ -181,16 +180,13 @@ class TaplinkServiceKernel private constructor(context: Context) {
         return when (serviceKey) {
             SERVICE_KEY_LAN -> {
                 LogUtil.d(TAG, "Creating LAN service")
-                WebSocketClientKernel(appId, appSecretKey, mContext)
+                LanClientKernel(appId, appSecretKey, mContext)
             }
 
             SERVICE_KEY_USB -> {
                 LogUtil.d(TAG, "Creating USB service")
-                UsbStandardHostKernel(
+                CableAoaHostKernel(
                     appId, appSecretKey, mContext,
-                    UsbStandardProtocol.UsbStandardInfo(),
-                    UsbStandardHostKernel.ACTION_USB_STANDARD_HOST_KERNEL,
-                    UsbStandardHostKernel.createRequestPermissionPendingIntent(mContext)
                 )
             }
 
@@ -237,7 +233,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         val kernel = currentServiceKernel
         if (kernel == null) {
             LogUtil.e(TAG, "No service kernel available, cannot send data")
-            callback?.onError(InnerErrorCode.C46.code, InnerErrorCode.C46.description)
+            callback?.onError(InnerErrorCode.E203.code, "No service kernel available")
             return
         }
 
@@ -245,7 +241,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
             kernel.sendData(traceId, data, callback)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send data: traceId=$traceId, error=${e.message}")
-            callback?.onError(InnerErrorCode.C47.code, "${InnerErrorCode.C47.description}:${e.message}")
+            callback?.onError(InnerErrorCode.E304.code, "${InnerErrorCode.E304.description}:${e.message}")
         }
     }
 

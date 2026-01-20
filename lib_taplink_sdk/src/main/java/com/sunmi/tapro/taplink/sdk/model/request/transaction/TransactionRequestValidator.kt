@@ -12,10 +12,10 @@ import java.math.BigDecimal
  * @since 2025-01-XX
  */
 object TransactionRequestValidator {
-    
+
     /**
      * 验证交易请求ID
-     * 
+     *
      * @param transactionRequestId 交易请求ID
      * @return ValidationResult 验证结果
      */
@@ -26,10 +26,10 @@ object TransactionRequestValidator {
             ValidationResult.success()
         }
     }
-    
+
     /**
      * 验证参考订单号
-     * 
+     *
      * @param referenceOrderId 参考订单号
      * @return ValidationResult 验证结果
      */
@@ -44,10 +44,10 @@ object TransactionRequestValidator {
             ValidationResult.success()
         }
     }
-    
+
     /**
      * 验证金额信息
-     * 
+     *
      * @param amount 金额信息
      * @return ValidationResult 验证结果
      */
@@ -60,10 +60,10 @@ object TransactionRequestValidator {
             ValidationResult.success()
         }
     }
-    
+
     /**
      * 验证描述信息
-     * 
+     *
      * @param description 描述信息
      * @return ValidationResult 验证结果
      */
@@ -76,10 +76,10 @@ object TransactionRequestValidator {
             ValidationResult.success()
         }
     }
-    
+
     /**
      * 验证原始交易引用
-     * 
+     *
      * @param originalTransactionId 原始交易ID
      * @param originalTransactionRequestId 原始交易请求ID
      * @return ValidationResult 验证结果
@@ -94,10 +94,26 @@ object TransactionRequestValidator {
             ValidationResult.success()
         }
     }
-    
+
+    /**
+     * 验证原始交易引用
+     *
+     * @param originalTransactionRequestId 原始交易请求ID
+     * @return ValidationResult 验证结果
+     */
+    fun validateOriginalTransactionReference(
+        originalTransactionRequestId: String?
+    ): ValidationResult {
+        return if (originalTransactionRequestId.isNullOrBlank()) {
+            ValidationResult.failure(ValidationError.MissingOriginalTransaction)
+        } else {
+            ValidationResult.success()
+        }
+    }
+
     /**
      * 验证小费金额
-     * 
+     *
      * @param tipAmount 小费金额
      * @return ValidationResult 验证结果
      */
@@ -108,10 +124,10 @@ object TransactionRequestValidator {
             ValidationResult.success()
         }
     }
-    
+
     /**
      * 合并多个验证结果
-     * 
+     *
      * @param results 验证结果列表
      * @return ValidationResult 合并后的验证结果
      */

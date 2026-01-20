@@ -24,7 +24,8 @@ sealed class ProtocolParseResult {
      */
     data class LanProtocol(
         val ip: String,
-        val port: Int
+        val port: Int,
+        val secure: Boolean = false  // 是否使用安全连接（wss://），默认为 false（ws://）
     ) : ProtocolParseResult()
 
     /**
@@ -145,13 +146,13 @@ object ProtocolParser {
      */
     private fun parseLanProtocol(protocol: String): ProtocolParseResult {
         try {
-            // 支持 wss:// 和 ws:// 两种格式
-            val content = when {
+            // 支持 wss:// 和 ws:// 两种格式，并保存安全连接信息
+            val (content, secure) = when {
                 protocol.startsWith(ProtocolConstants.LAN_PROTOCOL_PREFIX) -> 
-                    protocol.removePrefix(ProtocolConstants.LAN_PROTOCOL_PREFIX)
+                    Pair(protocol.removePrefix(ProtocolConstants.LAN_PROTOCOL_PREFIX), true)  // wss://
                 protocol.startsWith(ProtocolConstants.LAN_WS_PROTOCOL_PREFIX) -> 
-                    protocol.removePrefix(ProtocolConstants.LAN_WS_PROTOCOL_PREFIX)
-                else -> protocol
+                    Pair(protocol.removePrefix(ProtocolConstants.LAN_WS_PROTOCOL_PREFIX), false)  // ws://
+                else -> Pair(protocol, false)  // 默认非安全连接
             }
             
             if (content.isEmpty()) {
@@ -180,7 +181,7 @@ object ProtocolParser {
                 return ProtocolParseResult.Error("Invalid port number: ${parts[1]}")
             }
 
-            return ProtocolParseResult.LanProtocol(ip, port)
+            return ProtocolParseResult.LanProtocol(ip, port, secure)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to parse lan protocol: $protocol\n${e.stackTraceToString()}")
             return ProtocolParseResult.Error("Failed to parse lan protocol: ${e.message}")

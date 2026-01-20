@@ -131,10 +131,12 @@ val refundRequest = PaymentRequest()
 
 | 错误类型 | 错误码示例 | 处理策略 |
 | --- | --- | --- |
-| **临时性错误** | E02, 996, E01, C08 | 使用相同ID重试 |
-| **明确失败** | 051, 055, 054 | 提示用户，使用新ID重试 |
-| **配置错误** | S03, C20, M02 | 检查配置，联系技术支持 |
-| **连接错误** | C22, C23, C30 | 检查连接状态 |
+| **通用系统错误** | 201, 202, 203, 204, 209 | 检查配置，修复后重试 |
+| **连接错误** | 211, 212, 213, 214, 215, 231, 232, 251, 271, 281, 283, 286, 291, 294 | 检查连接状态，重试连接 |
+| **认证错误** | 221 | 检查认证参数，重新建立连接 |
+| **参数验证错误（交易处理）** | 311, 312, 313, 314, 315, 316 | 检查参数，修复后重试 |
+| **数据传输错误（交易处理）** | 321, 322, 323 | 检查网络连接，重试数据发送 |
+| **交易业务逻辑错误（交易处理）** | 331, 332, 333, 334, 335, 336 | 等待后重试或查询状态（注意：333、334需使用新ID） |
 
 **处理流程：**
 
@@ -161,9 +163,11 @@ val refundRequest = PaymentRequest()
     
 *   相同的 `transactionRequestId` 在系统中只会被处理一次
     
-*   临时性错误重试时，必须使用相同的 `transactionRequestId`
+*   **特殊错误码**（332、333、334、000）重试时，必须使用**新的** `transactionRequestId`
     
-*   明确失败或修改参数后，必须使用新的 `transactionRequestId`
+*   **其他错误码**重试时，可以使用**相同的** `transactionRequestId`
+    
+*   修改金额或订单后，必须使用新的 `transactionRequestId`
     
 
 ---
@@ -172,27 +176,48 @@ val refundRequest = PaymentRequest()
 
 **何时使用相同ID？**
 
-当遇到以下情况时，必须使用**相同的** `transactionRequestId` 重试：
+**核心原则：** 除了以下特殊错误码外，其他所有错误码都可以使用**相同的** `transactionRequestId` 重试：
 
-| **场景** | **原因** | **典型错误码** |
+| **错误码** | **说明** | **处理方式** |
 | --- | --- | --- |
-| **网络错误** | 请求可能已到达服务器，但响应未返回 | E02 |
-| **系统超时** | 交易状态未知，可能已处理 | 996 |
-| **系统繁忙** | 系统可能已接收请求但未及时响应 | E01, C08 |
-| **连接中断** | 交易可能已提交但连接断开 | 连接异常 |
+| **333** | host交易拒绝 | 必须使用**新** `transactionRequestId` |
+| **334** | Host交易处理中 | 必须使用**新** `transactionRequestId` |
+| **000** | 交易成功 | 无需重试 |
+
+**特殊处理：响应超时（332）**
+
+| **错误码** | **说明** | **处理方式** |
+| --- | --- | --- |
+| **332** | Tapro响应超时 | 先查询交易状态，确认结果后再使用**相同** `transactionRequestId` 重试 |
+
+**可以使用相同ID的错误码示例：**
+
+| **错误码类型** | **典型错误码** | **说明** |
+| --- | --- | --- |
+| **响应超时** | 332 | 先查询交易状态，确认结果后可使用相同ID重试 |
+| **交易锁定** | 331, 209 | 系统正在处理其他交易，可使用相同ID重试 |
+| **连接错误** | 213, 212, 232, 251, 271 | 连接问题，可使用相同ID重试 |
+| **初始化错误** | 201, 231, 202 | 配置问题修复后，可使用相同ID重试 |
+| **参数错误** | 311, 312, 313, 314, 315, 316 | 参数错误修复后，可使用相同ID重试 |
+| **其他错误** | 除333/334/000外的所有错误码 | 可使用相同ID重试 |
 
 **何时使用新ID？**
 
-当遇到以下情况时，必须使用**新的** `transactionRequestId`：
+当遇到以下情况时，必须使用**新的** `transactionRequestId`：
 
 | **场景** | **原因** | **典型错误码** |
 | --- | --- | --- |
-| **余额不足** | 交易已明确拒绝，需要新的尝试 | 051 |
-| **PIN错误** | 需要用户重新输入PIN | 055 |
-| **卡片过期** | 需要更换卡片 | 054 |
+| **host交易拒绝** | 交易被host明确拒绝 | 333 |
+| **Host交易处理中** | Host正在处理，需要查询状态 | 334 |
+| **交易成功** | 交易已成功完成 | 000 |
 | **修改金额** | 交易参数已变化 | \- |
 | **修改订单** | 不同的业务订单 | \- |
-| **用户取消** | 用户主动取消交易 | C39 |
+
+**特殊处理：响应超时（332）**
+
+| **场景** | **原因** | **处理方式** |
+| --- | --- | --- |
+| **响应超时** | 交易状态未知，可能已处理 | 先查询交易状态，确认结果后再使用**相同** `transactionRequestId` 重试 |
 
 ---
 
@@ -219,17 +244,24 @@ class PaymentManager {
     }
     
     fun retryPayment(error: PaymentError) {
-        if (isTemporaryError(error.code)) {
-            // 临时性错误：使用相同请求重试
+        if (canRetryWithSameId(error.code)) {
+            // 可以使用相同ID：使用相同请求重试
             TaplinkSDK.execute(currentRequest!!, callback)
         } else {
-            // 明确失败：创建新交易
+            // 特殊错误码（332、333、334、000）：必须创建新交易
             processPayment(100.0)  // 生成新ID
         }
     }
     
-    private fun isTemporaryError(code: String): Boolean {
-        return code in listOf("996", "E01", "E02", "C08")
+    /**
+     * 判断是否可以使用相同的 transactionRequestId 重试
+     * 
+     * 特殊错误码（332、333、334、000）必须使用新ID
+     * 其他所有错误码都可以使用相同ID
+     */
+    private fun canRetryWithSameId(code: String): Boolean {
+        // 332、333、334、000 不能使用相同ID（332需要先查询状态）
+        return code !in listOf("332", "333", "334", "000")
     }
 }
 
@@ -273,10 +305,61 @@ class PaymentManager {
 
 | **错误码** | **说明** | **解决方案** |
 | --- | --- | --- |
-| S03 | 签名验证失败 | 检查 secretKey 是否正确 |
-| S06 | 权限不足 | 联系管理员申请权限 |
-| M02 | 应用不存在或已禁用 | 检查 appId 是否正确 |
-| M03 | 应用和商户绑定不匹配 | 确认应用已授权给此商户 |
+| 201 | SDK未初始化 | 调用TaplinkSDK.init()初始化SDK |
+| 231 | Tapro应用未安装 | 安装Tapro应用到设备 |
+| 221 | 连接认证失败 | 检查认证参数（appId、secretKey等），重新建立连接 |
+| 212 | 未建立连接 | 先调用connect()建立连接 |
+
+---
+
+### 2.6 金额单位规范
+
+#### 核心概念
+
+SDK 中的所有金额字段都必须使用**最小货币单位**（smallest currency unit）表示，这是国际支付系统的标准做法，确保精确性和一致性。
+
+**基本货币单位 vs 最小货币单位：**
+
+| **货币** | **基本货币单位** | **最小货币单位** | **换算关系** |
+| --- | --- | --- | --- |
+| **USD（美元）** | Dollar | Cent（分） | 1 Dollar = 100 Cents |
+| **EUR（欧元）** | Euro | Cent（分） | 1 Euro = 100 Cents |
+| **JPY（日元）** | Yen | Yen（日元） | 1 Yen = 1 Yen |
+| **CNY（人民币）** | Yuan | Fen（分） | 1 Yuan = 100 Fen |
+
+**为什么使用最小货币单位？**
+
+1.  **避免浮点数精度问题**：整数运算比浮点数更精确
+    
+2.  **国际标准兼容**：符合 ISO-4217 标准
+    
+3.  **系统一致性**：所有支付系统都使用相同的表示方法
+    
+4.  **防止舍入误差**：避免金额计算中的精度丢失
+    
+
+#### 示例：
+
+```kotlin
+正确：
+// $12.34 表示为 1234 分
+val amount = AmountInfo()
+    .setOrderAmount(BigDecimal("1234"))  // 1234 分 = $12.34
+    .setPricingCurrency("USD")
+
+// 错误：使用基本货币单位
+val wrongAmount = AmountInfo()
+    .setOrderAmount(BigDecimal("12.34"))  // 错误！这会被理解为 $0.1234
+    .setPricingCurrency("USD")
+```
+
+#### 常见货币换算表
+
+| **金额显示** | **最小货币单位** | **SDK中的值** |
+| --- | --- | --- |
+| $1.00 | 100 cents | 100 |
+
+**参考标准：** 各货币的小数位数详情请参考 [ISO-4217](https://www.iso.org/iso-4217-currency-codes.html) 国际标准。
 
 ---
 
@@ -357,8 +440,9 @@ android {
 }
 
 dependencies {
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.0")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.1")
     implementation("com.google.code.gson:gson:2.13.1")
+    implementation("org.java-websocket:Java-WebSocket:1.5.3")
 }
 
 ```
@@ -374,7 +458,6 @@ class MyApplication : Application() {
             .setAppId("your_app_id")
             .setMerchantId("your_merchant_id")
             .setSecretKey("your_secret_key")
-            .setConnectionMode(ConnectionMode.APP_TO_APP))
     }
 }
 
@@ -389,7 +472,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         
         // 连接到 Tapro
-        TaplinkSDK.connect(null, object : ConnectionListener {
+        val connectionConfig = ConnectionConfig().setConnectionMode(ConnectionMode.APP_TO_APP)
+        TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
                 // 连接成功，发起支付
                 processPayment()
@@ -417,15 +501,10 @@ class MainActivity : AppCompatActivity() {
         
         TaplinkSDK.execute(request, object : PaymentCallback {
             override fun onSuccess(result: PaymentResult) {
-                if (result.isSuccess()) {
-                    Toast.makeText(this@MainActivity, 
-                        "支付成功: ${result.transactionId}", 
-                        Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@MainActivity, 
-                        "支付失败: ${result.message}", 
-                        Toast.LENGTH_SHORT).show()
-                }
+                // 支付成功
+                Toast.makeText(this@MainActivity, 
+                    "支付成功: ${result.transactionId}", 
+                    Toast.LENGTH_SHORT).show()
             }
             
             override fun onFailure(error: PaymentError) {
@@ -452,10 +531,7 @@ class MainActivity : AppCompatActivity() {
 **配置要点：**
 
 *   连接模式：`ConnectionMode.APP_TO_APP`
-    
-*   连接参数：传 `null`（自动使用初始化配置）
-    
-*   特殊处理：检查 Tapro 应用是否已安装（错误码 C22）
+*   特殊处理：检查 Tapro 应用是否已安装（错误码 231）
     
 
 详细说明请参考 [4.1 应用间模式](#41-%E5%BA%94%E7%94%A8%E9%97%B4%E6%A8%A1%E5%BC%8F)
@@ -465,12 +541,15 @@ class MainActivity : AppCompatActivity() {
 ```kotlin
 // 1. 初始化（Application中）
 TaplinkSDK.init(this, TaplinkConfig()
-    .setConnectionMode(ConnectionMode.APP_TO_APP)
+    .setAppId("your_app_id")
+            .setMerchantId("your_merchant_id")
+            .setSecretKey("your_secret_key")
     // ... 其他配置
 )
 
 // 2. 连接（Activity中）
-TaplinkSDK.connect(null, connectionListener)
+val connectionConfig = ConnectionConfig().setConnectionMode(ConnectionMode.APP_TO_APP)
+TaplinkSDK.connect(connectionConfig, connectionListener)
 
 // 3. 发起支付
 val request = PaymentRequest()
@@ -497,7 +576,7 @@ TaplinkSDK.execute(request, paymentCallback)
     
 *   连接参数：传 `null`（自动检测线缆类型）
     
-*   特殊处理：检查线缆物理连接（错误码 C23）
+*   特殊处理：检查线缆物理连接（错误码 212）
     
 
 详细说明请参考 [4.2 线缆模式](#42-%E7%BA%BF%E7%BC%86%E6%A8%A1%E5%BC%8F)
@@ -507,10 +586,15 @@ TaplinkSDK.execute(request, paymentCallback)
 ```kotlin
 // 初始化
 TaplinkSDK.init(this, TaplinkConfig()
-    .setConnectionMode(ConnectionMode.CABLE))
+    .setAppId("your_app_id")
+    .setMerchantId("your_merchant_id")
+    .setSecretKey("your_secret_key")
 
 // 连接（自动检测USB/串口）
-TaplinkSDK.connect(null, connectionListener)
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.CABLE)
+            .setCableProtocol(CableProtocol.AUTO)
+TaplinkSDK.connect(connectionConfig, connectionListener)
 
 ```
 
@@ -532,12 +616,15 @@ TaplinkSDK.connect(null, connectionListener)
 ```kotlin
 // 初始化
 TaplinkSDK.init(this, TaplinkConfig()
-    .setConnectionMode(ConnectionMode.LAN))
+    .setAppId("your_app_id")
+    .setMerchantId("your_merchant_id")
+    .setSecretKey("your_secret_key")
 
 // 首次连接
-val config = ConnectionConfig()
-    .setHost("192.168.1.100")
-    .setPort(8443)
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.LAN)
+            .setHost(ip)
+            .setPort(port)
 TaplinkSDK.connect(config, connectionListener)
 
 // 后续连接
@@ -647,8 +734,8 @@ sequenceDiagram
 **配置示例：**
 
 ```kotlin
-TaplinkConfig()
-    .setConnectionMode(ConnectionMode.APP_TO_APP)
+val connectionConfig = ConnectionConfig()
+  .setConnectionMode(ConnectionMode.APP_TO_APP)
 
 ```
 
@@ -656,7 +743,8 @@ TaplinkConfig()
 
 ```kotlin
 // 使用初始化时的 APP_TO_APP 模式
-TaplinkSDK.connect(null, object : ConnectionListener {
+
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
     override fun onConnected(deviceId: String, taproVersion: String) {
         Log.d(TAG, "已连接到 Tapro $taproVersion")
         enablePaymentButtons(true)
@@ -669,8 +757,8 @@ TaplinkSDK.connect(null, object : ConnectionListener {
     
     override fun onError(error: ConnectionError) {
         when (error.code) {
-            "C22" -> showInstallTaproDialog()
-            "C20" -> Log.e(TAG, "SDK not initialized")
+            "231" -> showInstallTaproDialog()
+            "201" -> Log.e(TAG, "SDK not initialized")
             else -> Log.e(TAG, "Connection error: ${error.message}")
         }
     }
@@ -726,9 +814,9 @@ TaplinkSDK.connect(null, object : ConnectionListener {
 **配置示例：**
 
 ```kotlin
-TaplinkConfig()
-    .setConnectionMode(ConnectionMode.CABLE)
-
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.CABLE)
+            .setCableProtocol(CableProtocol.AUTO)
 ```
 
 **建立连接：**
@@ -737,7 +825,7 @@ TaplinkConfig()
 
 ```kotlin
 // 使用初始化时的 CABLE 模式，自动检测线缆类型
-TaplinkSDK.connect(null, object : ConnectionListener {
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
     override fun onConnected(deviceId: String, taproVersion: String) {
         Log.d(TAG, "通过线缆连接：$deviceId")
         enablePaymentButtons(true)
@@ -749,8 +837,8 @@ TaplinkSDK.connect(null, object : ConnectionListener {
     
     override fun onError(error: ConnectionError) {
         when (error.code) {
-            "C23" -> showDialog("线缆未连接", "请连接 USB 或串口线缆")
-            "C24" -> showDialog("无法识别线缆协议", "请手动指定协议类型")
+            "281" -> showDialog("线缆未连接", "请连接 USB 或串口线缆")
+            "291" -> showDialog("无法识别线缆协议", "请手动指定协议类型")
             else -> Log.e(TAG, "Connection error: ${error.message}")
         }
     }
@@ -763,7 +851,8 @@ TaplinkSDK.connect(null, object : ConnectionListener {
 ```kotlin
 // 指定 USB AOA 协议
 val config = ConnectionConfig()
-    .setCableProtocol(CableProtocol.USB_AOA)
+            .setConnectionMode(ConnectionMode.CABLE)
+            .setCableProtocol(CableProtocol.USB_AOA)
 
 TaplinkSDK.connect(config, object : ConnectionListener {
     override fun onConnected(deviceId: String, taproVersion: String) {
@@ -823,8 +912,10 @@ enum class CableProtocol {
 **配置示例：**
 
 ```kotlin
-TaplinkConfig()
-    .setConnectionMode(ConnectionMode.LAN)
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.LAN)
+            .setHost(ip)
+            .setPort(port)
 
 ```
 
@@ -842,11 +933,12 @@ TaplinkConfig()
 
 ```kotlin
 // 在支付终端的 Tapro 应用界面查看 IP 和端口
-val config = ConnectionConfig()
-    .setHost("192.168.1.100")
-    .setPort(8443)
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.LAN)
+            .setHost(ip)
+            .setPort(port)
 
-TaplinkSDK.connect(config, object : ConnectionListener {
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
     override fun onConnected(deviceId: String, taproVersion: String) {
         // 连接成功，设备信息自动缓存
         Toast.makeText(context, "已连接到设备：$deviceId", Toast.LENGTH_SHORT).show()
@@ -867,7 +959,10 @@ TaplinkSDK.connect(config, object : ConnectionListener {
 
 ```kotlin
 // 使用缓存的设备信息，即使 IP 地址变化也能自动更新
-TaplinkSDK.connect(null, object : ConnectionListener {
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.LAN)
+            
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
     override fun onConnected(deviceId: String, taproVersion: String) {
         Log.d(TAG, "已连接到缓存的设备：$deviceId")
     }
@@ -888,7 +983,7 @@ TaplinkSDK.connect(null, object : ConnectionListener {
 
 *   **在线**：正常通信
     
-*   **离线**：返回错误 E02
+*   **离线**：返回错误 213
     
 *   **重连中**：SDK自动处理
     
@@ -922,17 +1017,12 @@ private fun processSale() {
     
     TaplinkSDK.execute(request, object : PaymentCallback {
         override fun onSuccess(result: PaymentResult) {
-            if (result.isSuccess()) {
-                // 支付成功
-                val transactionId = result.transactionId
-                val authCode = result.authCode
-                
-                saveTransaction(transactionId, authCode)
-                printReceipt(result)
-            } else {
-                // 支付失败
-                handlePaymentError(result.message)
-            }
+            // 支付成功
+            val transactionId = result.transactionId
+            val authCode = result.authCode
+            
+            saveTransaction(transactionId, authCode)
+            printReceipt(result)
         }
         
         override fun onFailure(error: PaymentError) {
@@ -1016,9 +1106,7 @@ TaplinkSDK.execute(request, paymentCallback)
 
 **常见错误：**
 
-*   `C12`：找不到原始交易
-    
-*   `C11`：跨日交易，请使用 REFUND
+*   `333`：交易失败（具体原因，需要查看错误的信息）
     
 
 ---
@@ -1076,7 +1164,6 @@ val request = PaymentRequest()
         .setOrderAmount(500.00)
         .setPricingCurrency("USD"))
     .setDescription("酒店预订")
-    .setTimeExpire("2024-11-24T10:30:00+08:00")  // 可选：授权过期时间
 
 TaplinkSDK.execute(request, paymentCallback)
 
@@ -1119,7 +1206,7 @@ TaplinkSDK.execute(request, paymentCallback)
 ```
 ---
 
-### 5.8 批次关闭（BATCH\_CLOSE）（开发中）
+### 5.8 批次关闭（BATCH\_CLOSE）
 
 日终结算，关闭当前批次。
 
@@ -1131,15 +1218,14 @@ val request = PaymentRequest()
 
 TaplinkSDK.execute(request, object : PaymentCallback {
     override fun onSuccess(result: PaymentResult) {
-        if (result.isSuccess()) {
-            val batchCloseInfo = result.batchCloseInfo
-            // 显示批次汇总信息
-            showBatchSummary(
-                batchNo = result.batchNo,
-                totalCount = batchCloseInfo?.totalCount ?: 0,
-                totalAmount = batchCloseInfo?.totalAmount ?: 0.0
-            )
-        }
+        // 批次关闭成功
+        val batchCloseInfo = result.batchCloseInfo
+        // 显示批次汇总信息
+        showBatchSummary(
+            batchNo = result.batchNo,
+            totalCount = batchCloseInfo?.totalCount ?: 0,
+            totalAmount = batchCloseInfo?.totalAmount ?: 0.0
+        )
     }
     
     override fun onProgress(event: PaymentEvent) {
@@ -1285,20 +1371,12 @@ class TaplinkConfig {
     
     // 设置签名密钥（必需）
     fun setSecretKey(secretKey: String): TaplinkConfig
-    
-    // ========== 连接配置 ==========
-    
-    // 设置连接模式（可选）
-    fun setConnectionMode(mode: ConnectionMode): TaplinkConfig
-    
-    // 设置连接超时（可选，默认 10 秒）
-    fun setConnectionTimeout(seconds: Int): TaplinkConfig
-    
-    // 信任自签名证书（可选，默认 true）
-    fun setTrustSelfSignedCert(trust: Boolean): TaplinkConfig
-    
+
+    // 设置是否启用日志
+    fun setLogEnabled(enabled: Boolean): TaplinkConfig
+    // 设置日志级别
+    fun setLogLevel(level: LogLevel): TaplinkConfig
     // ========== 默认值配置 ==========
-    
     // 设置默认员工信息（可选）
     fun setDefaultStaffInfo(staffInfo: StaffInfo): TaplinkConfig
 }
@@ -1318,6 +1396,55 @@ val config = TaplinkConfig()
     .setDefaultStaffInfo(defaultStaffInfo)
 
 TaplinkSDK.init(this, config)
+
+```
+---
+
+### 6.3 ConnectionConfig
+
+SDK 连接配置类
+
+```kotlin
+class ConnectionConfig {
+    // ========== 必需配置 ==========
+    
+    // 设置连接模式（必需）
+    fun setConnectionMode(mode: ConnectionMode): ConnectionConfig
+    
+    // 设置主机地址（LAN模式首次必需）
+    fun setHost(host: String): ConnectionConfig
+    
+    // 设置端口号（LAN模式首次必需）
+    fun setPort(port: Int): ConnectionConfig
+
+    // 设置线缆协议
+    fun setCableProtocol(protocol: CableProtocol): ConnectionConfig
+
+    // 设置连接超时时间
+    fun setConnectionTimeout(seconds: Int): ConnectionConfig
+  
+    // 设置是否启用自动重连
+    fun setAutoReconnect(enabled: Boolean): ConnectionConfig
+
+    //设置重试策略(maxRetries - 最大重试次数,delayMs - 重试延迟时间（毫秒）)
+    fun setRetryPolicy(maxRetries: Int, delayMs: Long): ConnectionConfig
+}
+
+```
+
+**使用示例：**
+
+```kotlin
+val defaultStaffInfo = StaffInfo()
+    .setOperatorId("OP001")
+
+val config = ConnectionConfig()
+    .setConnectionMode(ConnectionMode.CABLE)
+    .setCableProtocol(CableProtocol.AUTO)
+    .setConnectionTimeout(60)
+    .setAutoReconnect(true)
+
+TaplinkSDK.connect(config,connectCallback)
 
 ```
 ---
@@ -1393,6 +1520,8 @@ class AmountInfo {
 
 ```
 
+**注意：** 所有金额字段都以**最小货币单位**返回。例如，USD以分为单位，JPY以日元为单位。
+
 **PaymentMethodInfo - 支付方式信息：**
 
 ```kotlin
@@ -1435,8 +1564,8 @@ class QueryRequest {
 ```kotlin
 class PaymentResult {
     // ========== 基本响应字段 ==========
-    val code: String                    // 响应码，"0" 表示成功
-    val message: String                 // 响应描述
+    val code: String                    // 交易结果码，"0" 表示成功
+    val message: String                 // 交易结果描述
     val traceId: String                 // 追踪 ID
     
     // ========== 交易标识符 ==========
@@ -1466,8 +1595,8 @@ class PaymentResult {
     val authCode: String                // 授权码
     
     // ========== 交易结果 ==========
-    val transactionResultCode: String   // 交易结果码
-    val transactionResultMsg: String    // 交易结果消息
+    val transactionResultCode: String   // 通道交易结果码
+    val transactionResultMsg: String    // 通道交易结果消息
     
     // ========== 其他信息 ==========
     val description: String             // 商品描述
@@ -1475,11 +1604,6 @@ class PaymentResult {
     
     // ========== 批次关闭特定 ==========
     val batchCloseInfo: BatchCloseInfo? // 批次关闭信息
-    
-    // ========== 便捷方法 ==========
-    fun isSuccess(): Boolean            // 检查交易是否成功
-    fun isProcessing(): Boolean         // 检查交易是否处理中
-    fun isFailed(): Boolean             // 检查交易是否失败
 }
 
 ```
@@ -1500,6 +1624,8 @@ class TransactionAmount {
 
 ```
 
+**注意：** 所有金额字段都以**最小货币单位**返回。例如，USD以分为单位，JPY以日元为单位。
+
 **BatchCloseInfo - 批次关闭信息：**
 
 ```kotlin
@@ -1515,6 +1641,9 @@ class BatchCloseInfo {
 }
 
 ```
+
+## 注意： 所有金额字段都以最小货币单位返回。例如，USD以分为单位，JPY以日元为单位。
+
 ---
 
 ### 6.6 PaymentError
@@ -1606,25 +1735,16 @@ interface PaymentCallback {
 
 **重要说明：**
 
-*   `onSuccess()`：表示 SDK 成功接收到响应，但**不代表交易一定成功**
+*   `onSuccess()`：表示 交易成功
     
-*   必须通过 `result.isSuccess()` 判断交易实际状态
-    
-*   `onFailure()`：表示 SDK 级别的错误或网络错误
-    
+*   `onFailure()`：表示 SDK 级别的错误或网络错误或者交易失败
 
 **使用示例：**
 
 ```kotlin
 TaplinkSDK.execute(request, object : PaymentCallback {
     override fun onSuccess(result: PaymentResult) {
-        if (result.isSuccess()) {
-            // 交易成功
-            handleSuccess(result.transactionId)
-        } else {
-            // 交易失败
-            handleFailure(result.message)
-        }
+         handleSuccess(result.transactionId)
     }
     
     override fun onFailure(error: PaymentError) {
@@ -1685,297 +1805,178 @@ enum class CableProtocol {
 
 ## 错误码参考
 
-本节列出 SDK 可能返回的所有错误码及其说明。
+本节列出 SDK 可能返回的所有错误码及其说明。
 
-### 错误码速查表（Top 10）
+### 错误码范围说明
+
+| 范围 | 错误类型 | 说明 | 连接模式 |
+|------|----------|------|----------|
+| 201-209 | 通用系统错误 | SDK初始化、配置、权限等通用错误 | 所有模式 |
+| 211-220 | 通用连接管理错误 | 连接状态、连接限制等通用连接错误 | 所有模式 |
+| 221-230 | 通用认证错误 | 认证、凭证、会话等通用认证错误 | 所有模式 |
+| 231-250 | APP_TO_APP模式错误 | APP_TO_APP连接和协议错误 | APP_TO_APP |
+| 251-280 | LAN模式错误 | LAN连接、网络、配置错误 | LAN |
+| 281-310 | CABLE模式错误 | CABLE连接、协议、设备、权限错误 | CABLE |
+| 311-350 | 交易处理错误 | 交易处理相关错误（包括参数验证、数据传输、交易业务逻辑） | 所有模式 |
+
+### 错误码列表
+
+| 错误码 | 说明 | 解决方案 | 分类 |
+|--------|------|----------|------|
+| 201 | SDK未初始化 | 调用TaplinkSDK.init()初始化SDK | 通用系统错误 |
+| 202 | VSP客户端未就绪 | 重新初始化VSP客户端 | 通用系统错误 |
+| 203 | 无可用服务内核 | 重新初始化服务内核 | 通用系统错误 |
+| 204 | 交易接口为空 | 重新绑定交易服务接口 | 通用系统错误 |
+| 209 | Tapro初始化失败 | 请重新连接 | 通用系统错误 |
+| 211 | 连接已建立 | 连接已存在，无需重复建立 | 通用连接管理错误 |
+| 212 | 未建立连接 | 先调用connect()建立连接再发起交易 | 通用连接管理错误 |
+| 213 | 连接已断开 | 调用connect()重新建立连接 | 通用连接管理错误 |
+| 214 | 手动断开连接 | 正常断开，无需处理 | 通用连接管理错误 |
+| 215 | 连接失败 | 检查网络/线缆/设备状态并重新连接 | 通用连接管理错误 |
+| 221 | 连接认证失败 | 检查认证参数（appId、secretKey等），重新建立连接 | 通用认证错误 |
+| 231 | Tapro应用未安装(应用间模式) | 安装Tapro应用到设备 | APP_TO_APP模式错误 |
+| 232 | IPC服务绑定失败(应用间模式) | 重启Tapro应用或重启设备 | APP_TO_APP模式错误 |
+| 251 | WebSocket连接失败(局域网模式) | 检查防火墙，确保端口8443-8453开放 | LAN模式错误 |
+| 271 | mDNS发现失败(局域网模式) | 手动输入IP地址或检查网络mDNS支持 | LAN模式错误 |
+| 281 | 线缆未连接 | 请连接 USB 或串口线缆 | CABLE模式错误 |
+| 283 | USB设备访问被拒绝 | 重新授权USB设备权限 | CABLE模式错误 |
+| 286 | USB设备连接超时 | 检查USB连接，重新插拔设备 | CABLE模式错误 |
+| 291 | 无效的USB协议 | 使用支持的USB协议或启用自动检测 | CABLE模式错误 |
+| 294 | 串口设备未就绪 | 重新初始化串口连接 | CABLE模式错误 |
+| 311 | 缺少请求参数 | 检查并提供所有必需参数 | 交易处理错误 |
+| 312 | 请求JSON格式错误 | 检查JSON格式、括号匹配和数据类型 | 交易处理错误 |
+| 313 | 协议数据无效或解析失败 | 检查协议数据格式是否正确 | 交易处理错误 |
+| 314 | 无效的金额参数 | 检查金额格式和范围是否有效 | 交易处理错误 |
+| 315 | 协议类型不匹配 | 确认协议类型匹配预期值 | 交易处理错误 |
+| 316 | 不支持的交易类型 | 检查action参数是否正确且被支持 | 交易处理错误 |
+| 321 | 发送数据失败 | 检查网络连接，重试数据发送 | 交易处理错误 |
+| 322 | 无法发送数据，未连接 | 先建立连接再发送数据 | 交易处理错误 |
+| 323 | 发送数据时发生意外错误 | 记录错误日志，重启服务或重试 | 交易处理错误 |
+| 331 | 交易锁定 | 等待当前操作完成后重试 | 交易处理错误 |
+| 332 | Tapro响应超时 | 查询交易状态后重试（**特殊处理**：先查询状态，确认后可使用相同ID重试） | 交易处理错误 |
+| 333 | Host交易拒绝 | 交易被Host拒绝，**必须使用新ID** | 交易处理错误 |
+| 334 | Host交易处理中 | Host正在处理交易，请查询交易状态确认结果，**必须使用新ID** | 交易处理错误 |
+| 335 | 交易已终止 | 交易已终止，无需重试 | 交易处理错误 |
+| 336 | 终止失败 | 交易终止操作失败，检查交易状态后重试 | 交易处理错误 |
+
+#### 错误码分类
+
+**000: 成功**
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 000 | 000 | 交易成功 | 交易成功 |
+
+**201-209: 通用系统错误**
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 201 | T01 | SDK未初始化 | 调用TaplinkSDK.init()初始化SDK |
+| 202 | T14 | VSP客户端未就绪 | 重新初始化VSP客户端 |
+| 203 | T20 | 无可用服务内核 | 重新初始化服务内核 |
+| 204 | T25 | 交易接口为空 | 重新绑定交易服务接口 |
+| 209 | T31 | Tapro初始化失败 | 请重新连接 |
+
+**211-220: 通用连接管理错误**
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 211 | T09 | 连接已建立 | 连接已存在，无需重复建立 |
+| 212 | T07, T37 | 未建立连接 | 先调用connect()建立连接再发起交易 |
+| 213 | T06 | 连接已断开 | 调用connect()重新建立连接 |
+| 214 | T08 | 手动断开连接 | 正常断开，无需处理 |
+| 215 | - | 连接失败 | 检查网络/线缆/设备状态并重新连接 |
+
+**221-230: 通用认证错误**
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 221 | T41 | 连接认证失败 | 检查认证参数（appId、secretKey等），重新建立连接 |
+
+**231-250: APP_TO_APP模式错误**
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 231 | T02 | Tapro应用未安装(应用间模式) | 安装Tapro应用到设备 |
+| 232 | T03 | IPC服务绑定失败(应用间模式) | 重启Tapro应用或重启设备 |
+
+**251-280: LAN模式错误**
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 251 | T04 | WebSocket连接失败(局域网模式) | 检查防火墙，确保端口8443-8453开放 |
+| 271 | T05 | mDNS发现失败(局域网模式) | 手动输入IP地址或检查网络mDNS支持 |
+
+**281-310: CABLE模式错误**
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 281 | T35 | 线缆未连接 | 请连接 USB 或串口线缆 |
+| 283 | T11 | USB设备访问被拒绝 | 重新授权USB设备权限 |
+| 286 | T12 | USB设备连接超时 | 检查USB连接，重新插拔设备 |
+| 291 | T10 | 无效的USB协议 | 使用支持的USB协议或启用自动检测 |
+| 294 | T13 | 串口设备未就绪 | 重新初始化串口连接 |
+
+**311-350: 交易处理错误**
+
+*311-320: 参数验证错误（交易处理）*
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 311 | T15 | 缺少请求参数 | 检查并提供所有必需参数 |
+| 312 | T16 | 请求JSON格式错误 | 检查JSON格式、括号匹配和数据类型 |
+| 313 | T17 | 协议数据无效或解析失败 | 检查协议数据格式是否正确 |
+| 314 | T18 | 无效的金额参数 | 检查金额格式和范围是否有效 |
+| 315 | T19 | 协议类型不匹配 | 确认协议类型匹配预期值 |
+| 316 | T28 | 不支持的交易类型 | 检查action参数是否正确且被支持 |
+
+*321-330: 数据传输错误（交易处理）*
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 321 | T21, T23 | 发送数据失败 | 检查网络连接，重试数据发送 |
+| 322 | T22 | 无法发送数据，未连接 | 先建立连接再发送数据 |
+| 323 | T24 | 发送数据时发生意外错误 | 记录错误日志，重启服务或重试 |
+
+*331-350: 交易业务逻辑错误*
+
+| 错误码 | 原错误码 | 说明 | 解决方案 |
+| --- | --- | --- | --- |
+| 331 | T27, T30 | 交易锁定 | 等待当前操作完成后重试 |
+| 332 | T34 | Tapro响应超时 | 查询交易状态后重试（**特殊处理**：先查询状态，确认后可使用相同ID重试） |
+| 333 | T38 | Host交易拒绝 | 交易被Host拒绝，**必须使用新ID** |
+| 334 | T39 | Host交易处理中 | Host正在处理交易，请查询交易状态确认结果，**必须使用新ID** |
+| 335 | T29 | 交易已终止 | 交易已终止，无需重试 |
+| 336 | T40 | 终止失败 | 交易终止操作失败，检查交易状态后重试 |
+
+**提示：** 完整的交易结果码列表请参考云端模式接口文档。
+
+---
+
+### 错误码速查表（Top 10）
 
 最常见的错误码及快速解决方案：
 
 | **错误码** | **说明** | **快速解决方案** | **是否可重试** |
 | --- | --- | --- | --- |
-| **E02** | 网络错误 | 使用相同ID重试 | 是 |
-| **996** | 系统超时 | 查询交易状态后重试 | 是 |
-| **051** | 余额不足 | 提示用户更换支付方式 | 否 |
-| **C20** | SDK未初始化 | 调用 `TaplinkSDK.init()` | 否 |
-| **C22** | Tapro应用未安装 | 引导用户安装Tapro | 否 |
-| **C37** | 未建立连接 | 调用 `connect()` 建立连接 | 否 |
-| **S03** | 签名验证失败 | 检查 secretKey 是否正确 | 否 |
-| **055** | PIN不正确 | 提示用户重新输入PIN | 否 |
-| **C08** | 交易锁定 | 等待3秒后使用相同ID重试 | 是 |
-| **E01** | 系统繁忙 | 稍后使用相同ID重试 | 是 |
+| **201** | SDK未初始化 | 调用 `TaplinkSDK.init()` 初始化SDK | 否 |
+| **231** | Tapro应用未安装（应用间模式） | 在设备上安装Tapro应用 | 否 |
+| **212** | 未建立连接 | 发起交易前先调用 `connect()` 建立连接 | 否 |
+| **311** | 缺少请求参数 | 确保提供所有必需参数 | 否 |
+| **331** | 交易锁定 | 等待当前操作完成后重试 | 否 |
+| **316** | 不支持的交易类型（Action） | 检查action参数是否正确且受支持 | 否 |
+| **332** | Tapro响应超时 | 增加超时时长或检查系统响应 | 否 |
+| **333** | host交易拒绝 | 交易被host拒绝，检查交易参数后重试 | 否 |
+| **334** | Host交易处理中 | Host正在处理交易，请查询交易状态确认结果 | 否 |
 
 **快速判断**:
 
-*   **临时性错误**（E02/996/E01/C08）→ 使用**相同ID**重试
-    
-*   **明确失败**（051/055/054）→ 提示用户，使用**新ID**重试
-    
-*   **配置错误**（S03/C20/M02）→ 检查配置，修复后重试
-    
-
----
-
-### 7.1 成功响应
-
-| **错误码** | **说明** | **备注** |
-| --- | --- | --- |
-| 0 | 接口响应成功 | 接口响应成功，不代表交易成功。需检查交易状态和交易结果码 |
-
----
-
-### 7.2 错误码分类
-
-#### 高优先级 - 需要立即处理
-
-**安全限制错误（S 系列）**
-
-| **错误码** | **说明** | **解决方案** |
-| --- | --- | --- |
-| S03 | 签名验证失败 | 检查签名算法、密钥和参数顺序 |
-| S06 | 权限不足 | 联系管理员申请权限 |
-| S07 | TMK 密钥不存在或已过期 | 重新获取 TMK |
-| S08 | 工作密钥不存在或已过期 | 重新获取工作密钥 |
-| S09 | 登录会话过期或未登录 | 重新登录 |
-
-**配置错误（M 系列）**
-
-| **错误码** | **说明** | **解决方案** |
-| --- | --- | --- |
-| M01 | 接口调用权限不足或未激活 | 申请相应接口权限或续期 |
-| M02 | 应用（appId）不存在或已禁用 | 检查 appId 是否正确 |
-| M03 | 应用和商户绑定关系不匹配 | 确认应用已正确授权给此商户 |
-| M04 | 商户未激活此支付产品 | 确认商户已激活支付产品 |
-
-**SDK错误（C 系列 - 关键）**
-
-| **错误码** | **说明** | **解决方案** |
-| --- | --- | --- |
-| C20 | SDK 未初始化 | 调用 TaplinkSDK.init() 初始化 |
-| C22 | Tapro 应用未安装 | 安装 Tapro 应用 |
-| C23 | 线缆未物理连接 | 检查 USB 或串口线缆连接 |
-| C37 | 未建立连接 | 调用 connect() 建立连接 |
-
----
-
-#### 中优先级 - 需要重试
-
-**临时性错误**
-
-| **错误码** | **说明** | **解决方案** |
-| --- | --- | --- |
-| E02 | 网络错误 | 使用相同ID重试 |
-| 996 | 系统超时 | 使用相同ID重试 |
-| E01 | 系统繁忙 | 使用相同ID重试 |
-| C08 | 交易锁定（防并发） | 等待后使用相同ID重试 |
-
-**连接错误**
-
-| **错误码** | **说明** | **解决方案** |
-| --- | --- | --- |
-| C25 | IPC 服务连接失败 | 检查 Tapro 应用状态 |
-| C26 | IPC 服务连接超时 | 确保应用未被系统杀死 |
-| C27 | 线缆连接超时 | 重新插拔线缆 |
-| C28 | 线缆通信错误 | 检查线缆质量 |
-| C30 | 网络连接失败 | 检查网络连接 |
-| C31 | 网络连接超时 | 确认支付终端在线 |
-| C36 | 连接已断开 | 调用 connect() 重新连接 |
-
----
-
-#### 低优先级 - 用户操作
-
-**明确失败（不可重试）**
-
-| 错误码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| 051 | 余额不足 | 提示用户更换支付方式 |
-| 055 | PIN 不正确或缺失 | 提示用户重新输入 |
-| 054 | 过期卡 | 提示用户更换卡片 |
-| C39 | 交易被取消 | 无需重试 |
-
----
-
-### 7.3 完整错误码列表
-
-#### 安全限制错误（S 系列）
-
-| 错误码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| S01 | IP 地址无效 | 将调用服务器 IP 添加到白名单 |
-| S02 | 请求时间戳与服务器时间相差过大 | 同步客户端系统时间 |
-| S03 | 签名验证失败 | 检查签名算法、密钥和参数顺序 |
-| S04 | API 调用频率超限 | 降低调用频率 |
-| S05 | 数据解密失败 | 检查加密逻辑或密钥设置 |
-| S06 | 权限不足 | 联系管理员申请权限 |
-| S07 | TMK 密钥不存在或已过期 | 重新获取 TMK |
-| S08 | 工作密钥不存在或已过期 | 重新获取工作密钥 |
-| S09 | 登录会话过期或未登录 | 重新登录 |
-
-#### 客户端错误（C 系列）
-
-| 错误码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| C01 | 缺少请求参数 | 确保提供所有必需参数 |
-| C02 | 请求 JSON 格式错误 | 检查 JSON 结构 |
-| C03 | 商户不存在或已禁用 | 检查商户 ID |
-| C04 | 门店不存在或已禁用 | 检查门店 ID |
-| C05 | 设备不存在 | 检查设备 SN |
-| C06 | 重复的请求序列号 | 确保请求号唯一性 |
-| C07 | 重复的商户订单号 | 确保订单号唯一性 |
-| C08 | 交易锁定 | 等待当前操作完成 |
-| C09 | 订单未支付 | 检查订单状态 |
-| C10 | 订单已支付 | 通过查询接口检查 |
-| C11 | 订单已关闭 | 重新创建订单 |
-| C12 | 订单不存在 | 检查订单号 |
-| C13 | 不支持的定价货币 | 检查支持的货币 |
-| C14 | 交易金额超出允许范围 | 调整请求金额 |
-| C15 | 退款金额超出原订单金额 | 验证原订单金额 |
-| C16 | 请求参数为空 | 设置正确的值 |
-| C17 | 请求参数格式错误 | 按文档规范填写 |
-| C18 | 请求接口不存在 | 检查接口地址 |
-| C19 | 不支持的 HTTP 方法 | 检查 HTTP 方法 |
-| C20 | SDK 未初始化 | 调用 init() 初始化 |
-| C21 | 设备不存在 | 完成设备激活 |
-| C22 | Tapro 应用未安装 | 安装 Tapro 应用 |
-| C23 | 线缆未物理连接 | 检查线缆连接 |
-| C24 | 不支持的线缆协议 | 使用支持的协议 |
-| C25 | IPC 服务连接失败 | 检查 Tapro 应用 |
-| C26 | IPC 服务连接超时 | 确保应用运行 |
-| C27 | 线缆连接超时 | 重新插拔线缆 |
-| C28 | 线缆通信错误 | 检查线缆质量 |
-| C29 | 设备未配对 | 输入 IP 和端口配对 |
-| C30 | 网络连接失败 | 检查网络连接 |
-| C31 | 网络连接超时 | 确认终端在线 |
-| C32 | TLS 握手失败 | 检查证书配置 |
-| C33 | WebSocket 连接失败 | 检查防火墙设置 |
-| C34 | 设备离线 | 检查终端网络 |
-| C35 | mDNS 发现失败 | 手动输入 IP |
-| C36 | 连接已断开 | 重新连接 |
-| C37 | 未建立连接 | 调用 connect() |
-| C38 | 不支持的交易类型 | 检查 action 参数 |
-| C39 | 交易被取消 | 无需重试 |
-| C40 | 应用初始化失败 | 检查初始化参数 |
-| C41 | 协议数据无效 | 检查协议格式 |
-
-#### 商户配置错误（M 系列）
-
-| 错误码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| M01 | 接口调用权限不足 | 申请权限或续期 |
-| M02 | 应用不存在或已禁用 | 检查 appId |
-| M03 | 应用和商户绑定不匹配 | 确认授权关系 |
-| M04 | 商户未激活支付产品 | 激活支付产品 |
-
-#### 支付渠道错误（P 系列）
-
-| 错误码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| P01 | 银行渠道异常 | 查询交易状态后重试 |
-
-#### 系统错误（E 系列）
-
-| 错误码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| E01 | 系统繁忙 | 查询状态后重试 |
-| E02 | 网络错误 | 查询状态后重试 |
-| E03 | 未知异常 | 查询状态后重试 |
-| E04 | 系统异常 | 联系技术支持 |
-
-#### 风控拦截（R 系列）
-
-| 错误码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| R01 | 风控系统拒绝交易 | 联系风控团队 |
-
-#### 其他错误码
-
-| 错误码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| 996 | 系统超时 | 查询状态后重试 |
-
----
-
-## 交易结果码参考
-
-本节列出交易查询接口返回的 `transactionResultCode` 字段的所有可能值。交易结果码由卡网络返回，用于解释交易的具体处理结果。
-
-### 8.1 成功结果码
-
-| 结果码 | 说明 |
-| --- | --- |
-| 000 | 交易成功 |
-
----
-
-### 8.2 结果码分类
-
-#### 需要联系发卡行
-
-| 结果码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| 001 | 联系发卡行 | 联系发卡行或更换卡 |
-| 002 | 联系发卡行，特殊情况 | 联系发卡行或更换卡 |
-| 005 | 不接受 | 联系发卡行或更换卡 |
-| 019 | 重新输入交易 | 引导店内支付 |
-| 090 | 日切正在进行 | 联系发卡行或更换卡 |
-| 091 | 发卡行不可用 | 24小时内重试 |
-| 096 | 系统故障 | 联系发卡行或更换卡 |
-
-#### 卡状态问题
-
-| 结果码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| 004 | 取卡（无欺诈） | 联系发卡行或更换卡 |
-| 007 | 取卡，特殊情况 | 联系发卡行或更换卡 |
-| 041 | 丢失卡 | 联系发卡行或更换卡 |
-| 043 | 被盗卡 | 联系发卡行或更换卡 |
-| 046 | 账户已关闭 | 联系发卡行或更换卡 |
-| 054 | 过期卡 | 联系发卡行或更换卡 |
-| 062 | 受限卡 | 联系发卡行或更换卡 |
-| 078 | 已阻止，首次使用 | 联系发卡行确认激活 |
-| 129 | 疑似伪卡 | 联系发卡行或更换卡 |
-
-#### 卡信息验证问题
-
-| 结果码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| 012 | 无效交易 | 检查卡信息并重试 |
-| 014 | 无效账号 | 检查卡信息并重试 |
-| 015 | 无此发卡行 | 检查卡信息并重试 |
-| 025 | 无法定位记录 | 检查卡信息并重试 |
-| 030 | 格式错误 | 检查卡信息并重试 |
-| 0N7 | CVV2 失败 | 检查卡信息并重试 |
-| 0Q1 | 卡认证失败 | 检查卡信息并重试 |
-| 082 | 负 CAM/CVV 结果 | 检查卡信息并重试 |
-| 084 | 无效授权生命周期 | 检查卡信息并重试 |
-
-#### PIN 相关问题
-
-| 结果码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| 055 | PIN 不正确或缺失 | 联系发卡行或更换卡 |
-| 070 | 需要 PIN 数据 | 联系发卡行或更换卡 |
-| 071 | PIN 未更改 | 联系发卡行或更换卡 |
-| 074 | PIN 加密错误 | 联系发卡行或更换卡 |
-| 075 | PIN 输入尝试超限 | 联系发卡行或更换卡 |
-| 081 | PIN 加密错误 | 检查卡信息并重试 |
-| 086 | 无法验证 PIN | 当天可重试 |
-| 0P5 | 拒绝 PIN 解锁 | 联系发卡行或更换卡 |
-| 0P6 | 拒绝 PIN 更改 | 联系发卡行或更换卡 |
-
-#### 金额/余额问题
-
-| 结果码 | 说明 | 解决方案 |
-| --- | --- | --- |
-| 013 | 无效金额 | 检查金额或货币 |
-| 051 | 余额不足 | 联系发卡行或更换卡 |
-| 061 | 超出批准金额限制 | 联系发卡行或更换卡 |
-| 065 | 超出取款频率 | 联系发卡行或更换卡 |
-| 0N3 | 现金服务不可用 | 联系发卡行或更换卡 |
-| 0N4 | 现金请求超限 | 联系发卡行或更换卡 |
-| 0N8 | 超出预授权金额 | 检查捕获金额 |
-
-**提示：** 完整的交易结果码列表请参考云端模式接口文档。
+*   **特殊错误码**（333/334）→ 必须使用**新ID**，不能使用相同ID重试
+*   **响应超时**（332）→ 先查询交易状态，确认结果后再使用**相同ID**重试
+*   **其他错误码**（除333/334外）→ 可以使用**相同ID**重试
+*   **初始化错误**（201/231/202）→ 检查配置，修复后重试
+*   **连接错误**（232/251/271/213/212）→ 检查连接状态，重试连接
+*   **参数错误**（311/312/313/314/315/316）→ 检查参数，修复后使用**相同ID**重试
 
 ---
 
@@ -2019,10 +2020,11 @@ val version = TaplinkSDK.getTaproVersion()
 
 **核心原则：**
 
-*   临时性错误（E02/996/E01/C08）→ 使用**相同** `transactionRequestId` 重试
+*   **特殊错误码**（333/334）→ 必须使用**新** `transactionRequestId`，不能使用相同ID
     
-*   明确失败（051/055/054）→ 使用**新** `transactionRequestId` 重试
+*   **响应超时**（332）→ 先查询交易状态，确认结果后再使用**相同** `transactionRequestId` 重试
     
+*   **其他错误码**（除333/334外）→ 可以使用**相同** `transactionRequestId` 重试
 
 详细说明请参考 [2.4 幂等性机制](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mix17s2xw1e8wfbkfyc) 和 [10.3 幂等性处理](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mix17s73wy0oyjd23nl)
 
@@ -2101,20 +2103,20 @@ class MainActivity : AppCompatActivity() {
 ```kotlin
 TaplinkSDK.execute(request, object : PaymentCallback {
     override fun onSuccess(result: PaymentResult) {
-        if (result.isSuccess()) {
-            // 支付成功
-            showSuccess(result.transactionId)
-        } else {
-            // 支付失败
-            showError(result.message)
-        }
+        // 支付成功
+        showSuccess(result.transactionId)
     }
     
     override fun onFailure(error: PaymentError) {
         // SDK错误或网络错误
         when (error.code) {
-            "E02", "996", "E01", "C08" -> retryWithSameId()  // 临时性错误
-            else -> showError(error.message)                  // 其他错误
+            // 特殊错误码：332、333、334 必须使用新ID
+            "332", "333", "334" -> {
+                // 这些错误码必须使用新的 transactionRequestId（332需要先查询状态）
+                showError("${error.message}，请使用新的交易请求ID重试")
+            }
+            // 其他所有错误码都可以使用相同ID重试
+            else -> retryWithSameId()  // 使用相同ID重试
         }
     }
 })
@@ -2132,32 +2134,48 @@ class PaymentManager {
         val errorMessage = error.message
         
         when (errorCode) {
-            // 临时性错误 - 可重试
-            "E02" -> {
+            // 特殊错误码：332、333、334、000 必须使用新ID
+            "332" -> {
                 AlertDialog.Builder(context)
-                    .setTitle("网络错误")
-                    .setMessage("网络连接失败。使用相同交易请求重试？")
-                    .setPositiveButton("重试") { _, _ ->
-                        retryWithSameRequestId()
+                    .setTitle("响应超时")
+                    .setMessage("交易状态未知，先查询交易状态，确认结果后可使用相同ID重试")
+                    .setPositiveButton("查询状态") { _, _ ->
+                        queryTransactionStatus()
+                    }
+                    .setNegativeButton("使用新ID重试") { _, _ ->
+                        processPayment()  // 创建新交易
+                    }
+                    .show()
+            }
+            
+            "333" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("host交易拒绝")
+                    .setMessage("交易被host拒绝，必须使用新的交易请求ID重试")
+                    .setPositiveButton("使用新ID重试") { _, _ ->
+                        processPayment()  // 创建新交易
                     }
                     .setNegativeButton("取消", null)
                     .show()
             }
             
-            "996" -> {
+            "334" -> {
                 AlertDialog.Builder(context)
-                    .setTitle("交易超时")
-                    .setMessage("系统超时，是否重试？")
-                    .setPositiveButton("重试") { _, _ ->
-                        retryWithSameRequestId()
+                    .setTitle("交易处理中")
+                    .setMessage("Host正在处理交易，请查询交易状态。如需重试，必须使用新的交易请求ID")
+                    .setPositiveButton("查询状态") { _, _ ->
+                        queryTransactionStatus()
                     }
-                    .setNegativeButton("取消", null)
+                    .setNegativeButton("使用新ID重试") { _, _ ->
+                        processPayment()  // 创建新交易
+                    }
                     .show()
             }
             
-            "E01", "C08" -> {
+            // 其他所有错误码都可以使用相同ID重试
+            else -> {
                 Toast.makeText(context, 
-                    "系统繁忙，请稍后使用相同请求重试", 
+                    "错误：${errorMessage}，使用相同请求ID重试", 
                     Toast.LENGTH_SHORT).show()
                 // 3秒后自动重试
                 Handler(Looper.getMainLooper()).postDelayed({
@@ -2165,29 +2183,37 @@ class PaymentManager {
                 }, 3000)
             }
             
-            // 明确失败 - 不可重试
-            "051" -> {
+            // 初始化错误 - 需要修复
+            "201" -> {
                 AlertDialog.Builder(context)
-                    .setTitle("余额不足")
-                    .setMessage("请使用其他支付方式")
-                    .setPositiveButton("重新支付") { _, _ ->
-                        processPayment()  // 新交易
-                    }
-                    .setNegativeButton("取消", null)
+                    .setTitle("SDK未初始化")
+                    .setMessage("请先初始化SDK")
+                    .setPositiveButton("确定", null)
                     .show()
             }
             
-            "055" -> {
-                Toast.makeText(context, 
-                    "PIN 错误。请使用新交易重试。", 
-                    Toast.LENGTH_LONG).show()
+            "231" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("Tapro应用未安装")
+                    .setMessage("请安装Tapro应用")
+                    .setPositiveButton("确定", null)
+                    .show()
             }
             
-            // 配置错误
-            "S03" -> {
+            // 连接错误
+            "212" -> {
                 AlertDialog.Builder(context)
-                    .setTitle("签名验证失败")
-                    .setMessage("请联系技术支持")
+                    .setTitle("未建立连接")
+                    .setMessage("请先建立连接")
+                    .setPositiveButton("确定", null)
+                    .show()
+            }
+            
+            // 参数错误 - 需要修复
+            "311", "312", "313", "314", "315", "316" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("参数错误")
+                    .setMessage("请检查请求参数")
                     .setPositiveButton("确定", null)
                     .show()
             }
@@ -2241,17 +2267,24 @@ class PaymentManager {
     }
     
     fun retryPayment(error: PaymentError) {
-        if (isTemporaryError(error.code)) {
-            // 临时性错误：使用相同请求重试
+        if (canRetryWithSameId(error.code)) {
+            // 可以使用相同ID：使用相同请求重试
             TaplinkSDK.execute(currentRequest!!, callback)
         } else {
-            // 明确失败：创建新交易
+            // 特殊错误码（332、333、334、000）：必须创建新交易
             processPayment(100.0)
         }
     }
     
-    private fun isTemporaryError(code: String): Boolean {
-        return code in listOf("996", "E01", "E02", "C08")
+    /**
+     * 判断是否可以使用相同的 transactionRequestId 重试
+     * 
+     * 特殊错误码（332、333、334、000）必须使用新ID
+     * 其他所有错误码都可以使用相同ID
+     */
+    private fun canRetryWithSameId(code: String): Boolean {
+        // 332、333、334、000 不能使用相同ID（332需要先查询状态）
+        return code !in listOf("332", "333", "334", "000")
     }
 }
 
@@ -2355,11 +2388,8 @@ private fun handleTimeout(transactionRequestId: String) {
     
     queryTransactionWithPolling(transactionRequestId) { result ->
         dialog.dismiss()
-        if (result.isSuccess()) {
-            showSuccessDialog(result)
-        } else {
-            showRetryDialog()
-        }
+        // 查询成功，显示结果
+        showSuccessDialog(result)
     }
 }
 

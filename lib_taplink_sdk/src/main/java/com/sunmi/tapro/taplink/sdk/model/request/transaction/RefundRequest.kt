@@ -2,6 +2,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
+import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
  * 退款交易请求
@@ -20,6 +21,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
  * @param attach 附加信息（可选）
  * @param notifyUrl 通知URL（可选）
  * @param requestTimeout 请求超时时间（可选，单位：秒）
+ * @param staffInfo 员工信息（可选）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -37,7 +39,8 @@ data class RefundRequest(
     // 通用可选字段
     val attach: String? = null,
     val notifyUrl: String? = null,
-    val requestTimeout: Long? = null
+    val requestTimeout: Long? = null,
+    val staffInfo: StaffInfo? = null
 ) : BaseTransactionRequest() {
 
     init {
@@ -102,6 +105,7 @@ data class RefundRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
+        private var staffInfo: StaffInfo? = null
 
         fun setTransactionRequestId(transactionRequestId: String): ReferencedBuilder {
             this.transactionRequestId = transactionRequestId

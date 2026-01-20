@@ -48,7 +48,8 @@ object ProtocolConfigResolver {
         // LAN mode
         connectionConfig.host?.let { host ->
             val port = connectionConfig.port ?: 8443
-            val protocolString = ProtocolManager.buildLanProtocol(host, port, secure = true)
+            val protocolString = ProtocolManager.buildLanProtocol(host, port, secure = false
+            )
             return Pair(protocolString, ConnectionMode.LAN.name)
         }
 
@@ -77,7 +78,7 @@ object ProtocolConfigResolver {
 
             ConnectionMode.LAN -> {
                 // LAN mode needs host and port, return default placeholder
-                Pair("wss://", ConnectionMode.LAN.name)
+                Pair("ws://", ConnectionMode.LAN.name)
             }
 
             ConnectionMode.APP_TO_APP -> {

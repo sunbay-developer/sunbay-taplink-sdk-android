@@ -273,6 +273,15 @@ class LocalCallbackManager<T>(
     }
 
     /**
+     * 获取当前 traceId 回调数量
+     *
+     * @return Int traceId 回调数量
+     */
+    fun getTraceIdCallbackCount(): Int {
+        return traceIdCallbackMap.size
+    }
+
+    /**
      * 启动超时清理任务
      *
      * @param requestId 请求ID
@@ -310,7 +319,7 @@ class LocalCallbackManager<T>(
                 if (elapsed >= wrapper.timeoutMillis) {
                     val removedCallback = traceIdCallbackMap.remove(traceId)
                     LogUtil.i(tag, "Callback timeout and removed by traceId: $traceId, elapsed=${elapsed}ms")
-                    (removedCallback?.callback as InnerCallback).onError(InnerErrorCode.Timeout.code, "Callback timeout")
+                    (removedCallback?.callback as InnerCallback).onError(InnerErrorCode.E306.code, "Callback timeout")
                 }
             }
         }

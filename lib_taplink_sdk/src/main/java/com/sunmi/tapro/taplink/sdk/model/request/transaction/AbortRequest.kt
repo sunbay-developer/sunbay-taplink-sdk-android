@@ -15,7 +15,6 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
  * @since 2025-01-XX
  */
 data class AbortRequest(
-    val originalTransactionId: String? = null,
     val originalTransactionRequestId: String? = null,
     val description: String? = null,
     val attach: String? = null,
@@ -23,14 +22,13 @@ data class AbortRequest(
 ) : BaseTransactionRequest() {
 
     init {
-        require(originalTransactionId != null || originalTransactionRequestId != null) {
+        require(originalTransactionRequestId != null) {
             "Either originalTransactionId or originalTransactionRequestId must be provided"
         }
     }
 
     override fun validate(): ValidationResult {
         val originalTransactionValidation = TransactionRequestValidator.validateOriginalTransactionReference(
-            originalTransactionId, 
             originalTransactionRequestId
         )
 
@@ -57,19 +55,10 @@ data class AbortRequest(
      * AbortRequest构建器
      */
     class Builder {
-        private var originalTransactionId: String? = null
         private var originalTransactionRequestId: String? = null
         private var description: String? = null
         private var attach: String? = null
         private var requestTimeout: Long? = null
-
-        /**
-         * 设置原始交易ID
-         */
-        fun setOriginalTransactionId(originalTransactionId: String): Builder {
-            this.originalTransactionId = originalTransactionId
-            return this
-        }
 
         /**
          * 设置原始交易请求ID
@@ -105,12 +94,11 @@ data class AbortRequest(
 
         /**
          * 构建AbortRequest实例
-         * 
+         *
          * @throws TransactionRequestValidationException 如果验证失败
          */
         fun build(): AbortRequest {
             val request = AbortRequest(
-                originalTransactionId = originalTransactionId,
                 originalTransactionRequestId = originalTransactionRequestId,
                 description = description,
                 attach = attach,

@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 import java.math.BigDecimal
 
 /**
@@ -15,6 +16,7 @@ import java.math.BigDecimal
  * @param attach 附加信息（可选）
  * @param notifyUrl 通知URL（可选）
  * @param requestTimeout 请求超时时间（可选，单位：秒）
+ * @param staffInfo 员工信息（可选）
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -27,7 +29,8 @@ data class IncrementalAuthRequest(
     val description: String? = null,
     val attach: String? = null,
     val notifyUrl: String? = null,
-    val requestTimeout: Long? = null
+    val requestTimeout: Long? = null,
+    val staffInfo: StaffInfo? = null
 ) : BaseTransactionRequest() {
 
     init {
@@ -79,6 +82,7 @@ data class IncrementalAuthRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
+        private var staffInfo: StaffInfo? = null
 
         /**
          * 设置原始预授权交易ID
@@ -145,6 +149,14 @@ data class IncrementalAuthRequest(
         }
 
         /**
+         * 设置员工信息
+         */
+        fun setStaffInfo(staffInfo: StaffInfo): Builder {
+            this.staffInfo = staffInfo
+            return this
+        }
+
+        /**
          * 构建IncrementalAuthRequest实例
          * 
          * @throws TransactionRequestValidationException 如果验证失败
@@ -158,7 +170,8 @@ data class IncrementalAuthRequest(
                 description = description,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                staffInfo = staffInfo
             )
 
             val validationResult = request.validate()

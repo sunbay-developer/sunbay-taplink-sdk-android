@@ -1,0 +1,198 @@
+--------- beginning of main
+2026-01-16 18:59:13.087 13554 ro.taplink.demo com...apro.taplink.demo  I  Compiler allocated 6480KB to compile void android.view.ViewRootImpl.performTraversals()
+--------- beginning of system
+2026-01-16 18:59:13.515 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:199)#OnReceive ] USB device permission granted: /dev/bus/usb/001/020 (VID=0x18D1, PID=0x2D01, ID=1020)
+2026-01-16 18:59:13.519 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:269)#StartAoaProtocol ] Starting AOA protocol for /dev/bus/usb/001/020, token=1
+2026-01-16 18:59:13.520 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:272)#StartAoaProtocol ] Device already in AOA mode
+2026-01-16 18:59:13.521 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:515)#ConnectToAoaDevice ] Attempting to connect to AOA device: /dev/bus/usb/001/020, token=1
+2026-01-16 18:59:13.527 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:555)#ConnectToAoaDeviceDirectly ] Connecting to AOA device: /dev/bus/usb/001/020, token=1
+2026-01-16 18:59:13.530 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:575)#ConnectToAoaDeviceDirectly ] Found AOA interface[1]
+2026-01-16 18:59:13.535 13554 HexFrameBuffer  com...apro.taplink.demo  D  [ (HexFrameBuffer.kt:140)#StartSequentialDataProcessor$lambda$5 ] Sequential hex data processor started
+2026-01-16 18:59:13.549 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:664)#ConnectToAoaDeviceDirectly ] AOA device connected, IN: 0x82, OUT: 0x02, oldToken=1
+2026-01-16 18:59:13.549 13554 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbAoaKernel.kt:69)#BeginNewOperation ] beginNewOperation token=2 reason=AOA device connected
+2026-01-16 18:59:13.551 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:678)#ConnectToAoaDeviceDirectly ] New operation token generated: 2 (replaced old token=1)
+2026-01-16 18:59:13.566 13554 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTING -> CONNECTED
+2026-01-16 18:59:13.567 13554 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1354)#SetupKernelStatusListener$lambda$13 ] Kernel status changed: CONNECTED -> syncing to ConnectionManager: CONNECTED (was: CONNECTING)
+2026-01-16 18:59:13.630 13554 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:139)#RegisterDataReceiver ] Data receiver registered
+2026-01-16 18:59:13.631 13554 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:600)#SendInitCommand ] Sending INIT command to initialize tapro application
+2026-01-16 18:59:13.633 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:777)#InvokeSuspend ] Starting AOA data receive loop (Host端 Bulk传输)...
+2026-01-16 18:59:13.634 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:778)#InvokeSuspend ] Current status: CONNECTED
+2026-01-16 18:59:13.812 13554 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:617)#SendInitCommand ] INIT command prepared: traceId=ee17fb744e2d4846aeb69fa4a8821b26
+2026-01-16 18:59:13.815 13554 Connec...anager com...apro.taplink.demo  D  [ (LocalCallbackManager.kt:93)#AddCallbackByTraceId ] Callback added by traceId: ee17fb744e2d4846aeb69fa4a8821b26, timeout: 180000ms
+2026-01-16 18:59:13.817 13554 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:699)#SendInitCommand ] INIT callback registered with traceId: ee17fb744e2d4846aeb69fa4a8821b26
+2026-01-16 18:59:13.820 13554 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:716)#SendInitCommand ] INIT command sent successfully
+2026-01-16 18:59:13.824 13554 UsbSta...Kernel com...apro.taplink.demo  D  [ (AsyncServiceKernel.kt:137)#InvokeSuspend ] Sending data via USB AOA: traceId=ee17fb744e2d4846aeb69fa4a8821b26, dataSize=247 bytes
+2026-01-16 18:59:13.829 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:897)#SendDataToDevice ] Sending raw data: size=247, token: 2
+2026-01-16 18:59:13.853 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:942)#SendDataToAoaDevice ] Attempting to send data (attempt 1/3): size=247 bytes
+2026-01-16 18:59:13.854 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:960)#SendDataToAoaDevice ] Bulk transfer result: 247 (expected: 247), transferTime=0ms
+2026-01-16 18:59:13.855 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:965)#SendDataToAoaDevice ] AOA data sent successfully: 247 bytes (attempt 1)
+2026-01-16 18:59:14.065 13554 AoaErrorHandler com...apro.taplink.demo  W  [ (AoaErrorHandler.kt:66)#HandleReceiveError ] Handling receive error: type=TRANSFER_ERROR, bytesRead=-1, consecutiveErrors=0, totalErrors=1
+2026-01-16 18:59:14.066 13554 AoaErrorHandler com...apro.taplink.demo  D  [ (AoaErrorHandler.kt:100)#HandleReceiveError ] Transfer error, retrying after delay
+2026-01-16 18:59:14.068 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:816)#InvokeSuspend ] Error handling result: shouldContinue=true, shouldBreak=false, delayMs=100
+2026-01-16 18:59:14.077 13554 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:228)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_DETACHED
+2026-01-16 18:59:14.082 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:241)#OnReceive ] USB device detached: /dev/bus/usb/001/020 (VID=0x18D1, PID=0x2D01, ID=1020)
+2026-01-16 18:59:14.085 13554 UsbAoa...Kernel com...apro.taplink.demo  W  [ (BaseUsbHostKernel.kt:250)#OnReceive ] Connected device detached, starting delayed disconnect check (token: 2, device: /dev/bus/usb/001/020 (VID=0x18D1, PID=0x2D01, ID=1020))
+2026-01-16 18:59:14.090 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:154)#OnDeviceDetached ] Device detached: /dev/bus/usb/001/020 (VID: 0x18D1, PID: 0x2D01)
+2026-01-16 18:59:14.173 13554 AoaErrorHandler com...apro.taplink.demo  W  [ (AoaErrorHandler.kt:66)#HandleReceiveError ] Handling receive error: type=DEVICE_DISCONNECTED, bytesRead=-1, consecutiveErrors=1, totalErrors=2
+2026-01-16 18:59:14.174 13554 AoaErrorHandler com...apro.taplink.demo  W  [ (AoaErrorHandler.kt:111)#HandleReceiveError ] Device disconnected error
+2026-01-16 18:59:14.175 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:816)#InvokeSuspend ] Error handling result: shouldContinue=false, shouldBreak=true, delayMs=0
+2026-01-16 18:59:14.177 13554 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTED -> DISCONNECTED
+2026-01-16 18:59:14.178 13554 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1354)#SetupKernelStatusListener$lambda$13 ] Kernel status changed: DISCONNECTED -> syncing to ConnectionManager: DISCONNECTED (was: CONNECTED)
+2026-01-16 18:59:14.179 13554 UsbAoa...Kernel com...apro.taplink.demo  W  [ (UsbStandardHostKernel.kt:828)#InvokeSuspend ] Breaking receive loop due to error handling result
+2026-01-16 18:59:14.179 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:878)#InvokeSuspend ] AOA data receive loop ended (Host端)
+2026-01-16 18:59:14.180 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:879)#InvokeSuspend ] Final status: DISCONNECTED
+2026-01-16 18:59:14.181 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:880)#InvokeSuspend ] Final error stats: Consecutive: 1, Total: 2
+2026-01-16 18:59:14.394 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:279)#InvokeSuspend ] Device confirmed disconnected after delay, token=2, device=/dev/bus/usb/001/020 (VID=0x18D1, PID=0x2D01, ID=1020)
+2026-01-16 18:59:14.396 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:451)#DisconnectInternal ] === USB Host Disconnect Internal Started token=2 reason=DETACHED ===
+2026-01-16 18:59:14.396 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:458)#DisconnectInternal ] Releasing USB interface and connection...
+2026-01-16 18:59:14.397 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:462)#DisconnectInternal ] USB interface released successfully
+2026-01-16 18:59:14.398 13554 UsbDev...ionJNI com...apro.taplink.demo  D  close
+2026-01-16 18:59:14.399 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:471)#DisconnectInternal ] USB device connection closed successfully
+2026-01-16 18:59:14.401 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:484)#DisconnectInternal ] Disconnected from USB device: /dev/bus/usb/001/020 (VID=0x18D1, PID=0x2D01, ID=1020)
+2026-01-16 18:59:14.402 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:488)#DisconnectInternal ] AOA Host disconnected successfully
+2026-01-16 18:59:14.402 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:501)#DisconnectInternal ] === USB Host Disconnect Internal Finished ===
+2026-01-16 18:59:14.871 13554 UsbAoa...Kernel com...apro.taplink.demo  W  [ (UsbStandardHostKernel.kt:744)#ValidateEndpointConfiguration ] USB interface is null
+2026-01-16 18:59:14.872 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:726)#ValidateConnectionState ] Connection validation:
+2026-01-16 18:59:14.873 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:727)#ValidateConnectionState ]   Device connected: false
+2026-01-16 18:59:14.873 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:728)#ValidateConnectionState ]   Endpoints valid: false
+2026-01-16 18:59:14.874 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:729)#ValidateConnectionState ]   Endpoint config valid: false
+2026-01-16 18:59:14.875 13554 UsbAoa...Kernel com...apro.taplink.demo  W  [ (UsbStandardHostKernel.kt:698)#InvokeSuspend ] Connection validation failed
+2026-01-16 18:59:15.602 13554 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:228)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_ATTACHED
+2026-01-16 18:59:15.606 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:233)#OnReceive ] USB device attached: /dev/bus/usb/001/022 (VID=0x0E8D, PID=0x201C, ID=1022)
+2026-01-16 18:59:15.608 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:103)#OnDeviceAttached ] Device attached: /dev/bus/usb/001/022 (VID: 0x0E8D, PID: 0x201C)
+2026-01-16 18:59:15.918 13554 Profil...taller com...apro.taplink.demo  D  Installing profile for com.sunmi.tapro.taplink.demo
+2026-01-16 19:00:00.572 13554 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:228)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_DETACHED
+2026-01-16 19:00:00.579 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:241)#OnReceive ] USB device detached: /dev/bus/usb/001/022 (VID=0x0E8D, PID=0x201C, ID=1022)
+2026-01-16 19:00:00.583 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:154)#OnDeviceDetached ] Device detached: /dev/bus/usb/001/022 (VID: 0x0E8D, PID: 0x201C)
+2026-01-16 19:00:07.105 13554 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:228)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_ATTACHED
+2026-01-16 19:00:07.112 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:233)#OnReceive ] USB device attached: /dev/bus/usb/001/024 (VID=0x0E8D, PID=0x201C, ID=1024)
+2026-01-16 19:00:07.115 13554 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:103)#OnDeviceAttached ] Device attached: /dev/bus/usb/001/024 (VID: 0x0E8D, PID: 0x201C)
+2026-01-16 19:02:13.822 13554 Connec...anager com...apro.taplink.demo  I  [ (LocalCallbackManager.kt:321)#InvokeSuspend ] Callback timeout and removed by traceId: ee17fb744e2d4846aeb69fa4a8821b26, elapsed=180006ms
+2026-01-16 19:02:13.830 13554 Connec...anager com...apro.taplink.demo  E  [ (ConnectionManager.kt:622)#OnError ] INIT command failed: code=306, msg=Callback timeout
+2026-01-16 19:02:13.832 13554 Connec...anager com...apro.taplink.demo  W  [ (ConnectionManager.kt:625)#OnError ] INIT command error/timeout, disconnecting WebSocket connection to ensure state consistency
+2026-01-16 19:02:13.834 13554 Connec...anager com...apro.taplink.demo  W  [ (ConnectionManager.kt:313)#OnConnected$lambda$0 ] INIT command failed, disconnecting WebSocket connection to ensure state consistency
+2026-01-16 19:02:13.850 13554 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:765)#UpdateConnectionStatus ] Connection status changed: DISCONNECTED -> ERROR
+2026-01-16 19:02:13.851 13554 Taplin...ervice com...apro.taplink.demo  E  Connection error - Code: 306, Message: Callback timeout
+2026-01-16 19:02:13.852 13554 Taplin...ervice com...apro.taplink.demo  E  Connection error - Code: 306, Message: Callback timeout
+2026-01-16 19:02:13.853 13554 com.sunmi.cb    com...apro.taplink.demo  E  ===========onError======306,Callback timeout
+2026-01-16 19:02:13.857 13554 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1445)#SyncStatusFromKernel ] Syncing status from kernel: DISCONNECTED -> DISCONNECTED (was: ERROR)
+2026-01-16 19:02:14.042 13554 VRI[Ma...ivity] com...apro.taplink.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-16 19:02:14.061 13554 InputTransport  com...apro.taplink.demo  D  Create ARC handle: 0xb400006fc6ebad30
+2026-01-16 19:02:14.061 13554 InputE...ceiver com...apro.taplink.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-16 19:02:14.061 13554 InputTransport  com...apro.taplink.demo  D  Input log is disabled in InputChannel.
+2026-01-16 19:02:14.135 13554 Buffer...nsumer com...apro.taplink.demo  D  [](id:34f200000001,api:0,p:-1,c:13554) connect: controlledByApp=false
+2026-01-16 19:02:14.142 13554 OpenGLRenderer  com...apro.taplink.demo  E  Unable to match the desired swap behavior.
+2026-01-16 19:02:14.181 13554 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[MainActivity]#1](f:0,a:1) acquireNextBufferLocked size=792x438 mFrameNumber=1 applyTransaction=true mTimestamp=42090804195274(auto) mPendingTransactions.size=0 graphicBufferId=58213986729996 transform=0
+2026-01-16 19:04:22.270 13663 ro.taplink.demo com...apro.taplink.demo  I  Late-enabling -Xcheck:jni
+2026-01-16 19:04:22.321 13663 ro.taplink.demo com...apro.taplink.demo  I  Using CollectorTypeCC GC.
+2026-01-16 19:04:22.387 13663 re-initialized> com...apro.taplink.demo  W  type=1400 audit(0.0:6942): avc:  granted  { execute } for  path="/data/data/com.sunmi.tapro.taplink.demo/code_cache/startup_agents/69b40b6c-agent.so" dev="dm-39" ino=573240 scontext=u:r:sunmi_app:s0:c159,c256,c512,c768 tcontext=u:object_r:app_data_file:s0:c159,c256,c512,c768 tclass=file app=com.sunmi.tapro.taplink.demo
+2026-01-16 19:04:22.407 13663 ro.taplink.demo com...apro.taplink.demo  W  DexFile /data/data/com.sunmi.tapro.taplink.demo/code_cache/.studio/instruments-cbb5ff5f.jar is in boot class path but is not in a known location
+2026-01-16 19:04:23.058 13663 ro.taplink.demo com...apro.taplink.demo  W  Redefining intrinsic method java.lang.Thread java.lang.Thread.currentThread(). This may cause the unexpected use of the original definition of java.lang.Thread java.lang.Thread.currentThread()in methods that have already been compiled.
+2026-01-16 19:04:23.058 13663 ro.taplink.demo com...apro.taplink.demo  W  Redefining intrinsic method boolean java.lang.Thread.interrupted(). This may cause the unexpected use of the original definition of boolean java.lang.Thread.interrupted()in methods that have already been compiled.
+2026-01-16 19:04:23.075 13663 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 171979766; UID 10159; state: ENABLED
+2026-01-16 19:04:23.077 13663 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 242716250; UID 10159; state: ENABLED
+2026-01-16 19:04:23.139 13663 ziparchive      com...apro.taplink.demo  W  Unable to open '/data/data/com.sunmi.tapro.taplink.demo/code_cache/.overlay/base.apk/classes16.dm': No such file or directory
+2026-01-16 19:04:23.142 13663 ziparchive      com...apro.taplink.demo  W  Unable to open '/data/app/~~Bu1U1wzc-9wiTqv_WHrn7Q==/com.sunmi.tapro.taplink.demo-23_RxCl1HSWIzdT1Z-_W-w==/base.dm': No such file or directory
+2026-01-16 19:04:23.142 13663 ziparchive      com...apro.taplink.demo  W  Unable to open '/data/app/~~Bu1U1wzc-9wiTqv_WHrn7Q==/com.sunmi.tapro.taplink.demo-23_RxCl1HSWIzdT1Z-_W-w==/base.dm': No such file or directory
+2026-01-16 19:04:23.564 13663 nativeloader    com...apro.taplink.demo  D  Configuring clns-6 for other apk /data/app/~~Bu1U1wzc-9wiTqv_WHrn7Q==/com.sunmi.tapro.taplink.demo-23_RxCl1HSWIzdT1Z-_W-w==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~Bu1U1wzc-9wiTqv_WHrn7Q==/com.sunmi.tapro.taplink.demo-23_RxCl1HSWIzdT1Z-_W-w==/lib/arm64, permitted_path=/data:/mnt/expand:/data/user/0/com.sunmi.tapro.taplink.demo
+2026-01-16 19:04:23.612 13663 Graphi...onment com...apro.taplink.demo  V  Currently set values for:
+2026-01-16 19:04:23.613 13663 Graphi...onment com...apro.taplink.demo  V    angle_gl_driver_selection_pkgs=[]
+2026-01-16 19:04:23.613 13663 Graphi...onment com...apro.taplink.demo  V    angle_gl_driver_selection_values=[]
+2026-01-16 19:04:23.614 13663 Graphi...onment com...apro.taplink.demo  V  ANGLE GameManagerService for com.sunmi.tapro.taplink.demo: false
+2026-01-16 19:04:23.615 13663 Graphi...onment com...apro.taplink.demo  V  com.sunmi.tapro.taplink.demo is not listed in per-application setting
+2026-01-16 19:04:23.615 13663 Graphi...onment com...apro.taplink.demo  V  Neither updatable production driver nor prerelease driver is supported.
+2026-01-16 19:04:23.635 13663 LoadedApk       com...apro.taplink.demo  I  No resource references to update in package com.sunmi
+2026-01-16 19:04:23.668 13663 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 183155436; UID 10159; state: ENABLED
+2026-01-16 19:04:23.697 13663 Mbrain...erImpl com...apro.taplink.demo  D  getService failed
+2026-01-16 19:04:23.767 13663 TaplinkDemoApp  com...apro.taplink.demo  D  === Application Started ===
+2026-01-16 19:04:23.767 13663 TaplinkDemoApp  com...apro.taplink.demo  D  === Taplink SDK Initialization Started ===
+2026-01-16 19:04:23.768 13663 TaplinkDemoApp  com...apro.taplink.demo  D  === SDK Init Request Parameters ===
+2026-01-16 19:04:23.768 13663 TaplinkDemoApp  com...apro.taplink.demo  D  App ID: sm6par3xf4d3tkum
+2026-01-16 19:04:23.768 13663 TaplinkDemoApp  com...apro.taplink.demo  D  Merchant ID: M1254947005
+2026-01-16 19:04:23.813 13663 TaplinkDemoApp  com...apro.taplink.demo  D  Secret Key: your****_key
+2026-01-16 19:04:23.816 13663 TaplinkDemoApp  com...apro.taplink.demo  D  === Calling TaplinkSDK.init() ===
+2026-01-16 19:04:23.822 13663 TaplinkApiImpl  com...apro.taplink.demo  D  [ (TaplinkApiImpl.kt:60)#<init> ] TaplinkApiImpl initialized
+2026-01-16 19:04:23.826 13663 TaplinkApiImpl  com...apro.taplink.demo  D  [ (TaplinkApiImpl.kt:66)#Init ] Initializing SDK with appId: sm6par3xf4d3tkum
+2026-01-16 19:04:23.952 13663 Respon...cessor com...apro.taplink.demo  D  [ (ResponseProcessor.kt:43)#<init> ] ResponseProcessor initialized
+2026-01-16 19:04:23.953 13663 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:132)#<init> ] ConnectionManager initialized
+2026-01-16 19:04:23.960 13663 Respon...cessor com...apro.taplink.demo  D  [ (ResponseProcessor.kt:43)#<init> ] ResponseProcessor initialized
+2026-01-16 19:04:23.966 13663 PaymentManager  com...apro.taplink.demo  D  [ (PaymentManager.kt:73)#<init> ] PaymentManager initialized
+2026-01-16 19:04:23.972 13663 Taplin...Kernel com...apro.taplink.demo  D  [ (TaplinkServiceKernel.kt:43)#<init> ] TaplinkServiceKernel initialized
+2026-01-16 19:04:23.972 13663 TaplinkDemoApp  com...apro.taplink.demo  D  === Taplink SDK Initialization Response ===
+2026-01-16 19:04:23.973 13663 TaplinkDemoApp  com...apro.taplink.demo  D  Status: SUCCESS
+2026-01-16 19:04:23.973 13663 TaplinkDemoApp  com...apro.taplink.demo  D  SDK Version: 1.0.7.12
+2026-01-16 19:04:23.987 13663 M-ProMotion     com...apro.taplink.demo  I  M-ProMotion is disabled
+2026-01-16 19:04:24.149 13663 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 171228096; UID 10159; state: ENABLED
+2026-01-16 19:04:24.180 13663 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 210923482; UID 10159; state: ENABLED
+2026-01-16 19:04:24.493 13663 Taplin...ervice com...apro.taplink.demo  D  Current mode set to: CABLE
+2026-01-16 19:04:24.502 13663 Taplin...ervice com...apro.taplink.demo  D  Attempting auto-connect with mode: CABLE
+2026-01-16 19:04:24.504 13663 Taplin...ervice com...apro.taplink.demo  D  === connect() called ===
+2026-01-16 19:04:24.504 13663 Taplin...ervice com...apro.taplink.demo  D  ConnectionListener set: true
+2026-01-16 19:04:24.505 13663 Taplin...ervice com...apro.taplink.demo  D  Connecting with provided ConnectionConfig: ConnectionConfig(connectionMode=CABLE, cableProtocol=USB_AOA, host=null, port=null, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-16 19:04:24.505 13663 Taplin...ervice com...apro.taplink.demo  D  Calling TaplinkSDK.connect() with provided config: ConnectionConfig(connectionMode=CABLE, cableProtocol=USB_AOA, host=null, port=null, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-16 19:04:24.531 13663 Connec...stence com...apro.taplink.demo  D  [ (ConnectionPersistence.kt:135)#GetLastConnectionConfig ] Retrieved last connection config: {"autoReconnect":false,"connectionTimeout":60,"host":"192.168.100.237","maxRetryCount":3,"port":8443,"retryDelayMs":2000}
+2026-01-16 19:04:24.531 13663 Reconn...anager com...apro.taplink.demo  D  [ (ReconnectManager.kt:351)#GetLastConnectionConfig ] Using persistent connection config
+2026-01-16 19:04:24.533 13663 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:149)#Connect ] ========actualConfig:ConnectionConfig(connectionMode=CABLE, cableProtocol=USB_AOA, host=null, port=null, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms),oldConfig:ConnectionConfig(connectionMode=null, cableProtocol=null, host=192.168.100.237, port=8443, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-16 19:04:24.534 13663 Reconn...anager com...apro.taplink.demo  D  [ (ReconnectManager.kt:83)#PrepareConnect ] Preparing connection, resetting reconnect state
+2026-01-16 19:04:24.535 13663 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:765)#UpdateConnectionStatus ] Connection status changed: DISCONNECTED -> CONNECTING
+2026-01-16 19:04:24.537 13663 Connec...anager com...apro.taplink.demo  I  [ (ConnectionManager.kt:825)#UpdateConnectionStatus ] do not need callback
+2026-01-16 19:04:24.547 13663 Taplin...Kernel com...apro.taplink.demo  D  [ (TaplinkServiceKernel.kt:188)#CreateServiceKernel ] Creating USB service
+2026-01-16 19:04:24.573 13663 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 160794467; UID 10159; state: ENABLED
+2026-01-16 19:04:24.635 13663 ro.taplink.demo com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:323)#<init> ] USB device permission receiver registered
+2026-01-16 19:04:24.638 13663 ro.taplink.demo com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:340)#<init> ] USB device receiver registered
+2026-01-16 19:04:24.640 13663 tag             com...apro.taplink.demo  I  [ (AsyncServiceKernel.kt:72)#Connect ] =======AsyncServiceKernel:::connect:protocol:usb://host
+2026-01-16 19:04:24.642 13663 UsbSta...Kernel com...apro.taplink.demo  D  [ (AsyncServiceKernel.kt:83)#Connect ] Starting connection with protocol: usb://host
+2026-01-16 19:04:24.646 13663 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: DISCONNECTED -> CONNECTING
+2026-01-16 19:04:24.647 13663 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1365)#SetupKernelStatusListener ] Kernel status listener setup successfully
+2026-01-16 19:04:24.647 13663 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:765)#UpdateConnectionStatus ] Connection status changed: CONNECTING -> WAIT_CONNECTING
+2026-01-16 19:04:24.648 13663 Connec...anager com...apro.taplink.demo  I  [ (ConnectionManager.kt:825)#UpdateConnectionStatus ] do not need callback
+2026-01-16 19:04:24.650 13663 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbAoaKernel.kt:69)#BeginNewOperation ] beginNewOperation token=1 reason=performConnect
+2026-01-16 19:04:24.677 13663 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:548)#SetConnectionListener ] Setting connection listener
+2026-01-16 19:04:24.677 13663 MainActivity    com...apro.taplink.demo  D  MainActivity initialization completed
+2026-01-16 19:04:24.679 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:212)#PerformUsbConnect ] USB connect started with token=1
+2026-01-16 19:04:24.684 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:224)#PerformUsbConnect ] Starting USB connect, found 1 device(s)
+2026-01-16 19:04:24.701 13663 Connec...anager com...apro.taplink.demo  W  [ (ConnectionManager.kt:482)#IsConnected ] Status inconsistency detected: Kernel=CONNECTING (expected: CONNECTING), ConnectionManager=WAIT_CONNECTING, syncing...
+2026-01-16 19:04:24.702 13663 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1445)#SyncStatusFromKernel ] Syncing status from kernel: CONNECTING -> CONNECTING (was: WAIT_CONNECTING)
+2026-01-16 19:04:24.705 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:254)#PerformUsbConnect ] Selected device: /dev/bus/usb/001/024 (VID: 0x0E8D, PID: 0x201C)
+2026-01-16 19:04:24.710 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:405)#RequestPermission ] Requesting permission for device: /dev/bus/usb/001/024 (VID=0x0E8D, PID=0x201C, ID=1024), key=/dev/bus/usb/001/024_3725_8220_1024, binding token: 1
+2026-01-16 19:04:24.716 13663 SurfaceFactory  com...apro.taplink.demo  I  [static] sSurfaceFactory = com.mediatek.view.impl.SurfaceFactoryImpl@91e338e
+2026-01-16 19:04:24.722 13663 PowerHalWrapper com...apro.taplink.demo  I  PowerHalWrapper.getInstance 
+2026-01-16 19:04:24.724 13663 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 237531167; UID 10159; state: DISABLED
+2026-01-16 19:04:24.735 13663 OpenGLRenderer  com...apro.taplink.demo  W  Unknown dataspace 0
+2026-01-16 19:04:24.743 13663 VRI[Ma...ivity] com...apro.taplink.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-16 19:04:24.748 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:412)#RequestPermission ] USB permission request sent for device: /dev/bus/usb/001/024 (VID=0x0E8D, PID=0x201C, ID=1024), key=/dev/bus/usb/001/024_3725_8220_1024, requestCode: 262503537, token: 1
+2026-01-16 19:04:24.763 13663 InputTransport  com...apro.taplink.demo  D  Create ARC handle: 0xb400006fc6ecd0f0
+2026-01-16 19:04:24.763 13663 InputE...ceiver com...apro.taplink.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-16 19:04:24.763 13663 InputTransport  com...apro.taplink.demo  D  Input log is disabled in InputChannel.
+2026-01-16 19:04:24.769 13663 Choreographer   com...apro.taplink.demo  I  Skipped 59 frames!  The application may be doing too much work on its main thread.
+2026-01-16 19:04:25.032 13663 Buffer...nsumer com...apro.taplink.demo  D  [](id:355f00000000,api:0,p:-1,c:13663) connect: controlledByApp=false
+2026-01-16 19:04:25.037 13663 FBI             com...apro.taplink.demo  E  Can't load library: dlopen failed: library "libmagtsync.so" not found
+2026-01-16 19:04:25.070 13663 OpenGLRenderer  com...apro.taplink.demo  E  Unable to match the desired swap behavior.
+2026-01-16 19:04:25.079 13663 ion             com...apro.taplink.demo  E  ioctl c0044901 failed with code -1: Invalid argument
+2026-01-16 19:04:25.340 13663 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[MainActivity]#0](f:0,a:1) acquireNextBufferLocked size=720x1600 mFrameNumber=1 applyTransaction=true mTimestamp=42221962181666(auto) mPendingTransactions.size=0 graphicBufferId=58682138165252 transform=0
+2026-01-16 19:04:25.353 13663 OpenGLRenderer  com...apro.taplink.demo  I  Davey! duration=1628ms; Flags=1, FrameTimelineVsyncId=159317, IntendedVsync=42220334846100, Vsync=42221381392997, InputEventId=0, HandleInputStart=42221394450974, AnimationStart=42221394499282, PerformTraversalsStart=42221395234974, DrawStart=42221840213666, FrameDeadline=42220354846100, FrameInterval=42221392646358, FrameStartTime=17738083, SyncQueued=42221910484435, SyncStart=42221913762282, IssueDrawCommandsStart=42221915708743, SwapBuffers=42221960456512, FrameCompleted=42221966766666, DequeueBufferDuration=0, QueueBufferDuration=1142462, GpuCompleted=42221966766666, SwapBuffersCompleted=42221964274282, DisplayPresentTime=0, CommandSubmissionCompleted=42221960456512, 
+2026-01-16 19:04:25.365 13663 Choreographer   com...apro.taplink.demo  I  Skipped 33 frames!  The application may be doing too much work on its main thread.
+2026-01-16 19:04:25.923 13663 ro.taplink.demo com...apro.taplink.demo  I  Compiler allocated 4271KB to compile void android.widget.TextView.<init>(android.content.Context, android.util.AttributeSet, int, int)
+2026-01-16 19:04:27.278 13663 ro.taplink.demo com...apro.taplink.demo  I  Compiler allocated 6480KB to compile void android.view.ViewRootImpl.performTraversals()
+2026-01-16 19:04:27.973 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:199)#OnReceive ] USB device permission granted: /dev/bus/usb/001/024 (VID=0x0E8D, PID=0x201C, ID=1024)
+2026-01-16 19:04:27.977 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:296)#StartAoaProtocol ] Starting AOA protocol for /dev/bus/usb/001/024, token=1
+2026-01-16 19:04:28.055 13663 UsbDev...ionJNI com...apro.taplink.demo  D  close
+2026-01-16 19:04:28.056 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:327)#StartAoaProtocol ] AOA protocol sent, waiting for device to switch, token=1
+2026-01-16 19:04:28.059 13663 UsbSta...Kernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTING -> WAITING_CONNECT
+2026-01-16 19:04:28.062 13663 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1354)#SetupKernelStatusListener$lambda$13 ] Kernel status changed: WAITING_CONNECT -> syncing to ConnectionManager: WAIT_CONNECTING (was: CONNECTING)
+2026-01-16 19:04:28.063 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:363)#WaitForAoaAccessory ] Waiting for AOA accessory, token=1
+2026-01-16 19:04:28.156 13663 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:228)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_DETACHED
+2026-01-16 19:04:28.162 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:241)#OnReceive ] USB device detached: /dev/bus/usb/001/024 (VID=0x0E8D, PID=0x201C, ID=1024)
+2026-01-16 19:04:28.166 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:181)#OnDeviceDetached ] Device detached: /dev/bus/usb/001/024 (VID: 0x0E8D, PID: 0x201C)
+2026-01-16 19:04:28.987 13663 UsbAoa...Kernel com...apro.taplink.demo  I  [ (BaseUsbHostKernel.kt:228)#OnReceive ] =========onReceive========intent:android.hardware.usb.action.USB_DEVICE_ATTACHED
+2026-01-16 19:04:28.993 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (BaseUsbHostKernel.kt:233)#OnReceive ] USB device attached: /dev/bus/usb/001/025 (VID=0x18D1, PID=0x2D01, ID=1025)
+2026-01-16 19:04:28.996 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:104)#OnDeviceAttached ] Device attached: /dev/bus/usb/001/025 (VID: 0x18D1, PID: 0x2D01)
+2026-01-16 19:04:28.997 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:117)#OnDeviceAttached ] AOA device attached, status: WAITING_CONNECT
+2026-01-16 19:04:28.999 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:122)#OnDeviceAttached ] AOA device detected via broadcast, attempting to connect...
+2026-01-16 19:04:29.095 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:410)#WaitForAoaAccessory ] AOA device detected: /dev/bus/usb/001/025, token=1
+2026-01-16 19:04:29.097 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:411)#WaitForAoaAccessory ] VID: 0x18D1, PID: 0x2D01
+2026-01-16 19:04:29.099 13663 UsbAoa...Kernel com...apro.taplink.demo  D  [ (UsbStandardHostKernel.kt:442)#WaitForAoaAccessory ] Requesting permission for AOA device, token=1
+2026-01-16 19:04:29.100 13663 UsbAoa...Kernel com...apro.taplink.demo  I  [ (UsbStandardHostKernel.kt:443)#WaitForAoaAccessory ] Note: This is the second permission request - AOA protocol requires separate permissions for:
+2026-01-16 19:04:29.100 13663 UsbAoa...Kernel com...apro.taplink.demo  I  [ (UsbStandardHostKernel.kt:447)#WaitForAoaAccessory ]   1. Original device (for AOA protocol setup)
+2026-01-16 19:04:29.101 13663 UsbAoa...Kernel com...apro.taplink.demo  I  [ (UsbStandardHostKernel.kt:448)#WaitForAoaAccessory ]   2. AOA accessory device (for data communication)
+2026-01-16 19:04:30.112 13663 Profil...taller com...apro.taplink.demo  D  Installing profile for com.sunmi.tapro.taplink.demo

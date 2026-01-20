@@ -120,10 +120,10 @@ object ProtocolConstants {
      *
      * @param host 主机地址
      * @param port 端口号
-     * @param secure 是否使用 WSS（默认 true）
+     * @param secure 是否使用 WSS（默认 false，使用 ws://）
      * @return 协议字符串
      */
-    fun buildLanProtocol(host: String, port: Int, secure: Boolean = true): String {
+    fun buildLanProtocol(host: String, port: Int, secure: Boolean = false): String {
         val prefix = if (secure) LAN_PROTOCOL_PREFIX else LAN_WS_PROTOCOL_PREFIX
         return "$prefix$host:$port"
     }

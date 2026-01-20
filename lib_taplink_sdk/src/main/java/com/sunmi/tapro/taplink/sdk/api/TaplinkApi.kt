@@ -5,11 +5,8 @@ import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
-import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
-import com.sunmi.tapro.taplink.sdk.error.TaplinkException
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
-import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 
 /**
  * Taplink SDK API接口
@@ -152,5 +149,10 @@ interface TaplinkApi {
      * 清除本地缓存的设备连接信息，下次连接时需要重新配对。
      */
     fun clearDeviceCache()
+
+    /**
+     * 获取连接信息
+     */
+    fun getConnectionConfig(): ConnectionConfig?
 }
 

@@ -4,22 +4,22 @@ import android.content.Context
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
-import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
-import com.sunmi.tapro.taplink.sdk.manager.ReconnectManager
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolConfigResolver
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolRequestBuilder
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
+import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback as ServiceConnectionCallback
 import com.google.gson.Gson
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
+import com.sunmi.tapro.taplink.communication.lan.LanClientKernel
 import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 
@@ -41,10 +41,6 @@ class ConnectionManager(
 ) {
     private val TAG = "ConnectionManager"
 
-    companion object {
-        private const val SUCCESS_CODE = "0"
-    }
-
     /**
      * Connection status
      */
@@ -65,6 +61,13 @@ class ConnectionManager(
      */
     private var connectedDeviceId: String? = null
     private var connectedTaproVersion: String? = null
+
+    /**
+     * Current connection configuration
+     * Used to check if already connected with same config
+     */
+    private var currentConnectionConfig: ConnectionConfig? = null
+
 
     /**
      * Reconnect manager
@@ -132,6 +135,9 @@ class ConnectionManager(
         reconnectManager = ReconnectManager(context) { connectionConfig, listener ->
             connectInternal(connectionConfig, listener)
         }
+
+        // Note: Kernel status listener will be setup when kernel is created during connection
+        // Cannot setup here because kernel doesn't exist yet
     }
 
     /**
@@ -140,6 +146,7 @@ class ConnectionManager(
     fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
         // If no config provided, try to get from ReconnectManager or create default
         var actualConfig = config ?: reconnectManager?.getLastConnectionConfig()
+        LogUtil.d(TAG, "========actualConfig:$actualConfig,oldConfig:${reconnectManager?.getLastConnectionConfig()}")
 
         // If still no config, create default based on TaplinkConfig connection mode
         if (actualConfig == null) {
@@ -164,7 +171,7 @@ class ConnectionManager(
                 return
             }
         } else {
-            // Not reconnecting, check if already connecting
+            // Not reconnecting, check connection status
             if (connectionStatus == ConnectionStatus.CONNECTING ||
                 connectionStatus == ConnectionStatus.WAIT_CONNECTING
             ) {
@@ -173,6 +180,30 @@ class ConnectionManager(
                 LogUtil.d(TAG, "Added listener to pending connection queue, total: ${pendingConnectionListeners.size}")
                 return
             }
+
+            // Check if already connected with same config
+            if (connectionStatus == ConnectionStatus.CONNECTED) {
+                val isSameConfig = currentConnectionConfig?.isEquivalentTo(actualConfig) == true
+                val isActuallyConnected = isConnected()
+
+                if (isSameConfig && isActuallyConnected) {
+                    // Already connected with same config, notify listener immediately
+                    LogUtil.d(TAG, "Already connected with same config, notifying listener immediately")
+                    val deviceId = connectedDeviceId ?: "unknown"
+                    val taproVersion = connectedTaproVersion ?: "unknown"
+                    listener.onConnected(deviceId, taproVersion)
+                    return
+                } else if (!isSameConfig) {
+                    // Different config, need to disconnect first
+                    LogUtil.d(TAG, "Different config detected, disconnecting current connection before reconnecting")
+                    disconnect()
+                } else if (!isActuallyConnected) {
+                    // Status says CONNECTED but actually not connected, need to reconnect
+                    LogUtil.w(TAG, "Status is CONNECTED but actually not connected, reconnecting...")
+                    disconnect()
+                }
+            }
+
             // Prepare reconnect manager for new connection
             reconnectManager?.prepareConnect(actualConfig, listener)
         }
@@ -185,6 +216,10 @@ class ConnectionManager(
      * Internal connection method
      */
     private fun connectInternal(config: ConnectionConfig?, listener: ConnectionListener) {
+        // Save config temporarily for later use in INIT callback
+        // We'll set currentConnectionConfig only after successful INIT
+        val connectionConfig = config
+
         // Set connection status immediately to prevent concurrent connections
         if (connectionStatus != ConnectionStatus.CONNECTING &&
             connectionStatus != ConnectionStatus.WAIT_CONNECTING
@@ -197,8 +232,8 @@ class ConnectionManager(
             updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
-                    InnerErrorCode.C20.code,
-                    InnerErrorCode.C20.description
+                    InnerErrorCode.E201.code,
+                    InnerErrorCode.E201.description
                 )
             )
             return
@@ -211,148 +246,180 @@ class ConnectionManager(
         )
         currentConnectionMode = connectionMode
 
+        // 如果不是LAN模式，清除之前可能存在的LAN地址监听器
+        if (connectionMode != ConnectionMode.LAN.name) {
+            clearServiceAddressChangeListener()
+        }
+
         // Validate protocol format
         if (!ProtocolManager.isValidProtocol(protocol)) {
             // Reset status on error
             updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
             listener.onError(
                 ConnectionError(
-                    InnerErrorCode.C41.code,
-                    "${InnerErrorCode.C41.description}:$protocol"
+                    InnerErrorCode.E302.code,
+                    "${InnerErrorCode.E302.description}:$protocol"
                 )
             )
             return
         }
 
+        // Validate status consistency before connecting
+        validateStatusConsistency()
+
         // Connect through ServiceKernel
-        TaplinkServiceKernel.getInstance()
-            ?.connect(
-                protocol,
-                this.config.appId,
-                this.config.secretKey,
-                object : ServiceConnectionCallback {
-                    override fun onConnected(extraInfoMap: Map<String, String?>?) {
-                        // Register data receiver
-                        registerDataReceiver()
+        val serviceKernel = TaplinkServiceKernel.getInstance()
 
-                        // Send INIT command to initialize tapro application
-                        sendInitCommand { success, errorCode, errorMsg, deviceId, taproVersion ->
-                            if (success) {
-                                // Get device info from INIT response
-                                connectedDeviceId = deviceId ?: "unknown"
-                                connectedTaproVersion = taproVersion ?: "unknown"
+        // Connect first, kernel will be created inside TaplinkServiceKernel.connect()
+        serviceKernel?.connect(
+            protocol,
+            this.config.appId,
+            this.config.secretKey,
+            object : ServiceConnectionCallback {
+                override fun onConnected(extraInfoMap: Map<String, String?>?) {
+                    // Sync status after connection success
+                    syncStatusFromKernel()
 
-                                // 在 INIT 成功后保存连接信息（包含正确的 deviceId）
-                                reconnectManager?.onConnected(connectedDeviceId, connectedTaproVersion)
-                                updateConnectionStatus(
-                                    ConnectionStatus.CONNECTED,
-                                    deviceId = connectedDeviceId,
-                                    taproVersion = connectedTaproVersion,
-                                    listener = listener
-                                )
-                            } else {
-                                val error = ConnectionError(
-                                    errorCode ?: InnerErrorCode.C44.code,
-                                    errorMsg ?: InnerErrorCode.C44.description
-                                )
+                    // Register data receiver
+                    registerDataReceiver()
 
-                                // Notify pending reconnection listeners
-                                reconnectManager?.notifyPendingListenersError(error)
+                    // Send INIT command to initialize tapro application
+                    // Note: If INIT fails, we need to disconnect WebSocket to ensure state consistency
+                    sendInitCommand { success, errorCode, errorMsg, deviceId, taproVersion ->
+                        if (success) {
+                            // Get device info from INIT response
+                            connectedDeviceId = deviceId ?: "unknown"
+                            connectedTaproVersion = taproVersion ?: "unknown"
 
-                                updateConnectionStatus(
-                                    ConnectionStatus.ERROR,
-                                    null,
-                                    null,
-                                    error,
-                                    null,
-                                    listener
-                                )
-                            }
-                        }
-                    }
+                            // Save current connection config after successful INIT
+                            currentConnectionConfig = connectionConfig
 
-                    override fun onWaitingConnect() {
-                        updateConnectionStatus(
-                            ConnectionStatus.WAIT_CONNECTING, listener = listener
-                        )
-                    }
-
-                    override fun onDisconnected(code: String, msg: String) {
-                        val reason = "Code: $code, Message: $msg"
-
-                        // 判断是连接错误还是正常断开
-                        val isConnectionError = isConnectionError(code, msg)
-
-                        if (isConnectionError) {
-                            // 立即触发所有待处理的交易回调（目标进程崩溃时）
-                            paymentManager?.failAllPendingTransactions(code, msg)
-
-                            // 创建连接错误对象
-                            val connectionError = ConnectionError(code, msg)
+                            // 在 INIT 成功后保存连接信息（包含正确的 deviceId）
+                            reconnectManager?.onConnected(connectedDeviceId, connectedTaproVersion)
                             updateConnectionStatus(
-                                ConnectionStatus.ERROR,
-                                errorCode = connectionError,
+                                ConnectionStatus.CONNECTED,
+                                deviceId = connectedDeviceId,
+                                taproVersion = connectedTaproVersion,
                                 listener = listener
                             )
 
-                            // 清理资源
+                            // 监听器已在 onConnected 时设置，无需重复设置
+                        } else {
+                            val error = ConnectionError(
+                                errorCode ?: InnerErrorCode.E305.code,
+                                errorMsg ?: InnerErrorCode.E305.description
+                            )
+
+                            LogUtil.w(TAG, "INIT command failed, disconnecting WebSocket connection to ensure state consistency")
+
+                            // INIT 失败时，需要断开 WebSocket 连接以确保状态一致
+                            // 因为 WebSocket 可能已连接，但业务层面连接失败
+                            val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+                            if (kernel != null) {
+                                val kernelStatus = kernel.getConnectionStatus()
+                                if (kernelStatus == InnerConnectionStatus.CONNECTED ||
+                                    kernelStatus == InnerConnectionStatus.CONNECTING
+                                ) {
+                                    LogUtil.d(TAG, "Disconnecting kernel connection due to INIT failure")
+                                    try {
+                                        kernel.disconnect()
+                                    } catch (e: Exception) {
+                                        LogUtil.e(TAG, "Error disconnecting kernel after INIT failure: ${e.message}")
+                                    }
+                                }
+                            }
+
+                            // 同步状态（确保 ConnectionManager 和 Kernel 状态一致）
+                            syncStatusFromKernel()
+
+                            // Notify pending reconnection listeners
+                            reconnectManager?.notifyPendingListenersError(error)
+
+                            updateConnectionStatus(
+                                ConnectionStatus.ERROR,
+                                null,
+                                null,
+                                error,
+                                null,
+                                listener
+                            )
+
+                            // 再次同步状态，确保断开后的状态一致
+                            syncStatusFromKernel()
+                        }
+                    }
+                }
+
+                override fun onWaitingConnect() {
+                    // 在连接等待阶段设置服务地址变化监听器
+                    // 此时 LanClientKernel 已经创建并赋值给 currentServiceKernel
+                    // 这样可以更早地监听服务地址变化，即使在连接过程中也能检测到
+                    setupServiceAddressChangeListener()
+
+                    // Setup status listener as soon as kernel is created
+                    // Kernel is created in TaplinkServiceKernel.connect() before this callback
+                    setupKernelStatusListener()
+
+                    updateConnectionStatus(
+                        ConnectionStatus.WAIT_CONNECTING,
+                        reason = "Waiting for connection",
+                        listener = listener
+                    )
+                }
+
+                override fun onDisconnected(code: String, msg: String) {
+                    val reason = "Code: $code, Message: $msg"
+
+                    // 判断是连接错误还是正常断开
+                    val isConnectionError = isConnectionError(code, msg)
+
+                    if (isConnectionError) {
+                        // 立即触发所有待处理的交易回调（目标进程崩溃时）
+                        paymentManager?.failAllPendingTransactions(code, msg)
+
+                        // 创建连接错误对象
+                        val connectionError = ConnectionError(code, msg)
+                        updateConnectionStatus(
+                            ConnectionStatus.ERROR,
+                            errorCode = connectionError,
+                            listener = listener
+                        )
+
+                        // 清理资源
+                        connectedDeviceId = null
+                        connectedTaproVersion = null
+                        currentConnectionMode = null
+                        currentConnectionConfig = null
+                    } else {
+                        updateConnectionStatus(
+                            ConnectionStatus.DISCONNECTED,
+                            reason = reason,
+                            listener = listener
+                        )
+
+                        // Try auto-reconnect
+                        val reconnected = reconnectManager?.onDisconnected(listener) ?: false
+
+                        if (!reconnected) {
+                            // Not reconnecting, notify application layer and clean up resources
+                            listener.onDisconnected(reason)
+                            connectionListener?.onDisconnected(reason)
+
+                            // Clean up resources (only when not reconnecting)
                             connectedDeviceId = null
                             connectedTaproVersion = null
                             currentConnectionMode = null
-                        } else {
-                            updateConnectionStatus(
-                                ConnectionStatus.DISCONNECTED,
-                                reason = reason,
-                                listener = listener
-                            )
-
-                            // Try auto-reconnect
-                            val reconnected = reconnectManager?.onDisconnected(listener) ?: false
-
-                            if (!reconnected) {
-                                // Not reconnecting, notify application layer and clean up resources
-                                listener.onDisconnected(reason)
-                                connectionListener?.onDisconnected(reason)
-
-                                // Clean up resources (only when not reconnecting)
-                                connectedDeviceId = null
-                                connectedTaproVersion = null
-                                currentConnectionMode = null
-                            }
-                            // If reconnecting, preserve device info and connection mode
+                            currentConnectionConfig = null
                         }
+                        // If reconnecting, preserve device info and connection mode
                     }
 
-                    override fun onServiceAddressChanged(
-                        newServiceName: String,
-                        newHost: String,
-                        newPort: Int,
-                        oldHost: String,
-                        oldPort: Int
-                    ): Boolean {
-                        LogUtil.i(TAG, "Service address changed detected: $oldHost:$oldPort -> $newHost:$newPort")
-                        val sameDevice =
-                            (connectedDeviceId.isNullOrEmpty()) || (connectedDeviceId != null && newServiceName.endsWith(
-                                connectedDeviceId!!
-                            ))
-
-                        if (!sameDevice) {
-                            return false
-                        } else {
-                            // Create new connection configuration
-                            val newConnectionConfig = ConnectionConfig().apply {
-                                setHost(newHost)
-                                setPort(newPort)
-                            }
-
-                            LogUtil.d(TAG, "Triggering reconnection with new address: $newHost:$newPort")
-
-                            // Notify reconnect manager of address change, trigger reconnection
-                            reconnectManager?.onAddressChanged(newConnectionConfig, listener)
-                            return true
-                        }
-                    }
-                })
+                    // Sync status from kernel after updating ConnectionManager status
+                    // Kernel should have updated its status in onDisconnected callback
+                    // This ensures both states are consistent
+                    syncStatusFromKernel()
+                }
+            })
     }
 
     /**
@@ -367,8 +434,8 @@ class ConnectionManager(
         // Clear pending connection listeners
         if (pendingConnectionListeners.isNotEmpty()) {
             val error = ConnectionError(
-                InnerErrorCode.C45.code,
-                InnerErrorCode.C45.description
+                InnerErrorCode.E213.code,
+                InnerErrorCode.E213.description
             )
             notifyPendingConnectionListenersError(error)
         }
@@ -378,14 +445,52 @@ class ConnectionManager(
         connectedDeviceId = null
         connectedTaproVersion = null
         currentConnectionMode = null
+        currentConnectionConfig = null
+
+        // 清除服务地址变化监听器（断开连接时清除）
+        clearServiceAddressChangeListener()
+
+        // Sync status after disconnect to ensure consistency
+        syncStatusFromKernel()
 
         LogUtil.d(TAG, "Connection config will be cleared by ReconnectManager")
     }
 
     /**
      * Check if connected
+     *
+     * Priority: Kernel actual status > ConnectionManager cached status
+     *
+     * Note: This method performs automatic status synchronization if inconsistency is detected
      */
     fun isConnected(): Boolean {
+        // First check kernel actual status
+        val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+        val kernelStatus = kernel?.getConnectionStatus()
+
+        if (kernelStatus != null) {
+            val isKernelConnected = kernelStatus == InnerConnectionStatus.CONNECTED
+            val expectedStatus = convertToConnectionStatus(kernelStatus)
+
+            // Sync status if inconsistent (but respect INIT failure scenario)
+            if (expectedStatus != connectionStatus) {
+                // Special case: INIT failure scenario - don't sync if ConnectionManager is ERROR
+                val isInitFailureScenario = connectionStatus == ConnectionStatus.ERROR &&
+                        expectedStatus == ConnectionStatus.CONNECTED
+
+                if (!isInitFailureScenario) {
+                    LogUtil.w(
+                        TAG,
+                        "Status inconsistency detected: Kernel=$kernelStatus (expected: $expectedStatus), ConnectionManager=$connectionStatus, syncing..."
+                    )
+                    syncStatusFromKernel()
+                }
+            }
+
+            return isKernelConnected
+        }
+
+        // Fallback to cached status if kernel is not available
         return connectionStatus == ConnectionStatus.CONNECTED
     }
 
@@ -403,6 +508,23 @@ class ConnectionManager(
      */
     fun getConnectedDeviceId(): String? {
         return connectedDeviceId
+    }
+
+    /**
+     * Get last connected device ID
+     *
+     * Get the device ID of the last successful connection, even if currently disconnected.
+     * Used for auto-reconnection, device identification, etc.
+     *
+     * @return Last connected device ID, or null if not available
+     */
+    fun getLastConnectedDeviceId(): String? {
+        // First try current connected device ID
+        if (connectedDeviceId != null) {
+            return connectedDeviceId
+        }
+        // Fall back to persistent storage
+        return reconnectManager?.getLastConnectedDeviceId()
     }
 
     /**
@@ -498,6 +620,24 @@ class ConnectionManager(
             val initCallback = object : InnerCallback {
                 override fun onError(code: String, msg: String) {
                     LogUtil.e(TAG, "INIT command failed: code=$code, msg=$msg")
+
+                    // INIT 超时或失败时，需要断开 WebSocket 连接以确保状态一致
+                    LogUtil.w(TAG, "INIT command error/timeout, disconnecting WebSocket connection to ensure state consistency")
+                    val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+                    if (kernel != null) {
+                        val kernelStatus = kernel.getConnectionStatus()
+                        if (kernelStatus == InnerConnectionStatus.CONNECTED ||
+                            kernelStatus == InnerConnectionStatus.CONNECTING
+                        ) {
+                            LogUtil.d(TAG, "Disconnecting kernel connection due to INIT error/timeout")
+                            try {
+                                kernel.disconnect()
+                            } catch (e: Exception) {
+                                LogUtil.e(TAG, "Error disconnecting kernel after INIT error: ${e.message}")
+                            }
+                        }
+                    }
+
                     onComplete(false, code, msg, null, null)
                 }
 
@@ -529,8 +669,8 @@ class ConnectionManager(
                         }
 
                         // Determine success
-                        if (code == SUCCESS_CODE && basicResponse.event is PaymentEvent.Completed
-                            && (transactionResultCode == "0" || transactionResultCode == "000")
+                        if ((code == ResponseProcessor.SUCCESS_CODE || code == "0" || code == "000") &&
+                            basicResponse.event is PaymentEvent.Completed
                         ) {
                             LogUtil.d(TAG, "INIT command completed successfully")
                             LogUtil.d(TAG, "Device info: deviceId=$deviceId, taproVersion=$taproVersion")
@@ -629,11 +769,35 @@ class ConnectionManager(
             ConnectionStatus.CONNECTED -> {
                 // Notify connection status listener (for PaymentManager to process pending transaction)
                 connectionStatusListener?.invoke()
-                listener?.onConnected(deviceId!!, taproVersion!!)
-                connectionListener?.onConnected(deviceId!!, taproVersion!!)
 
-                // Notify all pending connection listeners
-                notifyPendingConnectionListenersSuccess(deviceId!!, taproVersion!!)
+                // First, notify all pending connection listeners (they will be removed from the list)
+                val notifiedPendingListeners = notifyPendingConnectionListenersSuccess(deviceId!!, taproVersion!!)
+
+                // Collect all unique listeners to avoid duplicate callbacks
+                val listenersToNotify = mutableSetOf<ConnectionListener>()
+
+                // Add the listener parameter if provided and not already notified as pending listener
+                listener?.let {
+                    if (!notifiedPendingListeners.contains(it)) {
+                        listenersToNotify.add(it)
+                    }
+                }
+
+                // Add the global connection listener if set and different from listener parameter and not already notified
+                connectionListener?.let {
+                    if (it != listener && !notifiedPendingListeners.contains(it)) {
+                        listenersToNotify.add(it)
+                    }
+                }
+
+                // Now notify all unique listeners that haven't been notified yet
+                listenersToNotify.forEach { l ->
+                    try {
+                        l.onConnected(deviceId!!, taproVersion!!)
+                    } catch (e: Exception) {
+                        LogUtil.e(TAG, "Error notifying connection listener: ${e.message}")
+                    }
+                }
             }
 
             ConnectionStatus.ERROR -> {
@@ -668,10 +832,11 @@ class ConnectionManager(
      *
      * @param deviceId Connected device ID
      * @param taproVersion Tapro version
+     * @return List of listeners that were notified (for deduplication)
      */
-    private fun notifyPendingConnectionListenersSuccess(deviceId: String, taproVersion: String) {
+    private fun notifyPendingConnectionListenersSuccess(deviceId: String, taproVersion: String): List<ConnectionListener> {
         if (pendingConnectionListeners.isEmpty()) {
-            return
+            return emptyList()
         }
 
         LogUtil.d(TAG, "Notifying ${pendingConnectionListeners.size} pending connection listeners of connection success")
@@ -685,6 +850,8 @@ class ConnectionManager(
                 LogUtil.e(TAG, "Error notifying pending connection listener: ${e.message}")
             }
         }
+
+        return listeners
     }
 
     /**
@@ -766,9 +933,17 @@ class ConnectionManager(
      * @return Boolean true表示连接错误，false表示正常断开
      */
     private fun isConnectionError(code: String, msg: String): Boolean {
-        // 连接阶段的错误码
+        // 连接阶段的错误码（包含新错误码和向后兼容的T系列错误码）
         val connectionErrorCodes = setOf(
-            "C20", "C22", "C25", "C33", "C35", "C36", "C41", // 通用连接错误
+            // 新错误码
+            "201", "202", "203", // 初始化错误
+            "211", "212", "213", "214", "221", // 连接状态/失败
+            "231", "232", // APP_TO_APP连接错误
+            "241", "242", // LAN连接错误
+            "251", "252", "253", "254", "255", // USB模式连接错误
+            // 向后兼容：T系列错误码
+            "T01", "T02", "T04", "T05", "T06", "T07", "T08", "T09", "T10", "T11", "T12", "T17",
+            // 其他错误码
             "-1", // BaseServiceKernel 默认错误码
             "1006", "1002", "1015", // WebSocket 连接错误码
             "CONNECTION_FAILED", "WEBSOCKET_NULL", "SEND_FAILED", // 自定义错误码
@@ -811,5 +986,543 @@ class ConnectionManager(
 
         // 默认情况下，如果是在连接阶段发生的断开，认为是连接错误
         return connectionStatus == ConnectionStatus.CONNECTING || connectionStatus == ConnectionStatus.WAIT_CONNECTING
+    }
+
+    // ==================== Status Synchronization Methods ====================
+
+    /**
+     * 设备匹配结果
+     */
+    private data class DeviceMatchResult(
+        val matchType: DeviceMatchType,
+        val confidence: Float,
+        val reason: String
+    )
+
+    /**
+     * 设备匹配类型
+     */
+    private enum class DeviceMatchType {
+        SAME_DEVICE,
+        DIFFERENT_DEVICE,
+        UNKNOWN_DEVICE
+    }
+
+    /**
+     * 重连决策结果
+     */
+    private data class ReconnectionDecision(
+        val shouldReconnect: Boolean,
+        val reason: String
+    )
+
+    /**
+     * 处理服务地址变化（统一入口）
+     *
+     * 这个方法可以被回调或监听器调用
+     */
+    private fun handleServiceAddressChanged(
+        newServiceName: String,
+        newHost: String,
+        newPort: Int,
+        oldHost: String,
+        oldPort: Int
+    ): Boolean {
+        LogUtil.i(
+            TAG,
+            "Service address changed detected: $newServiceName -> $newHost:$newPort (old: $oldHost:$oldPort)"
+        )
+
+        // 1. 增强的设备身份验证
+        val deviceMatchResult = analyzeDeviceIdentity(
+            newServiceName = newServiceName,
+            currentDeviceId = connectedDeviceId,
+            lastConnectedDeviceId = reconnectManager?.getLastConnectedDeviceId()
+        )
+
+        when (deviceMatchResult.matchType) {
+            DeviceMatchType.DIFFERENT_DEVICE -> {
+                LogUtil.d(TAG, "Service from different device, ignoring reconnection")
+                return false
+            }
+
+            DeviceMatchType.UNKNOWN_DEVICE -> {
+                LogUtil.w(TAG, "Cannot determine device identity, applying conservative policy")
+                if (!shouldReconnectToUnknownDevice(newServiceName, newHost, newPort)) {
+                    return false
+                }
+            }
+
+            DeviceMatchType.SAME_DEVICE -> {
+                LogUtil.d(TAG, "Service from same device (confidence: ${deviceMatchResult.confidence})")
+                if (deviceMatchResult.confidence < 0.7f) {
+                    LogUtil.d(
+                        TAG,
+                        "Device match confidence too low (${deviceMatchResult.confidence}), ignoring reconnection"
+                    )
+                    return false
+                }
+            }
+        }
+
+        // 2. 地址变化分析
+        val addressChangeResult = analyzeAddressChange(newHost, newPort, oldHost, oldPort)
+        if (!addressChangeResult.shouldReconnect) {
+            LogUtil.d(TAG, "Address change analysis: ${addressChangeResult.reason}")
+            return false
+        }
+
+        // 3. 连接状态分析
+        val connectionStateResult = analyzeConnectionState(newHost, newPort)
+        if (!connectionStateResult.shouldReconnect) {
+            LogUtil.d(TAG, "Connection state analysis: ${connectionStateResult.reason}")
+            return false
+        }
+
+        // 4. 执行重连
+        LogUtil.i(TAG, "All checks passed, triggering reconnection to $newHost:$newPort")
+        return executeReconnection(newHost, newPort)
+    }
+
+    /**
+     * 分析设备身份
+     */
+    private fun analyzeDeviceIdentity(
+        newServiceName: String,
+        currentDeviceId: String?,
+        lastConnectedDeviceId: String?
+    ): DeviceMatchResult {
+        // 获取最可靠的设备ID
+        val targetDeviceId = getReliableDeviceId(currentDeviceId, lastConnectedDeviceId)
+
+        if (targetDeviceId.isNullOrEmpty() || targetDeviceId == "unknown") {
+            return DeviceMatchResult(
+                matchType = DeviceMatchType.UNKNOWN_DEVICE,
+                confidence = 0.0f,
+                reason = "No reliable device ID available"
+            )
+        }
+
+        // 多种匹配策略
+        val exactMatch = newServiceName == "TaproService_$targetDeviceId"
+        if (exactMatch) {
+            return DeviceMatchResult(
+                matchType = DeviceMatchType.SAME_DEVICE,
+                confidence = 1.0f,
+                reason = "Exact service name match"
+            )
+        }
+
+        val suffixMatch = newServiceName.endsWith("_$targetDeviceId") || newServiceName.endsWith(targetDeviceId)
+        if (suffixMatch) {
+            return DeviceMatchResult(
+                matchType = DeviceMatchType.SAME_DEVICE,
+                confidence = 0.8f,
+                reason = "Service name suffix match"
+            )
+        }
+
+        val patternMatch = newServiceName.contains(targetDeviceId) &&
+                newServiceName.contains("Tapro", ignoreCase = true)
+        if (patternMatch) {
+            return DeviceMatchResult(
+                matchType = DeviceMatchType.SAME_DEVICE,
+                confidence = 0.6f,
+                reason = "Service name pattern match"
+            )
+        }
+
+        return DeviceMatchResult(
+            matchType = DeviceMatchType.DIFFERENT_DEVICE,
+            confidence = 0.0f,
+            reason = "No device ID match found"
+        )
+    }
+
+    /**
+     * 获取最可靠的设备ID
+     */
+    private fun getReliableDeviceId(
+        currentDeviceId: String?,
+        lastConnectedDeviceId: String?
+    ): String? {
+        return when {
+            !currentDeviceId.isNullOrEmpty() && currentDeviceId != "unknown" -> {
+                LogUtil.d(TAG, "Using current connected device ID: $currentDeviceId")
+                currentDeviceId
+            }
+
+            !lastConnectedDeviceId.isNullOrEmpty() && lastConnectedDeviceId != "unknown" -> {
+                LogUtil.d(TAG, "Using last connected device ID: $lastConnectedDeviceId")
+                lastConnectedDeviceId
+            }
+
+            else -> {
+                LogUtil.w(TAG, "No reliable device ID available")
+                null
+            }
+        }
+    }
+
+    /**
+     * 处理未知设备的重连策略
+     */
+    private fun shouldReconnectToUnknownDevice(
+        serviceName: String,
+        newHost: String,
+        newPort: Int
+    ): Boolean {
+        // 保守策略：只有在特定条件下才重连
+        val isCurrentlyDisconnected = getActualConnectionStatus() in listOf(
+            ConnectionStatus.DISCONNECTED,
+            ConnectionStatus.ERROR
+        )
+
+        val isExpectedServiceName = serviceName.contains("Tapro", ignoreCase = true)
+
+        val shouldReconnect = isCurrentlyDisconnected && isExpectedServiceName
+
+        LogUtil.d(
+            TAG,
+            "Unknown device policy: disconnected=$isCurrentlyDisconnected, expectedService=$isExpectedServiceName, shouldReconnect=$shouldReconnect"
+        )
+
+        return shouldReconnect
+    }
+
+    /**
+     * 分析地址变化
+     */
+    private fun analyzeAddressChange(
+        newHost: String,
+        newPort: Int,
+        oldHost: String,
+        oldPort: Int
+    ): ReconnectionDecision {
+        // 检查地址是否真的发生变化
+        val isSameAddress = oldHost.isNotEmpty() &&
+                oldPort > 0 &&
+                newHost == oldHost &&
+                newPort == oldPort
+
+        if (isSameAddress) {
+            val actualStatus = getActualConnectionStatus()
+            return if (actualStatus in listOf(ConnectionStatus.DISCONNECTED, ConnectionStatus.ERROR)) {
+                ReconnectionDecision(
+                    shouldReconnect = true,
+                    reason = "Same address but currently disconnected, reconnection needed"
+                )
+            } else {
+                ReconnectionDecision(
+                    shouldReconnect = false,
+                    reason = "Same address and already connected (status: $actualStatus), no reconnection needed"
+                )
+            }
+        }
+
+        return ReconnectionDecision(
+            shouldReconnect = true,
+            reason = "Address changed from $oldHost:$oldPort to $newHost:$newPort"
+        )
+    }
+
+    /**
+     * 分析连接状态
+     */
+    private fun analyzeConnectionState(newHost: String, newPort: Int): ReconnectionDecision {
+        val actualStatus = getActualConnectionStatus()
+
+        // 如果已连接，检查是否连接到相同地址
+        if (actualStatus !in listOf(ConnectionStatus.DISCONNECTED, ConnectionStatus.ERROR)) {
+            val currentConfig = reconnectManager?.getLastConnectionConfig()
+            if (currentConfig != null &&
+                currentConfig.host == newHost &&
+                currentConfig.port == newPort
+            ) {
+                return ReconnectionDecision(
+                    shouldReconnect = false,
+                    reason = "Already connected to the same address $newHost:$newPort"
+                )
+            }
+        }
+
+        return ReconnectionDecision(
+            shouldReconnect = true,
+            reason = "Connection state allows reconnection (current status: $actualStatus)"
+        )
+    }
+
+    /**
+     * 设置服务地址变化监听器（仅用于 LAN 连接）
+     *
+     * 在连接等待阶段（onWaitingConnect）设置，此时 LanClientKernel 已经创建
+     * 这样可以更早地监听服务地址变化，即使在连接过程中也能检测到服务地址变化
+     */
+    private fun setupServiceAddressChangeListener() {
+        try {
+            val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+            if (kernel is LanClientKernel) {
+                if (kernel.getServiceAddressChangeListener() != null) {
+                    LogUtil.d(TAG, "exists address change listener for LanClientKernel")
+                    return
+                }
+                LogUtil.d(TAG, "Setting up service address change listener for LanClientKernel")
+
+                kernel.setServiceAddressChangeListener(object : LanClientKernel.ServiceAddressChangeListener {
+                    override fun onServiceAddressChanged(
+                        serviceName: String,
+                        newHost: String,
+                        newPort: Int,
+                        oldHost: String,
+                        oldPort: Int
+                    ): Boolean {
+                        // 直接调用统一的服务地址变化处理方法
+                        return this@ConnectionManager.handleServiceAddressChanged(
+                            serviceName,
+                            newHost,
+                            newPort,
+                            oldHost,
+                            oldPort
+                        )
+                    }
+                })
+                LogUtil.d(TAG, "Service address change listener set successfully")
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to setup service address change listener: ${e.message}")
+        }
+    }
+
+    /**
+     * 清除服务地址变化监听器
+     *
+     * 当切换到非LAN模式或断开连接时，清除之前设置的监听器
+     */
+    private fun clearServiceAddressChangeListener() {
+        try {
+            val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+            if (kernel is LanClientKernel) {
+                LogUtil.d(TAG, "Clearing service address change listener for LanClientKernel")
+                kernel.setServiceAddressChangeListener(null)
+                LogUtil.d(TAG, "Service address change listener cleared successfully")
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to clear service address change listener: ${e.message}")
+        }
+    }
+
+    /**
+     * 执行重连
+     */
+    private fun executeReconnection(newHost: String, newPort: Int): Boolean {
+        return try {
+            val newConnectionConfig = ConnectionConfig().apply {
+                setHost(newHost)
+                setPort(newPort)
+            }
+
+            LogUtil.d(TAG, "Executing reconnection to $newHost:$newPort,$connectionListener")
+            connectionListener?.let {
+                reconnectManager?.onAddressChanged(newConnectionConfig, it)
+            }
+
+            true
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to execute reconnection: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Setup kernel status listener for automatic synchronization
+     *
+     * When kernel status changes, automatically sync to ConnectionManager
+     *
+     * Note: This should be called after kernel is created (during connection process)
+     * Called in onWaitingConnect() which is always called before onConnected()
+     */
+    private fun setupKernelStatusListener() {
+        val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+        if (kernel == null) {
+            LogUtil.d(TAG, "Cannot setup kernel status listener: kernel not available yet")
+            return
+        }
+
+        kernel.setStatusChangeListener { kernelStatus ->
+            val newStatus = convertToConnectionStatus(kernelStatus)
+            if (connectionStatus != newStatus) {
+                LogUtil.d(
+                    TAG,
+                    "Kernel status changed: $kernelStatus -> syncing to ConnectionManager: $newStatus (was: $connectionStatus)"
+                )
+                // Update status without triggering callbacks (to avoid duplicate notifications)
+                // The callbacks should be triggered by ConnectionCallback, not by status sync
+                synchronized(this) {
+                    connectionStatus = newStatus
+                }
+            }
+        }
+        LogUtil.d(TAG, "Kernel status listener setup successfully")
+    }
+
+    /**
+     * Convert InnerConnectionStatus to ConnectionStatus
+     */
+    private fun convertToConnectionStatus(kernelStatus: InnerConnectionStatus): ConnectionStatus {
+        return when (kernelStatus) {
+            InnerConnectionStatus.CONNECTED -> ConnectionStatus.CONNECTED
+            InnerConnectionStatus.CONNECTING -> ConnectionStatus.CONNECTING
+            InnerConnectionStatus.WAITING_CONNECT -> ConnectionStatus.WAIT_CONNECTING
+            InnerConnectionStatus.ERROR -> ConnectionStatus.ERROR
+            InnerConnectionStatus.DISCONNECTED -> ConnectionStatus.DISCONNECTED
+            InnerConnectionStatus.RECONNECTING -> ConnectionStatus.CONNECTING // Map RECONNECTING to CONNECTING
+        }
+    }
+
+    /**
+     * Get actual connection status from kernel
+     *
+     * Priority: Kernel status > ConnectionManager cached status
+     */
+    private fun getActualConnectionStatus(): ConnectionStatus {
+        val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+        val kernelStatus = kernel?.getConnectionStatus()
+
+        return if (kernelStatus != null) {
+            convertToConnectionStatus(kernelStatus)
+        } else {
+            // Fallback to cached status if kernel is not available
+            connectionStatus
+        }
+    }
+
+    /**
+     * Sync status from kernel to ConnectionManager
+     *
+     * This method updates ConnectionManager's cached status based on kernel's actual status
+     *
+     * Note: In disconnect scenarios, Kernel should update its status before calling onDisconnected callback,
+     * so this sync should align both states correctly. However, we add protection to prevent overwriting
+     * correct disconnect states with stale CONNECTED state from kernel.
+     *
+     * Special handling for INIT failure scenario:
+     * - If ConnectionManager is ERROR but Kernel is CONNECTED, this indicates INIT failure
+     * - In this case, we should trust ConnectionManager's ERROR state and disconnect kernel
+     */
+    private fun syncStatusFromKernel() {
+        val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+        val kernelStatus = kernel?.getConnectionStatus()
+
+        if (kernelStatus != null) {
+            val expectedStatus = convertToConnectionStatus(kernelStatus)
+            if (connectionStatus != expectedStatus) {
+                // Special case: INIT failure scenario
+                // ConnectionManager is ERROR but Kernel is still CONNECTED
+                // This happens when WebSocket connects but INIT command fails
+                val isInitFailureScenario = connectionStatus == ConnectionStatus.ERROR &&
+                        expectedStatus == ConnectionStatus.CONNECTED
+
+                if (isInitFailureScenario) {
+                    LogUtil.w(
+                        TAG,
+                        "INIT failure scenario detected: ConnectionManager=ERROR, Kernel=CONNECTED. " +
+                                "This indicates INIT command failed after WebSocket connection. " +
+                                "Kernel state will be corrected by disconnect operation."
+                    )
+                    // Don't sync in this case - ConnectionManager's ERROR state is correct
+                    // The kernel should be disconnected (which should have been done in INIT failure handler)
+                    return
+                }
+
+                // Protection: Don't sync from CONNECTED to ERROR/DISCONNECTED if we're already in disconnect state
+                // This prevents overwriting correct disconnect states with stale CONNECTED state from kernel
+                val isDisconnectState = connectionStatus == ConnectionStatus.DISCONNECTED ||
+                        connectionStatus == ConnectionStatus.ERROR
+                val kernelIsDisconnectState = expectedStatus == ConnectionStatus.DISCONNECTED ||
+                        expectedStatus == ConnectionStatus.ERROR
+
+                if (!isDisconnectState || kernelIsDisconnectState) {
+                    LogUtil.d(TAG, "Syncing status from kernel: $kernelStatus -> $expectedStatus (was: $connectionStatus)")
+                    synchronized(this) {
+                        connectionStatus = expectedStatus
+                    }
+                } else {
+                    LogUtil.w(
+                        TAG,
+                        "Skipping status sync: ConnectionManager=$connectionStatus (disconnect state), Kernel=$kernelStatus (still CONNECTED), kernel state may be stale"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Validate status consistency between Kernel and ConnectionManager
+     *
+     * If inconsistency is detected, automatically sync from kernel
+     *
+     * @return Boolean true if status is consistent, false if inconsistency was detected and fixed
+     */
+    /**
+     * Validate status consistency between Kernel and ConnectionManager
+     *
+     * If inconsistency is detected, automatically sync from kernel
+     *
+     * Special handling for INIT failure scenario:
+     * - If ConnectionManager is ERROR but Kernel is CONNECTED, this indicates INIT failure
+     * - In this case, we should trust ConnectionManager's ERROR state and disconnect kernel
+     *
+     * @return Boolean true if status is consistent, false if inconsistency was detected and fixed
+     */
+    private fun validateStatusConsistency(): Boolean {
+        val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+        val kernelStatus = kernel?.getConnectionStatus()
+
+        if (kernelStatus == null) {
+            // Kernel not available, cannot validate
+            return true
+        }
+
+        val expectedStatus = convertToConnectionStatus(kernelStatus)
+
+        if (connectionStatus != expectedStatus) {
+            // Special case: INIT failure scenario
+            // ConnectionManager is ERROR but Kernel is still CONNECTED
+            // This happens when WebSocket connects but INIT command fails
+            val isInitFailureScenario = connectionStatus == ConnectionStatus.ERROR &&
+                    expectedStatus == ConnectionStatus.CONNECTED
+
+            if (isInitFailureScenario) {
+                LogUtil.w(
+                    TAG,
+                    "INIT failure scenario detected during validation: ConnectionManager=ERROR, Kernel=CONNECTED. " +
+                            "This indicates INIT command failed after WebSocket connection. " +
+                            "Kernel should be disconnected to ensure state consistency."
+                )
+                // Don't sync in this case - ConnectionManager's ERROR state is correct
+                // The kernel should be disconnected (which should have been done in INIT failure handler)
+                // If kernel is still connected, disconnect it now
+                if (kernelStatus == InnerConnectionStatus.CONNECTED) {
+                    LogUtil.w(TAG, "Kernel is still CONNECTED after INIT failure, disconnecting now")
+                    try {
+                        kernel.disconnect()
+                    } catch (e: Exception) {
+                        LogUtil.e(TAG, "Error disconnecting kernel during validation: ${e.message}")
+                    }
+                }
+                return false  // Inconsistency detected and handled
+            }
+
+            LogUtil.w(
+                TAG,
+                "Status inconsistency detected: ConnectionManager=$connectionStatus, Kernel=$kernelStatus (expected: $expectedStatus), auto-fixing..."
+            )
+            synchronized(this) {
+                connectionStatus = expectedStatus
+            }
+            return false
+        }
+
+        return true
     }
 }
