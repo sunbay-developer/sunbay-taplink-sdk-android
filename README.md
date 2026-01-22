@@ -38,6 +38,7 @@ Add the SDK module to your project's `settings.gradle.kts`:
 ```kotlin
 include(":app")
 include(":lib_taplink_sdk")
+include(":lib_taplink_communication")
 ```
 
 Then add the dependency to your app module's `build.gradle.kts`:
