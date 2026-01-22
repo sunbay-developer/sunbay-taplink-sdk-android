@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Unified Purple Theme -->
+    <color name="colorPrimary">#743EE4</color>
+    <color name="colorPrimaryDark">#5A2FB8</color>
+    <color name="colorAccent">#9B6EF7</color>
+    
+    <!-- Common colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="gray_light">#F5F5F5</color>
+    <color name="gray_medium">#9E9E9E</color>
+    <color name="gray_dark">#424242</color>
+    <color name="error_red">#F44336</color>
+    <color name="success_green">#4CAF50</color>
+    <color name="purple_light">#F5F0FF</color>
+    
+    <!-- Material Design 3 colors for TransactionProgressActivity -->
+    <color name="primary">#743EE4</color>
+    <color name="background_light">#F8F9FA</color>
+    <color name="text_primary">#1C1B1F</color>
+    <color name="text_secondary">#49454F</color>
+    <color name="card_background_purple_light">#F5F0FF</color>
+    <color name="progress_track">#E8E8E8</color>
+    <color name="divider">#E0E0E0</color>
+    <color name="success">#4CAF50</color>
+    <color name="error">#F44336</color>
+</resources>
+
+

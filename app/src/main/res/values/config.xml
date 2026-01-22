@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Taplink SDK Configuration -->
+    <!-- Note: These are sample values, please replace with real configuration when using -->
+
+    <!-- Application identifier - Assigned by Taplink platform -->
+    <string name="taplink_app_id">test_smt6ejh5l532428a</string>
+
+    <!-- Merchant identifier - Assigned by Taplink platform -->
+    <string name="taplink_merchant_id">M1254947005</string>
+
+    <!-- Secret key - Used for signature verification, assigned by Taplink platform -->
+    <string name="taplink_secret_key">your_taplink_secret_key</string>
+
+    <!-- Default connection mode: APP_TO_APP, CABLE, LAN, CLOUD -->
+    <string name="taplink_default_connection_mode">APP_TO_APP</string>
+    
+    <!-- Default currency type -->
+    <string name="taplink_default_currency">USD</string>
+    
+    <!-- Connection timeout (milliseconds) -->
+    <integer name="taplink_connection_timeout">30000</integer>
+    
+    <!-- Transaction timeout (milliseconds) -->
+    <integer name="taplink_transaction_timeout">60000</integer>
+    
+    <!-- Whether to enable debug mode -->
+    <bool name="taplink_debug_mode">true</bool>
+    
+    <!-- LAN connection default configuration -->
+    <string name="taplink_default_lan_ip">your_terminal_ip</string>
+    <integer name="taplink_default_lan_port">8443</integer>
+    
+    <!-- Cloud mode default configuration -->
+    <string name="taplink_cloud_server_url">taplink_cloud_server_url</string>
+    
+    <!-- Application version information -->
+    <string name="app_version_name">1.0.0</string>
+    <integer name="app_version_code">1</integer>
+    
+    <!-- Supported transaction types (for UI display control) -->
+    <bool name="support_sale">true</bool>
+    <bool name="support_auth">true</bool>
+    <bool name="support_refund">true</bool>
+    <bool name="support_void">true</bool>
+    <bool name="support_tip_adjust">true</bool>
+    <bool name="support_incremental_auth">true</bool>
+    <bool name="support_post_auth">true</bool>
+    <bool name="support_query">true</bool>
+    <bool name="support_batch_close">true</bool>
+    
+    <!-- Amount limit configuration -->
+    <string name="min_transaction_amount">0.01</string>
+    <string name="max_transaction_amount">99999.99</string>
+    
+    <!-- Retry configuration -->
+    <integer name="max_retry_count">3</integer>
+    <integer name="retry_delay_ms">2000</integer>
+</resources>

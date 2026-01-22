@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Amount validation error messages -->
+    <string name="error_invalid_amount_order">Order amount must be an integer, cannot be a decimal</string>
+    <string name="error_invalid_amount_tip">Tip amount must be an integer, cannot be a decimal</string>
+    <string name="error_invalid_amount_tax">Tax amount must be an integer, cannot be a decimal</string>
+    <string name="error_invalid_amount_surcharge">Surcharge amount must be an integer, cannot be a decimal</string>
+    <string name="error_invalid_amount_cashback">Cashback amount must be an integer, cannot be a decimal</string>
+    <string name="error_invalid_amount_service_fee">Service fee must be an integer, cannot be a decimal</string>
+</resources>
+
+
+
+
+
+

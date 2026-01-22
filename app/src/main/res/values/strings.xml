@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Taplink Demo</string>
+    
+    <!-- Main Page -->
+    <string name="connection_mode_label">Connection Mode</string>
+    <string name="connection_status_connecting">Connecting...</string>
+    <string name="connection_status_connected">Connected</string>
+    <string name="connection_status_disconnected">Disconnected</string>
+    <string name="connection_status_failed">Connection Failed</string>
+    
+    <string name="btn_settings">Settings</string>
+    <string name="btn_transaction_history">Transaction History</string>
+    
+    <string name="select_product_title">Select Product</string>
+    <string name="custom_amount_title">Or enter custom amount</string>
+    <string name="current_amount_label">Current Amount: </string>
+    
+    <string name="product_coffee">Coffee\n$10.00</string>
+    <string name="product_sandwich">Sandwich\n$20.00</string>
+    <string name="product_lunch">Lunch Set\n$50.00</string>
+    <string name="product_dinner">Dinner Set\n$100.00</string>
+    
+    <string name="custom_amount_hint">0.00</string>
+    <string name="currency_symbol">$</string>
+    <string name="default_amount">$0.00</string>
+    
+    <string name="btn_pay">Pay Now</string>
+    
+    <!-- Transaction Type Selection -->
+    <string name="select_transaction_type_title">Select Transaction Type</string>
+    <string name="transaction_type_sale">Sale (SALE)</string>
+    <string name="transaction_type_auth">Pre-authorization (AUTH)</string>
+    
+    <!-- Payment Status -->
+    <string name="payment_status_starting_tapro">Starting Tapro Payment App...</string>
+    <string name="payment_status_waiting_card">Please insert, swipe or tap card</string>
+    <string name="payment_status_waiting_pin">Please enter PIN on payment terminal</string>
+    <string name="payment_status_waiting_response">Waiting for payment gateway response</string>
+    <string name="payment_status_processing">Payment processing, please complete in Tapro app</string>
+    <string name="payment_status_success">Payment Successful</string>
+    <string name="payment_status_failed">Payment Failed</string>
+    
+    <!-- Connection Settings Page -->
+    <string name="connection_settings_title">Connection Settings</string>
+    <string name="select_connection_mode_title">Select Connection Mode</string>
+    
+    <!-- Connection Modes -->
+    <string name="connection_mode_app_to_app">App-to-App Mode (Same device integration)</string>
+    <string name="connection_mode_cable">Cable Mode (Cross-device via cable)</string>
+    <string name="connection_mode_lan">LAN Mode (Local Area Network)</string>
+    <string name="connection_mode_cloud">Cloud Mode (Cloud-based)</string>
+    
+    <!-- App-to-App Configuration -->
+    <string name="app_to_app_config_title">App-to-App Configuration</string>
+    <string name="app_to_app_config_description">POS app and Tapro run on the same Android device, communicating via IPC. No additional configuration needed.</string>
+    
+    <!-- Cable Configuration -->
+    <string name="cable_config_title">Cable Configuration</string>
+    <string name="cable_connection_type_label">Connection Type</string>
+    <string name="cable_type_usb">USB</string>
+    <string name="cable_type_serial">Serial</string>
+    <string name="cable_baud_rate_label">Baud Rate</string>
+    
+    <!-- LAN Configuration -->
+    <string name="lan_config_title">LAN Configuration</string>
+    <string name="lan_ip_address_label">IP Address</string>
+    <string name="lan_ip_address_hint">192.168.1.100</string>
+    <string name="lan_port_label">Port</string>
+    <string name="lan_port_hint">8443</string>
+<!--    <string name="lan_tls_label">Enable TLS Encryption</string>-->
+    
+    <!-- Cloud Configuration -->
+    <string name="cloud_config_title">Cloud Configuration</string>
+    <string name="cloud_device_id_label">Device ID</string>
+    <string name="cloud_device_id_hint">Enter payment terminal device ID</string>
+    <string name="cloud_api_endpoint_label">API Endpoint</string>
+    <string name="cloud_api_endpoint_hint">https://api.sunbay.com</string>
+    
+    <!-- General -->
+    <string name="mode_under_development">This mode is under development, coming soon</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_confirm">Confirm</string>
+    <string name="btn_exit_app">Exit Application</string>
+    <string name="config_validation_error">Configuration validation failed, please check input</string>
+    
+    <!-- Transaction Detail -->
+    <string name="original_transaction_id_label">Original Txn ID:</string>
+    
+    <!-- Error Handling -->
+    <string name="error_payment_title">Payment Error</string>
+    <string name="error_network_not_connected">Network Not Connected</string>
+    <string name="error_network_not_connected_message">Network is not connected. Please check your network connection and try again.</string>
+    <string name="error_network_check_failed">Network Check Failed</string>
+    
+    <!-- Error Action Buttons -->
+    <string name="btn_retry">Retry</string>
+    <string name="btn_try_again">Try Again</string>
+    <string name="btn_query_status">Query Status</string>
+    
+    <!-- Retry Progress -->
+    <string name="retry_progress_title">Retrying</string>
+    <string name="retry_progress_message">Retrying transaction...\n\nAttempt: %1$d/%2$d\nLast error: %3$s</string>
+    <string name="refund_without_reference">Refund without reference</string>
+
+</resources>
+
+
