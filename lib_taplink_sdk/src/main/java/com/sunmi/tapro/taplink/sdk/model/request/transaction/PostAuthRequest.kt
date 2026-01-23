@@ -4,19 +4,19 @@ import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
- * 预授权完成交易请求
+ * Post-Authorization Transaction Request
  *
- * 用于完成预授权交易，将预授权金额转为实际扣款
+ * Used to complete a pre-authorization transaction, converting the authorized amount to actual deduction
  *
- * @param originalTransactionId 原始预授权交易ID（与originalTransactionRequestId二选一）
- * @param originalTransactionRequestId 原始预授权交易请求ID（与originalTransactionId二选一）
- * @param transactionRequestId 交易请求ID（必需）
- * @param amount 完成金额信息（必需，可以小于等于预授权金额）
- * @param description 交易描述（可选，最多128字符）
- * @param attach 附加信息（可选）
- * @param notifyUrl 通知URL（可选）
- * @param requestTimeout 请求超时时间（可选，单位：秒）
- * @param staffInfo 员工信息（可选）
+ * @param originalTransactionId Original pre-authorization transaction ID (either this or originalTransactionRequestId must be provided)
+ * @param originalTransactionRequestId Original pre-authorization transaction request ID (either this or originalTransactionId must be provided)
+ * @param transactionRequestId Transaction request ID (required)
+ * @param amount Completion amount information (required, can be less than or equal to the authorized amount)
+ * @param description Transaction description (optional, maximum 128 characters)
+ * @param attach Additional information (optional)
+ * @param notifyUrl Notification URL (optional)
+ * @param requestTimeout Request timeout duration (optional, unit: seconds)
+ * @param staffInfo Staff information (optional)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -52,13 +52,13 @@ data class PostAuthRequest(
 
     companion object {
         /**
-         * 创建PostAuthRequest构建器
+         * Create PostAuthRequest builder
          */
         fun builder(): Builder = Builder()
     }
 
     /**
-     * PostAuthRequest构建器
+     * PostAuthRequest Builder
      */
     class Builder {
         private var originalTransactionId: String? = null
@@ -72,7 +72,7 @@ data class PostAuthRequest(
         private var staffInfo: StaffInfo? = null
 
         /**
-         * 设置原始预授权交易ID
+         * Set original pre-authorization transaction ID
          */
         fun setOriginalTransactionId(originalTransactionId: String): Builder {
             this.originalTransactionId = originalTransactionId
@@ -80,7 +80,7 @@ data class PostAuthRequest(
         }
 
         /**
-         * 设置原始预授权交易请求ID
+         * Set original pre-authorization transaction request ID
          */
         fun setOriginalTransactionRequestId(originalTransactionRequestId: String): Builder {
             this.originalTransactionRequestId = originalTransactionRequestId
@@ -88,7 +88,7 @@ data class PostAuthRequest(
         }
 
         /**
-         * 设置交易请求ID
+         * Set transaction request ID
          */
         fun setTransactionRequestId(transactionRequestId: String): Builder {
             this.transactionRequestId = transactionRequestId
@@ -96,7 +96,7 @@ data class PostAuthRequest(
         }
 
         /**
-         * 设置完成金额信息
+         * Set completion amount information
          */
         fun setAmount(amount: AmountInfo): Builder {
             this.amount = amount
@@ -104,7 +104,7 @@ data class PostAuthRequest(
         }
 
         /**
-         * 设置交易描述
+         * Set transaction description
          */
         fun setDescription(description: String?): Builder {
             this.description = description
@@ -112,7 +112,7 @@ data class PostAuthRequest(
         }
 
         /**
-         * 设置附加信息
+         * Set additional information
          */
         fun setAttach(attach: String): Builder {
             this.attach = attach
@@ -120,7 +120,7 @@ data class PostAuthRequest(
         }
 
         /**
-         * 设置通知URL
+         * Set notification URL
          */
         fun setNotifyUrl(notifyUrl: String): Builder {
             this.notifyUrl = notifyUrl
@@ -128,7 +128,7 @@ data class PostAuthRequest(
         }
 
         /**
-         * 设置请求超时时间
+         * Set request timeout duration
          */
         fun setRequestTimeout(requestTimeout: Long): Builder {
             this.requestTimeout = requestTimeout
@@ -136,7 +136,7 @@ data class PostAuthRequest(
         }
 
         /**
-         * 设置员工信息
+         * Set staff information
          */
         fun setStaffInfo(staffInfo: StaffInfo): Builder {
             this.staffInfo = staffInfo
@@ -144,9 +144,9 @@ data class PostAuthRequest(
         }
 
         /**
-         * 构建PostAuthRequest实例
+         * Build PostAuthRequest instance
          * 
-         * @throws TransactionRequestValidationException 如果验证失败
+         * @throws TransactionRequestValidationException If validation fails
          */
         fun build(): PostAuthRequest {
             val request = PostAuthRequest(

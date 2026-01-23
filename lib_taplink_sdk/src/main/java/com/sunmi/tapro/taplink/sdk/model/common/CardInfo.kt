@@ -1,57 +1,65 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 卡片信息
+ * Card information.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class CardInfo(
     /**
-     * 掩码卡号（格式：411111******1111）
+     * Masked card number (format: 411111******1111).
      */
     val maskedPan: String? = null,
     
     /**
-     * 卡网络类型
-     * 值：CREDIT, DEBIT, EBT, EGC, UNKNOWN
+     * Card network type.
+     * Values: CREDIT, DEBIT, EBT, EGC, UNKNOWN
      */
     val cardNetworkType: String? = null,
     
     /**
-     * 支付方式 ID
-     * 值：VISA, MASTERCARD, AMEX, DISCOVER, UNIONPAY 等
+     * Payment method ID.
+     * Values: VISA, MASTERCARD, AMEX, DISCOVER, UNIONPAY, etc.
      */
     val paymentMethodId: String? = null,
     
     /**
-     * 子支付方式 ID
-     * 值：SNAP, VOUCHER, WITHDRAW, BENEFIT 等（EBT 交易时使用）
+     * Sub-payment method ID.
+     * Values: SNAP, VOUCHER, WITHDRAW, BENEFIT, etc. (used for EBT transactions)
      */
     val subPaymentMethodId: String? = null,
     
     /**
-     * 输入模式
-     * 值：MANUAL, SWIPE, FALLBACK_SWIPE, CONTACT, CONTACTLESS
+     * Entry mode.
+     * Values: MANUAL, SWIPE, FALLBACK_SWIPE, CONTACT, CONTACTLESS
      */
     val entryMode: String? = null,
     
     /**
-     * 认证方式
-     * 值：NOT_AUTHENTICATED, PIN, OFFLINE_PIN, BY_PASS, SIGNATURE
+     * Authentication method.
+     * Values: NOT_AUTHENTICATED, PIN, OFFLINE_PIN, BY_PASS, SIGNATURE
      */
     val authenticationMethod: String? = null,
     
-    /** 持卡人姓名（可选） */
+    /**
+     * Cardholder name (optional).
+     */
     val cardholderName: String? = null,
     
-    /** 有效期（格式：MM/YY，可选） */
+    /**
+     * Expiry date (format: MM/YY, optional).
+     */
     val expiryDate: String? = null,
     
-    /** 发卡行（可选） */
+    /**
+     * Issuer bank (optional).
+     */
     val issuerBank: String? = null,
     
-    /** 卡品牌（可选） */
+    /**
+     * Card brand (optional).
+     */
     val cardBrand: String? = null
 )
 

@@ -6,120 +6,146 @@ import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
- * Taplink SDK 配置类
+ * Taplink SDK configuration class.
  *
- * 支持默认值以简化请求参数。
- * 使用链式调用方式设置配置项。
+ * Supports default values to simplify request parameters.
+ * Uses method chaining for configuration.
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class TaplinkConfig(
-    // ========== 必需配置 ==========
+    // ========== Required Configuration ==========
 
     /**
-     * 应用标识（必需）
-     * 由 SUNBAY 平台分配
+     * Application identifier (required).
+     * Assigned by the SUNBAY platform.
      */
     val appId: String,
 
     /**
-     * 商户 ID（必需）
-     * 商户在 SUNBAY 平台的唯一标识
+     * Merchant ID (required).
+     * Unique identifier for the merchant on the SUNBAY platform.
      */
     val merchantId: String,
 
     /**
-     * 签名密钥（必需）
-     * 用于 HMAC-SHA256 签名验证
+     * Signature secret key (required).
+     * Used for HMAC-SHA256 signature verification.
      */
     val secretKey: String,
 
 
-    // ========== 日志配置 ==========
+    // ========== Logging Configuration ==========
 
     /**
-     * 是否启用日志（可选，默认 false）
+     * Whether logging is enabled (optional, default: false).
      */
     val logEnabled: Boolean = false,
 
     /**
-     * 日志级别（可选，默认 INFO）
+     * Log level (optional, default: INFO).
      */
     val logLevel: LogLevel = LogLevel.INFO,
 
-    // ========== 默认值配置（简化请求参数）==========
+    // ========== Default Value Configuration (Simplifies Request Parameters) ==========
 
     /**
-     * 默认员工信息（可选）
-     * 设置后，PaymentRequest 可以省略 staffInfo 参数
+     * Default staff information (optional).
+     * When set, PaymentRequest can omit the staffInfo parameter.
      */
     val defaultStaffInfo: StaffInfo? = null,
 
     /**
-     * 默认设备信息（可选）
-     * 设置后，PaymentRequest 可以省略 deviceInfo 参数
+     * Default device information (optional).
+     * When set, PaymentRequest can omit the deviceInfo parameter.
      */
     val defaultDeviceInfo: DeviceInfo? = null,
 
     /**
-     * SDK版本号，格式：x.y.z，默认 1.0.0
+     * SDK version number in format x.y.z (default: 1.0.0).
      */
     val version: String = BuildConfig.VERSION_NAME,
 
     /**
-     * 默认超时时间（秒），默认 180
+     * Default timeout in seconds (default: 180).
      */
     val timeout: Int = 180
 ) {
-    // ========== 必需配置的链式调用方法 ==========
+    // ========== Required Configuration Methods ==========
 
     /**
-     * 链式调用：设置 AppId
+     * Sets the application ID.
+     *
+     * @param appId the application identifier
+     * @return the updated configuration instance for method chaining
      */
     fun setAppId(appId: String): TaplinkConfig = copy(appId = appId)
 
     /**
-     * 链式调用：设置商户 ID
+     * Sets the merchant ID.
+     *
+     * @param merchantId the merchant identifier
+     * @return the updated configuration instance for method chaining
      */
     fun setMerchantId(merchantId: String): TaplinkConfig = copy(merchantId = merchantId)
 
     /**
-     * 链式调用：设置签名密钥
+     * Sets the signature secret key.
+     *
+     * @param secretKey the secret key for signature verification
+     * @return the updated configuration instance for method chaining
      */
     fun setSecretKey(secretKey: String): TaplinkConfig = copy(secretKey = secretKey)
 
 
-    // ========== 日志配置的链式调用方法 ==========
+    // ========== Logging Configuration Methods ==========
 
     /**
-     * 链式调用：设置是否启用日志
+     * Enables or disables logging.
+     *
+     * @param enabled whether logging is enabled
+     * @return the updated configuration instance for method chaining
      */
     fun setLogEnabled(enabled: Boolean): TaplinkConfig = copy(logEnabled = enabled)
 
     /**
-     * 链式调用：设置日志级别
+     * Sets the log level.
+     *
+     * @param level the log level
+     * @return the updated configuration instance for method chaining
      */
     fun setLogLevel(level: LogLevel): TaplinkConfig = copy(logLevel = level)
 
-    // ========== 默认值配置的链式调用方法 ==========
+    // ========== Default Value Configuration Methods ==========
 
     /**
-     * 链式调用：设置默认员工信息
-     * 设置后，PaymentRequest 可以省略 staffInfo 参数
+     * Sets the default staff information.
+     * When set, PaymentRequest can omit the staffInfo parameter.
+     *
+     * @param staffInfo the default staff information
+     * @return the updated configuration instance for method chaining
      */
     fun setDefaultStaffInfo(staffInfo: StaffInfo): TaplinkConfig = copy(defaultStaffInfo = staffInfo)
 
     /**
-     * 链式调用：设置默认设备信息
-     * 设置后，PaymentRequest 可以省略 deviceInfo 参数
+     * Sets the default device information.
+     * When set, PaymentRequest can omit the deviceInfo parameter.
+     *
+     * @param deviceInfo the default device information
+     * @return the updated configuration instance for method chaining
      */
     fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
 
     companion object {
         /**
-         * 创建默认配置
-         * 需要提供必需的 appId, merchantId, secretKey
+         * Creates a default configuration.
+         * Requires the mandatory appId, merchantId, and secretKey.
+         *
+         * @param appId the application identifier
+         * @param merchantId the merchant identifier
+         * @param secretKey the signature secret key
+         * @return the default configuration instance
          */
         fun create(
             appId: String,

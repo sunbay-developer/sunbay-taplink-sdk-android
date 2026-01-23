@@ -3,8 +3,8 @@
 //import com.sunmi.tapro.taplink.communication.util.LogUtil
 //
 ///**
-// * 智能心跳配置管理器
-// * 根据应用状态动态调整心跳参数
+// * Smart Heartbeat Configuration Manager
+// * Dynamically adjusts heartbeat parameters based on application state
 // */
 //class SmartHeartbeatConfig private constructor() : AppStateMonitor.AppStateChangeListener {
 //
@@ -20,29 +20,29 @@
 //            }
 //        }
 //
-//        // 默认心跳配置
-//        private const val DEFAULT_FOREGROUND_INTERVAL = 30_000L      // 前台30秒
-//        private const val DEFAULT_BACKGROUND_INTERVAL = 60_000L      // 后台60秒
-//        private const val DEFAULT_LOW_MEMORY_INTERVAL = 120_000L     // 低内存120秒
-//        private const val DEFAULT_HEARTBEAT_TIMEOUT = 15_000L        // 超时15秒
-//        private const val DEFAULT_MAX_RETRY_COUNT = 3                // 最大重试次数
+//        // Default heartbeat configuration
+//        private const val DEFAULT_FOREGROUND_INTERVAL = 30_000L      // Foreground 30 seconds
+//        private const val DEFAULT_BACKGROUND_INTERVAL = 60_000L      // Background 60 seconds
+//        private const val DEFAULT_LOW_MEMORY_INTERVAL = 120_000L     // Low memory 120 seconds
+//        private const val DEFAULT_HEARTBEAT_TIMEOUT = 15_000L        // Timeout 15 seconds
+//        private const val DEFAULT_MAX_RETRY_COUNT = 3                // Maximum retry count
 //    }
 //
 //    private var currentConfig = HeartbeatConfig()
 //    private val configChangeListeners = mutableSetOf<HeartbeatConfigChangeListener>()
 //
 //    init {
-//        // 注册应用状态监听
+//        // Register app state listener
 //        AppStateMonitor.getInstance().addStateChangeListener(this)
 //    }
 //
 //    /**
-//     * 获取当前心跳配置
+//     * Get current heartbeat configuration
 //     */
 //    fun getCurrentConfig(): HeartbeatConfig = currentConfig.copy()
 //
 //    /**
-//     * 添加配置变化监听器
+//     * Add configuration change listener
 //     */
 //    fun addConfigChangeListener(listener: HeartbeatConfigChangeListener) {
 //        synchronized(configChangeListeners) {
@@ -51,7 +51,7 @@
 //    }
 //
 //    /**
-//     * 移除配置变化监听器
+//     * Remove configuration change listener
 //     */
 //    fun removeConfigChangeListener(listener: HeartbeatConfigChangeListener) {
 //        synchronized(configChangeListeners) {
@@ -60,7 +60,7 @@
 //    }
 //
 //    /**
-//     * 手动设置自定义配置
+//     * Manually set custom configuration
 //     */
 //    fun setCustomConfig(
 //        foregroundInterval: Long? = null,
@@ -85,7 +85,7 @@
 //    }
 //
 //    /**
-//     * 重置为默认配置
+//     * Reset to default configuration
 //     */
 //    fun resetToDefault() {
 //        val newConfig = HeartbeatConfig()
@@ -97,7 +97,7 @@
 //    }
 //
 //    /**
-//     * 根据网络质量调整配置
+//     * Adjust configuration based on network quality
 //     */
 //    fun adjustForNetworkQuality(networkQuality: NetworkQuality) {
 //        val multiplier = when (networkQuality) {
@@ -123,7 +123,7 @@
 //    }
 //
 //    /**
-//     * 获取当前应该使用的心跳间隔
+//     * Get current heartbeat interval that should be used
 //     */
 //    fun getCurrentInterval(): Long {
 //        return when (AppStateMonitor.getInstance().getAppState()) {
@@ -152,7 +152,7 @@
 //    }
 //
 //    /**
-//     * 心跳配置数据类
+//     * Heartbeat configuration data class
 //     */
 //    data class HeartbeatConfig(
 //        val foregroundInterval: Long = DEFAULT_FOREGROUND_INTERVAL,
@@ -163,18 +163,18 @@
 //    )
 //
 //    /**
-//     * 网络质量枚举
+//     * Network quality enum
 //     */
 //    enum class NetworkQuality {
-//        EXCELLENT,  // 网络极好
-//        GOOD,       // 网络良好
-//        FAIR,       // 网络一般
-//        POOR,       // 网络较差
-//        VERY_POOR   // 网络很差
+//        EXCELLENT,  // Excellent network
+//        GOOD,       // Good network
+//        FAIR,       // Fair network
+//        POOR,       // Poor network
+//        VERY_POOR   // Very poor network
 //    }
 //
 //    /**
-//     * 心跳配置变化监听器
+//     * Heartbeat configuration change listener
 //     */
 //    interface HeartbeatConfigChangeListener {
 //        fun onHeartbeatConfigChanged(newConfig: HeartbeatConfig)

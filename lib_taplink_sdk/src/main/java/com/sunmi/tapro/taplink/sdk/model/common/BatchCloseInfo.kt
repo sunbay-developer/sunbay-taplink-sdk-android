@@ -3,56 +3,56 @@ package com.sunmi.tapro.taplink.sdk.model.common
 import java.math.BigDecimal
 
 /**
- * 批次关闭信息类
+ * Batch close information class.
  * 
- * 用于批次关闭时返回批次汇总信息
+ * Used to return batch summary information during batch close.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class BatchCloseInfo(
     /**
-     * 交易数量（仅批次关闭）
+     * Transaction count (batch close only).
      */
     val totalCount: Int? = null,
     
     /**
-     * 批次总金额（仅批次关闭）
+     * Batch total amount (batch close only).
      */
     val totalAmount: BigDecimal? = null,
 
     /**
-     * 总小费金额
-     * 可选
+     * Total tip amount.
+     * Optional.
      */
     val totalTip: BigDecimal? = null,
 
     /**
-     * 总税金额
-     * 可选
+     * Total tax amount.
+     * Optional.
      */
     val totalTax: BigDecimal? = null,
 
     /**
-     * 总附加费金额
-     * 可选
+     * Total surcharge amount.
+     * Optional.
      */
     val totalSurchargeAmount: BigDecimal? = null,
 
     /**
-     * 总服务费金额
-     * 可选
+     * Total service fee amount.
+     * Optional.
      */
     val totalServiceFee: BigDecimal? = null,
 
     /**
-     * 总现金优惠金额
-     * 可选
+     * Total cash discount amount.
+     * Optional.
      */
     val cashDiscount: BigDecimal? = null,
     
     /**
-     * 批次关闭时间（仅批次关闭，ISO 8601 格式）
+     * Batch close time (batch close only, ISO 8601 format).
      */
     val closeTime: String? = null
 )

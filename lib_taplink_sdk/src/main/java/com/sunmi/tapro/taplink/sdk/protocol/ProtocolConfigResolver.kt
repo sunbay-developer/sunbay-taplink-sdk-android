@@ -11,10 +11,10 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import kotlinx.coroutines.runBlocking
 
 /**
- * 协议配置解析器
+ * Protocol Config Resolver
  *
- * 负责根据 ConnectionConfig 解析和选择合适的协议
- * 支持自动线缆协议检测和协议字符串构建
+ * Responsible for parsing and selecting appropriate protocol based on ConnectionConfig
+ * Supports automatic cable protocol detection and protocol string construction
  *
  * @author TaPro Team
  * @since 2025-12-17
@@ -24,11 +24,11 @@ object ProtocolConfigResolver {
     private val TAG = "ProtocolConfigResolver"
 
     /**
-     * 根据配置构建协议字符串
+     * Build protocol string based on configuration
      *
-     * @param connectionConfig 连接配置
-     * @param context Android 上下文 (线缆协议检测需要)
-     * @return 协议字符串和连接模式名称的配对
+     * @param connectionConfig Connection configuration
+     * @param context Android context (required for cable protocol detection)
+     * @return Pair of protocol string and connection mode name
      */
     fun buildProtocol(
         connectionConfig: ConnectionConfig?,

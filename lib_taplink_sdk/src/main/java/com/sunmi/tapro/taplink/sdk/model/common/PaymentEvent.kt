@@ -1,79 +1,87 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 交易进度事件
+ * Transaction progress event.
  *
- * 使用 sealed class 提供类型安全的事件定义
- * 支持 when 表达式的穷尽检查
+ * Uses sealed class to provide type-safe event definitions.
+ * Supports exhaustive checking in when expressions.
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 sealed class PaymentEvent(
-    /** 状态码 */
+    /**
+     * Status code.
+     */
     open val eventCode: String,
 
-    /** 状态描述 */
+    /**
+     * Status description.
+     */
     open val eventMsg: String,
 
-    /** 进度（0-100） */
+    /**
+     * Progress (0-100).
+     */
     val progress: Int,
 
-    /** 时间戳 */
+    /**
+     * Timestamp.
+     */
     val timestamp: Long = System.currentTimeMillis()
 ) {
     /**
-     * 处理中事件
+     * Processing event.
      */
     object Processing : PaymentEvent("PROCESSING", "Processing", 10)
 
     /**
-     * 等待卡片事件
+     * Waiting for card event.
      */
     object WaitingCard : PaymentEvent("WAITING_CARD", "Waiting for card", 20)
 
     /**
-     * 卡片已检测事件
+     * Card detected event.
      */
     object CardDetected : PaymentEvent("CARD_DETECTED", "Card detected", 30)
 
     /**
-     * 读取卡片事件
+     * Reading card event.
      */
     object ReadingCard : PaymentEvent("READING_CARD", "Reading card", 40)
 
     /**
-     * 等待PIN码事件
+     * Waiting for PIN event.
      */
     object WaitingPin : PaymentEvent("WAITING_PIN", "Waiting for PIN", 50)
 
     /**
-     * 等待签名事件
+     * Waiting for signature event.
      */
     object WaitingSignature : PaymentEvent("WAITING_SIGNATURE", "Waiting for signature", 55)
 
     /**
-     * 等待联机请求结果事件
+     * Waiting for online response event.
      */
     object WaitingOnlineResponse : PaymentEvent("WAITING_RESPONSE", "Waiting for online response", 70)
 
     /**
-     * 打印中事件
+     * Printing event.
      */
     object Printing : PaymentEvent("PRINTING", "Printing receipt", 80)
 
     /**
-     * 已完成事件
+     * Completed event.
      */
     object Completed : PaymentEvent("COMPLETED", "Transaction completed", 100)
 
     /**
-     * 取消事件
+     * Cancel event.
      */
     object Cancel : PaymentEvent("CANCEL", "Transaction cancelled", 0)
 
     /**
-     * 重连中事件
+     * Reconnecting event.
      */
     data class Reconnecting(
         val attempt: Int,
@@ -84,11 +92,11 @@ sealed class PaymentEvent(
 
     companion object {
         /**
-         * 根据 eventCode 字符串创建对应的 PaymentEvent
-         * 用于 JSON 反序列化
+         * Creates corresponding PaymentEvent from eventCode string.
+         * Used for JSON deserialization.
          *
-         * @param eventCode 事件码
-         * @return PaymentEvent 对应的子类实例
+         * @param eventCode the event code
+         * @return the corresponding PaymentEvent subclass instance
          */
         fun fromEventCode(eventCode: String): PaymentEvent {
             return when (eventCode.uppercase()) {
@@ -100,10 +108,10 @@ sealed class PaymentEvent(
                 "PROCESSING" -> Processing
                 "WAITING_RESPONSE" -> WaitingOnlineResponse
                 "PRINTING" -> Printing
-                "COMPLETED", "4003" -> Completed  // 4003 是完成事件的数字编码
+                "COMPLETED", "4003" -> Completed  // 4003 is the numeric code for completed event
                 "CANCEL" -> Cancel
                 else -> {
-                    // 未知事件类型，使用 Processing 作为默认值
+                    // Unknown event type, use Processing as default
                     Processing
                 }
             }

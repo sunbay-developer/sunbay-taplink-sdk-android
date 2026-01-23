@@ -10,10 +10,10 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * 协议请求构建器
+ * Protocol Request Builder
  *
- * 将任何请求对象转换为底层传输协议格式 (BasicRequest)
- * 负责协议层的数据封装、签名生成、时间戳处理等
+ * Converts any request object to the underlying transport protocol format (BasicRequest)
+ * Responsible for protocol layer data encapsulation, signature generation, timestamp processing, etc.
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -22,19 +22,19 @@ object ProtocolRequestBuilder {
 
     private const val TAG = "ProtocolRequestBuilder"
 
-    /** 时间戳格式：yyyyMMddHHmmssSSS */
+    /** Timestamp format: yyyyMMddHHmmssSSS */
     private val TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.US)
 
-    /** Gson实例 */
+    /** Gson instance */
     private val gson = Gson()
 
     /**
-     * 将具体的Request转换为BasicRequest
+     * Convert specific Request to BasicRequest
      *
-     * @param request 具体的Request对象（如PaymentRequest）
-     * @param version SDK版本号
-     * @param secretKey 签名密钥
-     * @return BasicRequest 转换后的BasicRequest对象
+     * @param request Specific Request object (e.g., PaymentRequest)
+     * @param version SDK version number
+     * @param secretKey Signature secret key
+     * @return BasicRequest Converted BasicRequest object
      */
     fun convertToBasicRequest(
         request: Any,
@@ -43,27 +43,27 @@ object ProtocolRequestBuilder {
         secretKey: String
     ): BasicRequest {
         try {
-            // 1. 获取 action（从 PaymentRequest 中提取或使用默认值）
+            // 1. Get action (extract from PaymentRequest or use default value)
             val action = getActionByRequest(request)
 
-            // 2. 将request转换为JsonObject作为bizData
+            // 2. Convert request to JsonObject as bizData
             val bizDataJson = gson.toJsonTree(request).asJsonObject
 
             bizDataJson.addProperty("appId", appid)
 
-            // 3. 生成时间戳
+            // 3. Generate timestamp
             val timestamp = getCurrentTimestamp()
 
-            // 4. 生成traceId（用于跟踪并发请求）
+            // 4. Generate traceId (for tracking concurrent requests)
             val traceId = generateTraceId()
 
-            // 5. 构建签名数据（排除appSign字段，按字段名排序，包含traceId）
+            // 5. Build signature data (exclude appSign field, sort by field name, include traceId)
             val signData = buildSignData(version, timestamp, action, bizDataJson, traceId)
 
-            // 6. 生成签名
+            // 6. Generate signature
             val appSign = SignUtil.generateHMACSHA256(signData, secretKey)
 
-            // 7. 创建BasicRequest对象
+            // 7. Create BasicRequest object
             return BasicRequest(
                 appSign = appSign,
                 version = version,
@@ -79,15 +79,15 @@ object ProtocolRequestBuilder {
     }
 
     /**
-     * 根据Request类型自动确定action
+     * Automatically determine action based on Request type
      *
-     * @param request Request对象
-     * @return String action字符串
+     * @param request Request object
+     * @return String action string
      */
     fun getActionByRequest(request: Any): String {
         return when (request) {
             is PaymentRequest -> {
-                // PaymentRequest 包含 action 字段，直接返回
+                // PaymentRequest contains action field, return directly
                 request.action.uppercase()
             }
 
@@ -99,17 +99,17 @@ object ProtocolRequestBuilder {
     }
 
     /**
-     * 构建签名数据
+     * Build signature data
      *
-     * 按照字段名排序，拼接成字符串用于签名
-     * 格式：action={action}&bizData={bizDataJson}&timeStamp={timeStamp}&traceId={traceId}&version={version}
+     * Sort by field name, concatenate into string for signature
+     * Format: action={action}&bizData={bizDataJson}&timeStamp={timeStamp}&traceId={traceId}&version={version}
      *
-     * @param version SDK版本号
-     * @param timestamp 时间戳
-     * @param action 操作类型
-     * @param bizData 业务数据JSON对象
-     * @param traceId 追踪ID
-     * @return String 用于签名的字符串
+     * @param version SDK version number
+     * @param timestamp Timestamp
+     * @param action Operation type
+     * @param bizData Business data JSON object
+     * @param traceId Trace ID
+     * @return String String for signature
      */
     private fun buildSignData(
         version: String,
@@ -118,33 +118,33 @@ object ProtocolRequestBuilder {
         bizData: JsonObject,
         traceId: String
     ): String {
-        // 按字段名排序：action, bizData, timeStamp, traceId, version
+        // Sort by field name: action, bizData, timeStamp, traceId, version
         val bizDataStr = gson.toJson(bizData)
         return "action=$action&bizData=$bizDataStr&timeStamp=$timestamp&traceId=$traceId&version=$version"
     }
 
     /**
-     * 获取当前时间戳
+     * Get current timestamp
      *
-     * @return String 格式：yyyyMMddHHmmssSSS
+     * @return String Format: yyyyMMddHHmmssSSS
      */
     private fun getCurrentTimestamp(): String {
         return TIMESTAMP_FORMAT.format(Date())
     }
 
     /**
-     * 生成追踪ID
+     * Generate trace ID
      *
-     * 使用UUID生成唯一的追踪ID，用于跟踪并发请求，确保响应能返回给对应的callback
+     * Use UUID to generate unique trace ID for tracking concurrent requests, ensuring responses return to corresponding callback
      *
-     * @return String 追踪ID（UUID格式，去除连字符）
+     * @return String Trace ID (UUID format, without hyphens)
      */
     private fun generateTraceId(): String {
         return UUID.randomUUID().toString().replace("-", "")
     }
 
     /**
-     * 请求转换异常
+     * Request conversion exception
      */
     class RequestConvertException(message: String, cause: Throwable? = null) : Exception(message, cause)
 }

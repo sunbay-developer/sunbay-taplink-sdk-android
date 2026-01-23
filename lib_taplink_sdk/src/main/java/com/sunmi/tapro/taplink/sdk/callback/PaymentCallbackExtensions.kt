@@ -6,23 +6,23 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
 
 /**
- * PaymentCallback 扩展函数
+ * PaymentCallback extension function
  *
- * 提供便捷的错误处理方法来减少重复代码
+ * Provide convenient error handling methods to reduce duplicate code
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 
 /**
- * 使用 InnerErrorCode 对象创建并调用 onFailure
+ * Create and invoke onFailure using the InnerErrorCode object
  *
- * @param errorCode 错误码对象
- * @param additionalMessage 额外的错误消息（可选，会追加到错误描述后）
- * @param traceId 追踪 ID（可选）
- * @param referenceOrderId 商户订单号（可选）
- * @param transactionId 交易 ID（可选）
- * @param transactionRequestId 交易请求 ID（可选）
+ * @param errorCode Error code object
+ * @param additionalMessage Additional error messages (optional, will be appended after the error description)
+ * @param traceId Tracking ID (optional)
+ * @param referenceOrderId Merchant order Number (optional)
+ * @param transactionId Transaction ID (optional)
+ * @param transactionRequestId Transaction request ID(optional)
  */
 fun PaymentCallback.onFailure(
     errorCode: InnerErrorCode,
@@ -52,14 +52,14 @@ fun PaymentCallback.onFailure(
 }
 
 /**
- * 使用错误码字符串创建并调用 onFailure
+ * Create and call onFailure using the error code string
  *
- * @param code 错误码字符串
- * @param additionalMessage 额外的错误消息（可选，会追加到错误描述后）
- * @param traceId 追踪 ID（可选）
- * @param referenceOrderId 商户订单号（可选）
- * @param transactionId 交易 ID（可选）
- * @param transactionRequestId 交易请求 ID（可选）
+ * @param errorCode Error code object
+ * @param additionalMessage Additional error messages (optional, will be appended after the error description)
+ * @param traceId Tracking ID (optional)
+ * @param referenceOrderId Merchant order Number (optional)
+ * @param transactionId Transaction ID (optional)
+ * @param transactionRequestId Transaction request ID(optional)
  */
 fun PaymentCallback.onFailure(
     code: String,

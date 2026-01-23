@@ -1,9 +1,9 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 /**
- * 交易请求基类
+ * Base Transaction Request
  *
- * 所有交易请求类的抽象基类，提供通用的验证接口
+ * Abstract base class for all transaction request classes, providing common validation interface
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -11,9 +11,9 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 abstract class BaseTransactionRequest {
 
     /**
-     * 验证请求参数
+     * Validate request parameters
      *
-     * @return ValidationResult 验证结果，包含是否有效和错误列表
+     * @return ValidationResult containing validation status and error list
      */
     abstract fun validate(): ValidationResult
 }

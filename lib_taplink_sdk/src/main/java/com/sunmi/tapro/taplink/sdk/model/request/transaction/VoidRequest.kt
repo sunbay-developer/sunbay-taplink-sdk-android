@@ -1,16 +1,16 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 /**
- * 撤销交易请求
+ * Void Transaction Request
  *
- * 用于撤销已完成的交易，不包含金额字段
+ * Used to void completed transactions, does not include amount fields
  *
- * @param originalTransactionId 原始交易ID（与originalTransactionRequestId二选一）
- * @param originalTransactionRequestId 原始交易请求ID（与originalTransactionId二选一）
- * @param transactionRequestId 交易请求ID（必需）
- * @param description 交易描述（可选，最多128字符）
- * @param attach 附加信息（可选）
- * @param notifyUrl 通知URL（可选）
+ * @param originalTransactionId Original transaction ID (either this or originalTransactionRequestId must be provided)
+ * @param originalTransactionRequestId Original transaction request ID (either this or originalTransactionId must be provided)
+ * @param transactionRequestId Transaction request ID (required)
+ * @param description Transaction description (optional, up to 128 characters)
+ * @param attach Additional information (optional)
+ * @param notifyUrl Notification URL (optional)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -42,13 +42,13 @@ data class VoidRequest(
 
     companion object {
         /**
-         * 创建VoidRequest构建器
+         * Create VoidRequest builder
          */
         fun builder(): Builder = Builder()
     }
 
     /**
-     * VoidRequest构建器
+     * VoidRequest Builder
      */
     class Builder {
         private var originalTransactionId: String? = null
@@ -59,7 +59,7 @@ data class VoidRequest(
         private var notifyUrl: String? = null
 
         /**
-         * 设置原始交易ID
+         * Set original transaction ID
          */
         fun setOriginalTransactionId(originalTransactionId: String): Builder {
             this.originalTransactionId = originalTransactionId
@@ -67,7 +67,7 @@ data class VoidRequest(
         }
 
         /**
-         * 设置原始交易请求ID
+         * Set original transaction request ID
          */
         fun setOriginalTransactionRequestId(originalTransactionRequestId: String): Builder {
             this.originalTransactionRequestId = originalTransactionRequestId
@@ -75,7 +75,7 @@ data class VoidRequest(
         }
 
         /**
-         * 设置交易请求ID
+         * Set transaction request ID
          */
         fun setTransactionRequestId(transactionRequestId: String): Builder {
             this.transactionRequestId = transactionRequestId
@@ -83,7 +83,7 @@ data class VoidRequest(
         }
 
         /**
-         * 设置交易描述
+         * Set transaction description
          */
         fun setDescription(description: String?): Builder {
             this.description = description
@@ -91,7 +91,7 @@ data class VoidRequest(
         }
 
         /**
-         * 设置附加信息
+         * Set additional information
          */
         fun setAttach(attach: String): Builder {
             this.attach = attach
@@ -99,7 +99,7 @@ data class VoidRequest(
         }
 
         /**
-         * 设置通知URL
+         * Set notification URL
          */
         fun setNotifyUrl(notifyUrl: String): Builder {
             this.notifyUrl = notifyUrl
@@ -107,9 +107,9 @@ data class VoidRequest(
         }
 
         /**
-         * 构建VoidRequest实例
+         * Build VoidRequest instance
          * 
-         * @throws TransactionRequestValidationException 如果验证失败
+         * @throws TransactionRequestValidationException If validation fails
          */
         fun build(): VoidRequest {
             val request = VoidRequest(

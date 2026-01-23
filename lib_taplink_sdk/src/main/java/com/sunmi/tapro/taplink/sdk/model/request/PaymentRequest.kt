@@ -9,329 +9,329 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 import java.math.BigDecimal
 
 /**
- * 支付请求类
+ * Payment Request Class
  *
- * 具有全面的字段支持，用于各种交易类型
+ * Provides comprehensive field support for various transaction types
  *
- * **推荐使用枚举：**
+ * **Recommended usage with enum:**
  * ```kotlin
  * val request = PaymentRequest(
  *     action = TransactionAction.SALE,
  *     referenceOrderId = "ORDER001",
  *     transactionRequestId = "TXN001",
  *     amount = amountInfo,
- *     description = "商品购买"
+ *     description = "Product purchase"
  * )
  * ```
  *
- * **Java 调用说明：**
+ * **Java usage instructions:**
  * ```java
  * PaymentRequest request = PaymentRequest.builder()
  *     .setAction(TransactionAction.SALE)
  *     .setReferenceOrderId("ORDER001")
  *     .setTransactionRequestId("TXN001")
  *     .setAmount(amountInfo)
- *     .setDescription("商品购买")
+ *     .setDescription("Product purchase")
  *     .build();
  * ```
  *
- * **重要说明：**
- * - referenceOrderId 和 transactionRequestId 可以使用相同的值
- * - transactionRequestId 用于幂等性控制，相同值的请求视为同一笔交易
- * - 临时性错误（网络超时、系统繁忙）时，可使用相同 transactionRequestId 重试
- * - 明确失败或修改参数后，必须使用新的 transactionRequestId
+ * **Important notes:**
+ * - referenceOrderId and transactionRequestId can use the same value
+ * - transactionRequestId is used for idempotency control; requests with the same value are treated as the same transaction
+ * - For temporary errors (network timeout, system busy), you can retry with the same transactionRequestId
+ * - After a clear failure or parameter modification, you must use a new transactionRequestId
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class PaymentRequest(
-    // ========== 基本交易字段 ==========
+    // ========== Basic transaction fields ==========
 
     /**
-     * 交易类型（必需）
-     * 推荐使用 TransactionAction 枚举，也支持字符串（向后兼容）
+     * Transaction type (required)
+     * Recommended to use TransactionAction enum, also supports string (backward compatibility)
      *
-     * 支持的类型：
-     * - SALE: 销售交易
-     * - REFUND: 退款交易
-     * - VOID: 撤销交易
-     * - AUTH: 预授权
-     * - POST_AUTH: 预授权完成
-     * - INCREMENT_AUTH: 预授权追加
-     * - FORCED_AUTH: 强制授权
-     * - TIP_ADJUST: 小费调整
-     * - BATCH_CLOSE: 批次结算
-     * - QUERY: 查询交易
+     * Supported types:
+     * - SALE: Sale transaction
+     * - REFUND: Refund transaction
+     * - VOID: Void transaction
+     * - AUTH: Pre-authorization
+     * - POST_AUTH: Pre-authorization completion
+     * - INCREMENT_AUTH: Pre-authorization increment
+     * - FORCED_AUTH: Forced authorization
+     * - TIP_ADJUST: Tip adjustment
+     * - BATCH_CLOSE: Batch settlement
+     * - QUERY: Transaction query
      */
     val action: String,
 
     /**
-     * 商户订单号/参考订单号（必需，6-32 个字符）
-     * 商户系统中订单的唯一标识符
+     * Merchant order ID / Reference order ID (required, 6-32 characters)
+     * Unique identifier for the order in the merchant system
      *
-     * 说明：
-     * - 用于标识商户业务系统中的订单或业务记录
-     * - 一个订单可以关联多笔交易（如原始交易、退款、小费调整等）
-     * - 同一订单的多笔交易使用相同的 referenceOrderId
-     * - 可以与 transactionRequestId 使用相同的值（简化场景）
+     * Notes:
+     * - Used to identify orders or business records in the merchant business system
+     * - One order can be associated with multiple transactions (e.g., original transaction, refund, tip adjustment, etc.)
+     * - Multiple transactions for the same order use the same referenceOrderId
+     * - Can use the same value as transactionRequestId (simplified scenario)
      */
     val referenceOrderId: String? = null,
 
     /**
-     * 交易请求 ID（必需，用于幂等性）
-     * 此特定交易请求的唯一标识符
+     * Transaction request ID (required, for idempotency)
+     * Unique identifier for this specific transaction request
      *
-     * 幂等性说明：
-     * - 相同 transactionRequestId 的请求被视为同一笔交易
-     * - 临时性错误（网络超时、系统繁忙）时，可使用相同 transactionRequestId 重试
-     * - 明确失败或修改参数后，必须使用新的 transactionRequestId
-     * - 同一订单的不同交易类型，必须使用不同的 transactionRequestId
+     * Idempotency notes:
+     * - Requests with the same transactionRequestId are treated as the same transaction
+     * - For temporary errors (network timeout, system busy), you can retry with the same transactionRequestId
+     * - After a clear failure or parameter modification, you must use a new transactionRequestId
+     * - Different transaction types for the same order must use different transactionRequestId
      *
-     * 可以与 referenceOrderId 使用相同的值（简化场景）
+     * Can use the same value as referenceOrderId (simplified scenario)
      */
     val transactionRequestId: String? = null,
 
 
     /**
-     * 交易描述（必需）
-     * 交易描述或商品描述
+     * Transaction description (required)
+     * Transaction description or product description
      */
     val description: String? = null,
 
-    // ========== 金额信息 ==========
+    // ========== Amount information ==========
 
     /**
-     * 金额信息（必需）
-     * 包含详细金额明细的结构化对象
+     * Amount information (required)
+     * Structured object containing detailed amount breakdown
      */
     val amount: AmountInfo? = null,
 
-    // ========== 支付方式 ==========
+    // ========== Payment method ==========
 
     /**
-     * 支付方式信息（可选）
-     * 指定首选支付方式类别和 ID
+     * Payment method information (optional)
+     * Specifies preferred payment method category and ID
      */
     val paymentMethod: PaymentMethodInfo? = null,
 
-    // ========== 员工信息 ==========
+    // ========== Staff information ==========
 
     /**
-     * 员工信息（可选）
-     * 操作员和小费接收者的信息
+     * Staff information (optional)
+     * Information about the operator and tip recipient
      */
     val staffInfo: StaffInfo? = null,
 
-    // ========== 设备信息 ==========
+    // ========== Device information ==========
 
     /**
-     * 设备信息（可选）
-     * 发起交易的设备详情
+     * Device information (optional)
+     * Details of the device initiating the transaction
      */
     val deviceInfo: DeviceInfo? = null,
 
-    // ========== 商品详情 ==========
+    // ========== Goods details ==========
 
     /**
-     * 商品详情列表（可选）
-     * 交易中商品/服务的明细列表
+     * Goods detail list (optional)
+     * Detailed list of goods/services in the transaction
      */
     val goodsDetail: List<GoodsDetail>? = null,
 
-    // ========== 引用交易字段 ==========
+    // ========== Reference transaction fields ==========
 
     /**
-     * 原始交易 ID（退款/撤销/授权完成时必需）
-     * 引用原始交易
+     * Original transaction ID (required for refund/void/authorization completion)
+     * References the original transaction
      */
     val originalTransactionId: String? = null,
 
     /**
-     * 原始交易请求 ID（originalTransactionId 的替代）
-     * 使用原始交易请求 ID 进行引用
+     * Original transaction request ID (alternative to originalTransactionId)
+     * Uses the original transaction request ID for reference
      */
     val originalTransactionRequestId: String? = null,
 
-    // ========== 小费调整 ==========
+    // ========== Tip adjustment ==========
 
     /**
-     * 小费金额（小费调整时必需，单位：基本货币单位）
+     * Tip amount (required for tip adjustment, unit: base currency unit)
      */
     val tipAmount: BigDecimal? = null,
 
-    // ========== 强制授权特定字段 ==========
+    // ========== Forced authorization specific fields ==========
 
     /**
-     * 强制授权码（强制授权时必需）
-     * 用于强制授权交易的授权码
+     * Forced authorization code (required for forced authorization)
+     * Authorization code used for forced authorization transactions
      */
     val forcedAuthCode: String? = null,
 
-    // ========== 附加字段 ==========
+    // ========== Additional fields ==========
 
     /**
-     * 原因（退款/撤销时可选）
-     * 退款或撤销的原因
+     * Reason (optional for refund/void)
+     * Reason for refund or void
      */
     val reason: String? = null,
 
     /**
-     * 附加数据（可选）
-     * 附加到交易的自定义数据（推荐 JSON 格式）
+     * Additional data (optional)
+     * Custom data attached to the transaction (JSON format recommended)
      */
     val attach: String? = null,
 
     /**
-     * 通知 URL（可选）
-     * 接收交易结果通知的 URL
+     * Notification URL (optional)
+     * URL to receive transaction result notifications
      */
     val notifyUrl: String? = null,
 
     /**
-     * 请求超时时间(单位:秒)
+     * Request timeout (unit: seconds)
      */
     val requestTimeout: Long? = null
 ) {
-    // ========== 基本交易字段的链式调用方法 ==========
+    // ========== Chain call methods for basic transaction fields ==========
 
     /**
-     * 链式调用：设置交易类型（使用枚举）
-     * 推荐使用此方法，类型安全
+     * Chain call: Set transaction type (using enum)
+     * Recommended to use this method for type safety
      */
     fun setAction(action: TransactionAction): PaymentRequest = copy(action = action.value)
 
     /**
-     * 链式调用：设置交易类型（使用字符串）
-     * 为了向后兼容保留，推荐使用 TransactionAction 枚举
+     * Chain call: Set transaction type (using string)
+     * Preserved for backward compatibility, recommended to use TransactionAction enum
      */
     fun setAction(action: String): PaymentRequest = copy(action = action)
 
     /**
-     * 链式调用：设置商户订单号/参考订单号
+     * Chain call: Set merchant order ID / reference order ID
      */
     fun setReferenceOrderId(referenceOrderId: String): PaymentRequest = copy(referenceOrderId = referenceOrderId)
 
     /**
-     * 链式调用：设置商户订单号（兼容旧方法名）
-     * @deprecated 使用 setReferenceOrderId 代替
+     * Chain call: Set merchant order ID (compatible with old method name)
+     * @deprecated Use setReferenceOrderId instead
      */
-    @Deprecated("使用 setReferenceOrderId 代替", ReplaceWith("setReferenceOrderId(merchantOrderNo)"))
+    @Deprecated("Use setReferenceOrderId instead", ReplaceWith("setReferenceOrderId(merchantOrderNo)"))
     fun setMerchantOrderNo(merchantOrderNo: String): PaymentRequest = copy(referenceOrderId = merchantOrderNo)
 
     /**
-     * 链式调用：设置交易请求 ID
+     * Chain call: Set transaction request ID
      */
     fun setTransactionRequestId(transactionRequestId: String): PaymentRequest = copy(transactionRequestId = transactionRequestId)
 
     /**
-     * 链式调用：设置交易描述
+     * Chain call: Set transaction description
      */
     fun setDescription(description: String): PaymentRequest = copy(description = description)
 
-    // ========== 金额信息的链式调用方法 ==========
+    // ========== Chain call methods for amount information ==========
 
     /**
-     * 链式调用：设置金额信息
+     * Chain call: Set amount information
      */
     fun setAmount(amount: AmountInfo): PaymentRequest = copy(amount = amount)
 
-    // ========== 支付方式的链式调用方法 ==========
+    // ========== Chain call methods for payment method ==========
 
     /**
-     * 链式调用：设置支付方式信息
+     * Chain call: Set payment method information
      */
     fun setPaymentMethod(paymentMethod: PaymentMethodInfo): PaymentRequest = copy(paymentMethod = paymentMethod)
 
-    // ========== 员工信息的链式调用方法 ==========
+    // ========== Chain call methods for staff information ==========
 
     /**
-     * 链式调用：设置员工信息
+     * Chain call: Set staff information
      */
     fun setStaffInfo(staffInfo: StaffInfo): PaymentRequest = copy(staffInfo = staffInfo)
 
-    // ========== 设备信息的链式调用方法 ==========
+    // ========== Chain call methods for device information ==========
 
     /**
-     * 链式调用：设置设备信息
+     * Chain call: Set device information
      */
     fun setDeviceInfo(deviceInfo: DeviceInfo): PaymentRequest = copy(deviceInfo = deviceInfo)
 
-    // ========== 商品详情的链式调用方法 ==========
+    // ========== Chain call methods for goods details ==========
 
     /**
-     * 链式调用：设置商品详情列表
+     * Chain call: Set goods detail list
      */
     fun setGoodsDetail(goodsDetail: List<GoodsDetail>): PaymentRequest = copy(goodsDetail = goodsDetail)
 
-    // ========== 引用交易字段的链式调用方法 ==========
+    // ========== Chain call methods for reference transaction fields ==========
 
     /**
-     * 链式调用：设置原始交易 ID
+     * Chain call: Set original transaction ID
      */
     fun setOriginalTransactionId(originalTransactionId: String): PaymentRequest =
         copy(originalTransactionId = originalTransactionId)
 
     /**
-     * 链式调用：设置原始交易请求 ID
+     * Chain call: Set original transaction request ID
      */
     fun setOriginalTransactionRequestId(originalTransactionRequestId: String): PaymentRequest =
         copy(originalTransactionRequestId = originalTransactionRequestId)
 
-    // ========== 小费调整的链式调用方法 ==========
+    // ========== Chain call methods for tip adjustment ==========
 
     /**
-     * 链式调用：设置小费金额
+     * Chain call: Set tip amount
      */
     fun setTipAmount(tipAmount: BigDecimal): PaymentRequest = copy(tipAmount = tipAmount)
 
-    // ========== 强制授权的链式调用方法 ==========
+    // ========== Chain call methods for forced authorization ==========
 
     /**
-     * 链式调用：设置强制授权码
+     * Chain call: Set forced authorization code
      */
     fun setForcedAuthCode(forcedAuthCode: String): PaymentRequest = copy(forcedAuthCode = forcedAuthCode)
 
-    // ========== 附加字段的链式调用方法 ==========
+    // ========== Chain call methods for additional fields ==========
 
     /**
-     * 链式调用：设置原因
+     * Chain call: Set reason
      */
     fun setReason(reason: String): PaymentRequest = copy(reason = reason)
 
     /**
-     * 链式调用：设置附加数据
+     * Chain call: Set additional data
      */
     fun setAttach(attach: String): PaymentRequest = copy(attach = attach)
 
     /**
-     * 链式调用：设置通知 URL
+     * Chain call: Set notification URL
      */
     fun setNotifyUrl(notifyUrl: String): PaymentRequest = copy(notifyUrl = notifyUrl)
 
     /**
-     * 链式调用：设置交易过期时间
+     * Chain call: Set transaction timeout
      */
     fun setRequestTimeout(requestTimeout: Long): PaymentRequest = copy(requestTimeout = requestTimeout)
 
     /**
-     * 获取交易类型枚举
+     * Get transaction type enum
      *
-     * @return TransactionAction? 对应的枚举，如果无法识别则返回 null
+     * @return TransactionAction? Corresponding enum, returns null if unrecognized
      */
     fun getActionEnum(): TransactionAction? = TransactionAction.fromValue(action)
 
     companion object {
         /**
-         * 创建一个新的 PaymentRequest 构建器
+         * Create a new PaymentRequest builder
          *
-         * 使用示例（推荐使用枚举）：
+         * Usage example (recommended with enum):
          * ```kotlin
          * val request = PaymentRequest.builder()
          *     .setAction(TransactionAction.SALE)
          *     .setReferenceOrderId("ORDER001")
          *     .setTransactionRequestId("TXN001")
          *     .setAmount(amountInfo)
-         *     .setDescription("商品购买")
+         *     .setDescription("Product purchase")
          *     .build()
          * ```
          */
@@ -340,9 +340,9 @@ data class PaymentRequest(
     }
 
     /**
-     * PaymentRequest 构建器
+     * PaymentRequest Builder
      *
-     * 提供更灵活的构建方式，特别适合 Java 调用
+     * Provides a more flexible construction method, especially suitable for Java calls
      */
     class Builder {
         private var action: String = ""
@@ -364,12 +364,12 @@ data class PaymentRequest(
         private var requestTimeout: Long? = null
 
         /**
-         * 设置交易类型（使用枚举，推荐）
+         * Set transaction type (using enum, recommended)
          */
         fun setAction(action: TransactionAction) = apply { this.action = action.value }
 
         /**
-         * 设置交易类型（使用字符串，向后兼容）
+         * Set transaction type (using string, backward compatibility)
          */
         fun setAction(action: String) = apply { this.action = action }
         fun setReferenceOrderId(referenceOrderId: String) = apply { this.referenceOrderId = referenceOrderId }
@@ -392,12 +392,12 @@ data class PaymentRequest(
         fun setRequestTimeout(requestTimeout: Long) = apply { this.requestTimeout = requestTimeout }
 
         /**
-         * 构建 PaymentRequest 对象
+         * Build PaymentRequest object
          */
         fun build(): PaymentRequest {
-            require(action.isNotEmpty()) { "action 是必需的" }
-            require(referenceOrderId.isNotEmpty()) { "referenceOrderId 是必需的" }
-            require(transactionRequestId.isNotEmpty()) { "transactionRequestId 是必需的" }
+            require(action.isNotEmpty()) { "action is required" }
+            require(referenceOrderId.isNotEmpty()) { "referenceOrderId is required" }
+            require(transactionRequestId.isNotEmpty()) { "transactionRequestId is required" }
 
             return PaymentRequest(
                 action = action,

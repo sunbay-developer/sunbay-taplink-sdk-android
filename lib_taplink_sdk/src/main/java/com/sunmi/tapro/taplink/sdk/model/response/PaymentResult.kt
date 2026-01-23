@@ -7,204 +7,204 @@ import com.sunmi.tapro.taplink.sdk.model.common.TransactionAmount
 import java.math.BigDecimal
 
 /**
- * 支付结果类
+ * Payment Result Class
  * 
- * 包含全面的交易信息
+ * Contains comprehensive transaction information
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class PaymentResult(
-    // ========== 基本响应字段 ==========
+    // ========== Basic response fields ==========
     
     /**
-     * 响应码（"0" 表示成功）
+     * Response code ("0" indicates success)
      */
     val code: String,
     
     /**
-     * 响应描述
+     * Response description
      */
     val message: String? = null,
     
     /**
-     * 追踪 ID（用于故障排查）
+     * Trace ID (for troubleshooting)
      */
     val traceId: String? = null,
     
-    // ========== 交易标识符字段 ==========
+    // ========== Transaction identifier fields ==========
     
     /**
-     * 交易 ID（Nexus（SUNBAY支付网关）交易 ID）
+     * Transaction ID (Nexus (SUNBAY payment gateway) transaction ID)
      */
     val transactionId: String? = null,
     
     /**
-     * 商户订单号/参考订单号
+     * Merchant order ID / Reference order ID
      */
     val referenceOrderId: String? = null,
     
     /**
-     * 交易请求 ID
+     * Transaction request ID
      */
     val transactionRequestId: String? = null,
     
-    // ========== 交易状态字段 ==========
+    // ========== Transaction status fields ==========
     
     /**
-     * 交易状态
-     * 值：SUCCESS, PROCESSING, FAILED
+     * Transaction status
+     * Values: SUCCESS, PROCESSING, FAILED
      */
     val transactionStatus: String? = null,
     
     /**
-     * 交易类型
-     * 值：SALE, AUTH, FORCED_AUTH, INCREMENTAL, POST_AUTH, VOID, REFUND
+     * Transaction type
+     * Values: SALE, AUTH, FORCED_AUTH, INCREMENTAL, POST_AUTH, VOID, REFUND
      */
     val transactionType: String? = null,
     
-    // ========== 金额信息 ==========
+    // ========== Amount information ==========
     
     /**
-     * 交易金额详情
+     * Transaction amount details
      */
     val amount: TransactionAmount? = null,
     
-    // ========== 时间字段 ==========
+    // ========== Time fields ==========
     
     /**
-     * 交易创建时间（ISO 8601 格式）
+     * Transaction creation time (ISO 8601 format)
      */
     val createTime: String? = null,
     
     /**
-     * 交易完成时间（ISO 8601 格式）
+     * Transaction completion time (ISO 8601 format)
      */
     val completeTime: String? = null,
     
-    // ========== 卡信息 ==========
+    // ========== Card information ==========
     
     /**
-     * 卡片信息（包含卡号、卡类型、输入方式等）
+     * Card information (includes card number, card type, input method, etc.)
      */
     val cardInfo: CardInfo? = null,
     
-    // ========== 交易凭证信息 ==========
+    // ========== Transaction voucher information ==========
     
     /**
-     * 批次号
+     * Batch number
      */
     val batchNo: Int? = null,
     
     /**
-     * 凭证号
+     * Voucher number
      */
     val voucherNo: String? = null,
     
     /**
-     * 系统跟踪审计号（STAN）
+     * System Trace Audit Number (STAN)
      */
     val stan: String? = null,
     
     /**
-     * 检索参考号（RRN）
+     * Retrieval Reference Number (RRN)
      */
     val rrn: String? = null,
     
     /**
-     * 授权码
+     * Authorization code
      */
     val authCode: String? = null,
     
-    // ========== 交易结果信息 ==========
+    // ========== Transaction result information ==========
     
     /**
-     * 交易结果码
+     * Transaction result code
      */
     val transactionResultCode: String? = null,
     
     /**
-     * 交易结果消息
+     * Transaction result message
      */
     val transactionResultMsg: String? = null,
     
-    // ========== 终端和描述信息 ==========
+    // ========== Terminal and description information ==========
     
     /**
-     * 商品描述
+     * Product description
      */
     val description: String? = null,
     
     /**
-     * 附加数据（原样返回）
+     * Additional data (returned as-is)
      */
     val attach: String? = null,
     
-    // ========== 批次关闭特定字段 ==========
+    // ========== Batch close specific fields ==========
     
     /**
-     * 批次关闭信息（仅批次关闭）
+     * Batch close information (batch close only)
      */
     val batchCloseInfo: BatchCloseInfo? = null,
     
-    // ========== 小费调整特定字段 ==========
+    // ========== Tip adjustment specific fields ==========
     
     /**
-     * 小费金额（仅小费调整，单位：基本货币单位）
+     * Tip amount (tip adjustment only, unit: base currency unit)
      */
     var tipAmount: BigDecimal? = null,
     
-    // ========== 增量授权特定字段 ==========
+    // ========== Incremental authorization specific fields ==========
     
     /**
-     * 增量金额（仅增量授权，单位：基本货币单位）
+     * Incremental amount (incremental authorization only, unit: base currency unit)
      */
     var incrementalAmount: BigDecimal? = null,
     
     /**
-     * 总授权金额（仅增量授权，单位：基本货币单位）
+     * Total authorized amount (incremental authorization only, unit: base currency unit)
      */
     var totalAuthorizedAmount: BigDecimal? = null,
     
-    // ========== 退款特定字段 ==========
+    // ========== Refund specific fields ==========
     
     /**
-     * 商户退款号（仅退款）
+     * Merchant refund number (refund only)
      */
     val merchantRefundNo: String? = null,
     
     /**
-     * 原始交易 ID（退款/撤销/授权完成）
+     * Original transaction ID (refund/void/authorization completion)
      */
     val originalTransactionId: String? = null,
     
     /**
-     * 原始交易请求 ID（退款/撤销/授权完成）
+     * Original transaction request ID (refund/void/authorization completion)
      */
     val originalTransactionRequestId: String? = null
 ) {
     /**
-     * 检查交易是否成功
+     * Check if transaction is successful
      * 
-     * @return true 如果响应码为 "0" 且交易状态为 "SUCCESS"
+     * @return true if response code is "0" and transaction status is "SUCCESS"
      */
     fun isSuccess(): Boolean {
         return "0" == code && "SUCCESS" == transactionStatus
     }
     
     /**
-     * 检查交易是否处理中
+     * Check if transaction is processing
      * 
-     * @return true 如果交易状态为 "PROCESSING"
+     * @return true if transaction status is "PROCESSING"
      */
     fun isProcessing(): Boolean {
         return "PROCESSING" == transactionStatus
     }
     
     /**
-     * 检查交易是否失败
+     * Check if transaction is failed
      * 
-     * @return true 如果交易状态为 "FAILED" 或响应码不为 "0"
+     * @return true if transaction status is "FAILED" or response code is not "0"
      */
     fun isFailed(): Boolean {
         return "FAILED" == transactionStatus || "0" != code

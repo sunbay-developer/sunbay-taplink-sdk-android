@@ -6,13 +6,13 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestV
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
 
 /**
- * 批次关闭交易请求
+ * Batch close transaction request
  *
- * 用于关闭当前批次，完成结算流程
+ * Used to close the current batch and complete the settlement process
  *
- * @param transactionRequestId 交易请求ID（必需）
- * @param description 关闭描述（可选，最多128字符）
- * @param requestTimeout 请求超时时间（可选，单位：秒）
+ * @param transactionRequestId Transaction request ID (required)
+ * @param description Close description (optional, max 128 characters)
+ * @param requestTimeout Request timeout (optional, in seconds)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -38,13 +38,13 @@ data class BatchCloseRequest(
 
     companion object {
         /**
-         * 创建BatchCloseRequest构建器
+         * Create BatchCloseRequest builder
          */
         fun builder(): Builder = Builder()
     }
 
     /**
-     * BatchCloseRequest构建器
+     * BatchCloseRequest builder
      */
     class Builder {
         private var transactionRequestId: String? = null
@@ -52,7 +52,7 @@ data class BatchCloseRequest(
         private var requestTimeout: Long? = null
 
         /**
-         * 设置交易请求ID
+         * Set transaction request ID
          */
         fun setTransactionRequestId(transactionRequestId: String): Builder {
             this.transactionRequestId = transactionRequestId
@@ -60,7 +60,7 @@ data class BatchCloseRequest(
         }
 
         /**
-         * 设置关闭描述
+         * Set close description
          */
         fun setDescription(description: String?): Builder {
             this.description = description
@@ -68,7 +68,7 @@ data class BatchCloseRequest(
         }
 
         /**
-         * 设置请求超时时间
+         * Set request timeout
          */
         fun setRequestTimeout(requestTimeout: Long): Builder {
             this.requestTimeout = requestTimeout
@@ -76,9 +76,9 @@ data class BatchCloseRequest(
         }
 
         /**
-         * 构建BatchCloseRequest实例
+         * Build BatchCloseRequest instance
          * 
-         * @throws TransactionRequestValidationException 如果验证失败
+         * @throws TransactionRequestValidationException if validation fails
          */
         fun build(): BatchCloseRequest {
             val request = BatchCloseRequest(

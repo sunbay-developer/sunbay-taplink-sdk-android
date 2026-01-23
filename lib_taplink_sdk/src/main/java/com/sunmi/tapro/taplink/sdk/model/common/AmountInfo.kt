@@ -3,81 +3,102 @@ package com.sunmi.tapro.taplink.sdk.model.common
 import java.math.BigDecimal
 
 /**
- * 金额信息类
+ * Amount information class.
  * 
- * 包含详细的金额明细信息
+ * Contains detailed amount breakdown information.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class AmountInfo(
     /**
-     * 订单金额（必需，单位：基本货币单位，如美元）
+     * Order amount (required, unit: base currency unit, e.g., USD).
      */
     val orderAmount: BigDecimal,
     
     /**
-     * 定价货币（必需，ISO 4217 标准，如 "USD", "EUR"）
+     * Pricing currency (required, ISO 4217 standard, e.g., "USD", "EUR").
      */
     val pricingCurrency: String,
     
     /**
-     * 小费金额（可选，单位：基本货币单位）
+     * Tip amount (optional, unit: base currency unit).
      */
     val tipAmount: BigDecimal? = null,
     
     /**
-     * 税额（可选，单位：基本货币单位）
+     * Tax amount (optional, unit: base currency unit).
      */
     val taxAmount: BigDecimal? = null,
     
     /**
-     * 附加费金额（可选，单位：基本货币单位）
+     * Surcharge amount (optional, unit: base currency unit).
      */
     val surchargeAmount: BigDecimal? = null,
     
     /**
-     * 现金返还金额（可选，单位：基本货币单位）
+     * Cashback amount (optional, unit: base currency unit).
      */
     val cashbackAmount: BigDecimal? = null,
     
     /**
-     * 服务费（可选，单位：基本货币单位）
+     * Service fee (optional, unit: base currency unit).
      */
     val serviceFee: BigDecimal? = null
 ) {
     /**
-     * 链式调用：设置订单金额
+     * Sets the order amount.
+     *
+     * @param orderAmount the order amount
+     * @return the updated AmountInfo instance for method chaining
      */
     fun setOrderAmount(orderAmount: BigDecimal): AmountInfo = copy(orderAmount = orderAmount)
     
     /**
-     * 链式调用：设置定价货币
+     * Sets the pricing currency.
+     *
+     * @param pricingCurrency the pricing currency code
+     * @return the updated AmountInfo instance for method chaining
      */
     fun setPricingCurrency(pricingCurrency: String): AmountInfo = copy(pricingCurrency = pricingCurrency)
     
     /**
-     * 链式调用：设置小费金额
+     * Sets the tip amount.
+     *
+     * @param tipAmount the tip amount
+     * @return the updated AmountInfo instance for method chaining
      */
     fun setTipAmount(tipAmount: BigDecimal): AmountInfo = copy(tipAmount = tipAmount)
     
     /**
-     * 链式调用：设置税额
+     * Sets the tax amount.
+     *
+     * @param taxAmount the tax amount
+     * @return the updated AmountInfo instance for method chaining
      */
     fun setTaxAmount(taxAmount: BigDecimal): AmountInfo = copy(taxAmount = taxAmount)
     
     /**
-     * 链式调用：设置附加费金额
+     * Sets the surcharge amount.
+     *
+     * @param surchargeAmount the surcharge amount
+     * @return the updated AmountInfo instance for method chaining
      */
     fun setSurchargeAmount(surchargeAmount: BigDecimal): AmountInfo = copy(surchargeAmount = surchargeAmount)
     
     /**
-     * 链式调用：设置现金返还金额
+     * Sets the cashback amount.
+     *
+     * @param cashbackAmount the cashback amount
+     * @return the updated AmountInfo instance for method chaining
      */
     fun setCashbackAmount(cashbackAmount: BigDecimal): AmountInfo = copy(cashbackAmount = cashbackAmount)
     
     /**
-     * 链式调用：设置服务费
+     * Sets the service fee.
+     *
+     * @param serviceFee the service fee
+     * @return the updated AmountInfo instance for method chaining
      */
     fun setServiceFee(serviceFee: BigDecimal): AmountInfo = copy(serviceFee = serviceFee)
 }

@@ -1,52 +1,52 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 支付方式ID枚举
+ * Payment method ID enumeration.
  * 
- * 定义所有支持的具体支付方式ID
+ * Defines all supported specific payment method IDs.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 enum class PaymentMethodId {
-    // ========== 二维码支付 ==========
+    // ========== QR Code Payment ==========
     /**
-     * 微信支付
+     * WeChat Pay.
      */
     WECHAT,
     
     /**
-     * 支付宝
+     * Alipay.
      */
     ALIPAY,
     
-    // ========== EBT 子支付方式 ==========
+    // ========== EBT Sub-payment Methods ==========
     /**
-     * SNAP（补充营养援助计划）
+     * SNAP (Supplemental Nutrition Assistance Program).
      */
     SNAP,
     
     /**
-     * Voucher（代金券）
+     * Voucher.
      */
     VOUCHER,
     
     /**
-     * Withdraw（提现）
+     * Withdraw.
      */
     WITHDRAW,
     
     /**
-     * Benefit（福利）
+     * Benefit.
      */
     BENEFIT;
     
     companion object {
         /**
-         * 从字符串转换为枚举
+         * Converts from string to enum.
          * 
-         * @param value 字符串值
-         * @return PaymentMethodId? 对应的枚举值，如果无法识别则返回 null
+         * @param value the string value
+         * @return the corresponding enum value, or null if not recognized
          */
         fun fromString(value: String?): PaymentMethodId? {
             if (value.isNullOrBlank()) return null
@@ -60,7 +60,7 @@ enum class PaymentMethodId {
     }
     
     /**
-     * 转换为字符串（用于API传输）
+     * Converts to string (for API transmission).
      */
     fun toApiString(): String {
         return name

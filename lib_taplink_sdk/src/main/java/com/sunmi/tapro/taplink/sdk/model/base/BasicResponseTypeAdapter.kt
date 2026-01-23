@@ -6,9 +6,9 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import java.lang.reflect.Type
 
 /**
- * BasicResponse 的自定义 JSON 序列化/反序列化适配器
+ * Custom JSON serialization/deserialization adapter for BasicResponse.
  * 
- * 处理 eventCode (Int) 和 eventMsg (String) 到 PaymentEvent 的转换
+ * Handles conversion between eventCode (Int) and eventMsg (String) to PaymentEvent.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
@@ -26,7 +26,7 @@ class BasicResponseTypeAdapter : JsonDeserializer<BasicResponse>, JsonSerializer
         
         val jsonObject = json.asJsonObject
         
-        // 解析基本字段
+        // Parse basic fields
         val appSign = jsonObject.get("appSign")?.asString ?: throw JsonParseException("Missing appSign")
         val version = jsonObject.get("version")?.asString ?: throw JsonParseException("Missing version")
         val timeStamp = jsonObject.get("timeStamp")?.asString ?: throw JsonParseException("Missing timeStamp")
@@ -34,7 +34,7 @@ class BasicResponseTypeAdapter : JsonDeserializer<BasicResponse>, JsonSerializer
         val traceId = jsonObject.get("traceId")?.asString ?: throw JsonParseException("Missing traceId")
         val bizData = jsonObject.get("bizData")?.asJsonObject
         
-        // 解析 eventCode 和 eventMsg，转换为 PaymentEvent
+        // Parse eventCode and eventMsg, convert to PaymentEvent
         val eventCodeElement = jsonObject.get("eventCode")
         val eventMsgElement = jsonObject.get("eventMsg")
         
@@ -50,7 +50,7 @@ class BasicResponseTypeAdapter : JsonDeserializer<BasicResponse>, JsonSerializer
             else -> throw JsonParseException("Missing or invalid eventCode")
         }
         
-        // eventMsg 不再使用，直接根据 eventCode 创建对应的 PaymentEvent
+        // eventMsg is no longer used, create PaymentEvent directly from eventCode
         val event = PaymentEvent.fromEventCode(eventCode)
         
         return BasicResponse(
@@ -79,16 +79,16 @@ class BasicResponseTypeAdapter : JsonDeserializer<BasicResponse>, JsonSerializer
         jsonObject.addProperty("timeStamp", src.timeStamp)
         jsonObject.addProperty("action", src.action)
         
-        // 将 PaymentEvent 转换为 eventCode 和 eventMsg
-        // eventCode 在 JSON 中可以是 Int 或 String 类型
-        // 如果 eventCode 是数字字符串（如 "4003"），转换为 Int；否则保持为 String
+        // Convert PaymentEvent to eventCode and eventMsg
+        // eventCode can be Int or String type in JSON
+        // If eventCode is a numeric string (like "4003"), convert to Int; otherwise keep as String
         val eventCodeElement = when {
             src.event.eventCode.toIntOrNull() != null -> {
-                // 是数字字符串，转换为 Int
+                // Is numeric string, convert to Int
                 JsonPrimitive(src.event.eventCode.toInt())
             }
             else -> {
-                // 非数字字符串，保持为 String
+                // Non-numeric string, keep as String
                 JsonPrimitive(src.event.eventCode)
             }
         }

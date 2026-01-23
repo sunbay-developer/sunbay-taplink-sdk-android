@@ -1,22 +1,30 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 小票信息
+ * Receipt information.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class Receipt(
-    /** 商户联小票内容（文本格式） */
+    /**
+     * Merchant copy receipt content (text format).
+     */
     val merchantCopy: String? = null,
     
-    /** 客户联小票内容（文本格式） */
+    /**
+     * Customer copy receipt content (text format).
+     */
     val customerCopy: String? = null,
     
-    /** 是否需要签名：true/false */
+    /**
+     * Whether signature is required: true/false.
+     */
     val signatureRequired: Boolean = false,
     
-    /** 签名图片（Base64 编码） */
+    /**
+     * Signature image (Base64 encoded).
+     */
     val signatureImage: ByteArray? = null
 )
 

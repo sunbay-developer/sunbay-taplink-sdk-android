@@ -1,15 +1,15 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 /**
- * 中止交易请求
+ * Abort Transaction Request
  *
- * 用于中止正在进行的交易，不包含金额或订单字段
+ * Used to abort an ongoing transaction, does not contain amount or order fields
  *
- * @param originalTransactionId 原始交易ID（与originalTransactionRequestId二选一）
- * @param originalTransactionRequestId 原始交易请求ID（与originalTransactionId二选一）
- * @param description 中止原因描述（可选，最多128字符）
- * @param attach 附加信息（可选）
- * @param requestTimeout 请求超时时间（可选，单位：秒）
+ * @param originalTransactionId Original transaction ID (either this or originalTransactionRequestId must be provided)
+ * @param originalTransactionRequestId Original transaction request ID (either this or originalTransactionId must be provided)
+ * @param description Abort reason description (optional, maximum 128 characters)
+ * @param attach Additional information (optional)
+ * @param requestTimeout Request timeout duration (optional, unit: seconds)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -46,13 +46,13 @@ data class AbortRequest(
 
     companion object {
         /**
-         * 创建AbortRequest构建器
+         * Create AbortRequest builder
          */
         fun builder(): Builder = Builder()
     }
 
     /**
-     * AbortRequest构建器
+     * AbortRequest Builder
      */
     class Builder {
         private var originalTransactionRequestId: String? = null
@@ -61,7 +61,7 @@ data class AbortRequest(
         private var requestTimeout: Long? = null
 
         /**
-         * 设置原始交易请求ID
+         * Set original transaction request ID
          */
         fun setOriginalTransactionRequestId(originalTransactionRequestId: String): Builder {
             this.originalTransactionRequestId = originalTransactionRequestId
@@ -69,7 +69,7 @@ data class AbortRequest(
         }
 
         /**
-         * 设置中止原因描述
+         * Set abort reason description
          */
         fun setDescription(description: String?): Builder {
             this.description = description
@@ -77,7 +77,7 @@ data class AbortRequest(
         }
 
         /**
-         * 设置附加信息
+         * Set additional information
          */
         fun setAttach(attach: String): Builder {
             this.attach = attach
@@ -85,7 +85,7 @@ data class AbortRequest(
         }
 
         /**
-         * 设置请求超时时间
+         * Set request timeout duration
          */
         fun setRequestTimeout(requestTimeout: Long): Builder {
             this.requestTimeout = requestTimeout
@@ -93,9 +93,9 @@ data class AbortRequest(
         }
 
         /**
-         * 构建AbortRequest实例
+         * Build AbortRequest instance
          *
-         * @throws TransactionRequestValidationException 如果验证失败
+         * @throws TransactionRequestValidationException If validation fails
          */
         fun build(): AbortRequest {
             val request = AbortRequest(

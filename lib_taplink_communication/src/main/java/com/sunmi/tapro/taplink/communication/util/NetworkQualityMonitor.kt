@@ -13,8 +13,8 @@
 //import kotlin.math.max
 //
 ///**
-// * 网络质量监测器
-// * 通过延迟测试和连接稳定性评估网络质量
+// * Network Quality Monitor
+// * Evaluates network quality through latency testing and connection stability assessment
 // */
 //class NetworkQualityMonitor private constructor(private val context: Context) {
 //
@@ -30,16 +30,16 @@
 //            }
 //        }
 //
-//        // 网络质量评估阈值
+//        // Network quality evaluation thresholds
 //        private const val EXCELLENT_LATENCY_MS = 50
 //        private const val GOOD_LATENCY_MS = 100
 //        private const val FAIR_LATENCY_MS = 200
 //        private const val POOR_LATENCY_MS = 500
 //
-//        // 测试参数
+//        // Test parameters
 //        private const val PING_TIMEOUT_MS = 3000
 //        private const val PING_TEST_COUNT = 3
-//        private const val QUALITY_CHECK_INTERVAL_MS = 30_000L // 30秒检查一次
+//        private const val QUALITY_CHECK_INTERVAL_MS = 30_000L // Check every 30 seconds
 //    }
 //
 //    private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -68,7 +68,7 @@
 //    }
 //
 //    /**
-//     * 开始监测网络质量
+//     * Start monitoring network quality
 //     */
 //    fun startMonitoring() {
 //        if (isMonitoring) return
@@ -76,7 +76,7 @@
 //        isMonitoring = true
 //        LogUtil.d(TAG, "Starting network quality monitoring")
 //
-//        // 注册网络状态监听
+//        // Register network status listener
 //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 //            connectivityManager.registerDefaultNetworkCallback(networkCallback)
 //        } else {
@@ -86,15 +86,15 @@
 //            connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
 //        }
 //
-//        // 开始定期质量检测
+//        // Start periodic quality checks
 //        startPeriodicQualityCheck()
 //
-//        // 立即进行一次质量检测
+//        // Perform an immediate quality check
 //        scheduleQualityCheck()
 //    }
 //
 //    /**
-//     * 停止监测网络质量
+//     * Stop monitoring network quality
 //     */
 //    fun stopMonitoring() {
 //        if (!isMonitoring) return
@@ -113,12 +113,12 @@
 //    }
 //
 //    /**
-//     * 获取当前网络质量
+//     * Get current network quality
 //     */
 //    fun getCurrentQuality(): SmartHeartbeatConfig.NetworkQuality = currentQuality
 //
 //    /**
-//     * 添加网络质量变化监听器
+//     * Add network quality change listener
 //     */
 //    fun addQualityChangeListener(listener: NetworkQualityChangeListener) {
 //        synchronized(qualityChangeListeners) {
@@ -127,7 +127,7 @@
 //    }
 //
 //    /**
-//     * 移除网络质量变化监听器
+//     * Remove network quality change listener
 //     */
 //    fun removeQualityChangeListener(listener: NetworkQualityChangeListener) {
 //        synchronized(qualityChangeListeners) {
@@ -136,7 +136,7 @@
 //    }
 //
 //    /**
-//     * 手动触发网络质量检测
+//     * Manually trigger network quality check
 //     */
 //    fun checkQualityNow() {
 //        scheduleQualityCheck()
@@ -170,7 +170,7 @@
 //        try {
 //            val latencies = mutableListOf<Long>()
 //
-//            // 进行多次延迟测试
+//            // Perform multiple latency tests
 //            repeat(PING_TEST_COUNT) { attempt ->
 //                val latency = measureLatency("8.8.8.8", 53) // Google DNS
 //                if (latency > 0) {
@@ -178,7 +178,7 @@
 //                }
 //
 //                if (attempt < PING_TEST_COUNT - 1) {
-//                    delay(100) // 测试间隔
+//                    delay(100) // Test interval
 //                }
 //            }
 //
@@ -209,16 +209,16 @@
 //                endTime - startTime
 //            }
 //        } catch (e: Exception) {
-//            -1L // 表示测试失败
+//            -1L // Indicates test failure
 //        }
 //    }
 //
 //    private fun evaluateQuality(avgLatency: Long, latencies: List<Long>): SmartHeartbeatConfig.NetworkQuality {
-//        // 计算延迟稳定性（标准差）
+//        // Calculate latency stability (standard deviation)
 //        val variance = latencies.map { (it - avgLatency) * (it - avgLatency) }.average()
 //        val stability = kotlin.math.sqrt(variance)
 //
-//        // 基于平均延迟的基础质量评估
+//        // Base quality evaluation based on average latency
 //        val baseQuality = when {
 //            avgLatency <= EXCELLENT_LATENCY_MS -> SmartHeartbeatConfig.NetworkQuality.EXCELLENT
 //            avgLatency <= GOOD_LATENCY_MS -> SmartHeartbeatConfig.NetworkQuality.GOOD
@@ -227,7 +227,7 @@
 //            else -> SmartHeartbeatConfig.NetworkQuality.VERY_POOR
 //        }
 //
-//        // 如果网络不稳定，降低质量等级
+//        // Reduce quality level if network is unstable
 //        return if (stability > avgLatency * 0.5) {
 //            when (baseQuality) {
 //                SmartHeartbeatConfig.NetworkQuality.EXCELLENT -> SmartHeartbeatConfig.NetworkQuality.GOOD
@@ -261,7 +261,7 @@
 //    }
 //
 //    /**
-//     * 网络质量变化监听器
+//     * Network quality change listener
 //     */
 //    interface NetworkQualityChangeListener {
 //        fun onNetworkQualityChanged(

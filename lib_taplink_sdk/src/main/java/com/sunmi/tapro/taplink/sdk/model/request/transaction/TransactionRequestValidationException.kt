@@ -1,11 +1,11 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 /**
- * 交易请求验证异常
+ * Transaction Request Validation Exception
  *
- * 当交易请求验证失败时抛出的异常
+ * Exception thrown when transaction request validation fails
  *
- * @param errors 验证错误列表
+ * @param errors List of validation errors
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -15,28 +15,28 @@ class TransactionRequestValidationException(
 ) : IllegalArgumentException("Validation failed: ${errors.joinToString(", ") { it.message }}") {
     
     /**
-     * 构造函数，接受单个验证错误
+     * Constructor that accepts a single validation error
      * 
-     * @param error 验证错误
+     * @param error Validation error
      */
     constructor(error: ValidationError) : this(listOf(error))
     
     /**
-     * 构造函数，接受验证结果
+     * Constructor that accepts a validation result
      * 
-     * @param validationResult 验证结果
+     * @param validationResult Validation result
      */
     constructor(validationResult: ValidationResult) : this(validationResult.errors) {
         require(!validationResult.isValid) { "Cannot create exception from successful validation result" }
     }
     
     /**
-     * 获取第一个错误信息
+     * Get the first error message
      */
     fun getFirstErrorMessage(): String? = errors.firstOrNull()?.message
     
     /**
-     * 获取所有错误信息
+     * Get all error messages
      */
     fun getAllErrorMessages(): List<String> = errors.map { it.message }
 }

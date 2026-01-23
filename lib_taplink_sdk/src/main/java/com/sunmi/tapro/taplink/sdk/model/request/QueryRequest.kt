@@ -1,10 +1,10 @@
 package com.sunmi.tapro.taplink.sdk.model.request
 
 /**
- * 查询请求类
+ * Query Request Class
  *
- * 用于查询交易状态
- * 可以通过交易ID、交易请求ID或订单ID查询
+ * Used to query transaction status
+ * Can query by transaction ID, transaction request ID, or order ID
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -12,24 +12,24 @@ package com.sunmi.tapro.taplink.sdk.model.request
 class QueryRequest {
 
     /**
-     * 交易ID
-     * Nexus（SUNBAY支付网关）交易ID
+     * Transaction ID
+     * Nexus (SUNBAY payment gateway) transaction ID
      */
     var transactionId: String? = null
         private set
 
     /**
-     * 交易请求ID
-     * 商户系统分配的交易请求ID
+     * Transaction request ID
+     * Transaction request ID assigned by the merchant system
      */
     var transactionRequestId: String? = null
         private set
 
     /**
-     * 链式调用：设置交易ID
+     * Chain call: Set transaction ID
      *
-     * @param transactionId 交易ID
-     * @return QueryRequest 当前对象，支持链式调用
+     * @param transactionId Transaction ID
+     * @return QueryRequest Current object, supporting chain calls
      */
     fun setTransactionId(transactionId: String): QueryRequest {
         this.transactionId = transactionId
@@ -37,10 +37,10 @@ class QueryRequest {
     }
 
     /**
-     * 链式调用：设置交易请求ID
+     * Chain call: Set transaction request ID
      *
-     * @param transactionRequestId 交易请求ID
-     * @return QueryRequest 当前对象，支持链式调用
+     * @param transactionRequestId Transaction request ID
+     * @return QueryRequest Current object, supporting chain calls
      */
     fun setTransactionRequestId(transactionRequestId: String): QueryRequest {
         this.transactionRequestId = transactionRequestId
@@ -49,27 +49,27 @@ class QueryRequest {
 
     companion object {
         /**
-         * 创建查询请求构建器
+         * Create query request builder
          *
-         * @return Builder 构建器对象
+         * @return Builder Builder object
          */
         fun builder(): Builder = Builder()
 
         /**
-         * 创建通过交易ID查询的请求
+         * Create request for querying by transaction ID
          *
-         * @param transactionId 交易ID
-         * @return QueryRequest 查询请求对象
+         * @param transactionId Transaction ID
+         * @return QueryRequest Query request object
          */
         fun byTransactionId(transactionId: String): QueryRequest {
             return QueryRequest().setTransactionId(transactionId)
         }
 
         /**
-         * 创建通过交易请求ID查询的请求
+         * Create request for querying by transaction request ID
          *
-         * @param transactionRequestId 交易请求ID
-         * @return QueryRequest 查询请求对象
+         * @param transactionRequestId Transaction request ID
+         * @return QueryRequest Query request object
          */
         fun byTransactionRequestId(transactionRequestId: String): QueryRequest {
             return QueryRequest().setTransactionRequestId(transactionRequestId)
@@ -77,7 +77,7 @@ class QueryRequest {
     }
 
     /**
-     * QueryRequest 构建器
+     * QueryRequest Builder
      */
     class Builder {
         private var transactionId: String? = null

@@ -3,15 +3,15 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 import java.math.BigDecimal
 
 /**
- * 小费调整交易请求
+ * Tip Adjustment Transaction Request
  *
- * 用于调整已完成交易的小费金额，不包含订单相关字段
+ * Used to adjust the tip amount for a completed transaction, does not contain order-related fields
  *
- * @param originalTransactionId 原始交易ID（与originalTransactionRequestId二选一）
- * @param originalTransactionRequestId 原始交易请求ID（与originalTransactionId二选一）
- * @param tipAmount 小费金额（必需，非负数，使用基本货币单位）
- * @param attach 附加信息（可选）
- * @param requestTimeout 请求超时时间（可选，单位：秒）
+ * @param originalTransactionId Original transaction ID (either this or originalTransactionRequestId must be provided)
+ * @param originalTransactionRequestId Original transaction request ID (either this or originalTransactionId must be provided)
+ * @param tipAmount Tip amount (required, non-negative, using basic currency unit)
+ * @param attach Additional information (optional)
+ * @param requestTimeout Request timeout duration (optional, unit: seconds)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -53,13 +53,13 @@ data class TipAdjustRequest(
 
     companion object {
         /**
-         * 创建TipAdjustRequest构建器
+         * Create TipAdjustRequest builder
          */
         fun builder(): Builder = Builder()
     }
 
     /**
-     * TipAdjustRequest构建器
+     * TipAdjustRequest Builder
      */
     class Builder {
         private var originalTransactionId: String? = null
@@ -69,7 +69,7 @@ data class TipAdjustRequest(
         private var requestTimeout: Long? = null
 
         /**
-         * 设置原始交易ID
+         * Set original transaction ID
          */
         fun setOriginalTransactionId(originalTransactionId: String): Builder {
             this.originalTransactionId = originalTransactionId
@@ -77,7 +77,7 @@ data class TipAdjustRequest(
         }
 
         /**
-         * 设置原始交易请求ID
+         * Set original transaction request ID
          */
         fun setOriginalTransactionRequestId(originalTransactionRequestId: String): Builder {
             this.originalTransactionRequestId = originalTransactionRequestId
@@ -85,7 +85,7 @@ data class TipAdjustRequest(
         }
 
         /**
-         * 设置小费金额
+         * Set tip amount
          */
         fun setTipAmount(tipAmount: BigDecimal): Builder {
             this.tipAmount = tipAmount
@@ -93,7 +93,7 @@ data class TipAdjustRequest(
         }
 
         /**
-         * 设置附加信息
+         * Set additional information
          */
         fun setAttach(attach: String): Builder {
             this.attach = attach
@@ -101,7 +101,7 @@ data class TipAdjustRequest(
         }
 
         /**
-         * 设置请求超时时间
+         * Set request timeout duration
          */
         fun setRequestTimeout(requestTimeout: Long): Builder {
             this.requestTimeout = requestTimeout
@@ -109,9 +109,9 @@ data class TipAdjustRequest(
         }
 
         /**
-         * 构建TipAdjustRequest实例
+         * Build TipAdjustRequest instance
          * 
-         * @throws TransactionRequestValidationException 如果验证失败
+         * @throws TransactionRequestValidationException If validation fails
          */
         fun build(): TipAdjustRequest {
             val request = TipAdjustRequest(
