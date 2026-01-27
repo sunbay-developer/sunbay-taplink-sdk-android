@@ -384,7 +384,7 @@ data class PaymentRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
-        private var receiptType: ReceiptType? = null
+        private var receiptType: ReceiptType = ReceiptType.BOTH
 
         /**
          * Set transaction type (using enum, recommended)
