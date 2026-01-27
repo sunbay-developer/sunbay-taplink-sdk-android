@@ -42,7 +42,7 @@ data class RefundRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val receiptType: ReceiptType = ReceiptType.BOTH
+    val receiptType: ReceiptType = ReceiptType.NONE
 ) : BaseTransactionRequest() {
 
     init {
@@ -108,7 +108,7 @@ data class RefundRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var receiptType: ReceiptType = ReceiptType.BOTH
+        private var receiptType: ReceiptType = ReceiptType.NONE
 
         fun setTransactionRequestId(transactionRequestId: String): ReferencedBuilder {
             this.transactionRequestId = transactionRequestId
@@ -193,7 +193,7 @@ data class RefundRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
-        private var receiptType: ReceiptType = ReceiptType.BOTH
+        private var receiptType: ReceiptType = ReceiptType.NONE
 
         fun setTransactionRequestId(transactionRequestId: String): NonReferencedBuilder {
             this.transactionRequestId = transactionRequestId

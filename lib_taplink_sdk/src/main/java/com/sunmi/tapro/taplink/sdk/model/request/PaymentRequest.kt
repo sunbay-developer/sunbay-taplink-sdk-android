@@ -197,16 +197,16 @@ data class PaymentRequest(
     // ========== Receipt configuration ==========
 
     /**
-     * Receipt type (optional)
+     * Receipt type (optional, default: NONE)
      * Specifies which receipt copies should be printed for the transaction
      *
      * Supported types:
-     * - NONE: No receipt will be printed
+     * - NONE: No receipt will be printed (default)
      * - MERCHANT: Only the merchant copy will be printed
      * - CUSTOMER: Only the customer copy will be printed
      * - BOTH: Both merchant and customer copies will be printed
      */
-    val receiptType: ReceiptType = ReceiptType.BOTH,
+    val receiptType: ReceiptType = ReceiptType.NONE,
 
     // ========== Tip configuration ==========
 
@@ -405,7 +405,7 @@ data class PaymentRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
-        private var receiptType: ReceiptType = ReceiptType.BOTH
+        private var receiptType: ReceiptType = ReceiptType.NONE
         private var tipDisplayMode: TipDisplayMode = TipDisplayMode.ON_SALE
 
         /**

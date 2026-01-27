@@ -24,7 +24,7 @@ data class VoidRequest(
     val description: String? = null,
     val attach: String? = null,
     val notifyUrl: String? = null,
-    val receiptType: ReceiptType = ReceiptType.BOTH
+    val receiptType: ReceiptType = ReceiptType.NONE
 ) : BaseTransactionRequest() {
 
     init {
@@ -60,7 +60,7 @@ data class VoidRequest(
         private var description: String? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
-        private var receiptType: ReceiptType = ReceiptType.BOTH
+        private var receiptType: ReceiptType = ReceiptType.NONE
 
         /**
          * Set original transaction ID

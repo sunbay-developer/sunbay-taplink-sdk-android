@@ -32,7 +32,7 @@ data class ForcedAuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val receiptType: ReceiptType = ReceiptType.BOTH
+    val receiptType: ReceiptType = ReceiptType.NONE
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -71,7 +71,7 @@ data class ForcedAuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var receiptType: ReceiptType = ReceiptType.BOTH
+        private var receiptType: ReceiptType = ReceiptType.NONE
 
         /**
          * Set reference order ID
