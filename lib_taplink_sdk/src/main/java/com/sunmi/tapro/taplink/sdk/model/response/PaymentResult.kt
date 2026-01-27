@@ -140,6 +140,14 @@ data class PaymentResult(
      */
     val attach: String? = null,
     
+    // ========== Receipt information ==========
+    
+    /**
+     * Receipt JSON data
+     * Contains the receipt information in JSON format
+     */
+    val receiptJson: String? = null,
+    
     // ========== Batch close specific fields ==========
     
     /**
