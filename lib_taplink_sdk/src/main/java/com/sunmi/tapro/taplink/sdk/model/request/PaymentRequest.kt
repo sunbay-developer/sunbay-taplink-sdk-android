@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request
 
+import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
@@ -190,7 +191,21 @@ data class PaymentRequest(
     /**
      * Request timeout (unit: seconds)
      */
-    val requestTimeout: Long? = null
+    val requestTimeout: Long? = null,
+
+    // ========== Receipt configuration ==========
+
+    /**
+     * Receipt type (optional)
+     * Specifies which receipt copies should be printed for the transaction
+     *
+     * Supported types:
+     * - NONE: No receipt will be printed
+     * - MERCHANT: Only the merchant copy will be printed
+     * - CUSTOMER: Only the customer copy will be printed
+     * - BOTH: Both merchant and customer copies will be printed
+     */
+    val receiptType: ReceiptType? = null
 ) {
     // ========== Chain call methods for basic transaction fields ==========
 
@@ -313,6 +328,13 @@ data class PaymentRequest(
      */
     fun setRequestTimeout(requestTimeout: Long): PaymentRequest = copy(requestTimeout = requestTimeout)
 
+    // ========== Chain call methods for receipt configuration ==========
+
+    /**
+     * Chain call: Set receipt type
+     */
+    fun setReceiptType(receiptType: ReceiptType): PaymentRequest = copy(receiptType = receiptType)
+
     /**
      * Get transaction type enum
      *
@@ -362,6 +384,7 @@ data class PaymentRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
+        private var receiptType: ReceiptType? = null
 
         /**
          * Set transaction type (using enum, recommended)
@@ -390,6 +413,7 @@ data class PaymentRequest(
         fun setAttach(attach: String) = apply { this.attach = attach }
         fun setNotifyUrl(notifyUrl: String) = apply { this.notifyUrl = notifyUrl }
         fun setRequestTimeout(requestTimeout: Long) = apply { this.requestTimeout = requestTimeout }
+        fun setReceiptType(receiptType: ReceiptType) = apply { this.receiptType = receiptType }
 
         /**
          * Build PaymentRequest object
@@ -416,7 +440,8 @@ data class PaymentRequest(
                 reason = reason,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                receiptType = receiptType
             )
         }
     }

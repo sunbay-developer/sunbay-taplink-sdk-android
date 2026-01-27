@@ -173,6 +173,7 @@ object PaymentRequestAdapter {
     fun convertTipAdjustRequest(request: TipAdjustRequest): PaymentRequest {
         return PaymentRequest(
             action = TransactionAction.TIP_ADJUST.value,
+            transactionRequestId = request.transactionRequestId,
             originalTransactionId = request.originalTransactionId,
             originalTransactionRequestId = request.originalTransactionRequestId,
             tipAmount = request.tipAmount,

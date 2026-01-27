@@ -1086,6 +1086,7 @@ class TaplinkPaymentService : PaymentService {
         // Based on the actual TipAdjustRequest structure, it uses originalTransactionId and tipAmount
         // The description parameter is not directly supported, but can be passed as attach
         val tipAdjustRequest = TipAdjustRequest(
+            transactionRequestId = transactionRequestId,
             originalTransactionId = originalTransactionId.takeIf { it.isNotEmpty() },
             originalTransactionRequestId = transactionRequestId.takeIf { originalTransactionId.isEmpty() },
             tipAmount = tipAmountInCents,

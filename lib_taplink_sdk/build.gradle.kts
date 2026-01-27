@@ -8,8 +8,8 @@ plugins {
 object SdkVersion {
     const val CODE = 6
 
-    //    const val NAME = "1.0.3"
-    const val NAME = "1.0.7.14"
+        const val NAME = "1.0.4"
+//    const val NAME = "1.0.7.14"
 }
 
 object BuildConfig {
