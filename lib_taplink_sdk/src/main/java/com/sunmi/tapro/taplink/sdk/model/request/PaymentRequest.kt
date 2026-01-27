@@ -205,7 +205,7 @@ data class PaymentRequest(
      * - CUSTOMER: Only the customer copy will be printed
      * - BOTH: Both merchant and customer copies will be printed
      */
-    val receiptType: ReceiptType? = null
+    val receiptType: ReceiptType = ReceiptType.BOTH
 ) {
     // ========== Chain call methods for basic transaction fields ==========
 
