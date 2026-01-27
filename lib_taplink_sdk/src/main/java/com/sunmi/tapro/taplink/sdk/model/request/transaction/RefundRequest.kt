@@ -193,6 +193,7 @@ data class RefundRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
+        private var receiptType: ReceiptType = ReceiptType.BOTH
 
         fun setTransactionRequestId(transactionRequestId: String): NonReferencedBuilder {
             this.transactionRequestId = transactionRequestId
