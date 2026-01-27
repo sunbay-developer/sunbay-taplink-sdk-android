@@ -17,6 +17,7 @@ import java.math.BigDecimal
  * @since 2025-01-XX
  */
 data class TipAdjustRequest(
+    val transactionRequestId: String,
     val originalTransactionId: String? = null,
     val originalTransactionRequestId: String? = null,
     val tipAmount: BigDecimal,
@@ -39,6 +40,7 @@ data class TipAdjustRequest(
                 originalTransactionId, 
                 originalTransactionRequestId
             ),
+            TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
             validateTipAmount(tipAmount)
         )
     }
@@ -62,11 +64,20 @@ data class TipAdjustRequest(
      * TipAdjustRequest Builder
      */
     class Builder {
+        private var transactionRequestId: String? = null
         private var originalTransactionId: String? = null
         private var originalTransactionRequestId: String? = null
         private var tipAmount: BigDecimal? = null
         private var attach: String? = null
         private var requestTimeout: Long? = null
+
+        /**
+         * set transaction request ID
+         */
+        fun setTransactionRequestId(transactionRequestId:String):Builder{
+            this.transactionRequestId = transactionRequestId
+            return this
+        }
 
         /**
          * Set original transaction ID
@@ -115,6 +126,7 @@ data class TipAdjustRequest(
          */
         fun build(): TipAdjustRequest {
             val request = TipAdjustRequest(
+                transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
                 originalTransactionId = originalTransactionId,
                 originalTransactionRequestId = originalTransactionRequestId,
                 tipAmount = requireNotNull(tipAmount) { "tipAmount is required" },
