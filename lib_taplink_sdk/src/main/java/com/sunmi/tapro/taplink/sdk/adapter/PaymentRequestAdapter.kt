@@ -30,7 +30,8 @@ object PaymentRequestAdapter {
             paymentMethod = request.paymentMethod,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            receiptType = request.receiptType
         )
     }
 
@@ -53,7 +54,8 @@ object PaymentRequestAdapter {
             paymentMethod = request.paymentMethod,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            receiptType = request.receiptType
         )
     }
 
@@ -76,7 +78,8 @@ object PaymentRequestAdapter {
             paymentMethod = request.paymentMethod,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            receiptType = request.receiptType
         )
     }
 
@@ -95,7 +98,8 @@ object PaymentRequestAdapter {
             paymentMethod = request.paymentMethod,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            receiptType = request.receiptType
         )
     }
 
@@ -110,7 +114,8 @@ object PaymentRequestAdapter {
             originalTransactionId = request.originalTransactionId,
             originalTransactionRequestId = request.originalTransactionRequestId,
             attach = request.attach,
-            notifyUrl = request.notifyUrl
+            notifyUrl = request.notifyUrl,
+            receiptType = request.receiptType
         )
     }
 
@@ -127,7 +132,8 @@ object PaymentRequestAdapter {
             originalTransactionRequestId = request.originalTransactionRequestId,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            receiptType = request.receiptType
         )
     }
 
@@ -150,7 +156,8 @@ object PaymentRequestAdapter {
             originalTransactionRequestId = request.originalTransactionRequestId,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            receiptType = request.receiptType
         )
     }
 

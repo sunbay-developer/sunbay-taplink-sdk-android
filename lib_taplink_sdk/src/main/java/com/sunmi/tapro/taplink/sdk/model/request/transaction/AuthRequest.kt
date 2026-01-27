@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
@@ -30,7 +31,8 @@ data class AuthRequest(
     val attach: String? = null,
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
-    val staffInfo: StaffInfo? = null
+    val staffInfo: StaffInfo? = null,
+    val receiptType: ReceiptType = ReceiptType.BOTH
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -69,6 +71,7 @@ data class AuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
+        private var receiptType: ReceiptType = ReceiptType.BOTH
 
         /**
          * Set reference order ID
@@ -143,6 +146,14 @@ data class AuthRequest(
         }
 
         /**
+         * Set receipt type
+         */
+        fun setReceiptType(receiptType: ReceiptType): Builder {
+            this.receiptType = receiptType
+            return this
+        }
+
+        /**
          * Build AuthRequest instance
          * 
          * @throws TransactionRequestValidationException If validation fails
@@ -157,7 +168,8 @@ data class AuthRequest(
                 attach = attach,
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
-                staffInfo = staffInfo
+                staffInfo = staffInfo,
+                receiptType = receiptType
             )
 
             val validationResult = request.validate()

@@ -1,5 +1,7 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
+
 /**
  * Void Transaction Request
  *
@@ -21,7 +23,8 @@ data class VoidRequest(
     val transactionRequestId: String,
     val description: String? = null,
     val attach: String? = null,
-    val notifyUrl: String? = null
+    val notifyUrl: String? = null,
+    val receiptType: ReceiptType = ReceiptType.BOTH
 ) : BaseTransactionRequest() {
 
     init {
@@ -57,6 +60,7 @@ data class VoidRequest(
         private var description: String? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
+        private var receiptType: ReceiptType = ReceiptType.BOTH
 
         /**
          * Set original transaction ID
@@ -107,6 +111,14 @@ data class VoidRequest(
         }
 
         /**
+         * Set receipt type
+         */
+        fun setReceiptType(receiptType: ReceiptType): Builder {
+            this.receiptType = receiptType
+            return this
+        }
+
+        /**
          * Build VoidRequest instance
          * 
          * @throws TransactionRequestValidationException If validation fails
@@ -118,7 +130,8 @@ data class VoidRequest(
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
                 description = description,
                 attach = attach,
-                notifyUrl = notifyUrl
+                notifyUrl = notifyUrl,
+                receiptType = receiptType
             )
 
             val validationResult = request.validate()

@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
@@ -40,7 +41,8 @@ data class RefundRequest(
     val attach: String? = null,
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
-    val staffInfo: StaffInfo? = null
+    val staffInfo: StaffInfo? = null,
+    val receiptType: ReceiptType = ReceiptType.BOTH
 ) : BaseTransactionRequest() {
 
     init {
@@ -106,6 +108,7 @@ data class RefundRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
+        private var receiptType: ReceiptType = ReceiptType.BOTH
 
         fun setTransactionRequestId(transactionRequestId: String): ReferencedBuilder {
             this.transactionRequestId = transactionRequestId
@@ -147,6 +150,11 @@ data class RefundRequest(
             return this
         }
 
+        fun setReceiptType(receiptType: ReceiptType): ReferencedBuilder {
+            this.receiptType = receiptType
+            return this
+        }
+
         fun build(): RefundRequest {
             require(originalTransactionId != null || originalTransactionRequestId != null) {
                 "Either originalTransactionId or originalTransactionRequestId must be provided for referenced refund"
@@ -160,7 +168,8 @@ data class RefundRequest(
                 originalTransactionRequestId = originalTransactionRequestId,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                receiptType = receiptType
             )
 
             val validationResult = request.validate()
@@ -225,6 +234,11 @@ data class RefundRequest(
             return this
         }
 
+        fun setReceiptType(receiptType: ReceiptType): NonReferencedBuilder {
+            this.receiptType = receiptType
+            return this
+        }
+
         fun build(): RefundRequest {
             val request = RefundRequest(
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
@@ -234,7 +248,8 @@ data class RefundRequest(
                 paymentMethod = paymentMethod,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                receiptType = receiptType
             )
 
             val validationResult = request.validate()
