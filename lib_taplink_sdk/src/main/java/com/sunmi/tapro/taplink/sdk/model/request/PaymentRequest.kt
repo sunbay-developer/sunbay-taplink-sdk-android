@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.sdk.model.request
 
 import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
+import com.sunmi.tapro.taplink.sdk.enums.TipDisplayMode
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
@@ -205,7 +206,19 @@ data class PaymentRequest(
      * - CUSTOMER: Only the customer copy will be printed
      * - BOTH: Both merchant and customer copies will be printed
      */
-    val receiptType: ReceiptType = ReceiptType.BOTH
+    val receiptType: ReceiptType = ReceiptType.BOTH,
+
+    // ========== Tip configuration ==========
+
+    /**
+     * Tip display mode (optional, default: ON_SALE)
+     * Specifies when the tip prompt should be displayed during the transaction
+     *
+     * Supported modes:
+     * - ON_SALE: Display tip prompt during sale (before transaction completion)
+     * - AFTER_SALE: Display tip prompt after sale (after transaction completion)
+     */
+    val tipDisplayMode: TipDisplayMode = TipDisplayMode.ON_SALE
 ) {
     // ========== Chain call methods for basic transaction fields ==========
 
@@ -335,12 +348,20 @@ data class PaymentRequest(
      */
     fun setReceiptType(receiptType: ReceiptType): PaymentRequest = copy(receiptType = receiptType)
 
+    // ========== Chain call methods for tip configuration ==========
+
+    /**
+     * Chain call: Set tip display mode
+     */
+    fun setTipDisplayMode(tipDisplayMode: TipDisplayMode): PaymentRequest = copy(tipDisplayMode = tipDisplayMode)
+
     /**
      * Get transaction type enum
      *
      * @return TransactionAction? Corresponding enum, returns null if unrecognized
      */
     fun getActionEnum(): TransactionAction? = TransactionAction.fromValue(action)
+    
 
     companion object {
         /**
@@ -385,6 +406,7 @@ data class PaymentRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var receiptType: ReceiptType = ReceiptType.BOTH
+        private var tipDisplayMode: TipDisplayMode = TipDisplayMode.ON_SALE
 
         /**
          * Set transaction type (using enum, recommended)
@@ -414,6 +436,7 @@ data class PaymentRequest(
         fun setNotifyUrl(notifyUrl: String) = apply { this.notifyUrl = notifyUrl }
         fun setRequestTimeout(requestTimeout: Long) = apply { this.requestTimeout = requestTimeout }
         fun setReceiptType(receiptType: ReceiptType) = apply { this.receiptType = receiptType }
+        fun setTipDisplayMode(tipDisplayMode: TipDisplayMode) = apply { this.tipDisplayMode = tipDisplayMode }
 
         /**
          * Build PaymentRequest object
@@ -441,7 +464,8 @@ data class PaymentRequest(
                 attach = attach,
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
-                receiptType = receiptType
+                receiptType = receiptType,
+                tipDisplayMode = tipDisplayMode
             )
         }
     }

@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
+import com.sunmi.tapro.taplink.sdk.enums.TipDisplayMode
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
@@ -32,7 +33,8 @@ data class PostAuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val receiptType: ReceiptType = ReceiptType.BOTH
+    val receiptType: ReceiptType = ReceiptType.BOTH,
+    val tipDisplayMode: TipDisplayMode = TipDisplayMode.ON_SALE
 ) : BaseTransactionRequest() {
 
     init {
@@ -73,6 +75,7 @@ data class PostAuthRequest(
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
         private var receiptType: ReceiptType = ReceiptType.BOTH
+        private var tipDisplayMode: TipDisplayMode = TipDisplayMode.ON_SALE
 
         /**
          * Set original pre-authorization transaction ID
@@ -155,6 +158,14 @@ data class PostAuthRequest(
         }
 
         /**
+         * Set tip display mode
+         */
+        fun setTipDisplayMode(tipDisplayMode: TipDisplayMode): Builder {
+            this.tipDisplayMode = tipDisplayMode
+            return this
+        }
+
+        /**
          * Build PostAuthRequest instance
          * 
          * @throws TransactionRequestValidationException If validation fails
@@ -170,7 +181,8 @@ data class PostAuthRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
-                receiptType = receiptType
+                receiptType = receiptType,
+                tipDisplayMode = tipDisplayMode
             )
 
             val validationResult = request.validate()

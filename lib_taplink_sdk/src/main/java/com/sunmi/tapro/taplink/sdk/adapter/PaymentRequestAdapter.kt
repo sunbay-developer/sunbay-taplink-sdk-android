@@ -31,7 +31,8 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            receiptType = request.receiptType
+            receiptType = request.receiptType,
+            tipDisplayMode = request.tipDisplayMode
         )
     }
 
@@ -133,7 +134,8 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            receiptType = request.receiptType
+            receiptType = request.receiptType,
+            tipDisplayMode = request.tipDisplayMode
         )
     }
 
