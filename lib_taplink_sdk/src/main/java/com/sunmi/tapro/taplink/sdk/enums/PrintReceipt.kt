@@ -8,7 +8,7 @@ package com.sunmi.tapro.taplink.sdk.enums
  * @author TaPro Team
  * @since 2025-01-XX
  */
-enum class ReceiptType(val value: String) {
+enum class PrintReceipt(val value: String) {
     /**
      * No receipt.
      * No receipt will be printed.
@@ -41,7 +41,7 @@ enum class ReceiptType(val value: String) {
          * @return the corresponding enum, or null if not found
          */
         @JvmStatic
-        fun fromValue(value: String): ReceiptType? {
+        fun fromValue(value: String): PrintReceipt? {
             return values().find { it.value.equals(value, ignoreCase = true) }
         }
 

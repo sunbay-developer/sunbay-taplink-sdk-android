@@ -1,7 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
-import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
-import com.sunmi.tapro.taplink.sdk.enums.TipDisplayMode
+import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
@@ -34,8 +33,7 @@ data class SaleRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val receiptType: ReceiptType = ReceiptType.NONE,
-    val tipDisplayMode: TipDisplayMode = TipDisplayMode.ON_SALE
+    val printReceipt: PrintReceipt = PrintReceipt.NONE,
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -66,8 +64,7 @@ data class SaleRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var receiptType: ReceiptType = ReceiptType.NONE
-        private var tipDisplayMode: TipDisplayMode = TipDisplayMode.ON_SALE
+        private var printReceipt: PrintReceipt = PrintReceipt.NONE
 
         /**
          * Set reference order ID
@@ -142,18 +139,10 @@ data class SaleRequest(
         }
 
         /**
-         * Set receipt type
+         * Set print receipt
          */
-        fun setReceiptType(receiptType: ReceiptType): Builder {
-            this.receiptType = receiptType
-            return this
-        }
-
-        /**
-         * Set tip display mode
-         */
-        fun setTipDisplayMode(tipDisplayMode: TipDisplayMode): Builder {
-            this.tipDisplayMode = tipDisplayMode
+        fun setPrintReceipt(printReceipt: PrintReceipt): Builder {
+            this.printReceipt = printReceipt
             return this
         }
 
@@ -173,8 +162,7 @@ data class SaleRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
-                receiptType = receiptType,
-                tipDisplayMode = tipDisplayMode
+                printReceipt = printReceipt,
             )
 
             val validationResult = request.validate()

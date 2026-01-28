@@ -31,8 +31,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            receiptType = request.receiptType,
-            tipDisplayMode = request.tipDisplayMode
+            printReceipt = request.printReceipt,
         )
     }
 
@@ -56,7 +55,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            receiptType = request.receiptType
+            printReceipt = request.printReceipt
         )
     }
 
@@ -80,7 +79,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            receiptType = request.receiptType
+            printReceipt = request.printReceipt
         )
     }
 
@@ -100,7 +99,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            receiptType = request.receiptType
+            printReceipt = request.printReceipt
         )
     }
 
@@ -116,7 +115,7 @@ object PaymentRequestAdapter {
             originalTransactionRequestId = request.originalTransactionRequestId,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            receiptType = request.receiptType
+            printReceipt = request.printReceipt
         )
     }
 
@@ -134,8 +133,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            receiptType = request.receiptType,
-            tipDisplayMode = request.tipDisplayMode
+            printReceipt = request.printReceipt,
         )
     }
 
@@ -159,7 +157,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            receiptType = request.receiptType
+            printReceipt = request.printReceipt
         )
     }
 

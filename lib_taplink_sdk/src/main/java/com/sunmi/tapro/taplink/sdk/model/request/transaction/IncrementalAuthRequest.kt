@@ -1,6 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
-import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
+import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 import java.math.BigDecimal
 
@@ -32,7 +32,7 @@ data class IncrementalAuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val receiptType: ReceiptType = ReceiptType.NONE
+    val printReceipt: PrintReceipt = PrintReceipt.NONE
 ) : BaseTransactionRequest() {
 
     init {
@@ -85,7 +85,7 @@ data class IncrementalAuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var receiptType: ReceiptType = ReceiptType.NONE
+        private var printReceipt: PrintReceipt = PrintReceipt.NONE
 
         /**
          * Set original pre-authorization transaction ID
@@ -160,10 +160,10 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * Set receipt type
+         * Set print receipt
          */
-        fun setReceiptType(receiptType: ReceiptType): Builder {
-            this.receiptType = receiptType
+        fun setPrintReceipt(printReceipt: PrintReceipt): Builder {
+            this.printReceipt = printReceipt
             return this
         }
 
@@ -183,7 +183,7 @@ data class IncrementalAuthRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
-                receiptType = receiptType
+                printReceipt = printReceipt
             )
 
             val validationResult = request.validate()

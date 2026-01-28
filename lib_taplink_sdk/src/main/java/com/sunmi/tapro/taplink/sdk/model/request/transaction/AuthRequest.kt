@@ -1,6 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
-import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
+import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
@@ -32,7 +32,7 @@ data class AuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val receiptType: ReceiptType = ReceiptType.NONE
+    val printReceipt: PrintReceipt = PrintReceipt.NONE
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -71,7 +71,7 @@ data class AuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var receiptType: ReceiptType = ReceiptType.NONE
+        private var printReceipt: PrintReceipt = PrintReceipt.NONE
 
         /**
          * Set reference order ID
@@ -146,10 +146,10 @@ data class AuthRequest(
         }
 
         /**
-         * Set receipt type
+         * Set print receipt
          */
-        fun setReceiptType(receiptType: ReceiptType): Builder {
-            this.receiptType = receiptType
+        fun setPrintReceipt(printReceipt: PrintReceipt): Builder {
+            this.printReceipt = printReceipt
             return this
         }
 
@@ -169,7 +169,7 @@ data class AuthRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
-                receiptType = receiptType
+                printReceipt = printReceipt
             )
 
             val validationResult = request.validate()

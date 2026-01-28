@@ -1,6 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
-import com.sunmi.tapro.taplink.sdk.enums.ReceiptType
+import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 
 /**
  * Void Transaction Request
@@ -24,7 +24,7 @@ data class VoidRequest(
     val description: String? = null,
     val attach: String? = null,
     val notifyUrl: String? = null,
-    val receiptType: ReceiptType = ReceiptType.NONE
+    val printReceipt: PrintReceipt = PrintReceipt.NONE
 ) : BaseTransactionRequest() {
 
     init {
@@ -60,7 +60,7 @@ data class VoidRequest(
         private var description: String? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
-        private var receiptType: ReceiptType = ReceiptType.NONE
+        private var printReceipt: PrintReceipt = PrintReceipt.NONE
 
         /**
          * Set original transaction ID
@@ -111,10 +111,10 @@ data class VoidRequest(
         }
 
         /**
-         * Set receipt type
+         * Set print receipt
          */
-        fun setReceiptType(receiptType: ReceiptType): Builder {
-            this.receiptType = receiptType
+        fun setPrintReceipt(printReceipt: PrintReceipt): Builder {
+            this.printReceipt = printReceipt
             return this
         }
 
@@ -131,7 +131,7 @@ data class VoidRequest(
                 description = description,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                receiptType = receiptType
+                printReceipt = printReceipt
             )
 
             val validationResult = request.validate()
