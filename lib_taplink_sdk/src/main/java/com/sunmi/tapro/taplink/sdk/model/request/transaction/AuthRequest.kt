@@ -32,7 +32,7 @@ data class AuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val printReceipt: PrintReceipt = PrintReceipt.NONE
+    val printReceipt: PrintReceipt? = PrintReceipt.NONE
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -71,7 +71,7 @@ data class AuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var printReceipt: PrintReceipt = PrintReceipt.NONE
+        private var printReceipt: PrintReceipt? = PrintReceipt.NONE
 
         /**
          * Set reference order ID

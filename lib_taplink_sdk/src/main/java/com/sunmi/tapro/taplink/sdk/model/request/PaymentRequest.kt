@@ -205,7 +205,7 @@ data class PaymentRequest(
      * - CUSTOMER: Only the customer copy will be printed
      * - BOTH: Both merchant and customer copies will be printed
      */
-    val printReceipt: PrintReceipt = PrintReceipt.NONE,
+    val printReceipt: PrintReceipt? = PrintReceipt.NONE,
 
     // ========== Tip configuration ==========
 ) {
@@ -345,7 +345,7 @@ data class PaymentRequest(
      * @return TransactionAction? Corresponding enum, returns null if unrecognized
      */
     fun getActionEnum(): TransactionAction? = TransactionAction.fromValue(action)
-    
+
 
     companion object {
         /**
@@ -389,7 +389,7 @@ data class PaymentRequest(
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
-        private var printReceipt: PrintReceipt = PrintReceipt.NONE
+        private var printReceipt: PrintReceipt? = PrintReceipt.NONE
 
         /**
          * Set transaction type (using enum, recommended)

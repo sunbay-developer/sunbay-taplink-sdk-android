@@ -32,7 +32,7 @@ data class IncrementalAuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val printReceipt: PrintReceipt = PrintReceipt.NONE
+    val printReceipt: PrintReceipt? = PrintReceipt.NONE
 ) : BaseTransactionRequest() {
 
     init {
@@ -85,7 +85,7 @@ data class IncrementalAuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var printReceipt: PrintReceipt = PrintReceipt.NONE
+        private var printReceipt: PrintReceipt? = PrintReceipt.NONE
 
         /**
          * Set original pre-authorization transaction ID
