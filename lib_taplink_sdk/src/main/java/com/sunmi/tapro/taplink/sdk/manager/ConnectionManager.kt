@@ -275,6 +275,7 @@ class ConnectionManager(
             protocol,
             this.config.appId,
             this.config.secretKey,
+            this.config.taproAppWidth,
             object : ServiceConnectionCallback {
                 override fun onConnected(extraInfoMap: Map<String, String?>?) {
                     // Sync status after connection success
