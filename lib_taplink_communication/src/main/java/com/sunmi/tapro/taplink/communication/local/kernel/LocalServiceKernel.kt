@@ -28,11 +28,17 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
  */
 class LocalServiceKernel constructor(
     appId: String,
-    appSecretKey: String
+    appSecretKey: String,
+    private val taproAppWidth: Float? = null
 ) : AsyncServiceKernel(appId, appSecretKey) {
 
     companion object {
         private const val TAG = "LocalServiceKernel"
+        
+        // Intent extra keys
+        private const val EXTRA_APP_ID = "app_id"
+        private const val EXTRA_SECRET_KEY = "secret_key"
+        private const val EXTRA_TAPRO_APP_WIDTH = "tapro_app_width"
     }
 
     override fun getTag(): String = TAG
@@ -97,8 +103,13 @@ class LocalServiceKernel constructor(
             // Create Intent
             val intent = Intent(action)
             intent.setPackage(packageName)
-            intent.putExtra("app_id", appId)
-            intent.putExtra("secret_key", appSecretKey)
+            intent.putExtra(EXTRA_APP_ID, appId)
+            intent.putExtra(EXTRA_SECRET_KEY, appSecretKey)
+            
+            // Add taproAppWidth if provided
+            taproAppWidth?.let {
+                intent.putExtra(EXTRA_TAPRO_APP_WIDTH, it)
+            }
 
 
             // Check if target application is installed

@@ -70,7 +70,13 @@ data class TaplinkConfig(
     /**
      * Default timeout in seconds (default: 180).
      */
-    val timeout: Int = 180
+    val timeout: Int = 180,
+
+    /**
+     * Width for TaPro application execution (optional, default: null).
+     * Specifies the width dimension for the TaPro app.
+     */
+    val taproAppWidth: Float? = null
 ) {
     // ========== Required Configuration Methods ==========
 
@@ -136,6 +142,14 @@ data class TaplinkConfig(
      * @return the updated configuration instance for method chaining
      */
     fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
+
+    /**
+     * Sets the width for TaPro application execution.
+     *
+     * @param taproAppWidth the width dimension for the TaPro app
+     * @return the updated configuration instance for method chaining
+     */
+    fun setTaproAppWidth(taproAppWidth: Float?): TaplinkConfig = copy(taproAppWidth = taproAppWidth)
 
     companion object {
         /**

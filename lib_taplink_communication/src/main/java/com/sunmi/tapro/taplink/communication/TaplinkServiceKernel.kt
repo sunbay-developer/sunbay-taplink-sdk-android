@@ -49,9 +49,12 @@ class TaplinkServiceKernel private constructor(context: Context) {
      * is different from the already connected one, need to disconnect the old connection first, then connect the new one.
      *
      * @param protocol Protocol string, supports multiple protocol formats
+     * @param appid Application ID
+     * @param appSecretKey Application secret key
+     * @param taproAppWidth Width for TaPro application execution (optional)
      * @param connectionCallback Connection callback
      */
-    fun connect(protocol: String, appid: String, appSecretKey: String, connectionCallback: ConnectionCallback) {
+    fun connect(protocol: String, appid: String, appSecretKey: String, taproAppWidth: Float? = null, connectionCallback: ConnectionCallback) {
         if (!isInitialized()) {
             connectionCallback.onDisconnected(
                 InnerErrorCode.E201.code,
@@ -68,7 +71,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         }
 
         // Dynamically get corresponding service kernel based on protocol type
-        val serviceKernel = getServiceKernelByProtocol(parseResult, appid, appSecretKey)
+        val serviceKernel = getServiceKernelByProtocol(parseResult, appid, appSecretKey, taproAppWidth)
         if (serviceKernel == null) {
             connectionCallback.onDisconnected(
                 InnerErrorCode.E214.code,
@@ -123,7 +126,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
     private fun getServiceKernelByProtocol(
         parseResult: ProtocolParseResult,
         appId: String,
-        appSecretKey: String
+        appSecretKey: String,
+        taproAppWidth: Float? = null
     ): IServiceKernel? {
         val serviceKey = when (parseResult) {
             is ProtocolParseResult.LanProtocol -> SERVICE_KEY_LAN
@@ -146,7 +150,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
         }
 
         // Create new service kernel instance
-        return createServiceKernel(serviceKey, appId, appSecretKey)
+        return createServiceKernel(serviceKey, appId, appSecretKey, taproAppWidth)
     }
 
     /**
@@ -171,11 +175,16 @@ class TaplinkServiceKernel private constructor(context: Context) {
      * Create service kernel instance
      *
      * @param serviceKey Service type identifier
+     * @param appId Application ID
+     * @param appSecretKey Application secret key
+     * @param taproAppWidth Width for TaPro application execution (optional)
      * @return IServiceKernel Service kernel instance
      */
     private fun createServiceKernel(
-        serviceKey: String, appId: String,
-        appSecretKey: String
+        serviceKey: String, 
+        appId: String,
+        appSecretKey: String,
+        taproAppWidth: Float? = null
     ): IServiceKernel {
         return when (serviceKey) {
             SERVICE_KEY_LAN -> {
@@ -202,7 +211,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
 
             SERVICE_KEY_LOCAL -> {
                 LogUtil.d(TAG, "Creating Local service")
-                LocalServiceKernel(appId, appSecretKey)
+                LocalServiceKernel(appId, appSecretKey, taproAppWidth)
             }
 
             else -> {
