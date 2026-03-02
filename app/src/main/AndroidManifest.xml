@@ -59,7 +59,6 @@
             android:exported="false"
             android:label="Transaction Progress"
             android:parentActivityName=".activity.MainActivity"
-            android:screenOrientation="portrait"
             android:launchMode="singleTop" />
     </application>
 

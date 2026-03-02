@@ -32,7 +32,7 @@ data class IncrementalAuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val printReceipt: PrintReceipt? = PrintReceipt.NONE
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO
 ) : BaseTransactionRequest() {
 
     init {
@@ -47,7 +47,7 @@ data class IncrementalAuthRequest(
     override fun validate(): ValidationResult {
         return TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateOriginalTransactionReference(
-                originalTransactionId, 
+                originalTransactionId,
                 originalTransactionRequestId
             ),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
@@ -85,7 +85,7 @@ data class IncrementalAuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var printReceipt: PrintReceipt? = PrintReceipt.NONE
+        private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         /**
          * Set original pre-authorization transaction ID
@@ -169,7 +169,7 @@ data class IncrementalAuthRequest(
 
         /**
          * Build IncrementalAuthRequest instance
-         * 
+         *
          * @throws TransactionRequestValidationException If validation fails
          */
         fun build(): IncrementalAuthRequest {

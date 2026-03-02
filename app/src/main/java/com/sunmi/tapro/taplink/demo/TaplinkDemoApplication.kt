@@ -19,7 +19,7 @@ import java.math.BigDecimal
 
 /**
  * Main application class for Taplink Demo
- * 
+ *
  * Handles global SDK initialization and provides a centralized entry point
  * for SDK configuration. The SDK is initialized once at application startup
  * to ensure consistent configuration across all activities.
@@ -40,11 +40,11 @@ class TaplinkDemoApplication : Application() {
 
     /**
      * Initialize Taplink SDK with basic configuration
-     * 
+     *
      * Performs one-time SDK initialization using hardcoded credentials for UAT environment.
      * Connection mode is intentionally not set here because it needs to be
      * configurable at runtime based on user preferences.
-     * 
+     *
      * @throws Exception if SDK initialization fails due to missing configuration
      */
     private fun initializeTaplinkSDK() {
@@ -55,6 +55,7 @@ class TaplinkDemoApplication : Application() {
             val appId = getString(R.string.taplink_app_id)
             val merchantId = getString(R.string.taplink_merchant_id)
             val secretKey = getString(R.string.taplink_secret_key)
+            val taproAppWidthRatio = 0.7f
 
             // Log configuration parameters with sensitive data masked for security
             Log.d(TAG, "=== SDK Init Request Parameters ===")
@@ -67,9 +68,10 @@ class TaplinkDemoApplication : Application() {
             val config = TaplinkConfig(
                 appId = appId,
                 merchantId = merchantId,
-                secretKey = secretKey
+                secretKey = secretKey,
+                taproAppWidthRatio = taproAppWidthRatio
             ).setLogEnabled(true)
-             .setLogLevel(LogLevel.DEBUG)
+                .setLogLevel(LogLevel.DEBUG)
 
             // Initialize SDK with basic configuration
             Log.d(TAG, "=== Calling TaplinkSDK.init() ===")
@@ -89,7 +91,7 @@ class TaplinkDemoApplication : Application() {
 
     /**
      * Test connection and execute sale transaction for development purposes
-     * 
+     *
      * This method demonstrates the complete flow of connecting to Tapro and
      * executing a transaction. It's primarily used for testing and development
      * to verify SDK integration is working correctly.
@@ -129,15 +131,15 @@ class TaplinkDemoApplication : Application() {
 
     /**
      * Execute a test SALE transaction using new API
-     * 
+     *
      * Creates and executes a zero-amount SALE transaction for testing purposes using
      * the updated type-safe SaleRequest API. This demonstrates the proper way to:
      * - Construct SaleRequest objects with the new API structure
      * - Handle callbacks with the updated SDK interface
      * - Migrate from legacy PaymentRequest to type-safe request objects
-     * 
+     *
      * The zero amount is used to avoid actual charges during testing.
-     * 
+     *
      * API Migration: This method has been updated from PaymentRequest("SALE") + TaplinkSDK.execute()
      * to SaleRequest + TaplinkSDK.getClient().sale() for improved type safety and maintainability.
      */

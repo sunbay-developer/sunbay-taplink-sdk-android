@@ -23,13 +23,17 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
  * Provides local communication functionality, implements IServiceKernel interface
  * Supports starting and binding services via action and packageName
  *
+ * @param appId Application ID
+ * @param appSecretKey Application secret key
+ * @param taproAppWidthRatio Width ratio for TaPro application (0.0 to 1.0, optional)
+ *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 class LocalServiceKernel constructor(
     appId: String,
     appSecretKey: String,
-    private val taproAppWidth: Float? = null
+    private val taproAppWidthRatio: Float? = null
 ) : AsyncServiceKernel(appId, appSecretKey) {
 
     companion object {
@@ -38,7 +42,7 @@ class LocalServiceKernel constructor(
         // Intent extra keys
         private const val EXTRA_APP_ID = "app_id"
         private const val EXTRA_SECRET_KEY = "secret_key"
-        private const val EXTRA_TAPRO_APP_WIDTH = "tapro_app_width"
+        private const val EXTRA_TAPRO_APP_WIDTH_RATIO = "tapro_app_width_ratio"
     }
 
     override fun getTag(): String = TAG
@@ -106,9 +110,9 @@ class LocalServiceKernel constructor(
             intent.putExtra(EXTRA_APP_ID, appId)
             intent.putExtra(EXTRA_SECRET_KEY, appSecretKey)
             
-            // Add taproAppWidth if provided
-            taproAppWidth?.let {
-                intent.putExtra(EXTRA_TAPRO_APP_WIDTH, it)
+            // Add taproAppWidthRatio if provided (0.0 to 1.0)
+            taproAppWidthRatio?.let {
+                intent.putExtra(EXTRA_TAPRO_APP_WIDTH_RATIO, it)
             }
 
 
