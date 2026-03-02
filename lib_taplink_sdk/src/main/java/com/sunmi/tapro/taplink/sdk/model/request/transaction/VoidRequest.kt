@@ -24,7 +24,7 @@ data class VoidRequest(
     val description: String? = null,
     val attach: String? = null,
     val notifyUrl: String? = null,
-    val printReceipt: PrintReceipt? = PrintReceipt.NONE
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO
 ) : BaseTransactionRequest() {
 
     init {
@@ -60,7 +60,7 @@ data class VoidRequest(
         private var description: String? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
-        private var printReceipt: PrintReceipt? = PrintReceipt.NONE
+        private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         /**
          * Set original transaction ID

@@ -32,7 +32,7 @@ data class PostAuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val printReceipt: PrintReceipt? = PrintReceipt.NONE,
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
 ) : BaseTransactionRequest() {
 
     init {
@@ -72,7 +72,7 @@ data class PostAuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
-        private var printReceipt: PrintReceipt? = PrintReceipt.NONE
+        private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         /**
          * Set original pre-authorization transaction ID

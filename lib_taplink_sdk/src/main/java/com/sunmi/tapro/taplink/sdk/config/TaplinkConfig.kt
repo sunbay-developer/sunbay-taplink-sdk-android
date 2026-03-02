@@ -73,10 +73,11 @@ data class TaplinkConfig(
     val timeout: Int = 180,
 
     /**
-     * Width for TaPro application execution (optional, default: null).
-     * Specifies the width dimension for the TaPro app.
+     * Width ratio for TaPro application execution (optional, default: null).
+     * Specifies the width ratio that the TaPro app occupies on the screen.
+     * Value should be between 0.0 and 1.0 (e.g., 0.5 means 50% of screen width).
      */
-    val taproAppWidth: Float? = null
+    val taproAppWidthRatio: Float? = null
 ) {
     // ========== Required Configuration Methods ==========
 
@@ -144,12 +145,12 @@ data class TaplinkConfig(
     fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
 
     /**
-     * Sets the width for TaPro application execution.
+     * Sets the width ratio for TaPro application execution.
      *
-     * @param taproAppWidth the width dimension for the TaPro app
+     * @param taproAppWidthRatio the width ratio (0.0 to 1.0) for the TaPro app
      * @return the updated configuration instance for method chaining
      */
-    fun setTaproAppWidth(taproAppWidth: Float?): TaplinkConfig = copy(taproAppWidth = taproAppWidth)
+    fun setTaproAppWidthRatio(taproAppWidthRatio: Float?): TaplinkConfig = copy(taproAppWidthRatio = taproAppWidthRatio)
 
     companion object {
         /**

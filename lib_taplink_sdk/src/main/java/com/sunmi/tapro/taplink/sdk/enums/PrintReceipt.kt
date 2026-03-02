@@ -31,7 +31,13 @@ enum class PrintReceipt(val value: String) {
      * Both copies.
      * Both merchant and customer copies of the receipt will be printed.
      */
-    BOTH("BOTH");
+    BOTH("BOTH"),
+
+    /**
+     * Auto mode.
+     * The receipt printing behavior is automatically determined by the Tapro application.
+     */
+    AUTO("AUTO");
 
     companion object {
         /**
