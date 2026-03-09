@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
@@ -37,6 +38,7 @@ data class RefundRequest(
     // 非引用退款字段
     val referenceOrderId: String? = null,
     val paymentMethod: PaymentMethodInfo? = null,
+    val cardNetworkType: CardNetworkType? = null,
     // 通用可选字段
     val attach: String? = null,
     val notifyUrl: String? = null,
@@ -104,6 +106,7 @@ data class RefundRequest(
         private var description: String? = null
         private var originalTransactionId: String? = null
         private var originalTransactionRequestId: String? = null
+        private var cardNetworkType: CardNetworkType? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
@@ -132,6 +135,11 @@ data class RefundRequest(
 
         fun setOriginalTransactionRequestId(originalTransactionRequestId: String): ReferencedBuilder {
             this.originalTransactionRequestId = originalTransactionRequestId
+            return this
+        }
+
+        fun setCardNetworkType(cardNetworkType: CardNetworkType): ReferencedBuilder {
+            this.cardNetworkType = cardNetworkType
             return this
         }
 
@@ -166,6 +174,7 @@ data class RefundRequest(
                 description = description,
                 originalTransactionId = originalTransactionId,
                 originalTransactionRequestId = originalTransactionRequestId,
+                cardNetworkType = cardNetworkType,
                 attach = attach,
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
@@ -190,6 +199,7 @@ data class RefundRequest(
         private var description: String? = null
         private var referenceOrderId: String? = null
         private var paymentMethod: PaymentMethodInfo? = null
+        private var cardNetworkType: CardNetworkType? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
@@ -220,6 +230,11 @@ data class RefundRequest(
             return this
         }
 
+        fun setCardNetworkType(cardNetworkType: CardNetworkType): NonReferencedBuilder {
+            this.cardNetworkType = cardNetworkType
+            return this
+        }
+
         fun setAttach(attach: String): NonReferencedBuilder {
             this.attach = attach
             return this
@@ -247,6 +262,7 @@ data class RefundRequest(
                 description = description,
                 referenceOrderId = requireNotNull(referenceOrderId) { "referenceOrderId is required for non-referenced refund" },
                 paymentMethod = paymentMethod,
+                cardNetworkType = cardNetworkType,
                 attach = attach,
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,

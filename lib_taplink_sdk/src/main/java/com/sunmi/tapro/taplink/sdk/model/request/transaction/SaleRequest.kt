@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
@@ -15,6 +16,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param amount Amount information (required)
  * @param description Transaction description (optional, maximum 128 characters)
  * @param paymentMethod Payment method information (optional)
+ * @param cardNetworkType Card network type (optional, values: CREDIT, DEBIT)
  * @param attach Additional information (optional)
  * @param notifyUrl Notification URL (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
@@ -29,6 +31,7 @@ data class SaleRequest(
     val amount: AmountInfo,
     val description: String? = null,
     val paymentMethod: PaymentMethodInfo? = null,
+    val cardNetworkType: CardNetworkType? = null,
     val attach: String? = null,
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
@@ -60,6 +63,7 @@ data class SaleRequest(
         private var amount: AmountInfo? = null
         private var description: String? = null
         private var paymentMethod: PaymentMethodInfo? = null
+        private var cardNetworkType: CardNetworkType? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
@@ -103,6 +107,14 @@ data class SaleRequest(
          */
         fun setPaymentMethod(paymentMethod: PaymentMethodInfo): Builder {
             this.paymentMethod = paymentMethod
+            return this
+        }
+
+        /**
+         * Set card network type
+         */
+        fun setCardNetworkType(cardNetworkType: CardNetworkType): Builder {
+            this.cardNetworkType = cardNetworkType
             return this
         }
 
@@ -158,6 +170,7 @@ data class SaleRequest(
                 amount = requireNotNull(amount) { "amount is required" },
                 description = description,
                 paymentMethod = paymentMethod,
+                cardNetworkType = cardNetworkType,
                 attach = attach,
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
