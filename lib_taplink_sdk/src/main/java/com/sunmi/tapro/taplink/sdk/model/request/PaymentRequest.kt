@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.request
 
+import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
@@ -114,6 +115,13 @@ data class PaymentRequest(
      * Specifies preferred payment method category and ID
      */
     val paymentMethod: PaymentMethodInfo? = null,
+
+    /**
+     * Card network type (optional)
+     * Only takes effect when paymentMethod.category is CARD; when not specified, the system will automatically identify.
+     * Values: CREDIT, DEBIT
+     */
+    val cardNetworkType: CardNetworkType? = null,
 
     // ========== Staff information ==========
 
@@ -259,6 +267,12 @@ data class PaymentRequest(
      */
     fun setPaymentMethod(paymentMethod: PaymentMethodInfo): PaymentRequest = copy(paymentMethod = paymentMethod)
 
+    /**
+     * Chain call: Set card network type.
+     * Only takes effect when paymentMethod.category is CARD; when not specified, the system will automatically identify.
+     */
+    fun setCardNetworkType(cardNetworkType: CardNetworkType): PaymentRequest = copy(cardNetworkType = cardNetworkType)
+
     // ========== Chain call methods for staff information ==========
 
     /**
@@ -378,6 +392,7 @@ data class PaymentRequest(
         private var description: String? = null
         private var amount: AmountInfo? = null
         private var paymentMethod: PaymentMethodInfo? = null
+        private var cardNetworkType: CardNetworkType? = null
         private var staffInfo: StaffInfo? = null
         private var deviceInfo: DeviceInfo? = null
         private var goodsDetail: List<GoodsDetail>? = null
@@ -405,6 +420,11 @@ data class PaymentRequest(
         fun setDescription(description: String) = apply { this.description = description }
         fun setAmount(amount: AmountInfo) = apply { this.amount = amount }
         fun setPaymentMethod(paymentMethod: PaymentMethodInfo) = apply { this.paymentMethod = paymentMethod }
+        /**
+         * Set card network type.
+         * Only takes effect when paymentMethod.category is CARD; when not specified, the system will automatically identify.
+         */
+        fun setCardNetworkType(cardNetworkType: CardNetworkType) = apply { this.cardNetworkType = cardNetworkType }
         fun setStaffInfo(staffInfo: StaffInfo) = apply { this.staffInfo = staffInfo }
         fun setDeviceInfo(deviceInfo: DeviceInfo) = apply { this.deviceInfo = deviceInfo }
         fun setGoodsDetail(goodsDetail: List<GoodsDetail>) = apply { this.goodsDetail = goodsDetail }
@@ -435,6 +455,7 @@ data class PaymentRequest(
                 description = description,
                 amount = amount,
                 paymentMethod = paymentMethod,
+                cardNetworkType = cardNetworkType,
                 staffInfo = staffInfo,
                 deviceInfo = deviceInfo,
                 goodsDetail = goodsDetail,
