@@ -15,6 +15,8 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
 
 - **Complete Payment Functions**
   - Support for various transaction types (Sale, Refund, Void, Auth, etc.)
+  - Card network routing: specify CREDIT or DEBIT for card payment routing (auto-detection when not specified)
+  - Receipt print control: specify NONE, MERCHANT, CUSTOMER, BOTH, or AUTO (determined by Tapro app when not specified)
   - Synchronous and asynchronous calling methods
   - Comprehensive transaction query functionality
 
@@ -126,6 +128,7 @@ private fun processPayment() {
         .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
         .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setAmount(amount)
+        .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
         .setDescription("Product Purchase")
         .build()
     
@@ -219,7 +222,7 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 
 ### Sale Transaction
 
-The most common payment transaction type.
+The most common payment transaction type. For card payments, specify `paymentMethod` as `PaymentCategory.CARD`.
 
 ```kotlin
 val client = TaplinkSDK.getClient()
@@ -232,6 +235,7 @@ val request = SaleRequest.builder()
     .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
     .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setAmount(amount)
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
     .setDescription("Product Purchase")
     .build()
 
@@ -240,7 +244,7 @@ client.sale(request, paymentCallback)
 
 ### Refund Transaction
 
-Supports full and partial refunds.
+Supports full and partial refunds. For card refunds, specify `paymentMethod` as `PaymentCategory.CARD`.
 
 **Referenced Refund** (with original transaction ID):
 
@@ -253,6 +257,7 @@ val request = RefundRequest.referencedBuilder()
     .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("TXN20231119001")
     .setAmount(amount)
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
     .setDescription("Product Return")
     .build()
 
@@ -270,6 +275,7 @@ val request = RefundRequest.nonReferencedBuilder()
     .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setReferenceOrderId("REFUND_${System.currentTimeMillis()}")
     .setAmount(amount)
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
     .setDescription("Offline Refund")
     .build()
 
@@ -515,6 +521,7 @@ val saleRequest = SaleRequest.builder()
     .setReferenceOrderId(orderId)           // Same
     .setTransactionRequestId("TXN001_SALE") // Different
     .setAmount(amount)
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
     .build()
 
 // Refund transaction (same order)
@@ -522,6 +529,7 @@ val refundRequest = RefundRequest.referencedBuilder()
     .setTransactionRequestId("TXN001_REFUND")  // Different
     .setOriginalTransactionId(originalTxnId)   // Reference original transaction
     .setAmount(refundAmount)
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
     .build()
 ```
 
