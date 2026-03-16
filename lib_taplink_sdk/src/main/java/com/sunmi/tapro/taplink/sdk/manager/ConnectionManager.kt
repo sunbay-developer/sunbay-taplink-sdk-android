@@ -6,22 +6,15 @@ import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
-import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
-import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolConfigResolver
-import com.sunmi.tapro.taplink.sdk.protocol.ProtocolRequestBuilder
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
-import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback as ServiceConnectionCallback
-import com.google.gson.Gson
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.lan.LanClientKernel
-import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
-import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 
 /**
  * Connection management class
@@ -30,7 +23,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
  * - Connection establishment and teardown
  * - Reconnection management
  * - Connection status tracking
- * - INIT command handling
+ * - Device info (updated by PaymentManager when INIT succeeds)
  *
  * @author TaPro Team
  * @since 2025-12-22
@@ -99,11 +92,6 @@ class ConnectionManager(
     private var connectionDisconnectedListener: (() -> Unit)? = null
 
     /**
-     * Gson instance for JSON serialization
-     */
-    private val gson = Gson()
-
-    /**
      * Data receiver callback
      */
     private var dataReceiver: ((ByteArray) -> Unit)? = null
@@ -113,20 +101,6 @@ class ConnectionManager(
      * Used when user calls connect() while connection is already in progress
      */
     private val pendingConnectionListeners = mutableListOf<ConnectionListener>()
-
-    /**
-     * Callback manager for managing INIT command callbacks
-     */
-    private val callbackManager =
-        com.sunmi.tapro.taplink.communication.util.LocalCallbackManager<InnerCallback?>(
-            defaultTimeoutMillis = 60 * 1000L, // 60 seconds default timeout
-            tag = TAG
-        )
-
-    /**
-     * Response processor for handling INIT command responses
-     */
-    private val responseProcessor = ResponseProcessor()
 
     init {
         LogUtil.d(TAG, "ConnectionManager initialized")
@@ -216,8 +190,7 @@ class ConnectionManager(
      * Internal connection method
      */
     private fun connectInternal(config: ConnectionConfig?, listener: ConnectionListener) {
-        // Save config temporarily for later use in INIT callback
-        // We'll set currentConnectionConfig only after successful INIT
+        // Save config for connection state tracking
         val connectionConfig = config
 
         // Set connection status immediately to prevent concurrent connections
@@ -284,71 +257,19 @@ class ConnectionManager(
                     // Register data receiver
                     registerDataReceiver()
 
-                    // Send INIT command to initialize tapro application
-                    // Note: If INIT fails, we need to disconnect WebSocket to ensure state consistency
-                    sendInitCommand { success, errorCode, errorMsg, deviceId, taproVersion ->
-                        if (success) {
-                            // Get device info from INIT response
-                            connectedDeviceId = deviceId ?: "unknown"
-                            connectedTaproVersion = taproVersion ?: "unknown"
+                    // Physical connection established. INIT is deferred to first transaction execution.
+                    connectedDeviceId = "unknown"
+                    connectedTaproVersion = "unknown"
+                    currentConnectionConfig = connectionConfig
 
-                            // Save current connection config after successful INIT
-                            currentConnectionConfig = connectionConfig
+                    LogUtil.d(TAG, "Physical connection established, INIT will be performed on first transaction")
 
-                            // Save connection info after successful INIT (including correct deviceId)
-                            reconnectManager?.onConnected(connectedDeviceId, connectedTaproVersion)
-                            updateConnectionStatus(
-                                ConnectionStatus.CONNECTED,
-                                deviceId = connectedDeviceId,
-                                taproVersion = connectedTaproVersion,
-                                listener = listener
-                            )
-
-                            // Listener already set in onConnected, no need to set again
-                        } else {
-                            val error = ConnectionError(
-                                errorCode ?: InnerErrorCode.E305.code,
-                                errorMsg ?: InnerErrorCode.E305.description
-                            )
-
-                            LogUtil.w(TAG, "INIT command failed, disconnecting WebSocket connection to ensure state consistency")
-
-                            // When INIT fails, need to disconnect WebSocket to ensure state consistency
-                            // Because WebSocket may be connected, but business layer connection failed
-                            val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
-                            if (kernel != null) {
-                                val kernelStatus = kernel.getConnectionStatus()
-                                if (kernelStatus == InnerConnectionStatus.CONNECTED ||
-                                    kernelStatus == InnerConnectionStatus.CONNECTING
-                                ) {
-                                    LogUtil.d(TAG, "Disconnecting kernel connection due to INIT failure")
-                                    try {
-                                        kernel.disconnect()
-                                    } catch (e: Exception) {
-                                        LogUtil.e(TAG, "Error disconnecting kernel after INIT failure: ${e.message}")
-                                    }
-                                }
-                            }
-
-                            // Sync status (ensure ConnectionManager and Kernel status are consistent)
-                            syncStatusFromKernel()
-
-                            // Notify pending reconnection listeners
-                            reconnectManager?.notifyPendingListenersError(error)
-
-                            updateConnectionStatus(
-                                ConnectionStatus.ERROR,
-                                null,
-                                null,
-                                error,
-                                null,
-                                listener
-                            )
-
-                            // Sync status again to ensure consistency after disconnect
-                            syncStatusFromKernel()
-                        }
-                    }
+                    updateConnectionStatus(
+                        ConnectionStatus.CONNECTED,
+                        deviceId = "unknown",
+                        taproVersion = "unknown",
+                        listener = listener
+                    )
                 }
 
                 override fun onWaitingConnect() {
@@ -496,6 +417,20 @@ class ConnectionManager(
     }
 
     /**
+     * Update device info when INIT succeeds.
+     * Called by PaymentManager when INIT command completes successfully.
+     *
+     * @param deviceId Device ID from INIT response
+     * @param taproVersion Tapro version from INIT response
+     */
+    fun updateDeviceInfo(deviceId: String, taproVersion: String) {
+        connectedDeviceId = deviceId
+        connectedTaproVersion = taproVersion
+        reconnectManager?.onConnected(deviceId, taproVersion)
+        LogUtil.d(TAG, "Device info updated: deviceId=$deviceId, taproVersion=$taproVersion")
+    }
+
+    /**
      * Check if connection is in progress (connecting or reconnecting)
      */
     fun isConnecting(): Boolean {
@@ -566,24 +501,6 @@ class ConnectionManager(
     }
 
     /**
-     * Process received response data for INIT commands
-     */
-    private fun processReceivedResponse(responseJson: String) {
-        try {
-            if (responseJson.isBlank()) {
-                return
-            }
-
-            LogUtil.d(TAG, "Processing received response: $responseJson")
-
-            // Use ResponseProcessor to handle the response
-            responseProcessor.processResponse(responseJson, callbackManager)
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to process received response: ${e.message}")
-        }
-    }
-
-    /**
      * Create default connection configuration based on TaplinkConfig connection mode
      */
     private fun createDefaultConnectionConfig(): ConnectionConfig {
@@ -591,139 +508,6 @@ class ConnectionManager(
         // The SDK will auto-detect the connection mode
         LogUtil.d(TAG, "Creating default connection config with auto-detection")
         return ConnectionConfig.createDefault()
-    }
-
-    /**
-     * Send INIT command to initialize tapro application
-     */
-    private fun sendInitCommand(onComplete: (Boolean, String?, String?, String?, String?) -> Unit) {
-        try {
-            LogUtil.d(TAG, "Sending INIT command to initialize tapro application")
-
-            // Build INIT request
-            val initRequest = PaymentRequest(
-                action = TransactionAction.INIT.value
-            )
-
-            // Convert PaymentRequest to BasicRequest
-            val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
-                request = initRequest,
-                version = config.version,
-                config.appId,
-                secretKey = config.secretKey
-            )
-
-            // Convert BasicRequest to JSON string
-            val requestJson = gson.toJson(basicRequest)
-            LogUtil.d(TAG, "INIT command prepared: traceId=${basicRequest.traceId}")
-
-            // Create internal callback for receiving INIT response
-            val initCallback = object : InnerCallback {
-                override fun onError(code: String, msg: String) {
-                    LogUtil.e(TAG, "INIT command failed: code=$code, msg=$msg")
-
-                    // When INIT times out or fails, need to disconnect WebSocket to ensure state consistency
-                    LogUtil.w(TAG, "INIT command error/timeout, disconnecting WebSocket connection to ensure state consistency")
-                    val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
-                    if (kernel != null) {
-                        val kernelStatus = kernel.getConnectionStatus()
-                        if (kernelStatus == InnerConnectionStatus.CONNECTED ||
-                            kernelStatus == InnerConnectionStatus.CONNECTING
-                        ) {
-                            LogUtil.d(TAG, "Disconnecting kernel connection due to INIT error/timeout")
-                            try {
-                                kernel.disconnect()
-                            } catch (e: Exception) {
-                                LogUtil.e(TAG, "Error disconnecting kernel after INIT error: ${e.message}")
-                            }
-                        }
-                    }
-
-                    onComplete(false, code, msg, null, null)
-                }
-
-                override fun onResponse(responseData: String) {
-                    LogUtil.d(TAG, "INIT command response received: $responseData")
-                    try {
-                        // Parse response to determine success
-                        val basicResponse =
-                            gson.fromJson(responseData, com.sunmi.tapro.taplink.sdk.model.base.BasicResponse::class.java)
-
-                        // Parse device info directly from bizData
-                        var code = "ERROR"
-                        var message: String? = basicResponse.event.eventMsg
-                        var deviceId: String? = null
-                        var taproVersion: String? = null
-                        var transactionResultCode: String? = null
-
-                        if (basicResponse.bizData != null) {
-                            try {
-                                val bizDataJson = gson.fromJson(basicResponse.bizData, com.google.gson.JsonObject::class.java)
-                                code = bizDataJson.get("code")?.asString ?: "ERROR"
-                                message = bizDataJson.get("message")?.asString
-                                deviceId = bizDataJson.get("deviceId")?.asString
-                                taproVersion = bizDataJson.get("taproVersion")?.asString
-                                transactionResultCode = bizDataJson.get("transactionResultCode")?.asString
-                            } catch (e: Exception) {
-                                LogUtil.w(TAG, "Failed to parse bizData as JSON: ${e.message}")
-                            }
-                        }
-
-                        // Determine success
-                        if ((code == ResponseProcessor.SUCCESS_CODE || code == "0" || code == "000") &&
-                            basicResponse.event is PaymentEvent.Completed
-                        ) {
-                            LogUtil.d(TAG, "INIT command completed successfully")
-                            LogUtil.d(TAG, "Device info: deviceId=$deviceId, taproVersion=$taproVersion")
-                            onComplete(true, null, null, deviceId, taproVersion)
-                        } else {
-                            LogUtil.e(TAG, "INIT command failed: code=$code, message=$message")
-                            onComplete(false, code, message, null, null)
-                        }
-                    } catch (e: Exception) {
-                        LogUtil.e(TAG, "Failed to parse INIT response: ${e.message}")
-                        onComplete(false, "PARSE_ERROR", "Failed to parse INIT response: ${e.message}", null, null)
-                    }
-                }
-            }
-
-            // Add callback to callbackManager BEFORE sending
-            val added = callbackManager.addInitCallback(
-                basicRequest.traceId, initCallback,
-                app2app =
-                    getConnectionMode() == ConnectionMode.APP_TO_APP.name,
-                initRequest.requestTimeout
-            )
-            if (!added) {
-                LogUtil.w(TAG, "Failed to add INIT callback to manager, but continuing...")
-            }
-            LogUtil.d(TAG, "INIT callback registered with traceId: ${basicRequest.traceId}")
-
-            // Send INIT command
-            val serviceKernel = TaplinkServiceKernel.getInstance()
-            if (serviceKernel == null) {
-                LogUtil.e(TAG, "Service kernel not available")
-                callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                onComplete(false, "SERVICE_UNAVAILABLE", "Service kernel not available", null, null)
-                return
-            }
-
-            try {
-                serviceKernel.sendData(
-                    basicRequest.traceId,
-                    requestJson.toByteArray(Charsets.UTF_8),
-                    initCallback // This callback is now managed by callbackManager
-                )
-                LogUtil.d(TAG, "INIT command sent successfully")
-            } catch (e: Exception) {
-                LogUtil.e(TAG, "Failed to send INIT command: ${e.message}")
-                callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                onComplete(false, "SEND_ERROR", "Failed to send INIT command: ${e.message}", null, null)
-            }
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to prepare INIT command: ${e.message}")
-            onComplete(false, "PREPARE_ERROR", "Failed to prepare INIT command: ${e.message}", null, null)
-        }
     }
 
     /**
@@ -736,10 +520,7 @@ class ConnectionManager(
                     val responseJson = String(data, Charsets.UTF_8)
                     LogUtil.d(TAG, "Received data: $responseJson")
 
-                    // First try to process as INIT command response
-                    processReceivedResponse(responseJson)
-
-                    // Also forward to PaymentManager's data receiver if set
+                    // Forward to PaymentManager for processing (INIT and transaction responses)
                     dataReceiver?.invoke(data)
                 }
             } catch (e: Exception) {
