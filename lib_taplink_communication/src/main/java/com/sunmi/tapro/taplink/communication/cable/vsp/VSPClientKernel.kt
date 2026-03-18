@@ -431,9 +431,10 @@ class VSPClientKernel(
                     LogUtil.e(TAG, "Unexpected error in VSP client receive loop: ${e.message}")
                     
                     if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
-                        updateStatus(InnerConnectionStatus.ERROR)
+                        handleConnectionError()
                     }
                     break
+
                 }
             }
             
@@ -449,6 +450,10 @@ class VSPClientKernel(
         
         if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
             updateStatus(InnerConnectionStatus.ERROR)
+            notifyConnectionDisconnected(
+                InnerErrorCode.E232.code,
+                "VSP client connection error"
+            )
         }
     }
 

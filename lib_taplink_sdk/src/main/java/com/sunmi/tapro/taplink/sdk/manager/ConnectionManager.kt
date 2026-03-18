@@ -6,7 +6,9 @@ import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
+import com.sunmi.tapro.taplink.sdk.persistence.ConnectionPersistence
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolConfigResolver
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
@@ -66,6 +68,11 @@ class ConnectionManager(
      * Reconnect manager
      */
     private var reconnectManager: ReconnectManager? = null
+
+    /**
+     * Connection persistence for saving successful cable protocol
+     */
+    private val connectionPersistence = ConnectionPersistence(context)
 
     /**
      * Payment manager reference (optional, set after initialization)
@@ -212,7 +219,17 @@ class ConnectionManager(
             return
         }
 
-        // Build protocol string based on ConnectionConfig
+        // Cable AUTO mode: try connect in protocol order (AOA -> VSP -> RS232) for more accurate detection
+        val protocolsToTry = ProtocolConfigResolver.getCableProtocolsToTry(
+            config,
+            reconnectManager?.getContext()
+        )
+        if (!protocolsToTry.isNullOrEmpty()) {
+            tryConnectWithProtocolList(protocolsToTry, connectionConfig, listener)
+            return
+        }
+
+        // Build protocol string based on ConnectionConfig (single protocol)
         val (protocol, connectionMode) = ProtocolConfigResolver.buildProtocol(
             config,
             reconnectManager?.getContext()
@@ -342,6 +359,136 @@ class ConnectionManager(
                     syncStatusFromKernel()
                 }
             })
+    }
+
+    /**
+     * Try connect with cable protocols in order (AOA -> VSP -> RS232).
+     * More accurate than device detection - uses actual connection attempt.
+     */
+    private fun tryConnectWithProtocolList(
+        protocols: List<Pair<String, String>>,
+        connectionConfig: ConnectionConfig?,
+        listener: ConnectionListener
+    ) {
+        if (protocols.isEmpty()) {
+            updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
+            listener.onError(
+                ConnectionError(
+                    InnerErrorCode.E302.code,
+                    "${InnerErrorCode.E302.description}: No cable protocols to try"
+                )
+            )
+            return
+        }
+
+        clearServiceAddressChangeListener()
+        validateStatusConsistency()
+
+        val serviceKernel = TaplinkServiceKernel.getInstance() ?: run {
+            updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
+            listener.onError(
+                ConnectionError(InnerErrorCode.E201.code, InnerErrorCode.E201.description)
+            )
+            return
+        }
+
+        var tryIndex = 0
+
+        fun tryNextProtocol() {
+            if (tryIndex >= protocols.size) {
+                LogUtil.w(TAG, "All cable protocols failed: AOA, VSP, RS232")
+                updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
+                listener.onError(
+                    ConnectionError(
+                        InnerErrorCode.E214.code,
+                        "Cable connection failed: tried AOA, VSP, RS232 - none succeeded"
+                    )
+                )
+                return
+            }
+
+            val (protocol, connectionMode) = protocols[tryIndex]
+            currentConnectionMode = connectionMode
+            LogUtil.d(TAG, "Trying cable protocol ${tryIndex + 1}/${protocols.size}: $connectionMode")
+
+            if (!ProtocolManager.isValidProtocol(protocol)) {
+                LogUtil.w(TAG, "Invalid protocol for $connectionMode, trying next")
+                tryIndex++
+                tryNextProtocol()
+                return
+            }
+
+            serviceKernel.connect(
+                protocol,
+                this.config.appId,
+                this.config.secretKey,
+                this.config.taproAppWidthRatio,
+                object : ServiceConnectionCallback {
+                    override fun onConnected(extraInfoMap: Map<String, String?>?) {
+                        val (_, mode) = protocols[tryIndex]
+                        LogUtil.d(TAG, "Cable connection succeeded with $mode")
+
+                        // Save successful protocol for future reconnects
+                        runCatching {
+                            CableProtocol.valueOf(mode)
+                        }.onSuccess { cableProtocol ->
+                            connectionPersistence.saveDetectedCableProtocol(cableProtocol, null)
+                        }
+
+                        syncStatusFromKernel()
+                        registerDataReceiver()
+
+                        connectedDeviceId = "unknown"
+                        connectedTaproVersion = "unknown"
+                        currentConnectionConfig = connectionConfig
+
+                        updateConnectionStatus(
+                            ConnectionStatus.CONNECTED,
+                            deviceId = "unknown",
+                            taproVersion = "unknown",
+                            listener = listener
+                        )
+                    }
+
+                    override fun onWaitingConnect() {
+                        setupServiceAddressChangeListener()
+                        setupKernelStatusListener()
+                        updateConnectionStatus(
+                            ConnectionStatus.WAIT_CONNECTING,
+                            reason = "Waiting for connection ($connectionMode)",
+                            listener = listener
+                        )
+                    }
+
+                    override fun onDisconnected(code: String, msg: String) {
+                        val isConnectionError = isConnectionError(code, msg)
+                        LogUtil.d(TAG, "Cable $connectionMode failed: code=$code, msg=$msg, isConnectionError=$isConnectionError")
+
+                        if (isConnectionError && tryIndex < protocols.size - 1) {
+                            tryIndex++
+                            tryNextProtocol()
+                        } else {
+                            if (isConnectionError) {
+                                paymentManager?.failAllPendingTransactions(code, msg)
+                            }
+                            val connectionError = ConnectionError(code, msg)
+                            updateConnectionStatus(
+                                ConnectionStatus.ERROR,
+                                errorCode = connectionError,
+                                listener = listener
+                            )
+                            connectedDeviceId = null
+                            connectedTaproVersion = null
+                            currentConnectionMode = null
+                            currentConnectionConfig = null
+                        }
+                        syncStatusFromKernel()
+                    }
+                }
+            )
+        }
+
+        tryNextProtocol()
     }
 
     /**
