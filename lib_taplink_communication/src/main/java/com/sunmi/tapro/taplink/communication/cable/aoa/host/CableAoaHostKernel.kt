@@ -28,6 +28,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.CountDownLatch
 
@@ -121,6 +122,11 @@ class CableAoaHostKernel(
     private var pendingPermissionDevice: UsbDevice? = null
 
     // ============ AOA Device Wait Mechanism ============
+
+    /** Timeout for waiting AOA device after sending switch protocol (ms). Shorter = faster fallback to VSP/RS232. */
+    private companion object {
+        const val AOA_SWITCH_TIMEOUT_MS = 8000L
+    }
 
     @Volatile
     private var aoaDeviceLatch: CountDownLatch? = null
@@ -386,9 +392,13 @@ class CableAoaHostKernel(
             LogUtil.i(TAG, "AOA protocol sent, waiting for device to switch")
 
             // 4. Wait for AOA device to appear
-            val aoaDevice = waitForAoaDevice(timeout = 15000)
+            val aoaDevice = waitForAoaDevice(timeout = AOA_SWITCH_TIMEOUT_MS)
             if (aoaDevice == null) {
-                handleConnectionError("AOA device not found after switch (timeout 15s)", callback, InnerErrorCode.E212.code)
+                handleConnectionError(
+                    "AOA device not found after switch (timeout ${AOA_SWITCH_TIMEOUT_MS / 1000}s), will try next protocol",
+                    callback,
+                    InnerErrorCode.E212.code
+                )
                 return
             }
 
@@ -720,14 +730,16 @@ class CableAoaHostKernel(
 
         LogUtil.i(TAG, "Waiting for AOA device to appear (timeout: ${timeout}ms)...")
 
-        // Wait for device to appear
+        // Wait for device to appear. runInterruptible makes blocking await() respond to coroutine cancellation (timeout).
         val appeared = withTimeoutOrNull(timeout) {
-            aoaDeviceLatch?.await()
+            runInterruptible(Dispatchers.IO) {
+                aoaDeviceLatch?.await()
+            }
             true
         }
 
         if (appeared != true) {
-            LogUtil.w(TAG, "Timeout waiting for AOA device")
+            LogUtil.w(TAG, "Timeout waiting for AOA device (${timeout}ms) - device did not switch to AOA mode, will try next protocol")
             return null
         }
 
