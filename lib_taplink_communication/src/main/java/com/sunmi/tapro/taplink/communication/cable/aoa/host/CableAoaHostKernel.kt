@@ -770,8 +770,9 @@ class CableAoaHostKernel(
             return aoaDevice
         }
 
-        // Otherwise return first device
-        return devices.values.firstOrNull()
+        // Prefer Sunmi device, otherwise return first device
+        return devices.values.firstOrNull { "Sunmi".equals(it.manufacturerName, ignoreCase = true) }
+            ?: devices.values.firstOrNull()
     }
 
     /**
@@ -1085,7 +1086,7 @@ class CableAoaHostKernel(
                 "0x%04X",
                 device.productId
             )
-        })"
+        },${device.manufacturerName})"
     }
 
     /**
