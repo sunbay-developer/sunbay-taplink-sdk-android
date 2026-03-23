@@ -85,9 +85,9 @@ open class SerialServiceKernel(
     private var targetDeviceName: String? = null
     private var portNum: Int = 0
 
-    // Permission management
+    /** Must match PendingIntent intent action and IntentFilter (Android USB permission pattern). */
     private val permissionAction = "com.sunmi.tapro.taplink.serial.USB_PERMISSION"
-    private val permissionPendingIntent: PendingIntent = createPermissionPendingIntent()
+
     private var pendingDevice: UsbDevice? = null
     private var isReceiverRegistered: Boolean = false
 
@@ -116,7 +116,6 @@ open class SerialServiceKernel(
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             LogUtil.d(TAG, "USB permission broadcast received: ${intent.action}")
-
             if (permissionAction == intent.action) {
                 // Cancel timeout task
                 permissionTimeoutJob?.cancel()
@@ -159,6 +158,9 @@ open class SerialServiceKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
+        // After disconnect, kernel may be reused; cleanup unregisters USB permission receiver — re-register each connect
+        registerPermissionReceiver()
+
         val serialProtocol = parseResult as ProtocolParseResult.SerialProtocol
 
         // Parse protocol parameters
@@ -453,7 +455,7 @@ open class SerialServiceKernel(
         pendingDevice = device
 
         try {
-            usbManager.requestPermission(device, permissionPendingIntent)
+            usbManager.requestPermission(device, createUsbPermissionPendingIntent(device))
 
             // Start timeout task
             permissionTimeoutJob = scope.launch {
@@ -706,20 +708,17 @@ open class SerialServiceKernel(
         }
     }
 
-    /**
-     * Create permission request PendingIntent
-     */
-    private fun createPermissionPendingIntent(): PendingIntent {
+    /** Action must match [permissionAction] and [IntentFilter] in [registerPermissionReceiver]. */
+    private fun createUsbPermissionPendingIntent(device: UsbDevice): PendingIntent {
+        val requestCode = device.deviceName.hashCode() and 0x7FFFFFFF
         val intent = Intent(permissionAction).apply {
             setPackage(context.packageName)
         }
-
         var flags = PendingIntent.FLAG_UPDATE_CURRENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             flags = flags or PendingIntent.FLAG_MUTABLE
         }
-
-        return PendingIntent.getBroadcast(context, 0, intent, flags)
+        return PendingIntent.getBroadcast(context, requestCode, intent, flags)
     }
 
     /**
