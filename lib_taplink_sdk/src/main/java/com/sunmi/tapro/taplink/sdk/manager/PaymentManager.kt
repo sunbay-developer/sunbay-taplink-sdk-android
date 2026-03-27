@@ -74,6 +74,12 @@ class PaymentManager(
     private var isInitInProgress = false
 
     /**
+     * traceId of INIT registered in [callbackManager]; removed on disconnect so a stale INIT
+     * cannot finish after reconnect and so [isInitInProgress] / [initComplete] stay consistent.
+     */
+    private var pendingInitTraceId: String? = null
+
+    /**
      * Pending transaction waiting for connection (only one at a time)
      * Used when connection is in progress but no auto-connect transaction is pending
      */
@@ -97,17 +103,36 @@ class PaymentManager(
             handlePendingTransactionError(error)
         }
 
-        // Set up connection disconnected listener to clear flags when disconnected
+        // Physical disconnect: must treat app as uninitialized; drop in-flight INIT listener
+        // so the next transaction runs INIT again instead of hitting E307 or skipping INIT.
         connectionManager.setConnectionDisconnectedListener {
-            if (hasPendingAutoConnectTransaction) {
-                LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
-                hasPendingAutoConnectTransaction = false
+            onPhysicalDisconnected()
+        }
+    }
+
+    /**
+     * Reset INIT state after transport disconnect. INIT is per-session; reconnect always needs a new INIT.
+     */
+    private fun onPhysicalDisconnected() {
+        if (hasPendingAutoConnectTransaction) {
+            LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
+            hasPendingAutoConnectTransaction = false
+        }
+        initComplete = false
+        if (isInitInProgress) {
+            val traceId = pendingInitTraceId
+            pendingInitTraceId = null
+            isInitInProgress = false
+            if (!traceId.isNullOrBlank()) {
+                val cb = callbackManager.getAndRemoveCallbackByTraceId(traceId)
+                try {
+                    cb?.onError(InnerErrorCode.E213.code, InnerErrorCode.E213.description)
+                } catch (e: Exception) {
+                    LogUtil.e(TAG, "Error notifying aborted INIT: ${e.message}")
+                }
             }
-            if (isInitInProgress) {
-                LogUtil.w(TAG, "Connection disconnected, clearing init-in-progress flag")
-                isInitInProgress = false
-            }
-            initComplete = false
+        } else {
+            pendingInitTraceId = null
         }
     }
 
@@ -482,8 +507,10 @@ class PaymentManager(
      */
     fun failAllPendingTransactions(errorCode: String, errorMessage: String) {
         LogUtil.w(TAG, "Failing all pending transactions: $errorCode - $errorMessage")
-        // Clear auto-connect flag when connection is lost
         hasPendingAutoConnectTransaction = false
+        isInitInProgress = false
+        initComplete = false
+        pendingInitTraceId = null
         callbackManager.failAllCallbacks(errorCode, errorMessage)
     }
 
@@ -526,12 +553,11 @@ class PaymentManager(
             }
 
             override fun onDisconnected(reason: String) {
-                // Clear flag if auto-connect was interrupted
                 if (hasPendingAutoConnectTransaction) {
                     LogUtil.w(TAG, "Auto-connect disconnected: $reason")
                     hasPendingAutoConnectTransaction = false
-                    connectionManager.updateConnectionStatus(ConnectionStatus.DISCONNECTED)
-                    // Notify callback of disconnection
+                    // Do not call updateConnectionStatus(DISCONNECTED) without reason — it used to skip
+                    // connectionDisconnectedListener and left INIT state inconsistent.
                     callback.onFailure(
                         errorCode = InnerErrorCode.E213,
                         transactionRequestId = request.transactionRequestId
@@ -639,6 +665,7 @@ class PaymentManager(
             val initCallback = object : InnerCallback {
                 override fun onError(code: String, msg: String) {
                     LogUtil.e(TAG, "INIT command failed: code=$code, msg=$msg")
+                    pendingInitTraceId = null
                     onComplete(false, code, msg, null, null)
                 }
 
@@ -673,13 +700,16 @@ class PaymentManager(
                             basicResponse.event is PaymentEvent.Completed
                         ) {
                             LogUtil.d(TAG, "INIT command completed successfully")
+                            pendingInitTraceId = null
                             onComplete(true, null, null, deviceId, taproVersion)
                         } else {
                             LogUtil.e(TAG, "INIT command failed: code=$code, message=$message")
+                            pendingInitTraceId = null
                             onComplete(false, code, message, null, null)
                         }
                     } catch (e: Exception) {
                         LogUtil.e(TAG, "Failed to parse INIT response: ${e.message}")
+                        pendingInitTraceId = null
                         onComplete(false, "PARSE_ERROR", "Failed to parse INIT response: ${e.message}", null, null)
                     }
                 }
@@ -697,9 +727,12 @@ class PaymentManager(
                 return
             }
 
+            pendingInitTraceId = basicRequest.traceId
+
             val serviceKernel = TaplinkServiceKernel.getInstance()
             if (serviceKernel == null) {
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
+                pendingInitTraceId = null
                 onComplete(false, "SERVICE_UNAVAILABLE", "Service kernel not available", null, null)
                 return
             }
@@ -714,6 +747,7 @@ class PaymentManager(
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to send INIT command: ${e.message}")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
+                pendingInitTraceId = null
                 onComplete(false, "SEND_ERROR", "Failed to send INIT command: ${e.message}", null, null)
             }
         } catch (e: Exception) {

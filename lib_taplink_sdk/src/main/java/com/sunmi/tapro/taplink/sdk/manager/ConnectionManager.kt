@@ -742,12 +742,12 @@ class ConnectionManager(
             }
 
             ConnectionStatus.DISCONNECTED -> {
-                reason?.let {
-                    // Notify connection disconnected listener (for PaymentManager to clear auto-connect flag)
-                    connectionDisconnectedListener?.invoke()
-                    listener?.onDisconnected(it)
-                    connectionListener?.onDisconnected(it)
-                }
+                // Always notify PaymentManager: reason was optional and DISCONNECTED without reason
+                // skipped the listener, leaving INIT flags stale after link drop / mode switch.
+                connectionDisconnectedListener?.invoke()
+                val disconnectionReason = reason ?: "Disconnected"
+                listener?.onDisconnected(disconnectionReason)
+                connectionListener?.onDisconnected(disconnectionReason)
             }
 
             else -> {
