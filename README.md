@@ -1,6 +1,6 @@
 # Taplink SDK for Android
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
+[![Version](https://img.shields.io/badge/version-1.0.7.19-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
 [![Min SDK](https://img.shields.io/badge/minSdk-25-green.svg)](https://developer.android.com/about/versions/android-7.1)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.7.10-purple.svg)](https://kotlinlang.org/)
 
@@ -95,9 +95,8 @@ class MainActivity : AppCompatActivity() {
             }
             
             override fun onDisconnected(reason: String) {
-                // Connection failed
-                Toast.makeText(this@MainActivity, 
-                    "Connection failed: $reason", 
+                Toast.makeText(this@MainActivity,
+                    "Disconnected: $reason",
                     Toast.LENGTH_SHORT).show()
             }
             
@@ -158,6 +157,8 @@ private fun processPayment() {
 
 That's it! You've completed the basic integration in just 3 steps.
 
+**Session `INIT`:** After a physical connection is established, the SDK runs **INIT** with Tapro on the **first payment operation** (not necessarily inside `onConnected`). If the transport drops, INIT state is cleared and the next transaction performs INIT again—avoid assuming INIT remains valid across disconnect/reconnect.
+
 ## Connection Modes
 
 ### App-to-App Mode
@@ -191,7 +192,14 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 **Supported Protocols:**
 - USB AOA (Android Open Accessory 2.0)
 - USB-VSP (USB Virtual Serial Port)
-- RS232 (Standard serial communication)
+- RS232 (USB serial adapter, hex-framed payload)
+
+**Cable `AUTO` detection:** The SDK tries cable transports in order **AOA → VSP → RS232** until one succeeds (more reliable than guessing from device metadata alone).
+
+**RS232 link behavior (summary):**
+- Opening the USB serial port is not enough for `onConnected`: the stack waits for **peer liveness** via lightweight markers `##TAPLINK_HSK_REQ##` / `##TAPLINK_HSK_ACK##`, or **application payload** (hex-framed business data) after markers are stripped from the byte stream.
+- While connected, periodic REQ and a **peer silence** watchdog (default **5 seconds** without handshake or payload after peer activity; adjust `RS232_HSK_PEER_SILENCE_MS` in `SerialServiceKernel` if you maintain a fork) help detect a dead or unplugged far end. USB attach checks and I/O errors complement this.
+- Ensure the host app has **USB host** support and grants **USB permission** when the system prompts; RS232 uses standard Android USB serial probing (e.g. FTDI, CH340, PL2303).
 
 ### LAN Mode
 
@@ -697,9 +705,9 @@ client.query(request: QueryRequest, callback: PaymentCallback)
 
 ## Version Information
 
-- **Current Version**: 1.0.1
-- **Version Code**: 2
-- **Release Date**: 2025-01
+- **Current Version**: 1.0.7.19 (see `lib_taplink_sdk/build.gradle.kts` → `SdkVersion.NAME`)
+- **Version Code**: 6 (`SdkVersion.CODE`)
+- **Release Date**: see project tags / release notes
 
 ## Technical Stack
 
