@@ -11,7 +11,7 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
  * Protocol Config Resolver
  *
  * Responsible for parsing and selecting appropriate protocol based on ConnectionConfig.
- * Cable AUTO mode uses try-order (AOA -> VSP -> RS232) in ConnectionManager, not detection.
+ * Cable AUTO mode uses try-order (VSP -> RS232 -> AOA) in ConnectionManager, not detection.
  *
  * @author TaPro Team
  * @since 2025-12-17
@@ -110,7 +110,7 @@ object ProtocolConfigResolver {
 
     /**
      * Get cable protocols to try in order for connect-by-attempt strategy.
-     * Returns protocols in priority order: AOA, VSP, RS232.
+     * Returns protocols in priority order: VSP, RS232, AOA.
      * More accurate than device detection - tries actual connection.
      *
      * @param connectionConfig Connection configuration
@@ -136,11 +136,11 @@ object ProtocolConfigResolver {
 
         if (!isCableTryOrder) return null
 
-        // Base order: AOA, VSP, RS232. Put cached protocol first if recent.
+        // Base order: VSP, RS232, AOA. Prefer serial when peer enumerates as CDC; AOA last for stale-enum cases.
         val baseOrder = listOf(
-            Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name),
             Pair(ProtocolManager.buildVspProtocol(), CableProtocol.USB_VSP.name),
-            Pair(ProtocolManager.buildRs232Protocol(), CableProtocol.RS232.name)
+            Pair(ProtocolManager.buildRs232Protocol(), CableProtocol.RS232.name),
+            Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
         )
         val cached = ConnectionPersistence(context).getDetectedCableProtocol()
         if (cached != null && cached != CableProtocol.AUTO) {

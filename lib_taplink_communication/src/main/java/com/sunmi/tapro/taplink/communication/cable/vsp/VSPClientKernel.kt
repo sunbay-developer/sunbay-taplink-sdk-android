@@ -20,10 +20,14 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
+import kotlin.text.Charsets
 
 /**
  * VSP client kernel class
@@ -73,6 +77,13 @@ class VSPClientKernel(
      */
     @Volatile
     private var usbPermissionReceiverRegistered: Boolean = false
+
+    /**
+     * Set when the port is open and we are waiting for [VspHandshake] with the server (same as
+     * [VSPServiceKernel.performHandshake] success on the service side).
+     */
+    @Volatile
+    private var handshakeWaiter: CompletableDeferred<Unit>? = null
 
     // VSP configuration parameters
     private var baudRate: Int = 115200
@@ -156,25 +167,31 @@ class VSPClientKernel(
 
         scope.launch {
             try {
-                val success = connectToVspDevice(connectionCallback)
+                val success = connectToVspDevice()
                 val waitingPermission = synchronized(this@VSPClientKernel) { pendingDevice != null }
                 if (success) {
-                    // Server initiates REQ; client only ACKs. Receive loop runs in CONNECTING so REQ is handled.
-                    startDataReceive()
-                    notifyConnectionSuccess(
-                        mapOf(
-                            "mode" to "client",
-                            "baudRate" to baudRate.toString(),
-                            "dataBits" to dataBits.toString(),
-                            "parity" to vspProtocol.parity,
-                            "stopBits" to vspProtocol.stopBits.toString(),
-                            "device" to (targetDeviceName ?: "auto-detected")
+                    if (awaitVspHandshake()) {
+                        notifyConnectionSuccess(
+                            mapOf(
+                                "mode" to "client",
+                                "baudRate" to baudRate.toString(),
+                                "dataBits" to dataBits.toString(),
+                                "parity" to vspProtocol.parity,
+                                "stopBits" to vspProtocol.stopBits.toString(),
+                                "device" to (targetDeviceName ?: "auto-detected"),
+                                "handshake" to "verified"
+                            )
                         )
-                    )
+                    } else {
+                        cleanupAfterHandshakeFailure()
+                        notifyConnectionError("VSP handshake timed out", InnerErrorCode.E232)
+                    }
                 } else if (!waitingPermission) {
                     notifyConnectionError("Failed to connect to VSP device", InnerErrorCode.E232)
                 }
                 // success == false && waitingPermission: continueConnection() will finish after permission grant
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to connect VSP client: ${e.message}")
                 notifyConnectionError(e.message ?: "Unknown error", InnerErrorCode.E232)
@@ -211,7 +228,10 @@ class VSPClientKernel(
 
     override fun performDisconnect() {
         LogUtil.d(TAG, "=== VSP Client Disconnect Started ===")
-        
+
+        handshakeWaiter?.cancel(CancellationException("VSP client disconnect"))
+        handshakeWaiter = null
+
         try {
             dataReceiveJob?.cancel()
             dataReceiveJob = null
@@ -254,7 +274,7 @@ class VSPClientKernel(
     /**
      * Connect to VSP device
      */
-    private suspend fun connectToVspDevice(connectionCallback: ConnectionCallback): Boolean {
+    private suspend fun connectToVspDevice(): Boolean {
         return try {
             // Find available USB serial port devices
             val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
@@ -323,21 +343,32 @@ class VSPClientKernel(
             
             val success = continueConnectionInternal(targetDriver)
             if (success) {
-                startDataReceive()
-                handleConnectionSuccess(
-                    connectionCallback,
-                    mapOf(
-                        "mode" to "client",
-                        "baudRate" to baudRate.toString(),
-                        "dataBits" to dataBits.toString(),
-                        "parity" to parity.toString(),
-                        "stopBits" to stopBits.toString(),
-                        "device" to device.deviceName
+                if (awaitVspHandshake()) {
+                    handleConnectionSuccess(
+                        connectionCallback,
+                        mapOf(
+                            "mode" to "client",
+                            "baudRate" to baudRate.toString(),
+                            "dataBits" to dataBits.toString(),
+                            "parity" to parity.toString(),
+                            "stopBits" to stopBits.toString(),
+                            "device" to device.deviceName,
+                            "handshake" to "verified"
+                        )
                     )
-                )
+                } else {
+                    cleanupAfterHandshakeFailure()
+                    handleConnectionError(
+                        "VSP handshake timed out",
+                        connectionCallback,
+                        InnerErrorCode.E232.code
+                    )
+                }
             } else {
                 connectionCallback.onDisconnected("CONNECTION_FAILED", "Failed to establish VSP connection")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error during VSP connection: ${e.message}")
             connectionCallback.onDisconnected("CONNECTION_ERROR", e.message ?: "Unknown error")
@@ -408,6 +439,48 @@ class VSPClientKernel(
     }
 
     /**
+     * USB port is open: start receive loop and block until application-layer handshake completes
+     * (service sends [VspHandshake.REQ], we send [VspHandshake.ACK]), same window as
+     * [VspHandshake.DEFAULT_TIMEOUT_MS].
+     */
+    private suspend fun awaitVspHandshake(): Boolean {
+        val waiter = CompletableDeferred<Unit>()
+        handshakeWaiter = waiter
+        return try {
+            startDataReceive()
+            withTimeoutOrNull(VspHandshake.DEFAULT_TIMEOUT_MS) {
+                waiter.await()
+            } != null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            LogUtil.w(TAG, "VSP handshake aborted (IO): ${e.message}")
+            false
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "VSP handshake await failed: ${e.message}")
+            false
+        } finally {
+            handshakeWaiter = null
+            if (!waiter.isCompleted) {
+                waiter.cancel(CancellationException("VSP handshake abandoned"))
+            }
+        }
+    }
+
+    private fun signalHandshakeSuccess() {
+        val w = handshakeWaiter ?: return
+        if (w.complete(Unit)) {
+            LogUtil.i(TAG, "VSP client handshake verified with server")
+        }
+    }
+
+    private fun cleanupAfterHandshakeFailure() {
+        dataReceiveJob?.cancel()
+        dataReceiveJob = null
+        performDisconnect()
+    }
+
+    /**
      * Start data reception loop.
      *
      * Server initiates handshake with [VspHandshake.REQ]; client replies with [VspHandshake.ACK].
@@ -426,12 +499,17 @@ class VSPClientKernel(
 
                     if (bytesRead > 0) {
                         val data = buffer.copyOf(bytesRead)
-                        val dataString = String(data)
+                        val dataString = String(data, Charsets.UTF_8)
                         LogUtil.d(TAG, "VSP client data received: $dataString (${data.size} bytes)")
 
                         if (VspHandshake.isHandshakeMessage(dataString)) {
                             if (VspHandshake.containsReq(dataString)) {
-                                sendHandshakeAck()
+                                if (sendHandshakeAck()) {
+                                    signalHandshakeSuccess()
+                                }
+                            } else if (VspHandshake.containsAck(dataString)) {
+                                // Symmetric with service handling "mutual REQ" — link already verified
+                                signalHandshakeSuccess()
                             }
                             val remaining = VspHandshake.stripHandshakeMarkers(dataString)
                             if (remaining != null) {
@@ -444,14 +522,20 @@ class VSPClientKernel(
                     }
                 } catch (e: IOException) {
                     LogUtil.e(TAG, "Error receiving VSP client data: ${e.message}")
-                    
+
+                    if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
+                        handshakeWaiter?.completeExceptionally(e)
+                    }
                     if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
                         handleConnectionError()
                     }
                     break
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Unexpected error in VSP client receive loop: ${e.message}")
-                    
+
+                    if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
+                        handshakeWaiter?.completeExceptionally(e)
+                    }
                     if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
                         handleConnectionError()
                     }
@@ -465,14 +549,17 @@ class VSPClientKernel(
 
     /**
      * Reply to handshake [VspHandshake.REQ] from server.
+     * @return false if ACK could not be sent (handshake cannot complete).
      */
-    private fun sendHandshakeAck() {
-        try {
+    private fun sendHandshakeAck(): Boolean {
+        return try {
             val ackBytes = VspHandshake.ACK.toByteArray(Charsets.UTF_8)
             usbSerialPort?.write(ackBytes, 1000)
             LogUtil.d(TAG, "Handshake ACK sent (server initiated REQ)")
+            true
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send handshake ACK: ${e.message}")
+            false
         }
     }
 
