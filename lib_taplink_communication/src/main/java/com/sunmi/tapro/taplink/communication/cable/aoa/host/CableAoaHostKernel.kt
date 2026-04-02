@@ -20,10 +20,13 @@ import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.protocol.HexFrameBuffer
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
+import com.sunmi.tapro.taplink.communication.cable.vsp.VspHandshake
 import com.sunmi.tapro.taplink.communication.util.InnerUtil
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -49,6 +52,11 @@ class CableAoaHostKernel(
     appSecretKey: String,
     private val context: Context
 ) : AsyncServiceKernel(appId, appSecretKey) {
+
+    private companion object {
+        const val BULK_OUT_RETRY_DELAY_MS = 50L
+        const val AOA_SWITCH_TIMEOUT_MS = 8000L
+    }
 
     private val TAG = "SimplifiedAoaHostKernel"
 
@@ -82,6 +90,13 @@ class CableAoaHostKernel(
 
     // USB Manager
     private val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+
+    /**
+     * [AsyncServiceKernel.disconnect] calls [kotlinx.coroutines.Job.cancelChildren] on [scope] first.
+     * A [scope.launch] that invokes [disconnect] is itself a child of [scope] and can be cancelled
+     * before [performDisconnect] completes. Use this scope for disconnect from receive/send paths.
+     */
+    private val deferredDisconnectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // ============ Connection Resources ============
 
@@ -120,13 +135,6 @@ class CableAoaHostKernel(
 
     @Volatile
     private var pendingPermissionDevice: UsbDevice? = null
-
-    // ============ AOA Device Wait Mechanism ============
-
-    /** Timeout for waiting AOA device after sending switch protocol (ms). Shorter = faster fallback to VSP/RS232. */
-    private companion object {
-        const val AOA_SWITCH_TIMEOUT_MS = 8000L
-    }
 
     @Volatile
     private var aoaDeviceLatch: CountDownLatch? = null
@@ -245,6 +253,13 @@ class CableAoaHostKernel(
         LogUtil.i(TAG, "=== Disconnect completed ===")
     }
 
+    private fun scheduleKernelDisconnect(reason: String) {
+        LogUtil.w(TAG, "Scheduling kernel disconnect: $reason")
+        deferredDisconnectScope.launch {
+            disconnect()
+        }
+    }
+
     /**
      * Send data
      *
@@ -282,10 +297,21 @@ class CableAoaHostKernel(
             LogUtil.d(TAG, "  Hex: $hexStr")
             LogUtil.d(TAG, "  Text: $textStr")
 
-            val result = conn.bulkTransfer(epOut, data, data.size, 3000)
+            var result = conn.bulkTransfer(epOut, data, data.size, 3000)
             if (result < 0) {
-                LogUtil.e(TAG, "❌ Bulk transfer failed: $result")
+                delay(BULK_OUT_RETRY_DELAY_MS)
+                if (state == ConnectionState.CONNECTED && connection === conn && endpointOut === epOut) {
+                    result = conn.bulkTransfer(epOut, data, data.size, 3000)
+                }
+            }
+            if (result < 0) {
+                LogUtil.e(
+                    TAG,
+                    "❌ Bulk OUT failed after retry ($result); peer may have closed link while USB still enumerated"
+                )
                 callback?.onError(InnerErrorCode.E304.code, "Bulk transfer failed")
+                // Tapro app disconnect often leaves the USB device visible; receive loop only sees IN timeouts.
+                scheduleKernelDisconnect("AOA bulk OUT failure")
             } else {
                 LogUtil.d(TAG, "✅ Data sent successfully: $result bytes")
             }
@@ -303,6 +329,7 @@ class CableAoaHostKernel(
     fun release() {
         LogUtil.i(TAG, "=== Release started ===")
 
+        deferredDisconnectScope.cancel()
         // Cancel all coroutines
         scope.cancel()
 
@@ -485,6 +512,39 @@ class CableAoaHostKernel(
                 flushEndpoint(conn, epIn)
             }
 
+            // 6b. Application-layer handshake (same REQ/ACK contract as VSP / RS232 Host)
+            // Ensures the peer is actually serving Taplink on this bulk link before reporting CONNECTED.
+            if (epIn == null) {
+                LogUtil.w(TAG, "AOA: no IN endpoint — cannot run Taplink handshake")
+                conn.releaseInterface(iface)
+                conn.close()
+                handleConnectionError(
+                    "AOA device has no IN endpoint for handshake",
+                    callback,
+                    InnerErrorCode.E212.code
+                )
+                return
+            }
+            if (!performTaplinkAppHandshake(conn, epIn, epOut)) {
+                LogUtil.w(TAG, "AOA Taplink handshake failed — peer may be VSP-only or not ready")
+                try {
+                    conn.releaseInterface(iface)
+                } catch (e: Exception) {
+                    LogUtil.w(TAG, "releaseInterface after handshake fail: ${e.message}")
+                }
+                try {
+                    conn.close()
+                } catch (e: Exception) {
+                    LogUtil.w(TAG, "close after handshake fail: ${e.message}")
+                }
+                handleConnectionError(
+                    "AOA Taplink handshake failed — peer not responding on AOA bulk (try VSP/RS232)",
+                    callback,
+                    InnerErrorCode.E212.code
+                )
+                return
+            }
+
             // 7. Save resources
             synchronized(stateLock) {
                 currentDevice = device
@@ -553,6 +613,67 @@ class CableAoaHostKernel(
         } catch (e: Exception) {
             LogUtil.w(TAG, "Failed to flush endpoint: ${e.message}")
         }
+    }
+
+    /**
+     * After USB bulk endpoints are ready, verify the peer is serving Taplink on AOA (same markers as
+     * [VspHandshake] used by VSP / RS232). Mirrors [SerialServiceKernel] active REQ probe + peer ACK/REQ.
+     *
+     * @return true if ACK seen, or peer REQ answered with ACK (mutual completion).
+     */
+    private suspend fun performTaplinkAppHandshake(
+        conn: UsbDeviceConnection,
+        epIn: UsbEndpoint,
+        epOut: UsbEndpoint
+    ): Boolean {
+        val reqBytes = VspHandshake.REQ.toByteArray(Charsets.UTF_8)
+        val ackMarker = VspHandshake.ACK
+        val reqMarker = VspHandshake.REQ
+        val buffer = ByteArray(epIn.maxPacketSize.coerceAtLeast(64))
+        val acc = StringBuilder(256)
+
+        LogUtil.i(
+            TAG,
+            "AOA Taplink handshake starting (timeout=${VspHandshake.DEFAULT_TIMEOUT_MS}ms, interval=${VspHandshake.DEFAULT_INTERVAL_MS}ms)"
+        )
+
+        val deadline = System.currentTimeMillis() + VspHandshake.DEFAULT_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            var written = conn.bulkTransfer(epOut, reqBytes, reqBytes.size, 3000)
+            if (written < 0) {
+                LogUtil.w(TAG, "AOA handshake: bulk OUT failed ($written), retrying")
+                delay(50)
+                continue
+            }
+
+            val intervalEnd = System.currentTimeMillis() + VspHandshake.DEFAULT_INTERVAL_MS
+            while (System.currentTimeMillis() < intervalEnd && System.currentTimeMillis() < deadline) {
+                val n = conn.bulkTransfer(epIn, buffer, buffer.size, 150)
+                if (n > 0) {
+                    acc.append(String(buffer.copyOf(n), Charsets.UTF_8))
+                    val s = acc.toString()
+                    when {
+                        s.contains(ackMarker) -> {
+                            LogUtil.i(TAG, "AOA handshake: received ACK")
+                            return true
+                        }
+                        s.contains(reqMarker) -> {
+                            val ackBytes = ackMarker.toByteArray(Charsets.UTF_8)
+                            val w2 = conn.bulkTransfer(epOut, ackBytes, ackBytes.size, 3000)
+                            LogUtil.i(TAG, "AOA handshake: peer REQ seen, sent ACK (w=$w2)")
+                            return true
+                        }
+                    }
+                    if (acc.length > 4096) {
+                        acc.setLength(0)
+                    }
+                }
+                delay(VspHandshake.POLL_INTERVAL_MS)
+            }
+        }
+
+        LogUtil.w(TAG, "AOA handshake: timeout waiting for ACK / peer REQ")
+        return false
     }
 
     /**
@@ -933,9 +1054,7 @@ class CableAoaHostKernel(
                             // Check if device is really disconnected
                             if (!isDeviceStillConnected()) {
                                 LogUtil.w(TAG, "❌ Device disconnected, stopping receive loop")
-                                scope.launch {
-                                    disconnect()
-                                }
+                                scheduleKernelDisconnect("USB device removed (IN bulk timeout)")
                                 break
                             }
                             
@@ -957,9 +1076,7 @@ class CableAoaHostKernel(
                         // Check if exception is caused by device disconnection
                         if (!isDeviceStillConnected()) {
                             LogUtil.w(TAG, "❌ Device disconnected detected in exception handler, triggering disconnect")
-                            scope.launch {
-                                disconnect()
-                            }
+                            scheduleKernelDisconnect("USB device removed (receive exception)")
                             break
                         }
 
@@ -1058,9 +1175,7 @@ class CableAoaHostKernel(
                         // If it's the currently connected device, trigger disconnect
                         if (isSameDevice(device, currentDevice) && state == ConnectionState.CONNECTED) {
                             LogUtil.w(TAG, "Current device detached, disconnecting")
-                            scope.launch {
-                                disconnect()
-                            }
+                            scheduleKernelDisconnect("ACTION_USB_DEVICE_DETACHED")
                         }
                     }
                 }
