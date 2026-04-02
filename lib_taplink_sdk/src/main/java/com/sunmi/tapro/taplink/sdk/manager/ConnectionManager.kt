@@ -219,7 +219,7 @@ class ConnectionManager(
             return
         }
 
-        // Cable AUTO mode: try connect in protocol order (AOA -> VSP -> RS232) for more accurate detection
+        // Cable AUTO mode: try connect in protocol order (VSP -> RS232 -> AOA)
         val protocolsToTry = ProtocolConfigResolver.getCableProtocolsToTry(
             config,
             reconnectManager?.getContext()
@@ -362,7 +362,7 @@ class ConnectionManager(
     }
 
     /**
-     * Try connect with cable protocols in order (AOA -> VSP -> RS232).
+     * Try connect with cable protocols in order (VSP -> RS232 -> AOA).
      * More accurate than device detection - uses actual connection attempt.
      */
     private fun tryConnectWithProtocolList(
@@ -394,18 +394,28 @@ class ConnectionManager(
 
         var tryIndex = 0
 
+        /**
+         * Incremented on every [tryNextProtocol] entry. Each protocol attempt captures its value in
+         * the [ServiceConnectionCallback] so a late [onDisconnected] from a previous kernel (e.g. AOA
+         * finishing disconnect after we already moved to VSP) cannot advance [tryIndex] again.
+         */
+        var cableAttemptEpoch = 0
+
         fun tryNextProtocol() {
             if (tryIndex >= protocols.size) {
-                LogUtil.w(TAG, "All cable protocols failed: AOA, VSP, RS232")
+                LogUtil.w(TAG, "All cable protocols failed: VSP, RS232, AOA")
                 updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
                 listener.onError(
                     ConnectionError(
                         InnerErrorCode.E214.code,
-                        "Cable connection failed: tried AOA, VSP, RS232 - none succeeded"
+                        "Cable connection failed: tried VSP, RS232, AOA - none succeeded"
                     )
                 )
                 return
             }
+
+            cableAttemptEpoch++
+            val epochForThisAttempt = cableAttemptEpoch
 
             val (protocol, connectionMode) = protocols[tryIndex]
             currentConnectionMode = connectionMode
@@ -425,6 +435,11 @@ class ConnectionManager(
                 this.config.taproAppWidthRatio,
                 object : ServiceConnectionCallback {
                     override fun onConnected(extraInfoMap: Map<String, String?>?) {
+                        if (epochForThisAttempt != cableAttemptEpoch) {
+                            LogUtil.d(TAG, "Ignoring stale cable onConnected for $connectionMode (epoch=$epochForThisAttempt, current=$cableAttemptEpoch)")
+                            return
+                        }
+
                         val (_, mode) = protocols[tryIndex]
                         LogUtil.d(TAG, "Cable connection succeeded with $mode")
 
@@ -451,6 +466,11 @@ class ConnectionManager(
                     }
 
                     override fun onWaitingConnect() {
+                        if (epochForThisAttempt != cableAttemptEpoch) {
+                            LogUtil.d(TAG, "Ignoring stale cable onWaitingConnect for $connectionMode (epoch=$epochForThisAttempt, current=$cableAttemptEpoch)")
+                            return
+                        }
+
                         setupServiceAddressChangeListener()
                         setupKernelStatusListener()
                         updateConnectionStatus(
@@ -461,6 +481,15 @@ class ConnectionManager(
                     }
 
                     override fun onDisconnected(code: String, msg: String) {
+                        if (epochForThisAttempt != cableAttemptEpoch) {
+                            LogUtil.d(
+                                TAG,
+                                "Ignoring stale cable disconnect for $connectionMode " +
+                                    "(epoch=$epochForThisAttempt, current=$cableAttemptEpoch): code=$code, msg=$msg"
+                            )
+                            return
+                        }
+
                         val isConnectionError = isConnectionError(code, msg)
                         LogUtil.d(TAG, "Cable $connectionMode failed: code=$code, msg=$msg, isConnectionError=$isConnectionError")
 

@@ -194,7 +194,7 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 - USB-VSP (USB Virtual Serial Port)
 - RS232 (USB serial adapter, hex-framed payload)
 
-**Cable `AUTO` detection:** The SDK tries cable transports in order **AOA → VSP → RS232** until one succeeds (more reliable than guessing from device metadata alone).
+**Cable `AUTO` detection:** The SDK tries cable transports in order **VSP → RS232 → AOA** until one succeeds (more reliable than guessing from device metadata alone). Serial paths are tried first so peers that enumerate as CDC connect without waiting on an AOA attempt; pure AOA accessories are still reached last.
 
 **RS232 link behavior (summary):**
 - Opening the USB serial port is not enough for `onConnected`: the stack waits for **peer liveness** via lightweight markers `##TAPLINK_HSK_REQ##` / `##TAPLINK_HSK_ACK##`, or **application payload** (hex-framed business data) after markers are stripped from the byte stream.
