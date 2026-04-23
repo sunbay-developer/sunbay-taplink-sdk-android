@@ -21,6 +21,8 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
 import java.math.BigDecimal
 
 /**
@@ -465,6 +467,21 @@ class PaymentManager(
                     return false
                 }
             }
+
+            val tipConfigValidation = TransactionRequestValidator.validateTipConfig(
+                amountInfo.tipAmount,
+                amountInfo.tipConfig
+            )
+            if (!tipConfigValidation.isValid) {
+                val validationError = tipConfigValidation.errors.first()
+                LogUtil.e(TAG, "Invalid tip configuration: ${validationError.message}")
+                callback.onFailure(
+                    errorCode = InnerErrorCode.E302,
+                    errorMessage = "${InnerErrorCode.E302.description}(${getTipConfigValidationMessage(validationError)})",
+                    transactionRequestId = request.transactionRequestId
+                )
+                return false
+            }
         }
 
         // Validate PaymentRequest tipAmount field
@@ -489,6 +506,17 @@ class PaymentManager(
     private fun isInteger(amount: BigDecimal): Boolean {
         // Check if the remainder when divided by 1 is zero
         return amount.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) == 0
+    }
+
+    private fun getTipConfigValidationMessage(error: ValidationError): String {
+        return when (error) {
+            ValidationError.TipConfigConflict -> context.getString(R.string.error_invalid_tip_config_conflict)
+            ValidationError.TipConfigEmptySuggestionValues ->
+                context.getString(R.string.error_invalid_tip_config_empty_suggestions)
+            ValidationError.TipConfigNegativeSuggestionValues ->
+                context.getString(R.string.error_invalid_tip_config_negative_suggestions)
+            else -> error.message
+        }
     }
 
     /**

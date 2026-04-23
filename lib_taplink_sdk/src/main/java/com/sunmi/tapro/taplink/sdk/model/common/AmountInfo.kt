@@ -44,7 +44,14 @@ data class AmountInfo(
     /**
      * Service fee (optional, unit: base currency unit).
      */
-    val serviceFee: BigDecimal? = null
+    val serviceFee: BigDecimal? = null,
+
+    /**
+     * Tip configuration (optional).
+     * Defines on-screen tip behavior and suggestion options.
+     * Must not be used together with tipAmount.
+     */
+    val tipConfig: TipConfig? = null
 ) {
     /**
      * Sets the order amount.
@@ -101,5 +108,14 @@ data class AmountInfo(
      * @return the updated AmountInfo instance for method chaining
      */
     fun setServiceFee(serviceFee: BigDecimal): AmountInfo = copy(serviceFee = serviceFee)
+
+    /**
+     * Sets the tip configuration.
+     * Note: tipConfig must not be used together with tipAmount.
+     *
+     * @param tipConfig the tip configuration
+     * @return the updated AmountInfo instance for method chaining
+     */
+    fun setTipConfig(tipConfig: TipConfig): AmountInfo = copy(tipConfig = tipConfig)
 }
 

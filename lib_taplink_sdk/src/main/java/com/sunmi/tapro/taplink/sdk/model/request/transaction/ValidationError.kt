@@ -25,6 +25,11 @@ sealed class ValidationError(val message: String) {
     // Original transaction reference validation errors
     object MissingOriginalTransaction : ValidationError("Either originalTransactionId or originalTransactionRequestId is required")
     
+    // Tip configuration validation errors
+    object TipConfigConflict : ValidationError("tipConfig cannot be used when tipAmount is set")
+    object TipConfigEmptySuggestionValues : ValidationError("tipConfig.suggestions.values must not be empty")
+    object TipConfigNegativeSuggestionValues : ValidationError("tipConfig.suggestions.values must contain only non-negative values")
+
     // Refund mode validation errors
     object InvalidRefundMode : ValidationError("Refund must be either referenced or non-referenced, not both")
     
