@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
+import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 import java.math.BigDecimal
 
 /**
@@ -112,17 +113,36 @@ object TransactionRequestValidator {
     }
 
     /**
-     * Validate tip amount
+     * Validate tip configuration and tip amount.
+     * - tipAmount must be non-negative when present
+     * - tipConfig is only valid when tipAmount is null
      *
-     * @param tipAmount Tip amount
+     * @param tipAmount Tip amount from AmountInfo
+     * @param tipConfig Tip configuration from AmountInfo
      * @return ValidationResult validation result
      */
-    fun validateTipAmount(tipAmount: Long): ValidationResult {
-        return if (tipAmount < 0) {
-            ValidationResult.failure(ValidationError.InvalidTipAmount)
-        } else {
-            ValidationResult.success()
+    fun validateTipConfig(tipAmount: BigDecimal?, tipConfig: TipConfig?): ValidationResult {
+        // Validate tipAmount is non-negative when present
+        if (tipAmount != null && tipAmount < BigDecimal.ZERO) {
+            return ValidationResult.failure(ValidationError.InvalidTipAmount)
         }
+        if (tipConfig == null) {
+            return ValidationResult.success()
+        }
+        // tipConfig and tipAmount are mutually exclusive
+        if (tipAmount != null) {
+            return ValidationResult.failure(ValidationError.TipConfigConflict)
+        }
+        val suggestions = tipConfig.suggestions
+        if (suggestions != null) {
+            if (suggestions.values.isEmpty()) {
+                return ValidationResult.failure(ValidationError.TipConfigEmptySuggestionValues)
+            }
+            if (suggestions.values.any { it < 0 }) {
+                return ValidationResult.failure(ValidationError.TipConfigNegativeSuggestionValues)
+            }
+        }
+        return ValidationResult.success()
     }
 
     /**

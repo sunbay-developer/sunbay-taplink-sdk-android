@@ -48,7 +48,8 @@ data class PostAuthRequest(
                 originalTransactionRequestId
             ),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            TransactionRequestValidator.validateAmount(amount)
+            TransactionRequestValidator.validateAmount(amount),
+            TransactionRequestValidator.validateTipConfig(amount.tipAmount, amount.tipConfig),
         )
     }
 

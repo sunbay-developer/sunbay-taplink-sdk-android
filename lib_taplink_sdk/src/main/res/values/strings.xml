@@ -7,6 +7,9 @@
     <string name="error_invalid_amount_surcharge">Surcharge amount must be an integer, cannot be a decimal</string>
     <string name="error_invalid_amount_cashback">Cashback amount must be an integer, cannot be a decimal</string>
     <string name="error_invalid_amount_service_fee">Service fee must be an integer, cannot be a decimal</string>
+    <string name="error_invalid_tip_config_conflict">tipConfig cannot be used when tipAmount is set</string>
+    <string name="error_invalid_tip_config_empty_suggestions">tipConfig.suggestions.values must not be empty</string>
+    <string name="error_invalid_tip_config_negative_suggestions">tipConfig.suggestions.values must contain only non-negative values</string>
 </resources>
 
 

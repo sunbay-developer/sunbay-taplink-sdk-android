@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.sunmi.tapro.taplink.demo"
-    compileSdk = Integer.parseInt(libs.versions.compileSdk.get())
+    compileSdkVersion(Integer.parseInt(libs.versions.compileSdk.get()))
 
     defaultConfig {
         applicationId = "com.sunmi.tapro.taplink.demo"

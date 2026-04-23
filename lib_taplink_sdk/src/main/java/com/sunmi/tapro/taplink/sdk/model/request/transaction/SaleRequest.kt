@@ -44,6 +44,7 @@ data class SaleRequest(
             TransactionRequestValidator.validateReferenceOrderId(referenceOrderId),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
             TransactionRequestValidator.validateAmount(amount),
+            TransactionRequestValidator.validateTipConfig(amount.tipAmount, amount.tipConfig),
         )
     }
 

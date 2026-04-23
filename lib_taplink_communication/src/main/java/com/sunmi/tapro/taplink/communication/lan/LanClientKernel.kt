@@ -1,7 +1,6 @@
 package com.sunmi.tapro.taplink.communication.lan
 
 import android.content.Context
-import android.text.TextUtils
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel

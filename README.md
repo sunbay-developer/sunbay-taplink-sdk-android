@@ -250,6 +250,26 @@ val request = SaleRequest.builder()
 client.sale(request, paymentCallback)
 ```
 
+### Tip Configuration
+
+When you want the terminal to collect tip interactively, set `tipConfig` in `AmountInfo`. `tipConfig` and `tipAmount` are mutually exclusive, so `tipAmount` must be `null`.
+
+```kotlin
+val amount = AmountInfo(
+    orderAmount = BigDecimal("1000"),
+    pricingCurrency = "USD",
+    tipConfig = TipConfig(
+        onScreenTip = true,
+        tipMode = TipMode.ON_SALE,
+        tipWithTax = false,
+        suggestions = TipSuggestions(
+            feeMode = FeeMode.RATE,
+            values = listOf(15, 18, 20)
+        )
+    )
+)
+```
+
 ### Refund Transaction
 
 Supports full and partial refunds. For card refunds, specify `paymentMethod` as `PaymentCategory.CARD`.
