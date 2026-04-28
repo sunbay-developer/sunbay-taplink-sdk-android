@@ -1,0 +1,345 @@
+---
+description: Taplink SDK transaction types – Sale, Refund, Void, Auth, PostAuth, BatchClose, and more
+globs: ["**/*.kt", "**/*.java"]
+alwaysApply: false
+---
+
+# Taplink SDK – Transactions
+
+All transactions are executed via `TaplinkClient` (obtained from `TaplinkSDK.getClient()`).  
+Each transaction uses a **Builder pattern** and a `PaymentCallback`.
+
+---
+
+## ⚠️ Critical: Amount Units
+
+All amount fields use the **smallest currency unit**:
+
+| Currency | Unit | Example |
+|----------|------|---------|
+| USD | Cents | $10.00 → `BigDecimal("1000")` |
+| EUR | Cents | €10.00 → `BigDecimal("1000")` |
+| JPY | Yen | ¥1000 → `BigDecimal("1000")` |
+| CNY | Fen | ¥10.00 → `BigDecimal("1000")` |
+
+```kotlin
+// ✅ Correct: $12.34 = 1234 cents
+val amount = AmountInfo(
+    orderAmount = BigDecimal("1234"),
+    pricingCurrency = "USD"
+)
+
+// ❌ Wrong: $12.34 passed as dollars — interpreted as $0.1234
+val amount = AmountInfo(
+    orderAmount = BigDecimal("12.34"),
+    pricingCurrency = "USD"
+)
+```
+
+---
+
+## AmountInfo
+
+```kotlin
+val amount = AmountInfo(
+    orderAmount = BigDecimal("1000"),   // Required: order amount in smallest unit
+    pricingCurrency = "USD",            // Required: ISO 4217 currency code
+    tipAmount = null,                   // Optional: tip (mutually exclusive with tipConfig)
+    taxAmount = null,                   // Optional: tax
+    surchargeAmount = null,             // Optional: surcharge
+    cashbackAmount = null,              // Optional: cashback
+    serviceFee = null,                  // Optional: service fee
+    tipConfig = null                    // Optional: on-screen tip (mutually exclusive with tipAmount)
+)
+```
+
+**Method-chaining style (also supported):**
+```kotlin
+val amount = AmountInfo(BigDecimal("1000"), "USD")
+    .setTaxAmount(BigDecimal("80"))
+    .setTipAmount(BigDecimal("150"))
+```
+
+---
+
+## PaymentCallback
+
+All transactions share the same callback:
+
+```kotlin
+val callback = object : PaymentCallback {
+    override fun onProgress(event: PaymentEvent) {
+        // Update UI based on transaction stage
+        when (event.eventCode) {
+            "PROCESSING"       -> showStatus("Processing...")
+            "WAITING_CARD"     -> showStatus("Please present card")
+            "CARD_DETECTED"    -> showStatus("Card detected")
+            "READING_CARD"     -> showStatus("Reading card...")
+            "WAITING_PIN"      -> showStatus("Enter PIN on terminal")
+            "WAITING_SIGNATURE"-> showStatus("Sign on terminal")
+            "WAITING_RESPONSE" -> showStatus("Waiting for gateway...")
+            "PRINTING"         -> showStatus("Printing receipt...")
+            "COMPLETED"        -> hideStatus()
+            "CANCEL"           -> showStatus("Transaction cancelled")
+        }
+    }
+
+    override fun onSuccess(result: PaymentResult) {
+        // result.isSuccess() == true when code=="0" && transactionStatus=="SUCCESS"
+        showSuccess(result.transactionId, result.amount)
+    }
+
+    override fun onFailure(error: PaymentError) {
+        showError(error.code, error.message, error.suggestion)
+    }
+}
+```
+
+---
+
+## Sale Transaction
+
+```kotlin
+val client = TaplinkSDK.getClient()
+
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")      // Required, 6–32 chars
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")    // Required, must be unique
+    .setAmount(AmountInfo(BigDecimal("1000"), "USD"))                 // Required
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))       // Recommended for card
+    .setCardNetworkType(CardNetworkType.CREDIT)                      // Optional: CREDIT or DEBIT
+    .setDescription("Product Purchase")                              // Optional, max 128 chars
+    .setPrintReceipt(PrintReceipt.AUTO)                              // Optional, default: AUTO
+    .build()
+
+client.sale(request, callback)
+```
+
+### On-Screen Tip during Sale:
+
+```kotlin
+val amount = AmountInfo(
+    orderAmount = BigDecimal("1000"),
+    pricingCurrency = "USD",
+    tipConfig = TipConfig(
+        onScreenTip = true,
+        tipMode = TipMode.ON_SALE,
+        tipWithTax = false,
+        suggestions = TipSuggestions(
+            feeMode = FeeMode.RATE,
+            values = listOf(15, 18, 20)   // 15%, 18%, 20%
+        )
+    )
+    // tipAmount must be null when tipConfig is set
+)
+```
+
+---
+
+## Refund Transaction
+
+### Referenced Refund (with original transaction ID):
+```kotlin
+val request = RefundRequest.referencedBuilder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")   // Required, unique
+    .setOriginalTransactionId("original_txn_id")                    // Required
+    .setAmount(AmountInfo(BigDecimal("500"), "USD"))                 // Required: refund amount
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
+    .setDescription("Product Return")
+    .build()
+
+client.refund(request, callback)
+```
+
+### Non-Referenced Refund (requires card swipe):
+```kotlin
+val request = RefundRequest.nonReferencedBuilder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setReferenceOrderId("REFUND_${System.currentTimeMillis()}")     // Required for non-referenced
+    .setAmount(AmountInfo(BigDecimal("500"), "USD"))
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
+    .build()
+
+client.refund(request, callback)
+```
+
+---
+
+## Void Transaction
+
+Cancels a **same-day** transaction (no online authorization, faster than refund).  
+For cross-day transactions, use `Refund` instead.
+
+```kotlin
+val request = VoidRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_txn_id")   // Required
+    .setDescription("Cancel Transaction")
+    .build()
+
+client.void(request, callback)
+```
+
+---
+
+## Authorization (Pre-Auth)
+
+Freeze funds without charging — used for hotels, car rentals, etc.
+
+```kotlin
+val authAmount = AuthAmountInfo(
+    authAmount = BigDecimal("5000"),   // Estimated amount to freeze
+    pricingCurrency = "USD"
+)
+
+val request = AuthRequest.builder()
+    .setReferenceOrderId("AUTH_${System.currentTimeMillis()}")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(authAmount)
+    .setDescription("Hotel Reservation")
+    .build()
+
+client.auth(request, callback)
+```
+
+---
+
+## Post-Authorization (Pre-Auth Completion)
+
+Completes a pre-auth and performs the actual charge.
+
+```kotlin
+val request = PostAuthRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_auth_txn_id")   // Required
+    .setAmount(AmountInfo(BigDecimal("4500"), "USD"))    // Final charge amount
+    .setDescription("Complete Hotel Payment")
+    .build()
+
+client.postAuth(request, callback)
+```
+
+---
+
+## Incremental Authorization
+
+Increases an existing pre-auth amount.
+
+```kotlin
+val request = IncrementalAuthRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_auth_txn_id")
+    .setAmount(AmountInfo(BigDecimal("1000"), "USD"))    // Additional amount to add
+    .build()
+
+client.incrementalAuth(request, callback)
+```
+
+---
+
+## Tip Adjustment
+
+Adjusts the tip on an existing sale transaction.
+
+```kotlin
+val request = TipAdjustRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_sale_txn_id")
+    .setTipAmount(BigDecimal("200"))   // New tip amount (smallest unit)
+    .build()
+
+client.tipAdjust(request, callback)
+```
+
+---
+
+## Abort Transaction
+
+Cancels an in-progress transaction.
+
+```kotlin
+val request = AbortRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .build()
+
+client.abort(request, callback)
+```
+
+---
+
+## Batch Close (End-of-Day Settlement)
+
+```kotlin
+val request = BatchCloseRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setDescription("End of Day Settlement")
+    .build()
+
+client.batchClose(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResult) {
+        val batchInfo = result.batchCloseInfo
+        showSummary(
+            batchNo = result.batchNo,
+            totalCount = batchInfo?.totalCount ?: 0,
+            totalAmount = batchInfo?.totalAmount ?: BigDecimal.ZERO
+        )
+    }
+    override fun onFailure(error: PaymentError) { ... }
+    override fun onProgress(event: PaymentEvent) { ... }
+})
+```
+
+---
+
+## Query Transaction
+
+Used for status checks — **required** before retrying after error code `306` (timeout).
+
+```kotlin
+val query = QueryRequest()
+    .setTransactionRequestId("TXN_the_original_request_id")
+
+client.query(query, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResult) {
+        when (result.transactionStatus) {
+            "SUCCESS"    -> handleSuccess(result)
+            "PROCESSING" -> continuePolling()   // Retry after 5 seconds
+            "FAILED"     -> handleFailure(result)
+        }
+    }
+    override fun onFailure(error: PaymentError) { ... }
+    override fun onProgress(event: PaymentEvent) { }
+})
+```
+
+---
+
+## Key IDs Explained
+
+| Field | Scope | Rules |
+|-------|-------|-------|
+| `referenceOrderId` | Business order | One order can contain multiple transactions; 6–32 chars |
+| `transactionRequestId` | Single transaction request | **Must be globally unique**; used for idempotency and retry |
+| `transactionId` | SUNBAY platform | Returned in `PaymentResult`; use for void/refund/postAuth |
+
+---
+
+## PaymentResult Key Fields
+
+```kotlin
+result.code               // "0" = success
+result.transactionStatus  // "SUCCESS" | "PROCESSING" | "FAILED"
+result.transactionId      // SUNBAY platform transaction ID
+result.referenceOrderId   // Echoed back from request
+result.amount             // TransactionAmount (total, tip, tax, etc.)
+result.cardInfo           // Card type, last 4 digits, input method
+result.authCode           // Authorization code
+result.rrn                // Retrieval Reference Number
+result.stan               // System Trace Audit Number
+result.receiptJson        // Receipt data in JSON format
+
+// Helper methods:
+result.isSuccess()        // code=="0" && transactionStatus=="SUCCESS"
+result.isProcessing()     // transactionStatus=="PROCESSING"
+result.isFailed()         // transactionStatus=="FAILED" || code!="0"
+```

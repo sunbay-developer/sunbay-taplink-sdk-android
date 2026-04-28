@@ -1,0 +1,247 @@
+---
+description: Taplink SDK error handling – error codes, categories, retry rules, and PaymentError usage
+globs: ["**/*.kt", "**/*.java"]
+alwaysApply: false
+---
+
+# Taplink SDK – Error Handling
+
+---
+
+## Error Classes
+
+### `PaymentError` — Transaction errors
+
+```kotlin
+error.code                    // String error code, e.g., "306"
+error.message                 // Human-readable description
+error.suggestion              // Recommended action
+error.category                // ErrorCategory enum
+error.canRetryWithSameId      // Boolean: safe to retry with same transactionRequestId?
+error.traceId                 // For troubleshooting with SUNBAY support
+error.referenceOrderId        // Merchant order ID from request
+error.transactionId           // Platform transaction ID (if assigned)
+error.transactionRequestId    // Transaction request ID from request
+```
+
+### `ConnectionError` — Connection errors
+
+```kotlin
+error.code     // Error code string
+error.message  // Description
+```
+
+---
+
+## Error Categories (`ErrorCategory`)
+
+```kotlin
+when (error.category) {
+    ErrorCategory.INITIALIZATION -> {
+        // SDK not initialized or service issue
+        // Action: re-call TaplinkSDK.init() or restart app
+    }
+    ErrorCategory.CONNECTION -> {
+        // Connection failed or lost
+        // Action: check mode-specific requirements and call TaplinkSDK.connect()
+    }
+    ErrorCategory.AUTHENTICATION -> {
+        // Invalid appId, merchantId, or secretKey
+        // Action: verify TaplinkConfig credentials
+    }
+    ErrorCategory.TRANSACTION -> {
+        // Transaction rejected or processing error
+        // Action: check error.canRetryWithSameId and error.suggestion
+    }
+}
+```
+
+---
+
+## Error Code Reference
+
+> Error code `100` = **success** (not an error). Actual errors start at `200`.
+
+### Initialization Errors (20x)
+
+| Code | Issue | Action |
+|------|-------|--------|
+| 201 | SDK not initialized | Call `TaplinkSDK.init()` before any operation |
+| 202 | SDK service error | Restart the application |
+| 203 | Tapro initialization failed | Disconnect and reconnect |
+
+### Connection State Errors (21x)
+
+| Code | Issue | Action |
+|------|-------|--------|
+| 211 | Already connecting | Wait for current connect to complete |
+| 212 | Already connected | No action needed, already connected |
+| 213 | Not connected | Call `TaplinkSDK.connect()` first |
+| 214 | Connection failed | Check device, network, and credentials |
+| 221 | Auth/handshake failed | Verify appId, merchantId, secretKey |
+
+### App-to-App Mode Errors (23x)
+
+| Code | Issue | Action |
+|------|-------|--------|
+| 231 | Tapro app not installed | Ask user to install Tapro app |
+| 232 | Tapro app not running | Restart device or relaunch Tapro |
+
+### LAN Mode Errors (24x)
+
+| Code | Issue | Action |
+|------|-------|--------|
+| 241 | Cannot reach terminal IP | Check IP address and network connectivity |
+| 242 | Network unavailable | Check Wi-Fi or wired connection |
+
+### Cable Mode Errors (25x)
+
+| Code | Issue | Action |
+|------|-------|--------|
+| 251 | No USB device found | Check cable connection |
+| 252 | USB permission denied | Handle Android USB permission dialog |
+| 253 | Protocol mismatch | Try `CableProtocol.AUTO` |
+| 254 | Cable communication error | Re-plug cable and reconnect |
+| 255 | Serial port open failed | Check USB driver compatibility |
+
+### Transaction Errors (30x)
+
+| Code | Issue | Action | Retry Rule |
+|------|-------|--------|------------|
+| 301 | Invalid parameters | Fix request parameters | ✅ Same ID |
+| 302 | Request send failed | Check connection and retry | ✅ Same ID |
+| 303 | Request serialization error | Check request object | ✅ Same ID |
+| 304 | Transaction in progress | Wait for current transaction | ✅ Same ID |
+| 305 | Network error during send | Retry after reconnecting | ✅ Same ID |
+| 306 | **Response timeout** | **Query status first**, then decide | ⚠️ Query first |
+| 307 | Transaction rejected | Check error message, use new ID | ❌ New ID |
+| 308 | Duplicate transaction ID | Use new `transactionRequestId` | ❌ New ID |
+| 309 | Transaction failed | Review details | ❌ New ID |
+| 310 | Invalid response | Contact SUNBAY support | ❌ New ID |
+| 311 | Transaction cancelled | User or system cancelled | ❌ New ID |
+
+---
+
+## Retry Rules
+
+```
+✅ Same ID OK  → error.canRetryWithSameId == true  → Retry with same transactionRequestId
+⚠️ Query first → error.code == "306"              → MUST query status before any retry
+❌ New ID      → error.canRetryWithSameId == false  → MUST use a new transactionRequestId
+```
+
+---
+
+## Error 306 Timeout Handling Pattern
+
+When `error.code == "306"`, the transaction **may or may not** have been processed.  
+Always query status first before retrying:
+
+```kotlin
+override fun onFailure(error: PaymentError) {
+    if (error.code == "306") {
+        // MUST query before retrying
+        queryWithPolling(error.transactionRequestId!!)
+    } else if (error.canRetryWithSameId) {
+        // Safe to retry with same ID
+        retryTransaction(originalRequest)
+    } else {
+        // Must create new transaction with new transactionRequestId
+        val newRequest = originalRequest.copy(
+            transactionRequestId = "TXN_${System.currentTimeMillis()}"
+        )
+        client.sale(newRequest, callback)
+    }
+}
+
+private fun queryWithPolling(txnRequestId: String, attempt: Int = 1) {
+    if (attempt > 12) {  // Max 12 attempts = 60 seconds
+        showError("Status unknown. Contact support. ID: $txnRequestId")
+        return
+    }
+
+    val query = QueryRequest().setTransactionRequestId(txnRequestId)
+    client.query(query, object : PaymentCallback {
+        override fun onSuccess(result: PaymentResult) {
+            when (result.transactionStatus) {
+                "SUCCESS"    -> handleSuccess(result)
+                "FAILED"     -> handleFailure(result)
+                "PROCESSING" -> {
+                    // Continue polling after 5 seconds
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        queryWithPolling(txnRequestId, attempt + 1)
+                    }, 5000)
+                }
+            }
+        }
+        override fun onFailure(error: PaymentError) {
+            // Query itself failed — retry polling
+            Handler(Looper.getMainLooper()).postDelayed({
+                queryWithPolling(txnRequestId, attempt + 1)
+            }, 5000)
+        }
+        override fun onProgress(event: PaymentEvent) { }
+    })
+}
+```
+
+---
+
+## Complete Error Handling Pattern
+
+```kotlin
+client.sale(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResult) {
+        when {
+            result.isSuccess()    -> showPaymentSuccess(result)
+            result.isProcessing() -> queryWithPolling(result.transactionRequestId!!)
+            result.isFailed()     -> showPaymentFailed(result.transactionResultMsg)
+        }
+    }
+
+    override fun onFailure(error: PaymentError) {
+        Log.e("Payment", "Error ${error.code}: ${error.message} | traceId=${error.traceId}")
+
+        when (error.category) {
+            ErrorCategory.INITIALIZATION -> reinitializeSDK()
+            ErrorCategory.CONNECTION     -> reconnectAndRetry()
+            ErrorCategory.AUTHENTICATION -> showCredentialError(error.suggestion)
+            ErrorCategory.TRANSACTION    -> handleTransactionError(error)
+        }
+    }
+
+    override fun onProgress(event: PaymentEvent) { updateUI(event) }
+})
+
+private fun handleTransactionError(error: PaymentError) {
+    when (error.code) {
+        "306" -> queryWithPolling(error.transactionRequestId!!)
+        "308" -> showError("Duplicate transaction. Create a new order.")
+        else  -> {
+            if (error.canRetryWithSameId) {
+                showRetryDialog(error.message) { retryTransaction() }
+            } else {
+                showError("${error.message}\n\nSuggestion: ${error.suggestion}")
+            }
+        }
+    }
+}
+```
+
+---
+
+## Logging for Debugging
+
+Enable detailed logs during development:
+
+```kotlin
+val config = TaplinkConfig(
+    appId = "...",
+    merchantId = "...",
+    secretKey = "...",
+    logEnabled = true,
+    logLevel = LogLevel.DEBUG   // VERBOSE | DEBUG | INFO | WARN | ERROR
+)
+```
+
+> **Disable logging in production** (`logEnabled = false`) to avoid leaking sensitive data.

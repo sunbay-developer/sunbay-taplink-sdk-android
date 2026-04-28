@@ -1,0 +1,212 @@
+---
+description: Taplink SDK connection modes – App-to-App (Local), LAN (WLAN), and Cable (USB/Serial)
+globs: ["**/*.kt", "**/*.java"]
+alwaysApply: false
+---
+
+# Taplink SDK – Connection Modes
+
+Taplink SDK supports three connection modes controlled by `ConnectionConfig` and `ConnectionMode`.
+
+---
+
+## Mode 1: App-to-App (Local / 同设备模式)
+
+Used when the **POS app and Tapro run on the same Android device** (all-in-one POS).
+
+```kotlin
+val config = ConnectionConfig()
+    .setConnectionMode(ConnectionMode.APP_TO_APP)
+
+TaplinkSDK.connect(config, connectionListener)
+```
+
+**Characteristics:**
+- Millisecond-level latency via Android Intent (AIDL)
+- No network or cable required
+- Auto-detection available — use `ConnectionConfig()` with no mode set
+
+**Shortcut factory:**
+```kotlin
+val config = ConnectionConfig.createAppMode()
+```
+
+---
+
+## Mode 2: LAN (WLAN / 局域网模式)
+
+Used when the **POS device connects to the payment terminal over a local network** (wired or Wi-Fi).
+
+### First-time connection (specify IP and port):
+```kotlin
+val config = ConnectionConfig()
+    .setConnectionMode(ConnectionMode.LAN)
+    .setHost("192.168.1.100")   // Terminal IP address
+    .setPort(8443)              // Port range: 8443–8453
+
+TaplinkSDK.connect(config, connectionListener)
+```
+
+### Subsequent connections (use cached device info):
+```kotlin
+val config = ConnectionConfig()
+    .setConnectionMode(ConnectionMode.LAN)
+// Host/port omitted — SDK uses cached device info automatically
+
+TaplinkSDK.connect(config, connectionListener)
+```
+
+**Characteristics:**
+- TLS-encrypted WebSocket
+- mDNS auto-discovery supported
+- SDK handles IP change automatically
+- Port must be in range **8443–8453**
+
+**Shortcut factory:**
+```kotlin
+// First time
+val config = ConnectionConfig.createLanMode(host = "192.168.1.100", port = 8443)
+// Subsequent
+val config = ConnectionConfig.createLanMode()
+```
+
+---
+
+## Mode 3: Cable (线缆模式)
+
+Used when the **POS device connects to the payment terminal via USB or serial cable**.
+
+```kotlin
+val config = ConnectionConfig()
+    .setConnectionMode(ConnectionMode.CABLE)
+    .setCableProtocol(CableProtocol.AUTO)  // Recommended: auto-detect
+
+TaplinkSDK.connect(config, connectionListener)
+```
+
+### Supported Protocols (`CableProtocol`):
+
+| Enum | Description |
+|------|-------------|
+| `AUTO` | Auto-detect (tries VSP → RS232 → AOA) — **recommended** |
+| `USB_VSP` | USB Virtual Serial Port (CDC-ACM) |
+| `RS232` | Serial via USB adapter (FTDI/CH340/PL2303), hex-framed |
+| `USB_AOA` | USB Android Open Accessory 2.0 |
+
+> **AUTO detection order**: VSP → RS232 → AOA  
+> Serial paths are tried first so CDC devices connect without waiting on an AOA attempt.
+
+### RS232-specific notes:
+- Opening the USB serial port is **not** enough for `onConnected`; the stack waits for peer liveness via handshake markers (`##TAPLINK_HSK_REQ##` / `##TAPLINK_HSK_ACK##`) or business payload.
+- Ensure the host app has **USB host** support and handles the **USB permission** prompt.
+- Peer silence watchdog: default **5 seconds** without handshake/payload.
+
+**Shortcut factories:**
+```kotlin
+val config = ConnectionConfig.createCableMode()                        // AUTO protocol
+val config = ConnectionConfig.createCableMode(CableProtocol.USB_VSP)  // Specific protocol
+```
+
+---
+
+## Auto-Detect (No Mode Specified)
+
+If `connectionMode` is null, the SDK auto-detects the available mode in this order:  
+`APP_TO_APP → Cable → LAN (cached)`
+
+```kotlin
+val config = ConnectionConfig()  // Empty config — SDK decides
+// or
+val config = ConnectionConfig.createDefault()
+```
+
+---
+
+## ConnectionListener
+
+Always implement all three required callbacks:
+
+```kotlin
+TaplinkSDK.connect(config, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        // Connection successful — safe to call TaplinkSDK.getClient()
+        runOnUiThread { enablePaymentUI(true) }
+    }
+
+    override fun onDisconnected(reason: String) {
+        // Connection lost
+        runOnUiThread { enablePaymentUI(false) }
+    }
+
+    override fun onError(error: ConnectionError) {
+        // Connection failed — check error.code for diagnosis
+        runOnUiThread { showError(error.message) }
+    }
+
+    // Optional: called when autoReconnect is enabled
+    override fun onReconnecting(attempt: Int, maxRetries: Int) {
+        runOnUiThread { showStatus("Reconnecting $attempt/$maxRetries...") }
+    }
+})
+```
+
+---
+
+## Connection Config Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `connectionTimeout` | 60s | Max wait for connection |
+| `autoReconnect` | `false` | Auto-reconnect on unexpected disconnect |
+| `maxRetryCount` | 3 | Max reconnect attempts |
+| `retryDelayMs` | 2000ms | Delay between attempts |
+
+```kotlin
+// High-reliability config (preset)
+val config = ConnectionConfig.createHighReliabilityConfig()
+// autoReconnect=true, maxRetries=5, delayMs=3000, timeout=90s
+
+// Fast-connection config (preset)
+val config = ConnectionConfig.createFastConnectionConfig()
+// autoReconnect=false, timeout=30s
+```
+
+---
+
+## Monitoring Connection Status (Persistent Listener)
+
+Register a listener to monitor status changes throughout the Activity lifecycle:
+
+```kotlin
+// In Activity.onCreate()
+TaplinkSDK.setConnectionListener(object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) { ... }
+    override fun onDisconnected(reason: String) { ... }
+    override fun onError(error: ConnectionError) { ... }
+})
+
+// In Activity.onDestroy()
+TaplinkSDK.removeConnectionListener()
+```
+
+> **Note:** `setConnectionListener` registers a persistent observer.  
+> The listener passed to `connect()` is a one-shot listener for that specific connect call.
+
+---
+
+## Lifecycle Management
+
+```kotlin
+// Activity/Service lifecycle
+override fun onResume()  { TaplinkSDK.connect(config, listener) }
+override fun onDestroy() { TaplinkSDK.disconnect() }
+```
+
+---
+
+## Clearing Cached Device Info
+
+To force re-pairing (e.g., switching terminals):
+```kotlin
+TaplinkSDK.clearDeviceCache()
+```

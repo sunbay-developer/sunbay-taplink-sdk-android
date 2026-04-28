@@ -1,0 +1,141 @@
+---
+description: Taplink SDK architecture overview – module structure, entry classes, and initialization
+globs: ["**/*.kt", "**/*.java"]
+alwaysApply: false
+---
+
+# Taplink SDK Overview
+
+Taplink SDK is a **semi-integrated payment SDK** provided by SUNBAY for Android POS applications.  
+It supports three connection modes: **App-to-App (Local)**, **LAN (WLAN)**, and **Cable (USB/Serial)**.
+
+---
+
+## Module Structure
+
+| Module | Role |
+|--------|------|
+| `lib_taplink_sdk` | Public API — use this module in your app |
+| `lib_taplink_communication` | Internal transport layer — do **not** use directly |
+
+Add dependency in `build.gradle.kts`:
+```kotlin
+dependencies {
+    implementation(project(":lib_taplink_sdk"))
+}
+```
+> `lib_taplink_communication` is pulled in transitively; never reference its internal classes.
+
+---
+
+## Core Entry Classes
+
+### `TaplinkSDK` (singleton)
+Handles **initialization** and **connection management**.
+
+```kotlin
+// Package: com.sunmi.tapro.taplink.sdk
+TaplinkSDK.init(context, config)          // Initialize — call in Application.onCreate()
+TaplinkSDK.connect(config, listener)      // Establish connection
+TaplinkSDK.disconnect()                   // Release connection
+TaplinkSDK.isConnected(): Boolean
+TaplinkSDK.getConnectionMode(): String?   // "APP_TO_APP" | "LAN" | "CABLE"
+TaplinkSDK.getConnectedDeviceId(): String?
+TaplinkSDK.getTaproVersion(): String?
+TaplinkSDK.getClient(): TaplinkClient     // Get transaction client AFTER connect
+```
+
+### `TaplinkClient` (obtained via `TaplinkSDK.getClient()`)
+Handles **all transaction operations**.
+
+```kotlin
+val client = TaplinkSDK.getClient()
+client.sale(request, callback)
+client.refund(request, callback)
+client.void(request, callback)
+client.auth(request, callback)
+client.postAuth(request, callback)
+client.incrementalAuth(request, callback)
+client.tipAdjust(request, callback)
+client.batchClose(request, callback)
+client.query(request, callback)
+```
+
+---
+
+## Initialization
+
+Initialize once in `Application.onCreate()`:
+
+```kotlin
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        val config = TaplinkConfig(
+            appId = "your_app_id",
+            merchantId = "your_merchant_id",
+            secretKey = "your_secret_key"
+        )
+        TaplinkSDK.init(this, config)
+    }
+}
+```
+
+### `TaplinkConfig` Parameters
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `appId` | ✅ | — | App identifier assigned by SUNBAY |
+| `merchantId` | ✅ | — | Merchant identifier |
+| `secretKey` | ✅ | — | HMAC-SHA256 signing key |
+| `logEnabled` | ❌ | `false` | Enable SDK logs |
+| `logLevel` | ❌ | `INFO` | `VERBOSE`, `DEBUG`, `INFO`, `WARN`, `ERROR` |
+| `defaultStaffInfo` | ❌ | `null` | Global default staff info |
+| `defaultDeviceInfo` | ❌ | `null` | Global default device info |
+| `timeout` | ❌ | `180` | Default transaction timeout (seconds) |
+| `taproAppWidthRatio` | ❌ | `null` | Tapro UI width ratio (0.0–1.0) |
+
+---
+
+## 3-Step Integration Summary
+
+```
+Step 1: TaplinkSDK.init(context, config)       → in Application.onCreate()
+Step 2: TaplinkSDK.connect(config, listener)   → in Activity.onCreate() or onResume()
+Step 3: TaplinkSDK.getClient().sale(...)       → when user initiates payment
+```
+
+---
+
+## INIT Session Concept
+
+> **Important**: After a physical connection is established, the SDK runs **INIT** with Tapro on the **first payment operation** (not inside `onConnected`). If the transport drops, INIT state is cleared and the next transaction performs INIT again — do **not** assume INIT remains valid across disconnect/reconnect.
+
+---
+
+## Key Packages
+
+```
+com.sunmi.tapro.taplink.sdk
+├── TaplinkSDK.kt                  ← Main entry class
+├── TaplinkClient.kt               ← Transaction client
+├── config/
+│   ├── TaplinkConfig.kt           ← SDK initialization config
+│   └── ConnectionConfig.kt        ← Connection mode config
+├── callback/
+│   ├── ConnectionListener.kt      ← Connection events
+│   └── PaymentCallback.kt         ← Transaction events (progress/success/failure)
+├── enums/
+│   ├── ConnectionMode.kt          ← APP_TO_APP | LAN | CABLE
+│   ├── CableProtocol.kt           ← AUTO | USB_AOA | USB_VSP | RS232
+│   ├── CardNetworkType.kt         ← CREDIT | DEBIT
+│   └── PrintReceipt.kt            ← NONE | MERCHANT | CUSTOMER | BOTH | AUTO
+├── model/
+│   ├── common/AmountInfo.kt       ← Amount fields (smallest currency unit!)
+│   ├── common/PaymentEvent.kt     ← Transaction progress events (sealed class)
+│   ├── request/transaction/       ← SaleRequest, RefundRequest, VoidRequest, etc.
+│   └── response/PaymentResult.kt  ← Transaction result
+└── error/
+    ├── PaymentError.kt            ← Transaction error info
+    └── ConnectionError.kt         ← Connection error info
+```
