@@ -9,7 +9,6 @@ import com.sunmi.tapro.taplink.sdk.callback.onFailure
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
-import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolRequestBuilder
@@ -65,23 +64,6 @@ class PaymentManager(
     private var hasPendingAutoConnectTransaction = false
 
     /**
-     * Flag indicating whether INIT command has been sent and succeeded.
-     * Reset when connection is disconnected.
-     */
-    private var initComplete: Boolean = false
-
-    /**
-     * Flag to track if INIT is in progress (only one transaction can trigger init at a time)
-     */
-    private var isInitInProgress = false
-
-    /**
-     * traceId of INIT registered in [callbackManager]; removed on disconnect so a stale INIT
-     * cannot finish after reconnect and so [isInitInProgress] / [initComplete] stay consistent.
-     */
-    private var pendingInitTraceId: String? = null
-
-    /**
      * Pending transaction waiting for connection (only one at a time)
      * Used when connection is in progress but no auto-connect transaction is pending
      */
@@ -113,28 +95,12 @@ class PaymentManager(
     }
 
     /**
-     * Reset INIT state after transport disconnect. INIT is per-session; reconnect always needs a new INIT.
+     * Handle transport disconnect. Clear pending auto-connect state.
      */
     private fun onPhysicalDisconnected() {
         if (hasPendingAutoConnectTransaction) {
             LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
             hasPendingAutoConnectTransaction = false
-        }
-        initComplete = false
-        if (isInitInProgress) {
-            val traceId = pendingInitTraceId
-            pendingInitTraceId = null
-            isInitInProgress = false
-            if (!traceId.isNullOrBlank()) {
-                val cb = callbackManager.getAndRemoveCallbackByTraceId(traceId)
-                try {
-                    cb?.onError(InnerErrorCode.E213.code, InnerErrorCode.E213.description)
-                } catch (e: Exception) {
-                    LogUtil.e(TAG, "Error notifying aborted INIT: ${e.message}")
-                }
-            }
-        } else {
-            pendingInitTraceId = null
         }
     }
 
@@ -536,9 +502,6 @@ class PaymentManager(
     fun failAllPendingTransactions(errorCode: String, errorMessage: String) {
         LogUtil.w(TAG, "Failing all pending transactions: $errorCode - $errorMessage")
         hasPendingAutoConnectTransaction = false
-        isInitInProgress = false
-        initComplete = false
-        pendingInitTraceId = null
         callbackManager.failAllCallbacks(errorCode, errorMessage)
     }
 
@@ -618,170 +581,11 @@ class PaymentManager(
     }
 
     /**
-     * Ensure INIT is complete before executing transaction.
-     * If connected but not initialized, perform INIT first.
+     * Ensure connection is ready, then execute transaction directly.
+     * INIT is handled by Tapro itself, SDK no longer sends INIT command.
      */
     private fun ensureInitAndExecute(request: PaymentRequest, callback: PaymentCallback) {
-        if (initComplete) {
-            sendPaymentRequest(request, callback)
-            return
-        }
-
-        if (isInitInProgress) {
-            LogUtil.w(TAG, "INIT already in progress, rejecting transaction")
-            callback.onFailure(
-                errorCode = InnerErrorCode.E307,
-                errorMessage = "${InnerErrorCode.E307.description}(${"INIT in progress, please retry"})",
-                transactionRequestId = request.transactionRequestId
-            )
-            return
-        }
-
-        isInitInProgress = true
-        performInit { success, errorCode, errorMsg ->
-            isInitInProgress = false
-            if (success) {
-                sendPaymentRequest(request, callback)
-            } else {
-                LogUtil.e(TAG, "INIT failed before transaction: code=$errorCode, msg=$errorMsg")
-                callback.onFailure(
-                    code = errorCode ?: InnerErrorCode.E305.code,
-                    errorMsg = errorMsg ?: InnerErrorCode.E305.description,
-                    transactionRequestId = request.transactionRequestId
-                )
-            }
-        }
-    }
-
-    /**
-     * Perform INIT command before first transaction.
-     * INIT is deferred from connection to transaction execution.
-     *
-     * @param onComplete Callback with (success, errorCode, errorMessage)
-     */
-    private fun performInit(onComplete: (Boolean, String?, String?) -> Unit) {
-        sendInitCommand { success, errorCode, errorMsg, deviceId, taproVersion ->
-            if (success) {
-                initComplete = true
-                connectionManager.updateDeviceInfo(deviceId ?: "unknown", taproVersion ?: "unknown")
-                onComplete(true, null, null)
-            } else {
-                LogUtil.e(TAG, "INIT failed: code=$errorCode, msg=$errorMsg")
-                onComplete(false, errorCode, errorMsg)
-            }
-        }
-    }
-
-    /**
-     * Send INIT command to initialize Tapro application
-     */
-    private fun sendInitCommand(onComplete: (Boolean, String?, String?, String?, String?) -> Unit) {
-        try {
-            LogUtil.d(TAG, "Sending INIT command to initialize Tapro application")
-
-            val initRequest = PaymentRequest(action = TransactionAction.INIT.value)
-            val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
-                request = initRequest,
-                version = config.version,
-                config.appId,
-                secretKey = config.secretKey
-            )
-
-            val requestJson = gson.toJson(basicRequest)
-            LogUtil.d(TAG, "INIT command prepared: traceId=${basicRequest.traceId}")
-
-            val initCallback = object : InnerCallback {
-                override fun onError(code: String, msg: String) {
-                    LogUtil.e(TAG, "INIT command failed: code=$code, msg=$msg")
-                    pendingInitTraceId = null
-                    onComplete(false, code, msg, null, null)
-                }
-
-                override fun onResponse(responseData: String) {
-                    LogUtil.d(TAG, "INIT command response received: $responseData")
-                    try {
-                        val basicResponse = gson.fromJson(
-                            responseData,
-                            com.sunmi.tapro.taplink.sdk.model.base.BasicResponse::class.java
-                        )
-                        var code = "ERROR"
-                        var message: String? = basicResponse.event.eventMsg
-                        var deviceId: String? = null
-                        var taproVersion: String? = null
-
-                        if (basicResponse.bizData != null) {
-                            try {
-                                val bizDataJson = gson.fromJson(
-                                    basicResponse.bizData,
-                                    com.google.gson.JsonObject::class.java
-                                )
-                                code = bizDataJson.get("code")?.asString ?: "ERROR"
-                                message = bizDataJson.get("message")?.asString
-                                deviceId = bizDataJson.get("deviceId")?.asString
-                                taproVersion = bizDataJson.get("taproVersion")?.asString
-                            } catch (e: Exception) {
-                                LogUtil.w(TAG, "Failed to parse bizData as JSON: ${e.message}")
-                            }
-                        }
-
-                        if ((code == ResponseProcessor.SUCCESS_CODE || code == "0" || code == "000") &&
-                            basicResponse.event is PaymentEvent.Completed
-                        ) {
-                            LogUtil.d(TAG, "INIT command completed successfully")
-                            pendingInitTraceId = null
-                            onComplete(true, null, null, deviceId, taproVersion)
-                        } else {
-                            LogUtil.e(TAG, "INIT command failed: code=$code, message=$message")
-                            pendingInitTraceId = null
-                            onComplete(false, code, message, null, null)
-                        }
-                    } catch (e: Exception) {
-                        LogUtil.e(TAG, "Failed to parse INIT response: ${e.message}")
-                        pendingInitTraceId = null
-                        onComplete(false, "PARSE_ERROR", "Failed to parse INIT response: ${e.message}", null, null)
-                    }
-                }
-            }
-
-            val added = callbackManager.addInitCallback(
-                basicRequest.traceId,
-                initCallback,
-                app2app = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name,
-                initRequest.requestTimeout
-            )
-            if (!added) {
-                LogUtil.w(TAG, "Failed to add INIT callback to manager")
-                onComplete(false, "CALLBACK_ERROR", "Failed to add INIT callback", null, null)
-                return
-            }
-
-            pendingInitTraceId = basicRequest.traceId
-
-            val serviceKernel = TaplinkServiceKernel.getInstance()
-            if (serviceKernel == null) {
-                callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                pendingInitTraceId = null
-                onComplete(false, "SERVICE_UNAVAILABLE", "Service kernel not available", null, null)
-                return
-            }
-
-            try {
-                serviceKernel.sendData(
-                    basicRequest.traceId,
-                    requestJson.toByteArray(Charsets.UTF_8),
-                    initCallback
-                )
-                LogUtil.d(TAG, "INIT command sent successfully")
-            } catch (e: Exception) {
-                LogUtil.e(TAG, "Failed to send INIT command: ${e.message}")
-                callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                pendingInitTraceId = null
-                onComplete(false, "SEND_ERROR", "Failed to send INIT command: ${e.message}", null, null)
-            }
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to prepare INIT command: ${e.message}")
-            onComplete(false, "PREPARE_ERROR", "Failed to prepare INIT command: ${e.message}", null, null)
-        }
+        sendPaymentRequest(request, callback)
     }
 
     /**
