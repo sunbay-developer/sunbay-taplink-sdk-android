@@ -7,12 +7,12 @@ import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 
 /**
  * Taplink SDK API interface
  *
- * Complete API interface defined according to Taplink SDK for Android integration guide document
- * Reference document: Taplink SDK for Android - 集成指南.md
+ * Defines the complete public API contract for the Taplink SDK.
  *
  * Main features:
  * - Unified use of PaymentRequest to handle all transaction types (distinguished by action field)
@@ -36,6 +36,23 @@ interface TaplinkApi {
      * @param config SDK configuration object
      */
     fun init(context: Context, config: TaplinkConfig)
+
+    /**
+     * Whether the SDK has been initialized via [init].
+     *
+     * @return true if [init] has been called successfully
+     */
+    fun isInitialized(): Boolean
+
+    /**
+     * Returns the current connection status.
+     *
+     * More granular than [isConnected]: distinguishes CONNECTING, CONNECTED,
+     * WAIT_CONNECTING, DISCONNECTED, and ERROR states.
+     *
+     * @return [ConnectionStatus] current status
+     */
+    fun getConnectionStatus(): ConnectionStatus
 
     // ==================== Connection Management ====================
 

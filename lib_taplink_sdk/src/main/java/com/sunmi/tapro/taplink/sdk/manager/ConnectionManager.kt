@@ -593,6 +593,14 @@ class ConnectionManager(
     }
 
     /**
+     * Returns the current [ConnectionStatus].
+     *
+     * More granular than [isConnected]: distinguishes CONNECTING, WAIT_CONNECTING,
+     * CONNECTED, DISCONNECTED, and ERROR states.
+     */
+    fun getConnectionStatus(): ConnectionStatus = connectionStatus
+
+    /**
      * Update device info when INIT succeeds.
      * Called by PaymentManager when INIT command completes successfully.
      *

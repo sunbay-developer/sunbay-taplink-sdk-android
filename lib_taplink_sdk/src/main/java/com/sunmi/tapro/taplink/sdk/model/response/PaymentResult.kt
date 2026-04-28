@@ -158,21 +158,21 @@ data class PaymentResult(
     // ========== Tip adjustment specific fields ==========
     
     /**
-     * Tip amount (tip adjustment only, unit: base currency unit)
+     * Tip amount (tip adjustment only, unit: smallest currency unit / cents)
      */
-    var tipAmount: BigDecimal? = null,
+    val tipAmount: BigDecimal? = null,
     
     // ========== Incremental authorization specific fields ==========
     
     /**
-     * Incremental amount (incremental authorization only, unit: base currency unit)
+     * Incremental amount (incremental authorization only, unit: smallest currency unit / cents)
      */
-    var incrementalAmount: BigDecimal? = null,
+    val incrementalAmount: BigDecimal? = null,
     
     /**
-     * Total authorized amount (incremental authorization only, unit: base currency unit)
+     * Total authorized amount (incremental authorization only, unit: smallest currency unit / cents)
      */
-    var totalAuthorizedAmount: BigDecimal? = null,
+    val totalAuthorizedAmount: BigDecimal? = null,
     
     // ========== Refund specific fields ==========
     

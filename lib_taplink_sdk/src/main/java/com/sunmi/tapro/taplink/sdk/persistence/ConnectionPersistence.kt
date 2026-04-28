@@ -15,7 +15,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * @author TaPro Team
  * @since 2025-12-21
  */
-class ConnectionPersistence(private val context: Context) {
+class ConnectionPersistence(context: Context) {
     
     private val TAG = "ConnectionPersistence"
     
@@ -25,6 +25,9 @@ class ConnectionPersistence(private val context: Context) {
         private const val KEY_CONNECTED_DEVICE_ID = "connected_device_id"
         private const val KEY_DEVICE_SERVICE_INFO = "device_service_info_"
         private const val KEY_AUTO_CONNECT_ENABLED = "auto_connect_enabled"
+        private const val KEY_DETECTED_CABLE_PROTOCOL = "detected_cable_protocol"
+        private const val KEY_DETECTED_CABLE_DEVICE_INFO = "detected_cable_device_info"
+        private const val KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP = "detected_cable_protocol_timestamp"
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -50,22 +53,22 @@ class ConnectionPersistence(private val context: Context) {
     fun saveConnectionConfig(config: ConnectionConfig?, deviceId: String?) {
         try {
             LogUtil.d(TAG, "Saving connection config for deviceId: $deviceId")
-            
+
             val editor = prefs.edit()
-            
+
             // Save connection config
             if (config != null) {
                 val configJson = gson.toJson(config)
                 editor.putString(KEY_LAST_CONNECTION_CONFIG, configJson)
                 LogUtil.d(TAG, "Saved connection config: $configJson")
             }
-            
+
             // Save connected device ID
             if (deviceId != null) {
                 editor.putString(KEY_CONNECTED_DEVICE_ID, deviceId)
                 LogUtil.d(TAG, "Saved connected device ID: $deviceId")
             }
-            
+
             editor.apply()
             
         } catch (e: Exception) {
@@ -82,11 +85,11 @@ class ConnectionPersistence(private val context: Context) {
     fun saveDetectedCableProtocol(protocol: com.sunmi.tapro.taplink.sdk.enums.CableProtocol, deviceInfo: String?) {
         try {
             val editor = prefs.edit()
-            editor.putString("detected_cable_protocol", protocol.name)
+            editor.putString(KEY_DETECTED_CABLE_PROTOCOL, protocol.name)
             if (deviceInfo != null) {
-                editor.putString("detected_cable_device_info", deviceInfo)
+                editor.putString(KEY_DETECTED_CABLE_DEVICE_INFO, deviceInfo)
             }
-            editor.putLong("detected_cable_protocol_timestamp", System.currentTimeMillis())
+            editor.putLong(KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP, System.currentTimeMillis())
             editor.apply()
             
             LogUtil.d(TAG, "Saved detected cable protocol: $protocol, deviceInfo: $deviceInfo")
@@ -102,8 +105,8 @@ class ConnectionPersistence(private val context: Context) {
      */
     fun getDetectedCableProtocol(): com.sunmi.tapro.taplink.sdk.enums.CableProtocol? {
         return try {
-            val protocolName = prefs.getString("detected_cable_protocol", null)
-            val timestamp = prefs.getLong("detected_cable_protocol_timestamp", 0)
+            val protocolName = prefs.getString(KEY_DETECTED_CABLE_PROTOCOL, null)
+            val timestamp = prefs.getLong(KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP, 0)
             
             // Check if detection is recent (within 5 minutes)
             val isRecent = (System.currentTimeMillis() - timestamp) < 5 * 60 * 1000
@@ -205,10 +208,10 @@ class ConnectionPersistence(private val context: Context) {
             null
         }
     }
-    
+
     /**
      * Update device service information (IP/port change)
-     * 
+     *
      * @param deviceId Device ID
      * @param newHost New host/IP address
      * @param newPort New port
@@ -231,7 +234,7 @@ class ConnectionPersistence(private val context: Context) {
             LogUtil.e(TAG, "Failed to update device service info: ${e.message}")
         }
     }
-    
+
     /**
      * Set auto-connect enabled state
      * 
@@ -271,16 +274,16 @@ class ConnectionPersistence(private val context: Context) {
             LogUtil.e(TAG, "Failed to clear connection data: ${e.message}")
         }
     }
-    
+
     /**
      * Clear device service information
-     * 
+     *
      * @param deviceId Device ID to clear, or null to clear all
      */
     fun clearDeviceServiceInfo(deviceId: String? = null) {
         try {
             val editor = prefs.edit()
-            
+
             if (deviceId != null) {
                 val key = KEY_DEVICE_SERVICE_INFO + deviceId
                 editor.remove(key)
@@ -295,24 +298,24 @@ class ConnectionPersistence(private val context: Context) {
                 }
                 LogUtil.d(TAG, "Cleared all device service info")
             }
-            
+
             editor.apply()
-            
+
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to clear device service info: ${e.message}")
         }
     }
-    
+
     /**
      * Get all saved device service information
-     * 
+     *
      * @return List of all saved device service info
      */
     fun getAllDeviceServiceInfo(): List<DeviceServiceInfo> {
         return try {
             val result = mutableListOf<DeviceServiceInfo>()
             val allPrefs = prefs.all
-            
+
             for ((key, value) in allPrefs) {
                 if (key.startsWith(KEY_DEVICE_SERVICE_INFO) && value is String) {
                     try {
@@ -323,10 +326,10 @@ class ConnectionPersistence(private val context: Context) {
                     }
                 }
             }
-            
+
             LogUtil.d(TAG, "Retrieved ${result.size} device service info entries")
             result
-            
+
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to get all device service info: ${e.message}")
             emptyList()

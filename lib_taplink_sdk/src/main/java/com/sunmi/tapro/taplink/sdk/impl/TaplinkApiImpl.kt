@@ -17,6 +17,7 @@ import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
 
 /**
@@ -183,6 +184,12 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     // ==================== Utility Methods ====================
+
+    override fun isInitialized(): Boolean = connectionManager != null
+
+    override fun getConnectionStatus(): ConnectionStatus {
+        return connectionManager?.getConnectionStatus() ?: ConnectionStatus.DISCONNECTED
+    }
 
     override fun getVersion(): String {
         return config?.version ?: BuildConfig.VERSION_NAME

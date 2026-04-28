@@ -124,12 +124,21 @@ class ResponseProcessor {
                 // Code is 0, determine based on PaymentEvent type
                 when (basicResponse.event) {
                     is PaymentEvent.Completed -> {
-                        // Event is Completed, call onSuccess
-                        LogUtil.d(
-                            TAG,
-                            "Payment completed successfully: eventCode=${basicResponse.event.eventCode}"
-                        )
-                        callback.onSuccess(paymentResult)
+                        if (paymentResult.isFailed()) {
+                            // Terminal returned a FAILED transaction status — dispatch to onDeclined
+                            LogUtil.d(
+                                TAG,
+                                "Payment declined: transactionStatus=${paymentResult.transactionStatus}"
+                            )
+                            callback.onDeclined(paymentResult)
+                        } else {
+                            // Approved or processing
+                            LogUtil.d(
+                                TAG,
+                                "Payment completed: eventCode=${basicResponse.event.eventCode}"
+                            )
+                            callback.onSuccess(paymentResult)
+                        }
                     }
 
                     is PaymentEvent.Cancel -> {

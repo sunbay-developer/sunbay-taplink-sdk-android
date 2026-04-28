@@ -4,52 +4,70 @@ import java.math.BigDecimal
 
 /**
  * Amount information class.
- * 
- * Contains detailed amount breakdown information.
- * 
+ *
+ * All monetary values in this class use the **smallest currency unit** (e.g., cents for USD/EUR).
+ * Do NOT pass dollar/euro amounts — pass cents instead:
+ * - `BigDecimal("1000")` = **$10.00 USD**
+ * - `BigDecimal("500")`  = **$5.00 USD** or **€5.00 EUR**
+ *
+ * Use the factory method [AmountInfo.of] for the simplest construction:
+ * ```kotlin
+ * val amount = AmountInfo.of(1000L, "USD")   // $10.00
+ * val amount = AmountInfo.of(500L, "EUR")    // €5.00
+ * ```
+ *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class AmountInfo(
     /**
-     * Order amount (required, unit: base currency unit, e.g., USD).
+     * Order amount (**required**).
+     *
+     * Must be in the **smallest currency unit** (cents). Integer values only — no decimals.
+     * Example: `BigDecimal("1000")` = $10.00 USD.
      */
     val orderAmount: BigDecimal,
     
     /**
-     * Pricing currency (required, ISO 4217 standard, e.g., "USD", "EUR").
+     * Pricing currency (**required**).
+     * ISO 4217 currency code, e.g., `"USD"`, `"EUR"`.
      */
     val pricingCurrency: String,
     
     /**
-     * Tip amount (optional, unit: base currency unit).
+     * Tip amount (optional).
+     * Must be in the **smallest currency unit** (cents). Mutually exclusive with [tipConfig].
      */
     val tipAmount: BigDecimal? = null,
     
     /**
-     * Tax amount (optional, unit: base currency unit).
+     * Tax amount (optional).
+     * Must be in the **smallest currency unit** (cents).
      */
     val taxAmount: BigDecimal? = null,
     
     /**
-     * Surcharge amount (optional, unit: base currency unit).
+     * Surcharge amount (optional).
+     * Must be in the **smallest currency unit** (cents).
      */
     val surchargeAmount: BigDecimal? = null,
     
     /**
-     * Cashback amount (optional, unit: base currency unit).
+     * Cashback amount (optional).
+     * Must be in the **smallest currency unit** (cents).
      */
     val cashbackAmount: BigDecimal? = null,
     
     /**
-     * Service fee (optional, unit: base currency unit).
+     * Service fee (optional).
+     * Must be in the **smallest currency unit** (cents).
      */
     val serviceFee: BigDecimal? = null,
 
     /**
      * Tip configuration (optional).
-     * Defines on-screen tip behavior and suggestion options.
-     * Must not be used together with tipAmount.
+     * Defines on-screen tip prompts and suggestion percentages shown to the cardholder.
+     * Mutually exclusive with [tipAmount] — do not set both.
      */
     val tipConfig: TipConfig? = null
 ) {
@@ -117,5 +135,33 @@ data class AmountInfo(
      * @return the updated AmountInfo instance for method chaining
      */
     fun setTipConfig(tipConfig: TipConfig): AmountInfo = copy(tipConfig = tipConfig)
+
+    companion object {
+        /**
+         * Creates an [AmountInfo] for the most common case: a flat order amount with no tip or extras.
+         *
+         * All amounts in this SDK use the **smallest currency unit** (e.g., cents for USD/EUR).
+         * Example: `AmountInfo.of(1000L, "USD")` represents **$10.00 USD**.
+         *
+         * @param cents Order amount in smallest currency unit (e.g., cents)
+         * @param currency ISO 4217 currency code (e.g., "USD", "EUR")
+         */
+        @JvmStatic
+        fun of(cents: Long, currency: String): AmountInfo =
+            AmountInfo(orderAmount = java.math.BigDecimal(cents), pricingCurrency = currency)
+
+        /**
+         * Creates an [AmountInfo] from a [java.math.BigDecimal] amount.
+         *
+         * The value must represent the **smallest currency unit** (no decimals for USD/EUR).
+         * Example: `AmountInfo.of(BigDecimal("1000"), "USD")` represents **$10.00 USD**.
+         *
+         * @param amount Order amount as BigDecimal in smallest currency unit
+         * @param currency ISO 4217 currency code (e.g., "USD", "EUR")
+         */
+        @JvmStatic
+        fun of(amount: java.math.BigDecimal, currency: String): AmountInfo =
+            AmountInfo(orderAmount = amount, pricingCurrency = currency)
+    }
 }
 
