@@ -11,6 +11,7 @@ import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.lan.LanClientKernel
 import com.sunmi.tapro.taplink.communication.local.kernel.LocalServiceKernel
 import com.sunmi.tapro.taplink.communication.cable.vsp.VSPClientKernel
+import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
@@ -22,7 +23,7 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
  * Uses singleton pattern to ensure globally unique instance
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class TaplinkServiceKernel private constructor(context: Context) {
     private val TAG = "TaplinkServiceKernel"
@@ -39,6 +40,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
     private var currentServiceKernel: IServiceKernel? = null
 
     init {
+        ErrorStringHelper.init(context)
         LogUtil.d(TAG, "TaplinkServiceKernel initialized")
     }
 
@@ -132,93 +134,70 @@ class TaplinkServiceKernel private constructor(context: Context) {
         appSecretKey: String,
         taproAppWidthRatio: Float? = null
     ): IServiceKernel? {
-        val serviceKey = when (parseResult) {
-            is ProtocolParseResult.LanProtocol -> SERVICE_KEY_LAN
-            is ProtocolParseResult.UsbProtocol -> SERVICE_KEY_USB
-            is ProtocolParseResult.SerialProtocol -> SERVICE_KEY_SERIAL
-            is ProtocolParseResult.VspProtocol -> SERVICE_KEY_VSP
-            is ProtocolParseResult.LocalProtocol -> SERVICE_KEY_LOCAL
+        val serviceType = when (parseResult) {
+            is ProtocolParseResult.LanProtocol -> ServiceType.LAN
+            is ProtocolParseResult.UsbProtocol -> ServiceType.USB
+            is ProtocolParseResult.SerialProtocol -> ServiceType.SERIAL
+            is ProtocolParseResult.VspProtocol -> ServiceType.VSP
+            is ProtocolParseResult.LocalProtocol -> ServiceType.LOCAL
             else -> return null
         }
 
-        // Check if current serviceKernel is of the same type
+        // Reuse the existing kernel if it is the same transport type and disconnected
         val current = currentServiceKernel
-        if (current != null && isServiceKernelOfType(current, serviceKey)) {
-            // If same type and disconnected, can reuse
+        if (current != null && isServiceKernelOfType(current, serviceType)) {
             val status = current.getConnectionStatus()
             if (status == InnerConnectionStatus.DISCONNECTED) {
-                LogUtil.d(TAG, "Reusing existing service kernel of type: $serviceKey")
+                LogUtil.d(TAG, "Reusing existing service kernel of type: $serviceType")
                 return current
             }
         }
 
-        // Create new service kernel instance
-        return createServiceKernel(serviceKey, appId, appSecretKey, taproAppWidthRatio)
+        return createServiceKernel(serviceType, appId, appSecretKey, taproAppWidthRatio)
     }
 
     /**
-     * Check if serviceKernel is of specified type
-     *
-     * @param kernel Service kernel instance
-     * @param serviceKey Service type identifier
-     * @return Boolean Whether it is of specified type
+     * Check if [kernel] is the implementation for [serviceType].
      */
-    private fun isServiceKernelOfType(kernel: IServiceKernel, serviceKey: String): Boolean {
-        return when (serviceKey) {
-            SERVICE_KEY_LAN -> kernel is LanClientKernel
-            SERVICE_KEY_USB -> kernel is CableAoaHostKernel
-            SERVICE_KEY_SERIAL -> kernel is SerialServiceKernel
-            SERVICE_KEY_VSP -> kernel is VSPClientKernel
-            SERVICE_KEY_LOCAL -> kernel is LocalServiceKernel
-            else -> false
+    private fun isServiceKernelOfType(kernel: IServiceKernel, serviceType: ServiceType): Boolean {
+        return when (serviceType) {
+            ServiceType.LAN -> kernel is LanClientKernel
+            ServiceType.USB -> kernel is CableAoaHostKernel
+            ServiceType.SERIAL -> kernel is SerialServiceKernel
+            ServiceType.VSP -> kernel is VSPClientKernel
+            ServiceType.LOCAL -> kernel is LocalServiceKernel
         }
     }
 
     /**
-     * Create service kernel instance
-     *
-     * @param serviceKey Service type identifier
-     * @param appId Application ID
-     * @param appSecretKey Application secret key
-     * @param taproAppWidthRatio Width ratio for TaPro application (0.0 to 1.0, optional)
-     * @return IServiceKernel Service kernel instance
+     * Create a new kernel instance for [serviceType].
      */
     private fun createServiceKernel(
-        serviceKey: String, 
+        serviceType: ServiceType,
         appId: String,
         appSecretKey: String,
         taproAppWidthRatio: Float? = null
     ): IServiceKernel {
-        return when (serviceKey) {
-            SERVICE_KEY_LAN -> {
+        return when (serviceType) {
+            ServiceType.LAN -> {
                 LogUtil.d(TAG, "Creating LAN service")
                 LanClientKernel(appId, appSecretKey, mContext)
             }
-
-            SERVICE_KEY_USB -> {
+            ServiceType.USB -> {
                 LogUtil.d(TAG, "Creating USB service")
-                CableAoaHostKernel(
-                    appId, appSecretKey, mContext,
-                )
+                CableAoaHostKernel(appId, appSecretKey, mContext)
             }
-
-            SERVICE_KEY_SERIAL -> {
+            ServiceType.SERIAL -> {
                 LogUtil.d(TAG, "Creating Serial service (RS232 Hex mode)")
                 SerialServiceKernel(appId, appSecretKey, mContext)
             }
-
-            SERVICE_KEY_VSP -> {
+            ServiceType.VSP -> {
                 LogUtil.d(TAG, "Creating VSP service")
                 VSPClientKernel(appId, appSecretKey, mContext)
             }
-
-            SERVICE_KEY_LOCAL -> {
+            ServiceType.LOCAL -> {
                 LogUtil.d(TAG, "Creating Local service")
                 LocalServiceKernel(appId, appSecretKey, taproAppWidthRatio)
-            }
-
-            else -> {
-                throw IllegalArgumentException("Unknown service key: $serviceKey")
             }
         }
     }
@@ -269,10 +248,10 @@ class TaplinkServiceKernel private constructor(context: Context) {
     /**
      * Check if service is initialized
      *
-     * @return Boolean Whether initialized
+     * @return Boolean Whether the singleton instance has been created
      */
     fun isInitialized(): Boolean {
-        return mContext != null
+        return instance != null
     }
 
     /**
@@ -295,12 +274,8 @@ class TaplinkServiceKernel private constructor(context: Context) {
     }
 
     companion object {
-        // Service type identifier constants
-        private const val SERVICE_KEY_LAN = "lan"
-        private const val SERVICE_KEY_USB = "usb"
-        private const val SERVICE_KEY_SERIAL = "serial"
-        private const val SERVICE_KEY_VSP = "vsp"
-        private const val SERVICE_KEY_LOCAL = "local"
+        /** Transport type, used to select and reuse the correct kernel implementation. */
+        private enum class ServiceType { LAN, USB, SERIAL, VSP, LOCAL }
 
         @Volatile
         private var instance: TaplinkServiceKernel? = null

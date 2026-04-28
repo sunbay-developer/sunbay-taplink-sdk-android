@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong
  * @param context Android context
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class LanClientKernel(
     appId: String,

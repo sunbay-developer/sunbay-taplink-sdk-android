@@ -28,7 +28,7 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
  * @param taproAppWidthRatio Width ratio for TaPro application (0.0 to 1.0, optional)
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class LocalServiceKernel constructor(
     appId: String,

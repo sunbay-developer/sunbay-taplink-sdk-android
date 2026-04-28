@@ -23,7 +23,7 @@ import javax.net.ssl.SSLSocketFactory
  * - Integrate network connectivity checking
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class ConnectionManager {
 

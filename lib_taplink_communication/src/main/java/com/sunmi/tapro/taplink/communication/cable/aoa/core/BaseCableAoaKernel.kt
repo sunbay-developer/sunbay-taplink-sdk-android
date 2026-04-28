@@ -82,7 +82,7 @@ data class UsbAoaSession(
  * - Session lifecycle management (prevent old coroutines/old broadcasts from affecting new connections)
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 abstract class BaseUsbAoaKernel(
     appId: String,

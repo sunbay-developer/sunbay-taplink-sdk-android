@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - Enhance error handling and recovery capabilities
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class HeartbeatManager {
 
