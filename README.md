@@ -512,7 +512,6 @@ val amount = AmountInfo(
     tipConfig = TipConfig(
         onScreenTip = true,
         tipMode = TipMode.ON_SALE,
-        tipWithTax = false,
         suggestions = TipSuggestions(
             feeMode = FeeMode.RATE,
             values = listOf(15, 18, 20)
@@ -529,7 +528,6 @@ val amount = AmountInfo(
 |-------|------|----------|---------|-------------|
 | `onScreenTip` | `Boolean` | ❌ | `false` | Whether to show a tip input screen on the terminal. Set to `true` to prompt the customer for a tip. |
 | `tipMode` | `TipMode` | ❌ | `ON_SALE` | When the tip is collected. `ON_SALE` — collected during the sale; `AFTER_SALE` — collected after the sale completes. |
-| `tipWithTax` | `Boolean` | ❌ | `false` | Whether tip percentages are calculated on the tax-inclusive amount. When `false`, percentages apply to the base order amount only. |
 | `suggestions` | `TipSuggestions?` | ❌ | `null` | Predefined tip options displayed on the terminal for the customer to choose from. Omit to allow free-form tip entry only. |
 
 **`TipSuggestions`**
@@ -550,7 +548,7 @@ val amount = AmountInfo(
 
 | Value | Description |
 |-------|-------------|
-| `RATE` | Suggestion values are tip percentages. `15` means 15% of the order amount (or tax-inclusive amount when `tipWithTax = true`). |
+| `RATE` | Suggestion values are tip percentages. `15` means 15% of the order amount. |
 | `AMOUNT` | Suggestion values are fixed tip amounts in the smallest currency unit (cents). `100` means $1.00 USD. |
 
 > **Mutual exclusivity:** `tipConfig` and `tipAmount` in `AmountInfo` cannot be set at the same time. Use `tipConfig` for interactive terminal tip collection; use `tipAmount` when the tip amount is known upfront (e.g., from a TipAdjust flow).
