@@ -270,6 +270,42 @@ val amount = AmountInfo(
 )
 ```
 
+#### TipConfig Field Reference
+
+**`TipConfig`**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `onScreenTip` | `Boolean` | ✅ | — | Whether to show a tip input screen on the terminal. Set to `true` to prompt the customer for a tip. |
+| `tipMode` | `TipMode` | ✅ | — | When the tip is collected. `ON_SALE` — collected during the sale; `AFTER_SALE` — collected after the sale completes. |
+| `tipWithTax` | `Boolean` | ❌ | `false` | Whether tip percentages are calculated on the tax-inclusive amount. When `false`, percentages apply to the base order amount only. |
+| `suggestions` | `TipSuggestions?` | ❌ | `null` | Predefined tip options displayed on the terminal for the customer to choose from. Omit to allow free-form tip entry only. |
+
+**`TipSuggestions`**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `feeMode` | `FeeMode` | ✅ | How the `values` are interpreted. `RATE` — percentage (e.g., `15` = 15%); `AMOUNT` — fixed amount in smallest currency unit (e.g., `100` = $1.00). |
+| `values` | `List<Int>` | ✅ | List of suggested tip options shown on screen. Typically 3–4 values, e.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts. |
+
+**`TipMode` Enum**
+
+| Value | Description |
+|-------|-------------|
+| `ON_SALE` | Tip is collected during the sale flow. The total charged to the card includes the tip. |
+| `AFTER_SALE` | Tip is adjusted after the sale authorization. Use in combination with `TipAdjust` transaction. |
+
+**`FeeMode` Enum**
+
+| Value | Description |
+|-------|-------------|
+| `RATE` | Suggestion values are tip percentages. `15` means 15% of the order amount (or tax-inclusive amount when `tipWithTax = true`). |
+| `AMOUNT` | Suggestion values are fixed tip amounts in the smallest currency unit (cents). `100` means $1.00 USD. |
+
+> **Mutual exclusivity:** `tipConfig` and `tipAmount` in `AmountInfo` cannot be set at the same time. Use `tipConfig` for interactive terminal tip collection; use `tipAmount` when the tip amount is known upfront (e.g., from a TipAdjust flow).
+
+---
+
 ### Refund Transaction
 
 Supports full and partial refunds. For card refunds, specify `paymentMethod` as `PaymentCategory.CARD`.
