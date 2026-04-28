@@ -17,7 +17,7 @@ import java.net.URI
  * 4. Protocol type conversion
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object ProtocolManager {
 
@@ -115,11 +115,18 @@ object ProtocolManager {
     /**
      * Build RS232 protocol
      *
-     * @param devicePath Device path
-     * @param baudRate Baud rate
+     * @param baudRate Baud rate (default 115200)
+     * @param dataBits Data bits (default 8)
+     * @param parity Parity bit (default "n")
+     * @param stopBits Stop bits (default 1)
      * @return String Protocol string
      */
-    fun buildRs232Protocol(): String {
-        return ProtocolConstants.buildRs232Protocol()
+    fun buildRs232Protocol(
+        baudRate: Int = 115200,
+        dataBits: Int = 8,
+        parity: String = "n",
+        stopBits: Int = 1
+    ): String {
+        return ProtocolConstants.buildRs232Protocol(baudRate, dataBits, parity, stopBits)
     }
 }

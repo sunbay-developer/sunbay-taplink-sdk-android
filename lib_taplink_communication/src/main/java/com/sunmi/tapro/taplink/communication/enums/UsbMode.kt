@@ -8,7 +8,7 @@ package com.sunmi.tapro.taplink.communication.enums
  * - ACCESSORY: Android device acts as USB accessory, controlled by external USB host
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 enum class UsbMode {
     /** USB Host mode: Android device acts as USB host */
@@ -17,10 +17,6 @@ enum class UsbMode {
     /** USB Accessory mode: Android device acts as USB accessory */
     ACCESSORY
 }
-
-
-
-
 
 
 

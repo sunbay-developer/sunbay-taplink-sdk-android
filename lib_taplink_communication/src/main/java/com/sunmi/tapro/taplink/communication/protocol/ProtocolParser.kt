@@ -8,7 +8,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * Protocol parse result data class
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 sealed class ProtocolParseResult {
     /**
@@ -78,7 +78,7 @@ sealed class ProtocolParseResult {
  * - ws:// or wss:// - WebSocket
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object ProtocolParser {
     private const val TAG = "ProtocolParser"

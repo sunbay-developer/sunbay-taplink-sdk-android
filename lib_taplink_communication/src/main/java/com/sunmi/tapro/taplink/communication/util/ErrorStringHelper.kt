@@ -1,17 +1,31 @@
 package com.sunmi.tapro.taplink.communication.util
 
 import android.content.Context
-import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 
 /**
- * Error string resource helper class
- * 
- * Used to retrieve localized strings for error descriptions and solutions from resource files
- * 
+ * Error string resource helper class.
+ *
+ * Used to retrieve localized strings for error descriptions and solutions from resource files.
+ *
+ * Must be initialized via [init] before use (called automatically by [TaplinkServiceKernel]).
+ *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object ErrorStringHelper {
+
+    private var appContext: Context? = null
+
+    /**
+     * Initialize the helper with an application context.
+     *
+     * Called once from [TaplinkServiceKernel] constructor — callers do not need to invoke this directly.
+     *
+     * @param context Any [Context]; the application context is stored internally.
+     */
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
     
     /**
      * Get error description
@@ -55,7 +69,7 @@ object ErrorStringHelper {
      * Get application context
      */
     private fun getContext(): Context? {
-        return TaplinkServiceKernel.getInstance()?.getContext()
+        return appContext
     }
     
     /**

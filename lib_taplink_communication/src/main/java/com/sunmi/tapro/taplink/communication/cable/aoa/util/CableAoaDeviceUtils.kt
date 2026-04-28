@@ -17,7 +17,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * - Device information extraction
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object CableAoaDeviceUtils {
     

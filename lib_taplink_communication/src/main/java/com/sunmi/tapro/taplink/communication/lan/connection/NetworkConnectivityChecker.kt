@@ -16,7 +16,7 @@ import java.net.*
  * - If TCP connection check is needed, use methods with "WithTcp" suffix, but confirm server supports multiple client connections
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class NetworkConnectivityChecker {
     

@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.withLock
  * @param appSecretKey Application secret key
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 abstract class AsyncServiceKernel(
     protected val appId: String,
@@ -60,9 +60,10 @@ abstract class AsyncServiceKernel(
     protected var connectJob: Job? = null
 
     /**
-     * Current connection callback
-     * 
-     * Note: When connecting concurrently, callback may be overwritten, needs to be used with token mechanism
+     * Current connection callback.
+     *
+     * Overwritten on each [connect] call. Subclasses must capture the callback at the start
+     * of their coroutine to avoid using a stale reference if [disconnect] is called concurrently.
      */
     protected var currentConnectionCallback: ConnectionCallback? = null
 
@@ -70,7 +71,6 @@ abstract class AsyncServiceKernel(
      * Implement IServiceKernel interface: connect to service
      */
     override fun connect(protocol: String, connectionCallback: ConnectionCallback) {
-        LogUtil.i("tag", "=======AsyncServiceKernel:::connect:protocol:$protocol")
         if (!canConnect()) {
             handleConnectionError(
                 InnerErrorCode.E211.description + ": Current status: $currentInnerConnectionStatus",
@@ -256,12 +256,12 @@ abstract class AsyncServiceKernel(
     /**
      * Get error code when connection is busy
      */
-    protected open fun getConnectionBusyErrorCode(): String = InnerErrorCode.E232.code
+    protected open fun getConnectionBusyErrorCode(): String = InnerErrorCode.E214.code
 
     /**
      * Get error code when connection fails
      */
-    protected open fun getConnectionFailedErrorCode(): String = InnerErrorCode.E232.code
+    protected open fun getConnectionFailedErrorCode(): String = InnerErrorCode.E214.code
 
     // ==================== Helper methods ====================
 

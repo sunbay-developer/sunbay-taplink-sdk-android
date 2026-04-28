@@ -15,7 +15,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * Note: Reconnection logic is uniformly managed by SDK layer, here only responsible for error classification and local recovery
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class CableAoaErrorHandler {
     
