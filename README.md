@@ -163,19 +163,23 @@ That's it! You've completed the basic integration in just 3 steps.
 
 ## AI-Assisted Integration
 
-If you use an AI coding tool (Cursor, GitHub Copilot, Windsurf, etc.), you can give it full context about this SDK in seconds — so the AI generates correct code from the start instead of guessing.
+Using Cursor, GitHub Copilot, Windsurf, or any other AI coding tool? Follow these steps to give your AI full SDK context — so it generates production-correct code from your very first prompt.
 
-### Option 1: `llms.txt` (works with all AI tools)
+> **Why this matters:** Without context, AI tools hallucinate API names and miss critical rules (e.g., amount units in cents, error 306 query-first pattern). With context loaded, AI writes working Taplink code directly.
 
-This repository includes an [`llms.txt`](./llms.txt) file at the root — a standard machine-readable SDK reference. Many AI tools and assistants will automatically read it when you reference this repository. You can also paste its content directly into any AI chat to give the model full context.
+---
 
-### Option 2: Cursor Rule (for Cursor IDE users)
+### Step 1 — Load SDK Context into Your AI Tool
 
-Copy the following rule file into your **own project** at `.cursor/rules/taplink.mdc`.  
-Cursor will automatically attach it when you work on payment-related files.
+Choose the method that matches your tool:
+
+#### Cursor IDE
+
+1. In your project, create the file `.cursor/rules/taplink.mdc`
+2. Paste the following content:
 
 <details>
-<summary>📋 Click to copy — <code>.cursor/rules/taplink.mdc</code></summary>
+<summary>📋 Click to expand and copy — <code>.cursor/rules/taplink.mdc</code></summary>
 
 ````markdown
 ---
@@ -254,11 +258,9 @@ if (error.code == "306") client.query(QueryRequest().setTransactionRequestId(id)
 
 ## TipConfig
 ```kotlin
-// ON_SALE: tip collected during sale
-// AFTER_SALE: tip adjusted after sale via TipAdjust transaction
 TipConfig(
     onScreenTip = true,
-    tipMode = TipMode.ON_SALE,
+    tipMode = TipMode.ON_SALE,        // or AFTER_SALE
     suggestions = TipSuggestions(FeeMode.RATE, listOf(15, 18, 20))  // 15%, 18%, 20%
 )
 // Do NOT set tipAmount in AmountInfo when using tipConfig
@@ -275,25 +277,136 @@ override fun onSuccess(result: PaymentResult) {
 
 </details>
 
-### Option 3: GitHub Copilot
+3. Cursor auto-attaches this rule when you edit `.kt` or `.java` files — no further action needed.
 
-If you use GitHub Copilot, create a `.github/copilot-instructions.md` file in your project and add this snippet:
+#### GitHub Copilot
+
+1. In your project, create or open `.github/copilot-instructions.md`
+2. Add the following block:
 
 ```markdown
-This project integrates the Taplink SDK for Android payments (lib_taplink_sdk module from SUNBAY).
+## Taplink SDK Integration Rules
 
-Key rules:
-- All payment amounts are in smallest currency unit (cents): $10.00 = BigDecimal("1000")
-- transactionRequestId must be unique per request: use UUID.randomUUID().toString()
-- Error code 306 = timeout: always call client.query() before creating a new transaction
-- Error codes 307/308/309: never reuse transactionRequestId — generate a new UUID
-- Only import from lib_taplink_sdk, never from lib_taplink_communication
-- PaymentCallback methods run on background thread — use runOnUiThread {} for UI
-- Always call TaplinkSDK.disconnect() and removeConnectionListener() in onDestroy()
-- tipConfig and tipAmount in AmountInfo are mutually exclusive
+This project uses the Taplink SDK (lib_taplink_sdk) from SUNBAY for Android payment integration.
 
-Connection: TaplinkSDK.init() → TaplinkSDK.connect() → TaplinkSDK.getClient().sale()/refund()/etc.
+Critical rules — always follow these when generating Taplink code:
+- All amounts are in the SMALLEST CURRENCY UNIT: $10.00 USD = BigDecimal("1000") (1000 cents)
+- transactionRequestId must be globally unique per request: always use UUID.randomUUID().toString()
+- Error 306 = timeout: MUST call client.query() to check status BEFORE creating any new transaction
+- Error 307/308/309/310/311: NEVER reuse transactionRequestId — generate a new UUID
+- canRetryWithSameId=true (errors 301–305): safe to retry with the same transactionRequestId
+- Only import from lib_taplink_sdk — never from lib_taplink_communication
+- PaymentCallback methods run on a background thread — always use runOnUiThread {} for UI updates
+- Always call TaplinkSDK.disconnect() AND TaplinkSDK.removeConnectionListener() in onDestroy()
+- tipConfig and tipAmount in AmountInfo are mutually exclusive — set one or neither, never both
+
+Integration flow: TaplinkSDK.init() → TaplinkSDK.connect() → TaplinkSDK.getClient() → .sale()/.refund()/etc.
 ```
+
+#### Other AI Tools (Claude, ChatGPT, Windsurf, etc.)
+
+Paste the contents of [`llms.txt`](./llms.txt) at the beginning of your chat or add it as a project context file. This file contains the complete SDK reference in a compact, AI-readable format.
+
+---
+
+### Step 2 — Use Prompts to Generate Integration Code
+
+Once context is loaded, use the following prompts to generate each part of your integration. Copy and adapt them directly.
+
+#### 2.1 — Initialize the SDK
+
+> **Prompt:**
+> ```
+> Using the Taplink SDK, write the Application class initialization code.
+> App ID is "my_app_id", merchant ID is "my_merchant_id", secret key from BuildConfig.
+> Enable debug logging only in debug builds.
+> ```
+
+#### 2.2 — Connect in an Activity
+
+> **Prompt:**
+> ```
+> Using the Taplink SDK with LAN mode (terminal IP: 192.168.1.100, port 8443),
+> write the complete connection setup for a MainActivity, including:
+> - Persistent connection listener in onCreate
+> - Auto-connect in onResume if not already connected
+> - Cleanup in onDestroy
+> ```
+
+#### 2.3 — Execute a Sale Transaction
+
+> **Prompt:**
+> ```
+> Using the Taplink SDK, write a sale transaction for $25.00 USD paid by card.
+> Include full PaymentCallback handling:
+> - onProgress: show transaction stage on screen
+> - onSuccess: handle SUCCESS / PROCESSING / FAILED states
+> - onFailure: handle error 306 with query-first polling, and other error codes
+> ```
+
+#### 2.4 — Refund a Transaction
+
+> **Prompt:**
+> ```
+> Using the Taplink SDK, write a referenced refund of $10.00 for
+> original transaction ID "TXN20231119001". Include full error handling.
+> ```
+
+#### 2.5 — Add On-Screen Tip
+
+> **Prompt:**
+> ```
+> Using the Taplink SDK, modify a sale request to show a tip prompt on the terminal.
+> Tip mode is ON_SALE, suggest 15%, 18%, 20% as options.
+> ```
+
+#### 2.6 — Handle Error 306 (Timeout Recovery)
+
+> **Prompt:**
+> ```
+> Using the Taplink SDK, write a reusable pollTransactionStatus() function
+> that queries the transaction status after error 306, retries every 5 seconds,
+> gives up after 12 attempts, and handles SUCCESS / PROCESSING / FAILED results.
+> ```
+
+#### 2.7 — End-of-Day Batch Close
+
+> **Prompt:**
+> ```
+> Using the Taplink SDK, write a batch close transaction and display
+> the settlement summary (total count and total amount) on success.
+> ```
+
+---
+
+### Step 3 — Review AI-Generated Code
+
+Before committing AI-generated code, verify these items:
+
+| Check | What to look for |
+|-------|-----------------|
+| ✅ Amount unit | `BigDecimal("1000")` for $10.00 — **not** `BigDecimal("10.00")` |
+| ✅ Transaction ID | `UUID.randomUUID().toString()` — not sequential integers |
+| ✅ Error 306 | `client.query()` called before any new transaction attempt |
+| ✅ Error 307/308 | New UUID generated, not the original ID reused |
+| ✅ UI thread | `runOnUiThread {}` inside every callback that touches UI |
+| ✅ Lifecycle | `disconnect()` + `removeConnectionListener()` in `onDestroy()` |
+| ✅ Import path | `com.sunmi.tapro.taplink.sdk.*` — no `lib_taplink_communication` imports |
+| ✅ tipConfig | `tipAmount` in `AmountInfo` is `null` when `tipConfig` is set |
+
+---
+
+### Step 4 — Test Integration
+
+Run through this checklist before going to QA:
+
+- [ ] SDK initializes without crashing (`TaplinkSDK.isInitialized()` returns `true`)
+- [ ] Connection succeeds and `onConnected` fires (`TaplinkSDK.isConnected()` returns `true`)
+- [ ] Sale transaction completes and `onSuccess` receives a result with `isSuccess() == true`
+- [ ] Disconnect triggers `onDisconnected` callback
+- [ ] Reconnect after disconnect works without app restart
+- [ ] Error 306 scenario handled — query is called, not a blind retry
+- [ ] All amounts display correctly (not 100x inflated)
 
 ---
 
