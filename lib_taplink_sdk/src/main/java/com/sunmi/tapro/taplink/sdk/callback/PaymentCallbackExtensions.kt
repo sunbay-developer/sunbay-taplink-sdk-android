@@ -33,9 +33,9 @@ fun PaymentCallback.onFailure(
     transactionRequestId: String? = null
 ) {
     val message = if (errorMessage != null) {
-        "${errorCode.code}:$errorMessage"
+        errorMessage
     } else {
-        "${errorCode.code}:${errorCode.description}"
+        errorCode.description
     }
 
     val paymentError = PaymentError.create(
@@ -70,7 +70,7 @@ fun PaymentCallback.onFailure(
     transactionRequestId: String? = null
 ) {
     val errorCode = InnerErrorCode.fromCode(code, errorMsg)
-    val message = "${errorCode.code}:${errorCode.description}"
+    val message = errorCode.description
 
     val paymentError = PaymentError.create(
         code = code,

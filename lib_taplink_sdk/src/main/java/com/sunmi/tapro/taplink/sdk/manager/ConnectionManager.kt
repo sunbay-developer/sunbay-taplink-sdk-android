@@ -127,7 +127,7 @@ class ConnectionManager(
     fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
         // If no config provided, try to get from ReconnectManager or create default
         var actualConfig = config ?: reconnectManager?.getLastConnectionConfig()
-        LogUtil.d(TAG, "========actualConfig:$actualConfig,oldConfig:${reconnectManager?.getLastConnectionConfig()}")
+        LogUtil.d(TAG, "connect: actualConfig=$actualConfig, lastConfig=${reconnectManager?.getLastConnectionConfig()}")
 
         // If still no config, create default based on TaplinkConfig connection mode
         if (actualConfig == null) {
@@ -879,6 +879,21 @@ class ConnectionManager(
      */
     fun setConnectionDisconnectedListener(listener: (() -> Unit)?) {
         this.connectionDisconnectedListener = listener
+    }
+
+    /**
+     * Clears all persisted device and connection cache data.
+     *
+     * Resets cached device identity and version info, then delegates to
+     * [ConnectionPersistence] to wipe stored connection state (cable protocol,
+     * last-connected device id, etc.).  Call this when you want the next
+     * [connect] invocation to treat the device as completely new.
+     */
+    fun clearDeviceCache() {
+        LogUtil.d(TAG, "Clearing device cache")
+        connectedDeviceId = null
+        connectedTaproVersion = null
+        connectionPersistence.clearConnectionData()
     }
 
     /**
