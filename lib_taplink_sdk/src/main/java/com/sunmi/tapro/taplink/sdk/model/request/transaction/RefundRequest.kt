@@ -32,14 +32,14 @@ data class RefundRequest(
     val transactionRequestId: String,
     val amount: AmountInfo,
     val description: String? = null,
-    // 引用退款字段
+    // Referenced refund fields
     val originalTransactionId: String? = null,
     val originalTransactionRequestId: String? = null,
-    // 非引用退款字段
+    // Non-referenced refund fields
     val referenceOrderId: String? = null,
     val paymentMethod: PaymentMethodInfo? = null,
     val cardNetworkType: CardNetworkType? = null,
-    // 通用可选字段
+    // Common optional fields
     val attach: String? = null,
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,

@@ -72,9 +72,9 @@ data class TipAdjustRequest(
         private var requestTimeout: Long? = null
 
         /**
-         * set transaction request ID
+         * Set transaction request ID
          */
-        fun setTransactionRequestId(transactionRequestId:String):Builder{
+        fun setTransactionRequestId(transactionRequestId: String): Builder {
             this.transactionRequestId = transactionRequestId
             return this
         }

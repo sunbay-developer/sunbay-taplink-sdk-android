@@ -3,10 +3,9 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 /**
  * Abort Transaction Request
  *
- * Used to abort an ongoing transaction, does not contain amount or order fields
+ * Used to abort an ongoing transaction.
  *
- * @param originalTransactionId Original transaction ID (either this or originalTransactionRequestId must be provided)
- * @param originalTransactionRequestId Original transaction request ID (either this or originalTransactionId must be provided)
+ * @param originalTransactionRequestId Original transaction request ID (required)
  * @param description Abort reason description (optional, maximum 128 characters)
  * @param attach Additional information (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
@@ -23,7 +22,7 @@ data class AbortRequest(
 
     init {
         require(originalTransactionRequestId != null) {
-            "Either originalTransactionId or originalTransactionRequestId must be provided"
+            "originalTransactionRequestId must be provided"
         }
     }
 
