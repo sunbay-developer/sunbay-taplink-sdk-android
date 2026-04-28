@@ -1,0 +1,280 @@
+---
+description: Taplink SDK best practices – lifecycle, idempotency, timeout polling, and common pitfalls
+globs: ["**/*.kt", "**/*.java"]
+alwaysApply: false
+---
+
+# Taplink SDK – Best Practices
+
+---
+
+## 1. Lifecycle Management
+
+### SDK initialization — Application level (once)
+```kotlin
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        TaplinkSDK.init(this, TaplinkConfig(
+            appId = BuildConfig.TAPLINK_APP_ID,
+            merchantId = BuildConfig.TAPLINK_MERCHANT_ID,
+            secretKey = BuildConfig.TAPLINK_SECRET_KEY
+        ))
+    }
+}
+```
+
+### Connection — Activity/Service level
+```kotlin
+class MainActivity : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Register persistent status listener
+        TaplinkSDK.setConnectionListener(connectionStatusListener)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!TaplinkSDK.isConnected()) {
+            TaplinkSDK.connect(connectionConfig, oneTimeConnectListener)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        TaplinkSDK.removeConnectionListener()  // Always remove to avoid memory leaks
+        TaplinkSDK.disconnect()
+    }
+}
+```
+
+> **Rule:** Always call `removeConnectionListener()` and `disconnect()` in `onDestroy()`.
+
+---
+
+## 2. Two Types of Connection Listeners
+
+| Method | Purpose | Lifecycle |
+|--------|---------|-----------|
+| `TaplinkSDK.connect(config, listener)` | Notified for this specific connect call only | One-shot |
+| `TaplinkSDK.setConnectionListener(listener)` | Notified for all future status changes | Persistent |
+
+**Use both:**
+- `connect()` listener → react to initial connection result
+- `setConnectionListener()` → monitor ongoing status (disconnects, reconnects, errors)
+
+```kotlin
+// Persistent observer — set in onCreate()
+TaplinkSDK.setConnectionListener(object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        runOnUiThread { enablePaymentButton(true) }
+    }
+    override fun onDisconnected(reason: String) {
+        runOnUiThread { enablePaymentButton(false) }
+    }
+    override fun onError(error: ConnectionError) {
+        runOnUiThread { showConnectionError(error.message) }
+    }
+})
+```
+
+---
+
+## 3. transactionRequestId Uniqueness
+
+`transactionRequestId` is the **idempotency key** for each transaction.
+
+✅ **Rules:**
+- Generate a new, globally unique ID for each new transaction attempt
+- Use UUID or timestamp-based unique values
+- Store the ID before sending — needed for timeout recovery
+
+```kotlin
+// Recommended: UUID-based
+val txnId = UUID.randomUUID().toString()
+
+// Acceptable: timestamp-based (ensure no collisions)
+val txnId = "TXN_${System.currentTimeMillis()}_${Random.nextInt(1000)}"
+```
+
+❌ **Never:**
+- Reuse a `transactionRequestId` after errors `307`, `308`, `309`, `310`, `311`
+- Use sequential integers that might collide across app restarts
+
+---
+
+## 4. Amount Unit Pitfall
+
+**All amounts must be in the smallest currency unit.**
+
+```kotlin
+// ✅ Correct for $12.34 USD
+val amount = AmountInfo(
+    orderAmount = BigDecimal("1234"),  // 1234 cents = $12.34
+    pricingCurrency = "USD"
+)
+
+// ❌ Wrong — SDK treats 12.34 as 12.34 cents = $0.1234
+val wrong = AmountInfo(
+    orderAmount = BigDecimal("12.34"),
+    pricingCurrency = "USD"
+)
+```
+
+**Conversion helper:**
+```kotlin
+fun dollarsToSmallestUnit(dollars: Double): BigDecimal =
+    BigDecimal(dollars).multiply(BigDecimal("100")).setScale(0, RoundingMode.HALF_UP)
+```
+
+---
+
+## 5. INIT Session Concept
+
+> The SDK runs an **INIT handshake** with Tapro on the **first payment operation** after connecting — not inside `onConnected`.
+
+**Implications:**
+- The first transaction after connecting may take slightly longer (INIT overhead)
+- If the transport **disconnects and reconnects**, INIT state is **cleared** — the next transaction re-runs INIT
+- Do **not** cache or assume INIT remains valid after a disconnect/reconnect cycle
+
+```kotlin
+// onConnected fires when transport is ready — INIT happens on first client.sale()/etc.
+override fun onConnected(deviceId: String, taproVersion: String) {
+    // Safe to show "Connected" UI
+    // INIT will run automatically on the next transaction call
+}
+```
+
+---
+
+## 6. Timeout Recovery (Error 306)
+
+Error `306` = response timeout. The transaction **may have been processed**. Always query first.
+
+```kotlin
+// Store the ID before sending
+val txnRequestId = UUID.randomUUID().toString()
+currentTxnRequestId = txnRequestId
+
+val request = SaleRequest.builder()
+    .setTransactionRequestId(txnRequestId)
+    // ...
+    .build()
+
+client.sale(request, object : PaymentCallback {
+    override fun onFailure(error: PaymentError) {
+        if (error.code == "306") {
+            // MUST check status before creating new transaction
+            queryWithPolling(txnRequestId)
+        }
+    }
+})
+```
+
+---
+
+## 7. PaymentResult Status vs Response Code
+
+`PaymentResult` has two separate indicators:
+
+| Field | Values | Meaning |
+|-------|--------|---------|
+| `code` | `"0"` or other | SDK/gateway communication result |
+| `transactionStatus` | `"SUCCESS"` / `"PROCESSING"` / `"FAILED"` | Actual payment outcome |
+
+**Always check both:**
+```kotlin
+override fun onSuccess(result: PaymentResult) {
+    // onSuccess is called even when transactionStatus is "FAILED"
+    when {
+        result.isSuccess()    -> confirmPayment(result)
+        result.isProcessing() -> queryWithPolling(result.transactionRequestId!!)
+        result.isFailed()     -> showError(result.transactionResultMsg ?: "Transaction failed")
+    }
+}
+```
+
+---
+
+## 8. Card Network Routing
+
+```kotlin
+// Explicitly route to credit or debit
+SaleRequest.builder()
+    .setCardNetworkType(CardNetworkType.CREDIT)   // Force credit network
+    // or
+    .setCardNetworkType(CardNetworkType.DEBIT)    // Force debit network
+    // Omit for auto-detection (terminal decides)
+```
+
+---
+
+## 9. Receipt Control
+
+```kotlin
+// Control whether Tapro app prints receipts
+SaleRequest.builder()
+    .setPrintReceipt(PrintReceipt.AUTO)      // Default: terminal decides
+    .setPrintReceipt(PrintReceipt.NONE)      // No printing
+    .setPrintReceipt(PrintReceipt.MERCHANT)  // Merchant copy only
+    .setPrintReceipt(PrintReceipt.CUSTOMER)  // Customer copy only
+    .setPrintReceipt(PrintReceipt.BOTH)      // Both copies
+```
+
+---
+
+## 10. Credential Security
+
+```kotlin
+// ❌ Never hardcode credentials in source code
+val config = TaplinkConfig(
+    appId = "hardcoded_app_id",    // ❌ Risk of leakage
+    secretKey = "hardcoded_key"    // ❌ Security risk
+)
+
+// ✅ Use BuildConfig (set in local.properties or CI/CD secrets)
+val config = TaplinkConfig(
+    appId = BuildConfig.TAPLINK_APP_ID,
+    merchantId = BuildConfig.TAPLINK_MERCHANT_ID,
+    secretKey = BuildConfig.TAPLINK_SECRET_KEY
+)
+
+// ✅ Disable logs in production
+val config = TaplinkConfig(
+    // ...
+    logEnabled = BuildConfig.DEBUG
+)
+```
+
+---
+
+## 11. Thread Safety
+
+- All `TaplinkSDK` static methods are **thread-safe**
+- `PaymentCallback` methods may be called on a **background thread** — always use `runOnUiThread {}` for UI updates:
+
+```kotlin
+override fun onSuccess(result: PaymentResult) {
+    runOnUiThread {
+        // ✅ Safe to update UI here
+        updatePaymentResult(result)
+    }
+}
+```
+
+---
+
+## 12. Checklist Before Going Live
+
+- [ ] `logEnabled = false` in production config
+- [ ] All amounts verified in smallest currency unit
+- [ ] `transactionRequestId` guaranteed unique per transaction
+- [ ] Error 306 → query-first logic implemented
+- [ ] Error 307/308/309 → new ID logic implemented
+- [ ] `disconnect()` called in `onDestroy()`
+- [ ] `removeConnectionListener()` called in `onDestroy()`
+- [ ] USB permission handling for Cable mode
+- [ ] Tested disconnect/reconnect behavior
+- [ ] Verified INIT latency on first transaction
