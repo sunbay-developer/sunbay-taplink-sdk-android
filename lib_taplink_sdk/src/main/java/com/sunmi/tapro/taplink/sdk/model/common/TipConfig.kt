@@ -13,17 +13,17 @@ import com.sunmi.tapro.taplink.sdk.enums.TipMode
  */
 data class TipConfig(
     /**
-     * Whether to enable on-screen tip prompt (required).
+     * Whether to enable on-screen tip prompt (optional, default: false).
      * When true, the payment terminal will display a tip input screen.
      */
-    val onScreenTip: Boolean,
+    val onScreenTip: Boolean = false,
 
     /**
-     * Tip mode (required).
+     * Tip mode (optional, default: ON_SALE).
      * - ON_SALE: Tip is collected during the sale transaction
      * - AFTER_SALE: Tip is collected after the sale transaction
      */
-    val tipMode: TipMode,
+    val tipMode: TipMode = TipMode.ON_SALE,
 
     /**
      * Whether tip calculation includes tax amount (optional, default: false).

@@ -527,8 +527,8 @@ val amount = AmountInfo(
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `onScreenTip` | `Boolean` | ✅ | — | Whether to show a tip input screen on the terminal. Set to `true` to prompt the customer for a tip. |
-| `tipMode` | `TipMode` | ✅ | — | When the tip is collected. `ON_SALE` — collected during the sale; `AFTER_SALE` — collected after the sale completes. |
+| `onScreenTip` | `Boolean` | ❌ | `false` | Whether to show a tip input screen on the terminal. Set to `true` to prompt the customer for a tip. |
+| `tipMode` | `TipMode` | ❌ | `ON_SALE` | When the tip is collected. `ON_SALE` — collected during the sale; `AFTER_SALE` — collected after the sale completes. |
 | `tipWithTax` | `Boolean` | ❌ | `false` | Whether tip percentages are calculated on the tax-inclusive amount. When `false`, percentages apply to the base order amount only. |
 | `suggestions` | `TipSuggestions?` | ❌ | `null` | Predefined tip options displayed on the terminal for the customer to choose from. Omit to allow free-form tip entry only. |
 
