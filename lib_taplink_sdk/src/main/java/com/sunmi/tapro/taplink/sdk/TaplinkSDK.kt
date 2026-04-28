@@ -6,6 +6,7 @@ import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.impl.TaplinkApiImpl
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
@@ -83,6 +84,19 @@ class TaplinkSDK private constructor() : TaplinkApi {
         // ==================== Initialization Functions ====================
 
         /**
+         * Check whether the SDK has been initialized.
+         *
+         * Use this to guard calls to [connect] or [getClient] before [init] has been called.
+         *
+         * @return true if [init] has already been called
+         */
+        @JvmStatic
+        @JvmName("isSDKInitialized")
+        fun isInitialized(): Boolean {
+            return getInstance().isInitialized()
+        }
+
+        /**
          * Initialize SDK
          *
          * Initialize Taplink SDK, configure application information and connection parameters. Must be called before using other interfaces.
@@ -113,6 +127,20 @@ class TaplinkSDK private constructor() : TaplinkApi {
         @JvmName("connectSDK")
         fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
             getInstance().connect(config, listener)
+        }
+
+        /**
+         * Returns the current connection status.
+         *
+         * More granular than [isConnected]: distinguishes CONNECTING, CONNECTED,
+         * WAIT_CONNECTING, DISCONNECTED, and ERROR states.
+         *
+         * @return [ConnectionStatus] current status
+         */
+        @JvmStatic
+        @JvmName("getSDKConnectionStatus")
+        fun getConnectionStatus(): ConnectionStatus {
+            return getInstance().getConnectionStatus()
         }
 
         /**
@@ -221,6 +249,20 @@ class TaplinkSDK private constructor() : TaplinkApi {
             getInstance().clearDeviceCache()
         }
 
+        /**
+         * Get last used connection configuration.
+         *
+         * Returns the configuration used for the most recent successful connection,
+         * or null if no connection has been established yet.
+         *
+         * @return [ConnectionConfig] or null
+         */
+        @JvmStatic
+        @JvmName("getSDKConnectionConfig")
+        fun getConnectionConfig(): ConnectionConfig? {
+            return getInstance().getConnectionConfig()
+        }
+
         // ==================== Get Transaction Client ====================
 
         /**
@@ -270,6 +312,8 @@ class TaplinkSDK private constructor() : TaplinkApi {
 
     // ==================== Initialization Functions (Instance Methods) ====================
 
+    override fun isInitialized(): Boolean = apiImpl.isInitialized()
+
     override fun init(context: Context, config: TaplinkConfig) {
         apiImpl.init(context, config)
     }
@@ -283,6 +327,8 @@ class TaplinkSDK private constructor() : TaplinkApi {
     override fun disconnect() {
         apiImpl.disconnect()
     }
+
+    override fun getConnectionStatus(): ConnectionStatus = apiImpl.getConnectionStatus()
 
     override fun isConnected(): Boolean {
         return apiImpl.isConnected()

@@ -51,8 +51,12 @@ class QueryRequest {
         /**
          * Create query request builder
          *
-         * @return Builder Builder object
+         * @deprecated Use [byTransactionId] or [byTransactionRequestId] instead.
          */
+        @Deprecated(
+            message = "Use QueryRequest.byTransactionId() or QueryRequest.byTransactionRequestId() instead",
+            replaceWith = ReplaceWith("QueryRequest.byTransactionId(transactionId)")
+        )
         fun builder(): Builder = Builder()
 
         /**
@@ -78,7 +82,14 @@ class QueryRequest {
 
     /**
      * QueryRequest Builder
+     *
+     * @deprecated Use the fluent factory methods [byTransactionId] or [byTransactionRequestId]
+     * instead, or chain [setTransactionId] / [setTransactionRequestId] directly on a new instance.
      */
+    @Deprecated(
+        message = "Use QueryRequest.byTransactionId() or QueryRequest.byTransactionRequestId() instead",
+        replaceWith = ReplaceWith("QueryRequest.byTransactionId(transactionId) or QueryRequest.byTransactionRequestId(transactionRequestId)")
+    )
     class Builder {
         private var transactionId: String? = null
         private var transactionRequestId: String? = null

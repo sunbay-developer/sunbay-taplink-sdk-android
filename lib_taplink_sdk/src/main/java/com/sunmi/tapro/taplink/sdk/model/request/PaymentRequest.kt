@@ -445,7 +445,18 @@ data class PaymentRequest(
          */
         fun build(): PaymentRequest {
             require(action.isNotEmpty()) { "action is required" }
-            require(referenceOrderId.isNotEmpty()) { "referenceOrderId is required" }
+
+            // referenceOrderId is only required for sale/auth/refund transactions
+            val actionsRequiringOrderId = setOf(
+                TransactionAction.SALE.value,
+                TransactionAction.AUTH.value,
+                TransactionAction.FORCED_AUTH.value,
+                TransactionAction.REFUND.value
+            )
+            if (action in actionsRequiringOrderId) {
+                require(referenceOrderId.isNotEmpty()) { "referenceOrderId is required for action: $action" }
+            }
+
             require(transactionRequestId.isNotEmpty()) { "transactionRequestId is required" }
 
             return PaymentRequest(

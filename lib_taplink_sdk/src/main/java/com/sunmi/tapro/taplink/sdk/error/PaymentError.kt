@@ -75,17 +75,17 @@ class PaymentError(
     
     companion object {
         /**
-         * 便捷构造函数：从错误码和消息创建 PaymentError
-         * 
-         * 用于向后兼容，自动创建 Detail
-         * 
-         * @param code 错误码
-         * @param message 错误描述
-         * @param suggestion 处理建议（可选，默认为空字符串）
-         * @param traceId 追踪 ID（可选）
-         * @param referenceOrderId 商户订单号（可选）
-         * @param transactionId 交易 ID（可选）
-         * @param transactionRequestId 交易请求 ID（可选）
+         * Convenience factory: creates a [PaymentError] from an error code and message.
+         *
+         * Automatically derives [Detail.errorCategory] and [Detail.canRetryWithSameId] from [code].
+         *
+         * @param code Error code (e.g., "306", "201")
+         * @param message Human-readable error description
+         * @param suggestion Remediation hint (optional, defaults to empty string)
+         * @param traceId Trace ID for troubleshooting (optional)
+         * @param referenceOrderId Merchant order number (optional)
+         * @param transactionId Transaction ID (optional)
+         * @param transactionRequestId Transaction request ID (optional)
          */
         @JvmStatic
         fun create(
