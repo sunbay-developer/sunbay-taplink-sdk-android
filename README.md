@@ -159,6 +159,144 @@ That's it! You've completed the basic integration in just 3 steps.
 
 **Session `INIT`:** After a physical connection is established, the SDK runs **INIT** with Tapro on the **first payment operation** (not necessarily inside `onConnected`). If the transport drops, INIT state is cleared and the next transaction performs INIT again—avoid assuming INIT remains valid across disconnect/reconnect.
 
+---
+
+## AI-Assisted Integration
+
+If you use an AI coding tool (Cursor, GitHub Copilot, Windsurf, etc.), you can give it full context about this SDK in seconds — so the AI generates correct code from the start instead of guessing.
+
+### Option 1: `llms.txt` (works with all AI tools)
+
+This repository includes an [`llms.txt`](./llms.txt) file at the root — a standard machine-readable SDK reference. Many AI tools and assistants will automatically read it when you reference this repository. You can also paste its content directly into any AI chat to give the model full context.
+
+### Option 2: Cursor Rule (for Cursor IDE users)
+
+Copy the following rule file into your **own project** at `.cursor/rules/taplink.mdc`.  
+Cursor will automatically attach it when you work on payment-related files.
+
+<details>
+<summary>📋 Click to copy — <code>.cursor/rules/taplink.mdc</code></summary>
+
+````markdown
+---
+description: Taplink SDK integration rules for Android payment development
+globs: ["**/*.kt", "**/*.java"]
+alwaysApply: false
+---
+
+# Taplink SDK — Integration Rules
+
+## Critical Rules (Never Break)
+- All amounts in SMALLEST CURRENCY UNIT (cents): $10.00 → `BigDecimal("1000")`
+- `transactionRequestId` MUST be globally unique per request — use `UUID.randomUUID().toString()`
+- Never reuse `transactionRequestId` after errors 307, 308, 309, 310, 311
+- Error 306 (timeout): MUST call `client.query()` BEFORE creating any new transaction
+- Only import from `lib_taplink_sdk` — never import `lib_taplink_communication`
+- Always call `TaplinkSDK.disconnect()` + `TaplinkSDK.removeConnectionListener()` in `onDestroy()`
+- `tipConfig` and `tipAmount` in `AmountInfo` are mutually exclusive — set one or neither
+
+## SDK Entry Points
+```kotlin
+TaplinkSDK.init(context, config)              // in Application.onCreate()
+TaplinkSDK.connect(config, listener)          // in onResume()
+TaplinkSDK.disconnect()                       // in onDestroy()
+TaplinkSDK.getClient()                        // returns TaplinkClient for transactions
+TaplinkSDK.isConnected(): Boolean
+TaplinkSDK.isInitialized(): Boolean
+TaplinkSDK.getConnectionStatus(): String?
+```
+
+## Sale Transaction Pattern
+```kotlin
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
+    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setAmount(AmountInfo(BigDecimal("1000"), "USD"))   // 1000 cents = $10.00
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
+    .build()
+
+TaplinkSDK.getClient().sale(request, object : PaymentCallback {
+    override fun onProgress(event: PaymentEvent) { /* update UI */ }
+    override fun onSuccess(result: PaymentResult) {
+        when {
+            result.isSuccess()    -> confirmPayment(result)
+            result.isProcessing() -> pollStatus(result.transactionRequestId!!)
+            result.isFailed()     -> showDeclined(result.transactionResultMsg)
+        }
+    }
+    override fun onFailure(error: PaymentError) {
+        if (error.code == "306") pollStatus(error.transactionRequestId!!)
+        else if (error.canRetryWithSameId) retry()
+        else showError(error.message)
+    }
+})
+```
+
+## Connection Modes
+```kotlin
+ConnectionConfig.createAppMode()                          // Same device (APP_TO_APP)
+ConnectionConfig.createLanMode("192.168.1.100", 8443)    // LAN first-time
+ConnectionConfig.createLanMode()                          // LAN reuse cached
+ConnectionConfig.createCableMode()                        // Cable AUTO (VSP→RS232→AOA)
+ConnectionConfig.createDefault()                          // Auto-detect all modes
+```
+
+## Error Handling
+```kotlin
+// Error 306 — timeout: MUST query before retry
+if (error.code == "306") client.query(QueryRequest().setTransactionRequestId(id), ...)
+
+// Retry rules:
+// 301-305 → canRetryWithSameId=true  → retry with same transactionRequestId
+// 306     → query first              → then decide based on transactionStatus
+// 307-311 → canRetryWithSameId=false → use new UUID for transactionRequestId
+```
+
+## TipConfig
+```kotlin
+// ON_SALE: tip collected during sale
+// AFTER_SALE: tip adjusted after sale via TipAdjust transaction
+TipConfig(
+    onScreenTip = true,
+    tipMode = TipMode.ON_SALE,
+    suggestions = TipSuggestions(FeeMode.RATE, listOf(15, 18, 20))  // 15%, 18%, 20%
+)
+// Do NOT set tipAmount in AmountInfo when using tipConfig
+```
+
+## PaymentCallback — UI thread
+All callback methods may run on a background thread. Always wrap UI updates:
+```kotlin
+override fun onSuccess(result: PaymentResult) {
+    runOnUiThread { updateUI(result) }
+}
+```
+````
+
+</details>
+
+### Option 3: GitHub Copilot
+
+If you use GitHub Copilot, create a `.github/copilot-instructions.md` file in your project and add this snippet:
+
+```markdown
+This project integrates the Taplink SDK for Android payments (lib_taplink_sdk module from SUNBAY).
+
+Key rules:
+- All payment amounts are in smallest currency unit (cents): $10.00 = BigDecimal("1000")
+- transactionRequestId must be unique per request: use UUID.randomUUID().toString()
+- Error code 306 = timeout: always call client.query() before creating a new transaction
+- Error codes 307/308/309: never reuse transactionRequestId — generate a new UUID
+- Only import from lib_taplink_sdk, never from lib_taplink_communication
+- PaymentCallback methods run on background thread — use runOnUiThread {} for UI
+- Always call TaplinkSDK.disconnect() and removeConnectionListener() in onDestroy()
+- tipConfig and tipAmount in AmountInfo are mutually exclusive
+
+Connection: TaplinkSDK.init() → TaplinkSDK.connect() → TaplinkSDK.getClient().sale()/refund()/etc.
+```
+
+---
+
 ## Connection Modes
 
 ### App-to-App Mode
