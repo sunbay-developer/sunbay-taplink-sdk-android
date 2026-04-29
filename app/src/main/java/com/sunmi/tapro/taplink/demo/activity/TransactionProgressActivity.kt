@@ -803,8 +803,13 @@ class TransactionProgressActivity : AppCompatActivity() {
         runOnUiThread {
             Log.d(TAG, "Updating progress - Status: $status, Message: $message")
             
+            val normalizedStatus = when (status.uppercase()) {
+                "TIP_PROCESSING" -> "TIP PROCESSING"
+                else -> status
+            }
+
             // Update status text
-            progressStatusText.text = status
+            progressStatusText.text = normalizedStatus
             
             // Update message text (use SDK's eventMsg if available, fallback to status)
             val displayMessage = if (message.isNotBlank()) {
@@ -813,6 +818,8 @@ class TransactionProgressActivity : AppCompatActivity() {
                 // Fallback to default messages based on status
                 when (status.uppercase()) {
                     "PROCESSING" -> "Processing ${transaction.type.name.lowercase()} transaction..."
+                    "TIP_PROCESSING" -> "Tip selection in progress..."
+                    "WAITING_CARD" -> "Waiting for card..."
                     "WAITING" -> "Waiting for user action..."
                     "CONNECTING" -> "Connecting to payment terminal..."
                     "ABORTING" -> "Aborting transaction..."
@@ -842,7 +849,9 @@ class TransactionProgressActivity : AppCompatActivity() {
                 abortButton.isEnabled = false
                 abortButton.text = "Aborting..."
             }
-            "PROCESSING", "WAITING", "CONNECTING" -> {
+            "PROCESSING", "TIP_PROCESSING", "WAITING_CARD", "CARD_DETECTED", "READING_CARD",
+            "WAITING_PIN", "WAITING_SIGNATURE", "WAITING_RESPONSE", "PRINTING",
+            "WAITING", "CONNECTING" -> {
                 // Enable abort button for supported transaction types
                 val shouldShowAbort = when (transaction.type) {
                     TransactionType.QUERY, TransactionType.BATCH_CLOSE -> false

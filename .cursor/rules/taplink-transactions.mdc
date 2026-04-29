@@ -204,6 +204,28 @@ client.auth(request, callback)
 
 ---
 
+## Forced Authorization (Offline / Voice Auth)
+
+Used for offline or voice-authorized transactions where the auth code is already obtained.
+
+```kotlin
+val authAmount = AuthAmountInfo(
+    authAmount = BigDecimal("3000"),
+    pricingCurrency = "USD"
+)
+
+val request = ForcedAuthRequest.builder()
+    .setReferenceOrderId("FORCED_${System.currentTimeMillis()}")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(authAmount)
+    .setDescription("Voice Authorization")
+    .build()
+
+client.forcedAuth(request, callback)
+```
+
+---
+
 ## Post-Authorization (Pre-Auth Completion)
 
 Completes a pre-auth and performs the actual charge.

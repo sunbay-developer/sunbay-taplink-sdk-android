@@ -36,6 +36,15 @@ sealed class PaymentEvent(
     object Processing : PaymentEvent("PROCESSING", "Processing", 10)
 
     /**
+     * Tip selection is in progress.
+     *
+     * This event is emitted after payment initiation and before [WaitingCard]
+     * when on-screen tip collection is configured through `TipConfig` with
+     * `onScreenTip = true`.
+     */
+    object TipProcessing : PaymentEvent("TIP_PROCESSING", "Tip selection in progress", 15)
+
+    /**
      * Waiting for card event.
      */
     object WaitingCard : PaymentEvent("WAITING_CARD", "Waiting for card", 20)
@@ -101,6 +110,7 @@ sealed class PaymentEvent(
         fun fromEventCode(eventCode: String): PaymentEvent {
             return when (eventCode.uppercase()) {
                 "WAITING_CARD" -> WaitingCard
+                "TIP_PROCESSING" -> TipProcessing
                 "CARD_DETECTED" -> CardDetected
                 "READING_CARD" -> ReadingCard
                 "WAITING_PIN" -> WaitingPin

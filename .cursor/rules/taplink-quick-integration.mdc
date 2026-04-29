@@ -1,0 +1,313 @@
+---
+description: Taplink SDK quick integration recipes – copy-paste patterns for common tasks
+globs: ["**/*.kt", "**/*.java"]
+alwaysApply: false
+---
+
+# Taplink SDK – Quick Integration Recipes
+
+Step-by-step patterns for common integration tasks.  
+Each recipe is self-contained — copy into your project and adjust marked parameters.
+
+---
+
+## Recipe 1: Minimal Working Integration
+
+### Step 1 — Application class
+
+```kotlin
+class MyApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        TaplinkSDK.init(this, TaplinkConfig(
+            appId = "YOUR_APP_ID",          // ← Replace
+            merchantId = "YOUR_MERCHANT_ID", // ← Replace
+            secretKey = "YOUR_SECRET_KEY"    // ← Replace
+        ))
+    }
+}
+```
+
+### Step 2 — Connect in Activity
+
+```kotlin
+class PayActivity : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_pay)
+
+        // Monitor connection status throughout lifecycle
+        TaplinkSDK.setConnectionListener(object : ConnectionListener {
+            override fun onConnected(deviceId: String, taproVersion: String) {
+                runOnUiThread { payButton.isEnabled = true }
+            }
+            override fun onDisconnected(reason: String) {
+                runOnUiThread { payButton.isEnabled = false }
+            }
+            override fun onError(error: ConnectionError) {
+                runOnUiThread { showError(error.message) }
+            }
+        })
+
+        // Connect — App-to-App auto-detects if Tapro is on the same device
+        TaplinkSDK.connect(ConnectionConfig.createAppMode(), object : ConnectionListener {
+            override fun onConnected(d: String, v: String) { /* one-shot */ }
+            override fun onDisconnected(r: String) {}
+            override fun onError(e: ConnectionError) { showError(e.message) }
+        })
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        TaplinkSDK.removeConnectionListener()
+        TaplinkSDK.disconnect()
+    }
+}
+```
+
+### Step 3 — Execute a sale
+
+```kotlin
+fun pay(amountCents: Long) {
+    val request = SaleRequest.builder()
+        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setReferenceOrderId("ORD_${System.currentTimeMillis()}")
+        .setAmount(AmountInfo(BigDecimal(amountCents), "USD"))
+        .build()
+
+    TaplinkSDK.getClient().sale(request, object : PaymentCallback {
+        override fun onProgress(event: PaymentEvent) {
+            runOnUiThread { statusText.text = event.message ?: "Processing..." }
+        }
+        override fun onSuccess(result: PaymentResult) {
+            runOnUiThread {
+                if (result.isSuccess()) showSuccess(result)
+                else if (result.isProcessing()) queryStatus(result.transactionRequestId!!)
+                else showFailed(result.transactionResultMsg)
+            }
+        }
+        override fun onFailure(error: PaymentError) {
+            runOnUiThread { handleError(error) }
+        }
+    })
+}
+```
+
+---
+
+## Recipe 2: LAN Mode Connection
+
+```kotlin
+// First time — user provides IP
+val config = ConnectionConfig.createLanMode(
+    host = ipAddress,   // e.g., "192.168.1.100"
+    port = 8443
+)
+TaplinkSDK.connect(config, listener)
+
+// Subsequent — SDK uses cached connection info
+val config = ConnectionConfig.createLanMode()
+TaplinkSDK.connect(config, listener)
+```
+
+---
+
+## Recipe 3: Cable Mode Connection
+
+```kotlin
+// Auto-detect cable type (recommended)
+val config = ConnectionConfig.createCableMode()
+TaplinkSDK.connect(config, listener)
+
+// Force specific protocol
+val config = ConnectionConfig.createCableMode(CableProtocol.USB_AOA)
+TaplinkSDK.connect(config, listener)
+```
+
+> Cable AUTO tries: VSP → RS232 → AOA
+
+---
+
+## Recipe 4: Refund a Previous Sale
+
+```kotlin
+fun refund(originalTxnId: String, amountCents: Long) {
+    val request = RefundRequest.referencedBuilder()
+        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setOriginalTransactionId(originalTxnId)
+        .setAmount(AmountInfo(BigDecimal(amountCents), "USD"))
+        .build()
+
+    TaplinkSDK.getClient().refund(request, paymentCallback)
+}
+```
+
+---
+
+## Recipe 5: Void a Same-Day Transaction
+
+```kotlin
+fun void(originalTxnId: String) {
+    val request = VoidRequest.builder()
+        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setOriginalTransactionId(originalTxnId)
+        .build()
+
+    TaplinkSDK.getClient().void(request, paymentCallback)
+}
+```
+
+---
+
+## Recipe 6: Pre-Auth → Capture Flow (Hotels, Rentals)
+
+```kotlin
+// Step 1: Freeze funds
+fun authorize(amountCents: Long) {
+    val request = AuthRequest.builder()
+        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setReferenceOrderId("AUTH_${System.currentTimeMillis()}")
+        .setAmount(AuthAmountInfo(BigDecimal(amountCents), "USD"))
+        .build()
+    TaplinkSDK.getClient().auth(request, paymentCallback)
+}
+
+// Step 2: Capture (complete the charge)
+fun capture(originalAuthTxnId: String, finalAmountCents: Long) {
+    val request = PostAuthRequest.builder()
+        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setOriginalTransactionId(originalAuthTxnId)
+        .setAmount(AmountInfo(BigDecimal(finalAmountCents), "USD"))
+        .build()
+    TaplinkSDK.getClient().postAuth(request, paymentCallback)
+}
+```
+
+---
+
+## Recipe 7: Sale with On-Screen Tip
+
+```kotlin
+val amount = AmountInfo(
+    orderAmount = BigDecimal("1000"),  // $10.00 = 1000 cents
+    pricingCurrency = "USD",
+    tipConfig = TipConfig(
+        onScreenTip = true,
+        tipMode = TipMode.ON_SALE,
+        suggestions = TipSuggestions(
+            feeMode = FeeMode.RATE,
+            values = listOf(15, 18, 20)  // 15%, 18%, 20%
+        )
+    )
+)
+
+val request = SaleRequest.builder()
+    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setReferenceOrderId("ORD_${System.currentTimeMillis()}")
+    .setAmount(amount)
+    .build()
+
+TaplinkSDK.getClient().sale(request, paymentCallback)
+```
+
+---
+
+## Recipe 8: Timeout Recovery (Error 306)
+
+```kotlin
+override fun onFailure(error: PaymentError) {
+    when {
+        error.code == "306" -> {
+            // Transaction MAY have succeeded — query before retrying
+            pollStatus(error.transactionRequestId!!, attempt = 1)
+        }
+        error.canRetryWithSameId -> {
+            // Safe to retry with same request ID
+            retryTransaction()
+        }
+        else -> {
+            // Must use a NEW transactionRequestId
+            showError(error.message)
+        }
+    }
+}
+
+private fun pollStatus(txnRequestId: String, attempt: Int) {
+    if (attempt > 12) { showUnknownStatus(txnRequestId); return }
+
+    val query = QueryRequest().setTransactionRequestId(txnRequestId)
+    TaplinkSDK.getClient().query(query, object : PaymentCallback {
+        override fun onSuccess(result: PaymentResult) {
+            when {
+                result.isSuccess()    -> handleSuccess(result)
+                result.isFailed()     -> handleFailed(result)
+                result.isProcessing() -> {
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        pollStatus(txnRequestId, attempt + 1)
+                    }, 5000)
+                }
+            }
+        }
+        override fun onFailure(error: PaymentError) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                pollStatus(txnRequestId, attempt + 1)
+            }, 5000)
+        }
+        override fun onProgress(event: PaymentEvent) {}
+    })
+}
+```
+
+---
+
+## Recipe 9: Batch Close (End-of-Day Settlement)
+
+```kotlin
+val request = BatchCloseRequest.builder()
+    .setTransactionRequestId(UUID.randomUUID().toString())
+    .build()
+
+TaplinkSDK.getClient().batchClose(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResult) {
+        val info = result.batchCloseInfo
+        showBatchSummary(
+            count = info?.totalCount ?: 0,
+            total = info?.totalAmount ?: BigDecimal.ZERO,
+            tips = info?.totalTip ?: BigDecimal.ZERO
+        )
+    }
+    override fun onFailure(error: PaymentError) { showError(error.message) }
+    override fun onProgress(event: PaymentEvent) {}
+})
+```
+
+---
+
+## Amount Conversion Helper
+
+All SDK amounts use the **smallest currency unit** (cents for USD).
+
+```kotlin
+/** Convert dollars to cents for SDK AmountInfo */
+fun dollarsToCents(dollars: Double): BigDecimal =
+    BigDecimal(dollars).multiply(BigDecimal("100")).setScale(0, RoundingMode.HALF_UP)
+
+/** Convert cents from SDK result back to dollars for display */
+fun centsToDollars(cents: BigDecimal): BigDecimal =
+    cents.divide(BigDecimal("100"), 2, RoundingMode.HALF_UP)
+```
+
+---
+
+## Must-Follow Rules Summary
+
+| Rule | Detail |
+|------|--------|
+| **Amount unit** | Always smallest currency unit (cents). `$10.00` → `BigDecimal("1000")` |
+| **transactionRequestId** | Globally unique per attempt. Use `UUID.randomUUID()` |
+| **Error 306** | MUST query status before retrying. Transaction may have succeeded |
+| **Lifecycle** | Call `disconnect()` + `removeConnectionListener()` in `onDestroy()` |
+| **Thread safety** | Callbacks may arrive on background thread. Use `runOnUiThread {}` |
+| **INIT session** | Auto-runs on first transaction after connect. No manual call needed |
+| **Logs in production** | Set `logEnabled = false` to avoid leaking sensitive data |

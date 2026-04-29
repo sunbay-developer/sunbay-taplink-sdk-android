@@ -163,6 +163,16 @@ val request = AuthRequest.builder()
 client.auth(request, callback)
 ```
 
+### Forced Authorization (Offline / Voice Auth)
+```kotlin
+val request = ForcedAuthRequest.builder()
+    .setReferenceOrderId("FORCED_${System.currentTimeMillis()}")
+    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setAmount(AuthAmountInfo(authAmount = BigDecimal("3000"), pricingCurrency = "USD"))
+    .build()
+client.forcedAuth(request, callback)
+```
+
 ### Post-Authorization (Pre-Auth Completion)
 ```kotlin
 val request = PostAuthRequest.builder()
@@ -180,6 +190,14 @@ val request = BatchCloseRequest.builder()
     .setDescription("End of Day Settlement")
     .build()
 client.batchClose(request, callback)
+```
+
+### Abort (Cancel In-Progress Transaction)
+```kotlin
+val request = AbortRequest.builder()
+    .setTransactionRequestId(UUID.randomUUID().toString())
+    .build()
+client.abort(request, callback)
 ```
 
 ### Query (status check / timeout recovery)

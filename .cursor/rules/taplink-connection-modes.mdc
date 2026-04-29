@@ -57,7 +57,7 @@ TaplinkSDK.connect(config, connectionListener)
 ```
 
 **Characteristics:**
-- TLS-encrypted WebSocket
+- WebSocket communication (non-TLS by default)
 - mDNS auto-discovery supported
 - SDK handles IP change automatically
 - Port must be in range **8443–8453**

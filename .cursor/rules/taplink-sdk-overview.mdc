@@ -54,11 +54,13 @@ client.sale(request, callback)
 client.refund(request, callback)
 client.void(request, callback)
 client.auth(request, callback)
+client.forcedAuth(request, callback)      // Force auth (offline/voice auth)
 client.postAuth(request, callback)
 client.incrementalAuth(request, callback)
 client.tipAdjust(request, callback)
 client.batchClose(request, callback)
 client.query(request, callback)
+client.abort(request, callback)           // Cancel in-progress transaction
 ```
 
 ---
@@ -133,7 +135,7 @@ com.sunmi.tapro.taplink.sdk
 ├── model/
 │   ├── common/AmountInfo.kt       ← Amount fields (smallest currency unit!)
 │   ├── common/PaymentEvent.kt     ← Transaction progress events (sealed class)
-│   ├── request/transaction/       ← SaleRequest, RefundRequest, VoidRequest, etc.
+│   ├── request/transaction/       ← SaleRequest, RefundRequest, VoidRequest, AuthRequest, ForcedAuthRequest, PostAuthRequest, IncrementalAuthRequest, TipAdjustRequest, BatchCloseRequest, QueryRequest, AbortRequest
 │   └── response/PaymentResult.kt  ← Transaction result
 └── error/
     ├── PaymentError.kt            ← Transaction error info
