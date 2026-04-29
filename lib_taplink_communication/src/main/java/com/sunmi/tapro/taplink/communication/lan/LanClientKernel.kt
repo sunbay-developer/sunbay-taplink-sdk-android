@@ -669,11 +669,13 @@ class LanClientKernel(
         // Set connection status listener
         connectionManager.setConnectionListener(object : ConnectionManager.ConnectionListener {
             override fun onConnected() {
+                // Update status SYNCHRONOUSLY first so canSendData() is true
+                // before any external callback fires. Heartbeat start and notification
+                // happen asynchronously afterwards.
+                updateStatus(InnerConnectionStatus.CONNECTED)
+
                 launchInScope {
                     LogUtil.d(TAG, "LAN connection established")
-
-                    // Safely update status
-                    updateStatusSafely(InnerConnectionStatus.CONNECTED)
 
                     // Create service information (if needed)
                     if (currentService == null && currentUri != null) {

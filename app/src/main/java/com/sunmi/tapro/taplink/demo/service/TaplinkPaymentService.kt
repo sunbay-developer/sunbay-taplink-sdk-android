@@ -662,7 +662,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "SALE progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "SALE")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -722,7 +722,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "AUTH progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "AUTH")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -784,7 +784,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "FORCED_AUTH progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "FORCED_AUTH")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -854,7 +854,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "REFUND progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "REFUND")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -915,7 +915,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "VOID progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "VOID")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -987,7 +987,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "POST_AUTH progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "POST_AUTH")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -1049,7 +1049,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "INCREMENT_AUTH progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "INCREMENT_AUTH")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -1109,7 +1109,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "TIP_ADJUST progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "TIP_ADJUST")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -1143,7 +1143,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "QUERY progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "QUERY")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -1177,7 +1177,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "QUERY progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "QUERY")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -1216,7 +1216,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "BATCH_CLOSE progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "BATCH_CLOSE")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
@@ -1260,7 +1260,7 @@ class TaplinkPaymentService : PaymentService {
             override fun onProgress(event: SdkPaymentEvent) {
                 Log.d(TAG, "ABORT progress: ${event.eventMsg}")
                 val progressMessage = getProgressMessage(event, "ABORT")
-                callback.onProgress("PROCESSING", progressMessage)
+                callback.onProgress(event.eventCode, progressMessage)
             }
         })
     }
