@@ -8,6 +8,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
 import com.sunmi.tapro.taplink.sdk.model.common.GoodsDetail
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
+import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 import java.math.BigDecimal
 
 /**
@@ -216,6 +217,13 @@ data class PaymentRequest(
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
 
     // ========== Tip configuration ==========
+
+    /**
+     * Tip configuration (optional).
+     * Used by SALE and POST_AUTH to configure on-screen tip behavior.
+     * Mutually exclusive with amount.tipAmount.
+     */
+    val tipConfig: TipConfig? = null,
 ) {
     // ========== Chain call methods for basic transaction fields ==========
 
@@ -354,6 +362,11 @@ data class PaymentRequest(
     // ========== Chain call methods for tip configuration ==========
 
     /**
+     * Chain call: Set tip configuration
+     */
+    fun setTipConfig(tipConfig: TipConfig): PaymentRequest = copy(tipConfig = tipConfig)
+
+    /**
      * Get transaction type enum
      *
      * @return TransactionAction? Corresponding enum, returns null if unrecognized
@@ -405,6 +418,7 @@ data class PaymentRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
+        private var tipConfig: TipConfig? = null
 
         /**
          * Set transaction type (using enum, recommended)
@@ -439,6 +453,7 @@ data class PaymentRequest(
         fun setNotifyUrl(notifyUrl: String) = apply { this.notifyUrl = notifyUrl }
         fun setRequestTimeout(requestTimeout: Long) = apply { this.requestTimeout = requestTimeout }
         fun setPrintReceipt(printReceipt: PrintReceipt) = apply { this.printReceipt = printReceipt }
+        fun setTipConfig(tipConfig: TipConfig) = apply { this.tipConfig = tipConfig }
 
         /**
          * Build PaymentRequest object
@@ -479,6 +494,7 @@ data class PaymentRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 printReceipt = printReceipt,
+                tipConfig = tipConfig,
             )
         }
     }
