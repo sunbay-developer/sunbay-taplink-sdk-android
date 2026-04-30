@@ -3,6 +3,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
+import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 
 /**
  * Post-Authorization Transaction Request
@@ -18,6 +19,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param notifyUrl Notification URL (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
+ * @param tipConfig Tip configuration (optional, mutually exclusive with amount.tipAmount)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -32,6 +34,7 @@ data class PostAuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
+    val tipConfig: TipConfig? = null,
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
 ) : BaseTransactionRequest() {
 
@@ -49,7 +52,7 @@ data class PostAuthRequest(
             ),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
             TransactionRequestValidator.validateAmount(amount),
-            TransactionRequestValidator.validateTipConfig(amount.tipAmount, amount.tipConfig),
+            TransactionRequestValidator.validateTipConfig(amount.tipAmount, tipConfig),
         )
     }
 
@@ -73,6 +76,7 @@ data class PostAuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
+        private var tipConfig: TipConfig? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         /**
@@ -148,6 +152,14 @@ data class PostAuthRequest(
         }
 
         /**
+         * Set tip configuration
+         */
+        fun setTipConfig(tipConfig: TipConfig): Builder {
+            this.tipConfig = tipConfig
+            return this
+        }
+
+        /**
          * Set print receipt
          */
         fun setPrintReceipt(printReceipt: PrintReceipt): Builder {
@@ -171,6 +183,7 @@ data class PostAuthRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
+                tipConfig = tipConfig,
                 printReceipt = printReceipt,
             )
 

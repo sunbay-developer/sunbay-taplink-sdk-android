@@ -118,7 +118,7 @@ object TransactionRequestValidator {
      * - tipConfig is only valid when tipAmount is null
      *
      * @param tipAmount Tip amount from AmountInfo
-     * @param tipConfig Tip configuration from AmountInfo
+        * @param tipConfig Tip configuration from the transaction request
      * @return ValidationResult validation result
      */
     fun validateTipConfig(tipAmount: BigDecimal?, tipConfig: TipConfig?): ValidationResult {

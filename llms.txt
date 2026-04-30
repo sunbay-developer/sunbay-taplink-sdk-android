@@ -197,8 +197,7 @@ val amount = AmountInfo(
     taxAmount        = null,                // Optional
     surchargeAmount  = null,                // Optional
     cashbackAmount   = null,                // Optional
-    serviceFee       = null,                // Optional
-    tipConfig        = null                 // Optional (mutually exclusive with tipAmount)
+    serviceFee       = null                 // Optional
 )
 
 // Factory style
@@ -211,7 +210,25 @@ val amount = AmountInfo.of(BigDecimal("10.00"), "USD")  // auto-converts to cent
 ## TipConfig — On-Screen Tip
 
 Use `tipConfig` when the terminal should collect tip interactively.
-`tipConfig` and `tipAmount` are **mutually exclusive**.
+Set it on `SaleRequest` or `PostAuthRequest` as a top-level field.
+`tipConfig` and `amount.tipAmount` are **mutually exclusive**.
+
+```kotlin
+val request = SaleRequest(
+    referenceOrderId = "ORDER001",
+    transactionRequestId = "TXN001",
+    amount = AmountInfo(BigDecimal("1000"), "USD"),
+    tipConfig = TipConfig(
+        onScreenTip = true,
+        tipMode     = TipMode.ON_SALE,
+        tipWithTax  = false,
+        suggestions = TipSuggestions(
+            feeMode = FeeMode.RATE,
+            values  = listOf(15, 18, 20)
+        )
+    )
+)
+```
 
 ```kotlin
 val tipConfig = TipConfig(

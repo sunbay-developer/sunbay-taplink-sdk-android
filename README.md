@@ -197,7 +197,7 @@ alwaysApply: false
 - Error 306 (timeout): MUST call `client.query()` BEFORE creating any new transaction
 - Only import from `lib_taplink_sdk` — never import `lib_taplink_communication`
 - Always call `TaplinkSDK.disconnect()` + `TaplinkSDK.removeConnectionListener()` in `onDestroy()`
-- `tipConfig` and `tipAmount` in `AmountInfo` are mutually exclusive — set one or neither
+- top-level `tipConfig` and `AmountInfo.tipAmount` are mutually exclusive — set one or neither
 
 ## SDK Entry Points
 ```kotlin
@@ -263,7 +263,7 @@ TipConfig(
     tipMode = TipMode.ON_SALE,        // or AFTER_SALE
     suggestions = TipSuggestions(FeeMode.RATE, listOf(15, 18, 20))  // 15%, 18%, 20%
 )
-// Do NOT set tipAmount in AmountInfo when using tipConfig
+// Do NOT set AmountInfo.tipAmount when using top-level tipConfig
 ```
 
 ## PaymentCallback — UI thread
@@ -298,7 +298,7 @@ Critical rules — always follow these when generating Taplink code:
 - Only import from lib_taplink_sdk — never from lib_taplink_communication
 - PaymentCallback methods run on a background thread — always use runOnUiThread {} for UI updates
 - Always call TaplinkSDK.disconnect() AND TaplinkSDK.removeConnectionListener() in onDestroy()
-- tipConfig and tipAmount in AmountInfo are mutually exclusive — set one or neither, never both
+- top-level `tipConfig` and `AmountInfo.tipAmount` are mutually exclusive — set one or neither, never both
 
 Integration flow: TaplinkSDK.init() → TaplinkSDK.connect() → TaplinkSDK.getClient() → .sale()/.refund()/etc.
 ```
@@ -392,7 +392,7 @@ Before committing AI-generated code, verify these items:
 | ✅ UI thread | `runOnUiThread {}` inside every callback that touches UI |
 | ✅ Lifecycle | `disconnect()` + `removeConnectionListener()` in `onDestroy()` |
 | ✅ Import path | `com.sunmi.tapro.taplink.sdk.*` — no `lib_taplink_communication` imports |
-| ✅ tipConfig | `tipAmount` in `AmountInfo` is `null` when `tipConfig` is set |
+| ✅ tipConfig | `amount.tipAmount` is `null` when top-level `tipConfig` is set |
 
 ---
 
@@ -503,12 +503,16 @@ client.sale(request, paymentCallback)
 
 ### Tip Configuration
 
-When you want the terminal to collect tip interactively, set `tipConfig` in `AmountInfo`. `tipConfig` and `tipAmount` are mutually exclusive, so `tipAmount` must be `null`.
+When you want the terminal to collect tip interactively, set top-level `tipConfig` on `SaleRequest` or `PostAuthRequest`. `tipConfig` and `amount.tipAmount` are mutually exclusive, so `tipAmount` must be `null`.
 
 ```kotlin
-val amount = AmountInfo(
-    orderAmount = BigDecimal("1000"),
-    pricingCurrency = "USD",
+val request = SaleRequest(
+    referenceOrderId = "ORDER001",
+    transactionRequestId = "TXN001",
+    amount = AmountInfo(
+        orderAmount = BigDecimal("1000"),
+        pricingCurrency = "USD",
+    ),
     tipConfig = TipConfig(
         onScreenTip = true,
         tipMode = TipMode.ON_SALE,
@@ -516,7 +520,7 @@ val amount = AmountInfo(
             feeMode = FeeMode.RATE,
             values = listOf(15, 18, 20)
         )
-    )
+    ),
 )
 ```
 
@@ -551,7 +555,7 @@ val amount = AmountInfo(
 | `RATE` | Suggestion values are tip percentages. `15` means 15% of the order amount. |
 | `AMOUNT` | Suggestion values are fixed tip amounts in the smallest currency unit (cents). `100` means $1.00 USD. |
 
-> **Mutual exclusivity:** `tipConfig` and `tipAmount` in `AmountInfo` cannot be set at the same time. Use `tipConfig` for interactive terminal tip collection; use `tipAmount` when the tip amount is known upfront (e.g., from a TipAdjust flow).
+> **Mutual exclusivity:** top-level `tipConfig` and `amount.tipAmount` cannot be set at the same time. Use `tipConfig` for interactive terminal tip collection; use `tipAmount` when the tip amount is known upfront (e.g., from a TipAdjust flow).
 
 ---
 

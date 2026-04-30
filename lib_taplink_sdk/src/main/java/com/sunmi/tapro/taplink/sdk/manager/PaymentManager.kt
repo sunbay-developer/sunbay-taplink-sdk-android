@@ -436,7 +436,7 @@ class PaymentManager(
 
             val tipConfigValidation = TransactionRequestValidator.validateTipConfig(
                 amountInfo.tipAmount,
-                amountInfo.tipConfig
+                request.tipConfig
             )
             if (!tipConfigValidation.isValid) {
                 val validationError = tipConfigValidation.errors.first()

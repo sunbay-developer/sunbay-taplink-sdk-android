@@ -6,7 +6,7 @@ import com.sunmi.tapro.taplink.sdk.enums.TipMode
  * Tip configuration class.
  *
  * Defines the on-screen tip behavior and suggestion options for a transaction.
- * This configuration must not be used when tipAmount in AmountInfo is set.
+ * This configuration must not be used when the request amount already includes `tipAmount`.
  *
  * @author TaPro Team
  * @since 2025-01-XX
