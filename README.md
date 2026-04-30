@@ -1,6 +1,6 @@
 # Taplink SDK for Android
 
-[![Version](https://img.shields.io/badge/version-1.0.7.19-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
+[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
 [![Min SDK](https://img.shields.io/badge/minSdk-25-green.svg)](https://developer.android.com/about/versions/android-7.1)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.7.10-purple.svg)](https://kotlinlang.org/)
 
@@ -35,23 +35,49 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
 
 ### Installation
 
-Add the SDK module to your project's `settings.gradle.kts`:
-
-```kotlin
-include(":app")
-include(":lib_taplink_sdk")
-include(":lib_taplink_communication")
-```
-
-Then add the dependency to your app module's `build.gradle.kts`:
+Add the following dependency to your app module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation(project(":lib_taplink_sdk"))
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.6")
 }
 ```
 
 **Note:** All required permissions are already declared in the SDK module's manifest and will be automatically merged into your app.
+
+#### Optional Dependencies for LAN and Cable Modes
+
+If your application uses **LAN Mode** or **Cable Mode** connection, add the following dependencies to your app module's `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.6")
+    
+    // WebSocket client - required by Taplink SDK for LAN mode communication
+    // AAR does not bundle transitive dependencies, so this must be declared explicitly
+    api("org.java-websocket:Java-WebSocket:1.5.3")
+    
+    // USB serial (VSP cable path) — SDK uses UsbSerialProber; not bundled in AAR. Requires jitpack.io in settings.
+    api("com.github.mik3y:usb-serial-for-android:3.9.0")
+}
+```
+
+Additionally, ensure your `settings.gradle.kts` includes the JitPack repository for USB serial support:
+
+```kotlin
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }  // Required for usb-serial-for-android
+    }
+}
+```
+
+**Dependency Details:**
+- **Java-WebSocket (1.5.3)**: Enables WebSocket communication for LAN mode connections to payment terminals over network.
+- **usb-serial-for-android (3.9.0)**: Provides USB serial port support for Cable mode connections using VSP (Virtual Serial Port), RS232, and other serial protocols.
 
 ### Basic Integration (3 Steps)
 
@@ -1014,8 +1040,8 @@ client.query(request: QueryRequest, callback: PaymentCallback)
 
 ## Version Information
 
-- **Current Version**: 1.0.7.19 (see `lib_taplink_sdk/build.gradle.kts` → `SdkVersion.NAME`)
-- **Version Code**: 6 (`SdkVersion.CODE`)
+- **Current Version**: 1.0.6
+- **Version Code**: 6
 - **Release Date**: see project tags / release notes
 
 ## Technical Stack
