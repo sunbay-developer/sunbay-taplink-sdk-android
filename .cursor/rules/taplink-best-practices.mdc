@@ -91,10 +91,10 @@ TaplinkSDK.setConnectionListener(object : ConnectionListener {
 - Store the ID before sending — needed for timeout recovery
 
 ```kotlin
-// Recommended: UUID-based
-val txnId = UUID.randomUUID().toString()
+// Recommended: timestamp-based
+val txnId = "TXN_${System.currentTimeMillis()}"
 
-// Acceptable: timestamp-based (ensure no collisions)
+// Acceptable: timestamp + random suffix (ensure no collisions)
 val txnId = "TXN_${System.currentTimeMillis()}_${Random.nextInt(1000)}"
 ```
 
@@ -155,7 +155,7 @@ Error `306` = response timeout. The transaction **may have been processed**. Alw
 
 ```kotlin
 // Store the ID before sending
-val txnRequestId = UUID.randomUUID().toString()
+val txnRequestId = "TXN_${System.currentTimeMillis()}"
 currentTxnRequestId = txnRequestId
 
 val request = SaleRequest.builder()

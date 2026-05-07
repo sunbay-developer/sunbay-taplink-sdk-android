@@ -114,7 +114,7 @@ All transactions use `TaplinkSDK.getClient()` and a `PaymentCallback`.
 ```kotlin
 val request = SaleRequest.builder()
     .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")    // 6–32 chars, required
-    .setTransactionRequestId(UUID.randomUUID().toString())          // Unique, required
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")          // Unique, required
     .setAmount(AmountInfo(BigDecimal("1000"), "USD"))               // Required (cents)
     .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))      // For card payments
     .setDescription("Product Purchase")
@@ -127,7 +127,7 @@ client.sale(request, callback)
 ```kotlin
 // Referenced refund (with original transaction ID)
 val request = RefundRequest.referencedBuilder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("original_txn_id")
     .setAmount(AmountInfo(BigDecimal("500"), "USD"))
     .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
@@ -136,7 +136,7 @@ client.refund(request, callback)
 
 // Non-referenced refund (requires card swipe)
 val request = RefundRequest.nonReferencedBuilder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setReferenceOrderId("REFUND_ORDER_${System.currentTimeMillis()}")
     .setAmount(AmountInfo(BigDecimal("500"), "USD"))
     .build()
@@ -146,7 +146,7 @@ client.refund(request, callback)
 ### Void (same-day cancel only)
 ```kotlin
 val request = VoidRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("original_txn_id")
     .build()
 client.void(request, callback)
@@ -157,7 +157,7 @@ client.void(request, callback)
 ```kotlin
 val request = AuthRequest.builder()
     .setReferenceOrderId("AUTH_${System.currentTimeMillis()}")
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setAmount(AuthAmountInfo(authAmount = BigDecimal("5000"), pricingCurrency = "USD"))
     .build()
 client.auth(request, callback)
@@ -167,7 +167,7 @@ client.auth(request, callback)
 ```kotlin
 val request = ForcedAuthRequest.builder()
     .setReferenceOrderId("FORCED_${System.currentTimeMillis()}")
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setAmount(AuthAmountInfo(authAmount = BigDecimal("3000"), pricingCurrency = "USD"))
     .build()
 client.forcedAuth(request, callback)
@@ -176,7 +176,7 @@ client.forcedAuth(request, callback)
 ### Post-Authorization (Pre-Auth Completion)
 ```kotlin
 val request = PostAuthRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("original_auth_txn_id")
     .setAmount(AmountInfo(BigDecimal("4500"), "USD"))
     .build()
@@ -186,7 +186,7 @@ client.postAuth(request, callback)
 ### Batch Close
 ```kotlin
 val request = BatchCloseRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setDescription("End of Day Settlement")
     .build()
 client.batchClose(request, callback)
@@ -195,7 +195,7 @@ client.batchClose(request, callback)
 ### Abort (Cancel In-Progress Transaction)
 ```kotlin
 val request = AbortRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .build()
 client.abort(request, callback)
 ```
