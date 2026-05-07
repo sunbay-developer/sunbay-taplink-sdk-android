@@ -218,7 +218,7 @@ alwaysApply: false
 
 ## Critical Rules (Never Break)
 - All amounts in SMALLEST CURRENCY UNIT (cents): $10.00 → `BigDecimal("1000")`
-- `transactionRequestId` MUST be globally unique per request — use `UUID.randomUUID().toString()`
+- `transactionRequestId` MUST be globally unique per request — use `"TXN_${System.currentTimeMillis()}"`
 - Never reuse `transactionRequestId` after errors 307, 308, 309, 310, 311
 - Error 306 (timeout): MUST call `client.query()` BEFORE creating any new transaction
 - Only import from `lib_taplink_sdk` — never import `lib_taplink_communication`
@@ -240,7 +240,7 @@ TaplinkSDK.getConnectionStatus(): String?
 ```kotlin
 val request = SaleRequest.builder()
     .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setAmount(AmountInfo(BigDecimal("1000"), "USD"))   // 1000 cents = $10.00
     .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
     .build()
@@ -279,7 +279,7 @@ if (error.code == "306") client.query(QueryRequest().setTransactionRequestId(id)
 // Retry rules:
 // 301-305 → canRetryWithSameId=true  → retry with same transactionRequestId
 // 306     → query first              → then decide based on transactionStatus
-// 307-311 → canRetryWithSameId=false → use new UUID for transactionRequestId
+// 307-311 → canRetryWithSameId=false → use new ID for transactionRequestId
 ```
 
 ## TipConfig
@@ -317,9 +317,9 @@ This project uses the Taplink SDK (lib_taplink_sdk) from SUNBAY for Android paym
 
 Critical rules — always follow these when generating Taplink code:
 - All amounts are in the SMALLEST CURRENCY UNIT: $10.00 USD = BigDecimal("1000") (1000 cents)
-- transactionRequestId must be globally unique per request: always use UUID.randomUUID().toString()
+- transactionRequestId must be globally unique per request: always use "TXN_${System.currentTimeMillis()}"
 - Error 306 = timeout: MUST call client.query() to check status BEFORE creating any new transaction
-- Error 307/308/309/310/311: NEVER reuse transactionRequestId — generate a new UUID
+- Error 307/308/309/310/311: NEVER reuse transactionRequestId — generate a new ID
 - canRetryWithSameId=true (errors 301–305): safe to retry with the same transactionRequestId
 - Only import from lib_taplink_sdk — never from lib_taplink_communication
 - PaymentCallback methods run on a background thread — always use runOnUiThread {} for UI updates
@@ -412,9 +412,9 @@ Before committing AI-generated code, verify these items:
 | Check | What to look for |
 |-------|-----------------|
 | ✅ Amount unit | `BigDecimal("1000")` for $10.00 — **not** `BigDecimal("10.00")` |
-| ✅ Transaction ID | `UUID.randomUUID().toString()` — not sequential integers |
+| ✅ Transaction ID | `"TXN_${System.currentTimeMillis()}"` — not sequential integers |
 | ✅ Error 306 | `client.query()` called before any new transaction attempt |
-| ✅ Error 307/308 | New UUID generated, not the original ID reused |
+| ✅ Error 307/308 | New ID generated, not the original ID reused |
 | ✅ UI thread | `runOnUiThread {}` inside every callback that touches UI |
 | ✅ Lifecycle | `disconnect()` + `removeConnectionListener()` in `onDestroy()` |
 | ✅ Import path | `com.sunmi.tapro.taplink.sdk.*` — no `lib_taplink_communication` imports |

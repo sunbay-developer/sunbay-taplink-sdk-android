@@ -71,7 +71,7 @@ class PayActivity : AppCompatActivity() {
 ```kotlin
 fun pay(amountCents: Long) {
     val request = SaleRequest.builder()
-        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setReferenceOrderId("ORD_${System.currentTimeMillis()}")
         .setAmount(AmountInfo(BigDecimal(amountCents), "USD"))
         .build()
@@ -134,7 +134,7 @@ TaplinkSDK.connect(config, listener)
 ```kotlin
 fun refund(originalTxnId: String, amountCents: Long) {
     val request = RefundRequest.referencedBuilder()
-        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setOriginalTransactionId(originalTxnId)
         .setAmount(AmountInfo(BigDecimal(amountCents), "USD"))
         .build()
@@ -150,7 +150,7 @@ fun refund(originalTxnId: String, amountCents: Long) {
 ```kotlin
 fun void(originalTxnId: String) {
     val request = VoidRequest.builder()
-        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setOriginalTransactionId(originalTxnId)
         .build()
 
@@ -166,7 +166,7 @@ fun void(originalTxnId: String) {
 // Step 1: Freeze funds
 fun authorize(amountCents: Long) {
     val request = AuthRequest.builder()
-        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setReferenceOrderId("AUTH_${System.currentTimeMillis()}")
         .setAmount(AuthAmountInfo(BigDecimal(amountCents), "USD"))
         .build()
@@ -176,7 +176,7 @@ fun authorize(amountCents: Long) {
 // Step 2: Capture (complete the charge)
 fun capture(originalAuthTxnId: String, finalAmountCents: Long) {
     val request = PostAuthRequest.builder()
-        .setTransactionRequestId(UUID.randomUUID().toString())
+        .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setOriginalTransactionId(originalAuthTxnId)
         .setAmount(AmountInfo(BigDecimal(finalAmountCents), "USD"))
         .build()
@@ -203,7 +203,7 @@ val amount = AmountInfo(
 )
 
 val request = SaleRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setReferenceOrderId("ORD_${System.currentTimeMillis()}")
     .setAmount(amount)
     .build()
@@ -265,7 +265,7 @@ private fun pollStatus(txnRequestId: String, attempt: Int) {
 
 ```kotlin
 val request = BatchCloseRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .build()
 
 TaplinkSDK.getClient().batchClose(request, object : PaymentCallback {
@@ -305,7 +305,7 @@ fun centsToDollars(cents: BigDecimal): BigDecimal =
 | Rule | Detail |
 |------|--------|
 | **Amount unit** | Always smallest currency unit (cents). `$10.00` → `BigDecimal("1000")` |
-| **transactionRequestId** | Globally unique per attempt. Use `UUID.randomUUID()` |
+| **transactionRequestId** | Globally unique per attempt. Use `"TXN_${System.currentTimeMillis()}"` |
 | **Error 306** | MUST query status before retrying. Transaction may have succeeded |
 | **Lifecycle** | Call `disconnect()` + `removeConnectionListener()` in `onDestroy()` |
 | **Thread safety** | Callbacks may arrive on background thread. Use `runOnUiThread {}` |

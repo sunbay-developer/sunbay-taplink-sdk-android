@@ -60,7 +60,7 @@ val client = TaplinkSDK.getClient()
 
 val request = SaleRequest.builder()
     .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
-    .setTransactionRequestId(UUID.randomUUID().toString())   // MUST be unique
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")   // MUST be unique
     .setAmount(AmountInfo(BigDecimal("1000"), "USD"))         // 1000 cents = $10.00
     .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
     .build()
@@ -131,14 +131,14 @@ val config = ConnectionConfig.createDefault()  // tries APP_TO_APP → Cable →
 ```kotlin
 // Referenced (with original txn ID)
 val request = RefundRequest.referencedBuilder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("original_txn_id")
     .setAmount(AmountInfo(BigDecimal("500"), "USD"))
     .build()
 
 // Non-referenced (card swipe required)
 val request = RefundRequest.nonReferencedBuilder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setReferenceOrderId("REFUND_${System.currentTimeMillis()}")
     .setAmount(AmountInfo(BigDecimal("500"), "USD"))
     .build()
@@ -147,7 +147,7 @@ val request = RefundRequest.nonReferencedBuilder()
 ### Void
 ```kotlin
 val request = VoidRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("original_txn_id")
     .build()
 ```
@@ -156,13 +156,13 @@ val request = VoidRequest.builder()
 ```kotlin
 val request = AuthRequest.builder()
     .setReferenceOrderId("AUTH_${System.currentTimeMillis()}")
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setAmount(AuthAmountInfo(authAmount = BigDecimal("5000"), pricingCurrency = "USD"))
     .build()
 
 // Complete pre-auth
 val request = PostAuthRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("original_auth_txn_id")
     .setAmount(AmountInfo(BigDecimal("4500"), "USD"))
     .build()
@@ -171,7 +171,7 @@ val request = PostAuthRequest.builder()
 ### Tip Adjustment
 ```kotlin
 val request = TipAdjustRequest.builder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("original_sale_txn_id")
     .setTipAmount(BigDecimal("200"))   // 200 cents = $2.00
     .build()
