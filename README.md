@@ -531,6 +531,8 @@ client.sale(request, paymentCallback)
 
 When you want the terminal to collect tip interactively, set top-level `tipConfig` on `SaleRequest` or `PostAuthRequest`. `tipConfig` and `amount.tipAmount` are mutually exclusive, so `tipAmount` must be `null`.
 
+When the tip amount is already known, keep `orderAmount` as the pre-tip order subtotal and set `amount.tipAmount` separately. Tapro receives the amount breakdown, calculates the final transaction total, and returns that total in the transaction result. If tip is folded into `orderAmount`, tax may also be calculated on the tip portion.
+
 ```kotlin
 val request = SaleRequest(
     referenceOrderId = "ORDER001",
@@ -581,7 +583,7 @@ val request = SaleRequest(
 | `RATE` | Suggestion values are tip percentages. `15` means 15% of the order amount. |
 | `AMOUNT` | Suggestion values are fixed tip amounts in the smallest currency unit (cents). `100` means $1.00 USD. |
 
-> **Mutual exclusivity:** top-level `tipConfig` and `amount.tipAmount` cannot be set at the same time. Use `tipConfig` for interactive terminal tip collection; use `tipAmount` when the tip amount is known upfront (e.g., from a TipAdjust flow).
+> **Mutual exclusivity:** top-level `tipConfig` and `amount.tipAmount` cannot be set at the same time. Use `tipConfig` for interactive terminal tip collection; use `tipAmount` when the tip amount is known upfront and keep it separate from `orderAmount` so Tapro can calculate and return the final transaction total correctly.
 
 ---
 
@@ -848,6 +850,12 @@ val wrongAmount = AmountInfo()
     .setOrderAmount(BigDecimal("12.34"))  // Wrong! This will be interpreted as $0.1234
     .setPricingCurrency("USD")
 ```
+
+### Amount Field Guidance
+
+- **`orderAmount`**: Use the base order amount only. Do not include tip here when the tip is a separate amount.
+- **`tipAmount`**: When the tip is known upfront, set it separately from `orderAmount`. Tapro uses the breakdown to calculate the final total transaction amount and returns that total in the transaction result. If tip is already included in `orderAmount`, tax may also be calculated on the tip portion.
+- **`surchargeAmount`**: When a surcharge is provided and the customer pays with a **Debit Card**, Tapro removes the surcharge amount from the transaction before completion.
 
 ### Order ID vs Transaction Request ID
 

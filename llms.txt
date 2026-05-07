@@ -191,11 +191,11 @@ $10.00 USD → BigDecimal("10.00")  ❌ (= $0.10, 100x wrong!)
 ```kotlin
 // Constructor style
 val amount = AmountInfo(
-    orderAmount      = BigDecimal("1000"),   // Required
+    orderAmount      = BigDecimal("1000"),   // Required: base order amount before optional tip
     pricingCurrency  = "USD",               // Required, ISO 4217
-    tipAmount        = null,                // Optional (mutually exclusive with tipConfig)
+    tipAmount        = null,                // Optional: keep separate from orderAmount when known upfront
     taxAmount        = null,                // Optional
-    surchargeAmount  = null,                // Optional
+    surchargeAmount  = null,                // Optional: removed if the card used is Debit Card
     cashbackAmount   = null,                // Optional
     serviceFee       = null                 // Optional
 )
@@ -204,6 +204,10 @@ val amount = AmountInfo(
 val amount = AmountInfo.of(1000L, "USD")           // from Long cents
 val amount = AmountInfo.of(BigDecimal("10.00"), "USD")  // auto-converts to cents
 ```
+
+Keep `orderAmount` as the base order amount only. When tip is known upfront, set `tipAmount` separately so Tapro can calculate and return the final transaction total. If tip is folded into `orderAmount`, tax may also be calculated on the tip portion.
+
+If `surchargeAmount` is present and the customer pays with a **Debit Card**, Tapro removes the surcharge amount before the transaction is completed.
 
 ---
 
@@ -351,7 +355,9 @@ fun pollStatus(txnRequestId: String, attempt: Int = 1) {
 5. **Callbacks on background thread**: Always `runOnUiThread {}` for UI updates in callbacks.
 6. **Cleanup**: Always call `disconnect()` + `removeConnectionListener()` in `onDestroy()`.
 7. **tipConfig vs tipAmount**: Mutually exclusive. Set one or neither, never both.
-8. **INIT is automatic**: Do not call INIT manually. It runs on the first transaction after connect.
+8. **tipAmount placement**: Keep tip out of `orderAmount` and set `tipAmount` separately when known upfront, or tax may also be applied to the tip portion.
+9. **Debit surcharge handling**: If `surchargeAmount` is sent and the card used is a Debit Card, Tapro removes the surcharge amount before completion.
+10. **INIT is automatic**: Do not call INIT manually. It runs on the first transaction after connect.
 
 ---
 

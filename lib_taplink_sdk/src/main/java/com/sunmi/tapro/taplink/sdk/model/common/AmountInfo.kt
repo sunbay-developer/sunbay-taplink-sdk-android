@@ -25,6 +25,10 @@ data class AmountInfo(
      *
      * Must be in the **smallest currency unit** (cents). Integer values only — no decimals.
      * Example: `BigDecimal("1000")` = $10.00 USD.
+     *
+     * This should represent the base order amount before any optional tip.
+     * When a tip is known upfront, keep it out of `orderAmount` and set [tipAmount] separately.
+     * If tip is folded into `orderAmount`, tax may also be calculated on the tip portion.
      */
     val orderAmount: BigDecimal,
     
@@ -36,7 +40,10 @@ data class AmountInfo(
     
     /**
      * Tip amount (optional).
-        * Must be in the **smallest currency unit** (cents).
+     * Must be in the **smallest currency unit** (cents).
+     *
+     * When the tip is known upfront, set it separately from [orderAmount].
+     * Tapro uses the amount breakdown to calculate and return the final transaction total.
      */
     val tipAmount: BigDecimal? = null,
     
@@ -49,6 +56,9 @@ data class AmountInfo(
     /**
      * Surcharge amount (optional).
      * Must be in the **smallest currency unit** (cents).
+     *
+     * If the customer pays with a Debit Card, Tapro removes this surcharge amount
+     * before the transaction is completed.
      */
     val surchargeAmount: BigDecimal? = null,
     
