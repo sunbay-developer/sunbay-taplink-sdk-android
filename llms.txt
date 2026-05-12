@@ -123,9 +123,9 @@ val config = ConnectionConfig.createDefault()  // tries APP_TO_APP → Cable →
 | `client.postAuth()` | `PostAuthRequest` | Complete a pre-auth |
 | `client.incrementalAuth()` | `IncrementalAuthRequest` | Increase pre-auth amount |
 | `client.tipAdjust()` | `TipAdjustRequest` | Adjust tip after sale |
+| `client.abort()` | `AbortRequest` | Cancel in-progress transaction |
 | `client.batchClose()` | `BatchCloseRequest` | End-of-day settlement |
 | `client.query()` | `QueryRequest` | Query transaction status |
-| `client.abort()` | `AbortRequest` | Cancel in-progress transaction |
 
 ### Refund
 ```kotlin
@@ -175,6 +175,28 @@ val request = TipAdjustRequest.builder()
     .setOriginalTransactionId("original_sale_txn_id")
     .setTipAmount(BigDecimal("200"))   // 200 cents = $2.00
     .build()
+
+client.tipAdjust(request, paymentCallback)  // Use with TipMode.AFTER_SALE
+```
+
+### Abort
+```kotlin
+val request = AbortRequest.builder()
+    .setOriginalTransactionRequestId("original_txn_request_id")  // ID of in-progress transaction
+    .build()
+
+client.abort(request, paymentCallback)  // Only works before gateway authorization
+```
+
+### Incremental Authorization
+```kotlin
+val request = IncrementalAuthRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_auth_txn_id")
+    .setAmount(AmountInfo(BigDecimal("5000"), "USD"))  // Additional $50.00
+    .build()
+
+client.incrementalAuth(request, paymentCallback)  // Increase pre-auth amount
 ```
 
 ---
@@ -260,6 +282,9 @@ val tipConfig = TipConfig(
 
 ## PaymentCallback
 
+**CRITICAL:** `onSuccess` means the SDK received a valid response from Tapro—**not** that the payment was approved.
+Always check `result.transactionStatus` (via `result.isSuccess()`, `result.isProcessing()`, `result.isFailed()`) inside `onSuccess`.
+
 ```kotlin
 object : PaymentCallback {
     override fun onProgress(event: PaymentEvent) {
@@ -274,11 +299,20 @@ object : PaymentCallback {
     }
 
     override fun onSuccess(result: PaymentResult) {
-        // Called for BOTH approved and declined results
+        // onSuccess ≠ approved payment — MUST check transactionStatus
         when {
-            result.isSuccess()    -> confirmPayment(result)
-            result.isProcessing() -> pollStatus(result.transactionRequestId!!)
-            result.isFailed()     -> showDeclined(result.transactionResultMsg)
+            result.isSuccess()    -> {
+                // transactionStatus == "SUCCESS" → Approved, safe to fulfill order
+                confirmPayment(result)
+            }
+            result.isProcessing() -> {
+                // transactionStatus == "PROCESSING" → Gateway still deciding, poll for status
+                pollStatus(result.transactionRequestId!!)
+            }
+            result.isFailed()     -> {
+                // transactionStatus == "FAILED" → Declined, do NOT fulfill order
+                showDeclined(result.transactionResultMsg)
+            }
         }
     }
 
@@ -348,16 +382,18 @@ fun pollStatus(txnRequestId: String, attempt: Int = 1) {
 
 ## Key Rules (Never Violate)
 
-1. **Amount unit**: Always use smallest currency unit (cents). `$10.00 = BigDecimal("1000")`
-2. **transactionRequestId**: Must be globally unique per request. Never reuse after errors 307/308/309/310/311.
-3. **Error 306**: Always query status before retrying. Never create a new transaction blindly.
-4. **lib_taplink_communication**: Never import directly. Only use `lib_taplink_sdk`.
-5. **Callbacks on background thread**: Always `runOnUiThread {}` for UI updates in callbacks.
-6. **Cleanup**: Always call `disconnect()` + `removeConnectionListener()` in `onDestroy()`.
-7. **tipConfig vs tipAmount**: Mutually exclusive. Set one or neither, never both.
-8. **tipAmount placement**: Keep tip out of `orderAmount` and set `tipAmount` separately when known upfront, or tax may also be applied to the tip portion.
-9. **Debit surcharge handling**: If `surchargeAmount` is sent and the card used is a Debit Card, Tapro removes the surcharge amount before completion.
-10. **INIT is automatic**: Do not call INIT manually. It runs on the first transaction after connect.
+1. **onSuccess ≠ payment approved**: `onSuccess` means SDK received valid Tapro response. **ALWAYS check `result.isSuccess()`** before fulfilling order. Declined/processing results also trigger `onSuccess`.
+2. **Amount unit**: Always use smallest currency unit (cents). `$10.00 = BigDecimal("1000")`
+3. **transactionRequestId**: Must be globally unique per request. Never reuse after errors 307/308/309/310/311.
+4. **Error 306**: Always query status before retrying. Never create a new transaction blindly.
+5. **lib_taplink_communication**: Never import directly. Only use `lib_taplink_sdk`.
+6. **Callbacks on background thread**: Always `runOnUiThread {}` for UI updates in callbacks.
+7. **Cleanup**: Always call `disconnect()` + `removeConnectionListener()` in `onDestroy()`.
+8. **tipConfig vs tipAmount**: Mutually exclusive. Set one or neither, never both.
+9. **tipAmount placement**: Keep tip out of `orderAmount` and set `tipAmount` separately when known upfront, or tax may also be applied to the tip portion.
+10. **Debit surcharge handling**: If `surchargeAmount` is sent and the card used is a Debit Card, Tapro removes the surcharge amount before completion.
+11. **Abort prerequisites**: Abort only works before gateway authorization (during card detection/PIN entry stages). For authorized transactions, use Void (same-day) or Refund (cross-day).
+12. **INIT is automatic**: Do not call INIT manually. It runs on the first transaction after connect.
 
 ---
 

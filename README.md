@@ -43,41 +43,7 @@ dependencies {
 }
 ```
 
-**Note:** All required permissions are already declared in the SDK module's manifest and will be automatically merged into your app.
-
-#### Optional Dependencies for LAN and Cable Modes
-
-If your application uses **LAN Mode** or **Cable Mode** connection, add the following dependencies to your app module's `build.gradle.kts`:
-
-```kotlin
-dependencies {
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.6")
-    
-    // WebSocket client - required by Taplink SDK for LAN mode communication
-    // AAR does not bundle transitive dependencies, so this must be declared explicitly
-    api("org.java-websocket:Java-WebSocket:1.5.3")
-    
-    // USB serial (VSP cable path) — SDK uses UsbSerialProber; not bundled in AAR. Requires jitpack.io in settings.
-    api("com.github.mik3y:usb-serial-for-android:3.9.0")
-}
-```
-
-Additionally, ensure your `settings.gradle.kts` includes the JitPack repository for USB serial support:
-
-```kotlin
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-        maven { url = uri("https://jitpack.io") }  // Required for usb-serial-for-android
-    }
-}
-```
-
-**Dependency Details:**
-- **Java-WebSocket (1.5.3)**: Enables WebSocket communication for LAN mode connections to payment terminals over network.
-- **usb-serial-for-android (3.9.0)**: Provides USB serial port support for Cable mode connections using VSP (Virtual Serial Port), RS232, and other serial protocols.
+**Note:** All required permissions and transitive dependencies are already bundled in the SDK. No additional dependencies are needed for any connection mode (App-to-App, LAN, or Cable).
 
 ### Basic Integration (3 Steps)
 
@@ -89,12 +55,12 @@ Initialize the SDK in your Application class:
 class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        
-        val config = TaplinkConfig()
-            .setAppId("your_app_id")
-            .setMerchantId("your_merchant_id")
-            .setSecretKey("your_secret_key")
-        
+
+        val config = TaplinkConfig.create(
+            appId = "your_app_id",
+            secretKey = "your_secret_key"
+        )
+
         TaplinkSDK.init(this, config)
     }
 }
@@ -160,16 +126,22 @@ private fun processPayment() {
     // Execute sale transaction
     client.sale(request, object : PaymentCallback {
         override fun onSuccess(result: PaymentResponse) {
-            // Payment successful
-            Toast.makeText(this@MainActivity, 
-                "Payment successful: ${result.transactionId}", 
-                Toast.LENGTH_SHORT).show()
+            // onSuccess means response received — check actual transaction outcome
+            if (result.isSuccess()) {
+                Toast.makeText(this@MainActivity,
+                    "Payment approved: ${result.transactionId}",
+                    Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@MainActivity,
+                    "Payment not approved: ${result.transactionResultMsg}",
+                    Toast.LENGTH_SHORT).show()
+            }
         }
         
         override fun onFailure(error: PaymentError) {
-            // Payment failed
-            Toast.makeText(this@MainActivity, 
-                "Payment failed: ${error.message}", 
+            // SDK-level error or pre-gateway failure
+            Toast.makeText(this@MainActivity,
+                "Error: ${error.message}",
                 Toast.LENGTH_SHORT).show()
         }
         
@@ -503,6 +475,40 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 - mDNS auto-discovery
 - Automatic IP update handling
 
+## Determining Transaction Result
+
+The callback semantics are straightforward:
+
+- **`onSuccess`** — the transaction succeeded. You can safely fulfill the order.
+- **`onFailure`** — the transaction failed, or an SDK-level / network error occurred. Check `error.code` to decide how to proceed.
+
+| Callback | Meaning | Action |
+|----------|---------|--------|
+| `onSuccess` | Transaction approved — card was charged | Fulfill order, print receipt |
+| `onFailure` | SDK/network error **or** transaction failed | Handle by `error.code` |
+
+```kotlin
+client.sale(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResponse) {
+        // Transaction succeeded — safe to fulfill the order
+        handleApproved(result.transactionId, result.authCode)
+    }
+
+    override fun onFailure(error: PaymentError) {
+        when {
+            error.code == "306" || error.code == "308" -> {
+                // Timeout or processing — query transaction status first
+                pollTransactionStatus(error.transactionRequestId!!)
+            }
+            error.canRetryWithSameId -> retryWithSameRequest()
+            else -> createNewTransaction() // New transactionRequestId required
+        }
+    }
+})
+```
+
+> **Key point:** `onSuccess` means the transaction is approved. `onFailure` covers both SDK/network errors and transaction failures — use `error.code` to distinguish them.
+
 ## Transaction Types
 
 ### Sale Transaction
@@ -728,6 +734,87 @@ client.batchClose(request, object : PaymentCallback {
     
     override fun onFailure(error: PaymentError) {
         // Handle error
+    }
+})
+```
+
+### Abort Transaction
+
+Cancel an in-progress transaction **before** it reaches the payment gateway (e.g., while waiting for card tap). Once the gateway request is sent, use Void (same-day) or Refund (cross-day) to reverse instead.
+
+```kotlin
+val request = AbortRequest.builder()
+    .setOriginalTransactionRequestId("TXN_ORIGINAL_ID") // transactionRequestId of the in-progress transaction
+    .setDescription("User cancelled")
+    .build()
+
+client.abort(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResponse) {
+        // Abort successful — clear pending transaction state
+        clearPendingTransaction()
+    }
+
+    override fun onFailure(error: PaymentError) {
+        // Abort failed — transaction may have already reached the gateway
+        // Use Void or Refund to reverse if needed
+    }
+})
+```
+
+**Note:** Abort only works in pre-authorization stages (card detection, PIN entry). It cannot cancel a transaction that has already been authorized online.
+
+### Tip Adjustment
+
+Adjust the tip amount after a sale is authorized. Typically used when a customer writes a tip on a printed receipt after signing.
+
+```kotlin
+val request = TipAdjustRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("TXN20231119001")  // original sale transaction ID
+    .setTipAmount(BigDecimal("200"))              // $2.00 (smallest currency unit)
+    .setDescription("Tip adjustment")
+    .build()
+
+client.tipAdjust(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResponse) {
+        if (result.isSuccess()) {
+            showTipConfirmation(result.amount.tipAmount)
+        }
+    }
+
+    override fun onFailure(error: PaymentError) {
+        handleError(error)
+    }
+})
+```
+
+**Note:** The original sale must be in the current open batch. Use with `TipMode.AFTER_SALE` in `TipConfig`.
+
+### Incremental Authorization
+
+Increase the authorized amount on an existing Pre-Auth transaction. Commonly used in hotels for additional charges (e.g., room service, minibar).
+
+```kotlin
+val amount = AmountInfo()
+    .setOrderAmount(BigDecimal("5000"))  // $50.00 additional (smallest currency unit)
+    .setPricingCurrency("USD")
+
+val request = IncrementalAuthRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("TXN20231119002")  // original Auth transaction ID
+    .setAmount(amount)
+    .setDescription("Incremental auth — room service")
+    .build()
+
+client.incrementalAuth(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResponse) {
+        if (result.isSuccess()) {
+            updateAuthorizedAmount(result.amount.transAmount)
+        }
+    }
+
+    override fun onFailure(error: PaymentError) {
+        handleError(error)
     }
 })
 ```
@@ -1036,6 +1123,7 @@ val client = TaplinkSDK.getClient()
 client.sale(request: SaleRequest, callback: PaymentCallback)
 client.refund(request: RefundRequest, callback: PaymentCallback)
 client.void(request: VoidRequest, callback: PaymentCallback)
+client.abort(request: AbortRequest, callback: PaymentCallback)
 client.auth(request: AuthRequest, callback: PaymentCallback)
 client.postAuth(request: PostAuthRequest, callback: PaymentCallback)
 client.incrementalAuth(request: IncrementalAuthRequest, callback: PaymentCallback)
