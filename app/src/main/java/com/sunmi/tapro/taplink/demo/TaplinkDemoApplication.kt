@@ -53,14 +53,14 @@ class TaplinkDemoApplication : Application() {
 
             // Read configuration from resource files to avoid hardcoding credentials
             val appId = getString(R.string.taplink_app_id)
-            val merchantId = getString(R.string.taplink_merchant_id)
+            val merchantId = getString(R.string.taplink_merchant_id).trim().ifBlank { null }
             val secretKey = getString(R.string.taplink_secret_key)
             val taproAppWidthRatio = 0.7f
 
             // Log configuration parameters with sensitive data masked for security
             Log.d(TAG, "=== SDK Init Request Parameters ===")
             Log.d(TAG, "App ID: $appId")
-            Log.d(TAG, "Merchant ID: $merchantId")
+            Log.d(TAG, "Merchant ID: ${merchantId ?: "(not provided)"}")
             Log.d(TAG, "Secret Key: $secretKey")
 
             // Create SDK configuration without ConnectionMode because connection mode

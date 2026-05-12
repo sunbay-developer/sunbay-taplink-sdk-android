@@ -24,10 +24,11 @@ data class TaplinkConfig(
     val appId: String,
 
     /**
-     * Merchant ID (required).
-     * Unique identifier for the merchant on the SUNBAY platform.
+     * Merchant ID (optional).
+     * When provided, it is validated for legacy/cloud compatibility use cases.
+     * It is not required for local SDK initialization.
      */
-    val merchantId: String,
+    val merchantId: String? = null,
 
     /**
      * Signature secret key (required).
@@ -79,6 +80,10 @@ data class TaplinkConfig(
      */
     val taproAppWidthRatio: Float? = null
 ) {
+    init {
+        validateOptionalMerchantId(merchantId)
+    }
+
     // ========== Required Configuration Methods ==========
 
     /**
@@ -95,7 +100,14 @@ data class TaplinkConfig(
      * @param merchantId the merchant identifier
      * @return the updated configuration instance for method chaining
      */
-    fun setMerchantId(merchantId: String): TaplinkConfig = copy(merchantId = merchantId)
+    fun setMerchantId(merchantId: String?): TaplinkConfig = copy(merchantId = merchantId)
+
+    /**
+     * Clears the merchant ID.
+     *
+     * @return the updated configuration instance for method chaining
+     */
+    fun clearMerchantId(): TaplinkConfig = copy(merchantId = null)
 
     /**
      * Sets the signature secret key.
@@ -153,18 +165,54 @@ data class TaplinkConfig(
     fun setTaproAppWidthRatio(taproAppWidthRatio: Float?): TaplinkConfig = copy(taproAppWidthRatio = taproAppWidthRatio)
 
     companion object {
+        private const val MAX_MERCHANT_ID_LENGTH = 32
+        private val MERCHANT_ID_REGEX = Regex("^[A-Za-z0-9_-]+$")
+
+        private fun validateOptionalMerchantId(merchantId: String?) {
+            val normalizedMerchantId = merchantId?.trim()
+            if (normalizedMerchantId.isNullOrEmpty()) {
+                return
+            }
+
+            require(normalizedMerchantId.length <= MAX_MERCHANT_ID_LENGTH) {
+                "merchantId must be at most $MAX_MERCHANT_ID_LENGTH characters when provided"
+            }
+            require(MERCHANT_ID_REGEX.matches(normalizedMerchantId)) {
+                "merchantId can only contain letters, digits, underscores, and hyphens"
+            }
+        }
+
         /**
          * Creates a default configuration.
-         * Requires the mandatory appId, merchantId, and secretKey.
+         * Requires the mandatory appId and secretKey.
          *
          * @param appId the application identifier
-         * @param merchantId the merchant identifier
          * @param secretKey the signature secret key
          * @return the default configuration instance
          */
+        @JvmStatic
         fun create(
             appId: String,
-            merchantId: String,
+            secretKey: String
+        ): TaplinkConfig {
+            return TaplinkConfig(
+                appId = appId,
+                secretKey = secretKey
+            )
+        }
+
+        /**
+         * Creates a default configuration with an optional merchant identifier.
+         *
+         * @param appId the application identifier
+         * @param merchantId the merchant identifier (optional)
+         * @param secretKey the signature secret key
+         * @return the default configuration instance
+         */
+        @JvmStatic
+        fun create(
+            appId: String,
+            merchantId: String?,
             secretKey: String
         ): TaplinkConfig {
             return TaplinkConfig(

@@ -26,7 +26,7 @@ import kotlin.jvm.JvmStatic
  * Recommended usage:
  * ```kotlin
  * // 1. Initialize SDK
- * val config = TaplinkConfig.create(appId, merchantId, secretKey)
+ * val config = TaplinkConfig.create(appId, secretKey)
  * TaplinkSDK.init(context, config)
  * 
  * // 2. Establish connection
