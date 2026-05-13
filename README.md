@@ -125,28 +125,39 @@ private fun processPayment() {
     
     // Execute sale transaction
     client.sale(request, object : PaymentCallback {
-        override fun onSuccess(result: PaymentResponse) {
-            // onSuccess means response received — check actual transaction outcome
-            if (result.isSuccess()) {
-                Toast.makeText(this@MainActivity,
-                    "Payment approved: ${result.transactionId}",
-                    Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this@MainActivity,
-                    "Payment not approved: ${result.transactionResultMsg}",
-                    Toast.LENGTH_SHORT).show()
+        override fun onSuccess(result: PaymentResult) {
+            // onSuccess = terminal returned a final response. Inspect the result to
+            // determine the actual outcome — approved, declined, or processing.
+            when {
+                result.isSuccess()    -> {
+                    // Transaction approved by issuer
+                    Toast.makeText(this@MainActivity,
+                        "Payment approved: ${result.transactionId}",
+                        Toast.LENGTH_SHORT).show()
+                }
+                result.isFailed()     -> {
+                    // Transaction declined, cancelled, or failed by issuer/terminal
+                    Toast.makeText(this@MainActivity,
+                        "Payment failed: ${result.transactionResultMsg}",
+                        Toast.LENGTH_SHORT).show()
+                }
+                result.isProcessing() -> {
+                    // Gateway still deciding — poll with client.query() until terminal
+                    pollForFinalStatus(result.transactionRequestId!!)
+                }
             }
         }
         
         override fun onFailure(error: PaymentError) {
-            // SDK-level error or pre-gateway failure
+            // Technical/communication error — no response received from terminal.
+            // This is NOT a card decline. Check error.canRetryWithSameId for retry guidance.
             Toast.makeText(this@MainActivity,
                 "Error: ${error.message}",
                 Toast.LENGTH_SHORT).show()
         }
         
         override fun onProgress(event: PaymentEvent) {
-            // Update progress UI
+            // Update progress UI (waiting for card, PIN entry, authorizing, etc.)
             updateProgressUI(event.message)
         }
     })
@@ -290,6 +301,8 @@ This project uses the Taplink SDK (lib_taplink_sdk) from SUNBAY for Android paym
 Critical rules — always follow these when generating Taplink code:
 - All amounts are in the SMALLEST CURRENCY UNIT: $10.00 USD = BigDecimal("1000") (1000 cents)
 - transactionRequestId must be globally unique per request: always use "TXN_${System.currentTimeMillis()}"
+- onSuccess = terminal processed the request. Always check result.isSuccess() / isFailed() / isProcessing()
+- onFailure = communication error ONLY. Never contains transaction results — card declines arrive via onSuccess
 - Error 306 = timeout: MUST call client.query() to check status BEFORE creating any new transaction
 - Error 307/308/309/310/311: NEVER reuse transactionRequestId — generate a new ID
 - canRetryWithSameId=true (errors 301–305): safe to retry with the same transactionRequestId
@@ -338,8 +351,8 @@ Once context is loaded, use the following prompts to generate each part of your 
 > Using the Taplink SDK, write a sale transaction for $25.00 USD paid by card.
 > Include full PaymentCallback handling:
 > - onProgress: show transaction stage on screen
-> - onSuccess: handle SUCCESS / PROCESSING / FAILED states
-> - onFailure: handle error 306 with query-first polling, and other error codes
+> - onSuccess: inspect result with isSuccess/isFailed/isProcessing
+> - onFailure: handle communication errors (e.g., error 306 timeout with query-first polling)
 > ```
 
 #### 2.4 — Refund a Transaction
@@ -477,37 +490,51 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 
 ## Determining Transaction Result
 
-The callback semantics are straightforward:
+The SDK uses a clear callback separation:
 
-- **`onSuccess`** — the transaction succeeded. You can safely fulfill the order.
-- **`onFailure`** — the transaction failed, or an SDK-level / network error occurred. Check `error.code` to decide how to proceed.
+- **`onSuccess(result)`** — Tapro received and processed the request. Inspect `result` to determine the outcome.
+- **`onFailure(error)`** — Communication or technical error. No response was received from the terminal.
+- **`onProgress(event)`** — Transaction is in progress (card read, PIN entry, etc.).
 
 | Callback | Meaning | Action |
 |----------|---------|--------|
-| `onSuccess` | Transaction approved — card was charged | Fulfill order, print receipt |
-| `onFailure` | SDK/network error **or** transaction failed | Handle by `error.code` |
+| `onSuccess` | Terminal returned a final result | Inspect `result.isSuccess()` / `isFailed()` / `isProcessing()` |
+| `onFailure` | Communication error — no result received | Check `error.code` for retry guidance |
+| `onProgress` | Transaction stage update | Update UI with progress |
 
 ```kotlin
 client.sale(request, object : PaymentCallback {
-    override fun onSuccess(result: PaymentResponse) {
-        // Transaction succeeded — safe to fulfill the order
-        handleApproved(result.transactionId, result.authCode)
+    override fun onSuccess(result: PaymentResult) {
+        // Terminal processed the request — inspect result for the actual outcome
+        when {
+            result.isSuccess()    -> handleApproved(result)      // Transaction approved
+            result.isFailed()     -> handleDeclined(result)      // Transaction declined/cancelled
+            result.isProcessing() -> pollForFinalStatus(result)  // Still processing — poll with query()
+        }
     }
 
     override fun onFailure(error: PaymentError) {
+        // Communication error — no response received from terminal.
+        // This is NOT a card decline — declines arrive via onSuccess with isFailed().
         when {
-            error.code == "306" || error.code == "308" -> {
-                // Timeout or processing — query transaction status first
+            error.code == "306" -> {
+                // Timeout — query transaction status before retrying
                 pollTransactionStatus(error.transactionRequestId!!)
             }
             error.canRetryWithSameId -> retryWithSameRequest()
             else -> createNewTransaction() // New transactionRequestId required
         }
     }
+
+    override fun onProgress(event: PaymentEvent) {
+        updateProgressUI(event.eventMsg)
+    }
 })
 ```
 
-> **Key point:** `onSuccess` means the transaction is approved. `onFailure` covers both SDK/network errors and transaction failures — use `error.code` to distinguish them.
+> **Key point:** `onSuccess` does NOT mean "approved" — it means the terminal processed your request. Always check `result.isSuccess()`, `result.isFailed()`, or `result.isProcessing()` to determine the actual outcome. Cancelled/aborted transactions arrive as `isFailed()`. `onFailure` fires **only** for communication errors (connection lost, timeout, invalid request).
+>
+> For a complete API reference with all request/response fields, see [API-REFERENCE.md](./API-REFERENCE.md).
 
 ## Transaction Types
 
@@ -821,45 +848,60 @@ client.incrementalAuth(request, object : PaymentCallback {
 
 ## Error Handling
 
-The SDK provides structured error information with handling suggestions.
+The SDK separates **transaction outcomes** (always in `onSuccess`) from **communication errors** (always in `onFailure`).
+
+### Transaction Outcomes via onSuccess
+
+All requests that Tapro receives and processes return through `onSuccess`, regardless of whether the transaction was approved, declined, or cancelled:
 
 ```kotlin
-client.sale(request, object : PaymentCallback {
-    override fun onFailure(error: PaymentError) {
-        // Access error details
-        val code = error.code
-        val message = error.message
-        val suggestion = error.suggestion
-        val canRetry = error.canRetryWithSameId
+override fun onSuccess(result: PaymentResult) {
+    when {
+        result.isSuccess()    -> handleApproved(result)      // Approved — fulfill the order
+        result.isFailed()     -> handleDeclined(result)      // Declined/cancelled/failed
+        result.isProcessing() -> pollForFinalStatus(result)  // Still processing — query later
+    }
+}
+```
+
+### Communication Errors via onFailure
+
+`onFailure` fires **only** when the SDK cannot deliver the request or receive a response — connection lost, timeout, invalid configuration, etc.
+
+```kotlin
+override fun onFailure(error: PaymentError) {
+    // Communication/technical error — no transaction result was received.
+    val code = error.code
+    val message = error.message
+    val suggestion = error.suggestion
+    val canRetry = error.canRetryWithSameId
+    
+    when (error.detail.category) {
+        ErrorCategory.INITIALIZATION -> {
+            // SDK not ready: reinitialize
+            showDialog("Initialization Error", message, suggestion)
+        }
         
-        // Handle based on error category
-        when (error.detail.category) {
-            ErrorCategory.INITIALIZATION -> {
-                // Initialization error: reinitialize SDK
-                showDialog("Initialization Error", message, suggestion)
-            }
-            
-            ErrorCategory.CONNECTION -> {
-                // Connection error: reconnect
-                showDialog("Connection Error", message, suggestion)
-            }
-            
-            ErrorCategory.AUTHENTICATION -> {
-                // Authentication error: check credentials
-                showDialog("Authentication Failed", message, suggestion)
-            }
-            
-            ErrorCategory.TRANSACTION -> {
-                // Transaction error: handle based on retry rules
-                if (canRetry) {
-                    retryWithSameRequest()
-                } else {
-                    createNewTransaction()
-                }
+        ErrorCategory.CONNECTION -> {
+            // Connection lost: reconnect
+            showDialog("Connection Error", message, suggestion)
+        }
+        
+        ErrorCategory.AUTHENTICATION -> {
+            // Invalid credentials: check config
+            showDialog("Authentication Failed", message, suggestion)
+        }
+        
+        ErrorCategory.TRANSACTION -> {
+            // Request delivery error (timeout, etc.)
+            if (canRetry) {
+                retryWithSameRequest()
+            } else {
+                createNewTransaction()
             }
         }
     }
-})
+}
 ```
 
 ### Common Error Codes
@@ -1087,6 +1129,8 @@ override fun onProgress(event: PaymentEvent) {
 
 ## API Reference
 
+> For detailed request/response field tables and complete callback reference, see **[API-REFERENCE.md](./API-REFERENCE.md)**.
+
 ### TaplinkSDK
 
 Main SDK class providing core functionality.
@@ -1138,7 +1182,6 @@ client.query(request: QueryRequest, callback: PaymentCallback)
 
 - **Current Version**: 1.0.6
 - **Version Code**: 6
-- **Release Date**: see project tags / release notes
 
 ## Technical Stack
 
