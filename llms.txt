@@ -382,7 +382,8 @@ fun pollStatus(txnRequestId: String, attempt: Int = 1) {
 
 ## Key Rules (Never Violate)
 
-1. **onSuccess ≠ payment approved**: `onSuccess` means SDK received valid Tapro response. **ALWAYS check `result.isSuccess()`** before fulfilling order. Declined/processing results also trigger `onSuccess`.
+1. **onSuccess ≠ payment approved**: `onSuccess` means SDK received valid Tapro response. **ALWAYS check `result.isSuccess()`** before fulfilling order. Declined/processing results also trigger `onSuccess`. Cancelled/aborted transactions arrive as `isFailed()`.
+2. **onFailure = communication error only**: `onFailure` fires **only** for SDK/network errors (connection lost, timeout, bad config). Card declines and cancellations NEVER arrive in `onFailure`.
 2. **Amount unit**: Always use smallest currency unit (cents). `$10.00 = BigDecimal("1000")`
 3. **transactionRequestId**: Must be globally unique per request. Never reuse after errors 307/308/309/310/311.
 4. **Error 306**: Always query status before retrying. Never create a new transaction blindly.
