@@ -11,6 +11,22 @@ def sdkUrl = "http://code.sunmi.com/sunbay/App/tapro.git/-/tree/main"
 def sdkConnection = "scm:git@code.sunmi.com:sunbay/App/tapro.git"
 def sdkDeveloperConnection = "scm:git@code.sunmi.com:sunbay/App/tapro.git"
 
+// 与 gradle/libs.versions.toml 保持一致；手动发布 AAR 时需在 POM 中显式声明传递依赖，集成方只需依赖本 SDK 即可解析到下列库。
+def addTaplinkSdkTransitivePomDependencies = { pom ->
+    pom.withXml {
+        def dependenciesNode = asNode().appendNode('dependencies')
+        def addDep = { String g, String a, String v ->
+            def dep = dependenciesNode.appendNode('dependency')
+            dep.appendNode('groupId', g)
+            dep.appendNode('artifactId', a)
+            dep.appendNode('version', v)
+            dep.appendNode('scope', 'compile')
+        }
+        addDep('com.google.code.gson', 'gson', '2.13.1')
+        addDep('org.java-websocket', 'Java-WebSocket', '1.5.3')
+        addDep('com.github.mik3y', 'usb-serial-for-android', '3.7.0')
+    }
+}
 
 static def getReleaseRepositoryUrl() {
 //    return "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
@@ -89,6 +105,7 @@ afterEvaluate {
                         url = sdkUrl
                     }
                 }
+                addTaplinkSdkTransitivePomDependencies(pom)
                 ext.repo = 'releaseUrl'
             }
             debug(MavenPublication) {
@@ -100,6 +117,29 @@ afterEvaluate {
                 groupId 'com.sunmi'
                 artifactId sdkArtifactId
                 version = versionName + '-SNAPSHOT'
+                pom {
+                    name = sdkName
+                    description = sdkDescription
+                    url = sdkUrl
+                    developers {
+                        developer {
+                            name = 'ricardo'
+                            email = 'liucheng@sunmi.com'
+                        }
+                    }
+                    licenses {
+                        license {
+                            name = 'The Apache License, Version 2.0'
+                            url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        }
+                    }
+                    scm {
+                        connection = sdkConnection
+                        developerConnection = sdkDeveloperConnection
+                        url = sdkUrl
+                    }
+                }
+                addTaplinkSdkTransitivePomDependencies(pom)
                 ext.repo = 'snapshotUrl'
             }
         }
