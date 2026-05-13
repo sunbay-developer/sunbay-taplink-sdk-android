@@ -84,7 +84,7 @@ val amount = AmountInfo.of(1000L, "USD") // $10.00
 ```kotlin
 val request = SaleRequest.builder()
     .setReferenceOrderId("ORDER-001")
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setAmount(AmountInfo.of(1000L, "USD"))
     .setDescription("Coffee")
     .build()
@@ -192,7 +192,7 @@ Supports two refund modes:
 
 ```kotlin
 val request = RefundRequest.referencedBuilder()
-    .setTransactionRequestId(UUID.randomUUID().toString())
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setOriginalTransactionId("txn_123456")
     .setAmount(AmountInfo.of(500L, "USD"))
     .build()
@@ -484,7 +484,7 @@ Returned only from `onFailure`, which represents communication or technical erro
 ## Related Documents
 
 - [README.md](./README.md) — Integration guide and usage examples
-- [sunbay-open-docs](https://docs.sunbay.dev/en/sdk/client-side/android) — Online documentation
+- [sunbay-open-docs](https://docs.sunbay.us/en) — Online documentation
 
 ---
 
