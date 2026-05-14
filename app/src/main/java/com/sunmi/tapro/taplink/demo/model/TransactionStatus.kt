@@ -22,12 +22,7 @@ enum class TransactionStatus {
     SUCCESS,
     
     /**
-     * Failed - Transaction failed
+     * Failed - Transaction failed (includes cancelled/aborted)
      */
-    FAILED,
-    
-    /**
-     * Cancelled - Transaction cancelled
-     */
-    CANCELLED
+    FAILED
 }

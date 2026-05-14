@@ -11,22 +11,21 @@ import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
  * integrators (especially Java callers) only need to override the methods
  * they care about.
  *
- * **Important:** [onSuccess] fires for both approved and declined transactions.
- * Always check [PaymentResult.isSuccess] (or implement [onDeclined]) to distinguish outcomes.
+ * **[onSuccess] fires for ALL terminal-confirmed outcomes** — approved, declined, and cancelled.
+ * Inspect the result to determine the actual outcome:
  *
  * Kotlin usage:
  * ```kotlin
  * client.sale(request, object : PaymentCallbackAdapter() {
  *     override fun onSuccess(result: PaymentResult) {
- *         if (result.isSuccess()) {
- *             // payment approved
+ *         when {
+ *             result.isSuccess()    -> handleApproved(result)
+ *             result.isFailed()     -> handleDeclined(result)
+ *             result.isProcessing() -> pollForFinalStatus(result)
  *         }
  *     }
- *     override fun onDeclined(result: PaymentResult) {
- *         // payment declined by issuer
- *     }
  *     override fun onFailure(error: PaymentError) {
- *         // technical/communication error
+ *         // technical/communication error — no response received from terminal
  *     }
  * })
  * ```
@@ -35,7 +34,11 @@ import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
  * ```java
  * client.sale(request, new PaymentCallbackAdapter() {
  *     @Override
- *     public void onSuccess(PaymentResult result) { ... }
+ *     public void onSuccess(PaymentResult result) {
+ *         if (result.isSuccess()) { ... }
+ *         else if (result.isFailed()) { ... }
+ *         else if (result.isProcessing()) { ... }
+ *     }
  *     @Override
  *     public void onFailure(PaymentError error) { ... }
  * });
@@ -49,8 +52,6 @@ abstract class PaymentCallbackAdapter : PaymentCallback {
     override fun onProgress(event: PaymentEvent) {}
 
     override fun onSuccess(result: PaymentResult) {}
-
-    override fun onDeclined(result: PaymentResult) {}
 
     override fun onFailure(error: PaymentError) {}
 }

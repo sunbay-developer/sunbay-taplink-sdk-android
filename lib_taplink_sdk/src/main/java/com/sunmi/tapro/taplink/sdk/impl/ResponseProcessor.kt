@@ -105,68 +105,55 @@ class ResponseProcessor {
                 )
             }
 
-            // First check code
-            if (paymentResult.code != SUCCESS_CODE) {
-                // Code is not 0, call onFailure
-                LogUtil.e(TAG, "Payment failed: code=${paymentResult.code}, message=${paymentResult.message}")
-                val errorCode = InnerErrorCode.fromCode(paymentResult.code, paymentResult.message)
-                callback.onFailure(
-                    PaymentError.create(
-                        code = paymentResult.code,
-                        message = if (paymentResult.message.isNullOrEmpty()) errorCode.description else paymentResult.message,
-                        suggestion = ErrorStringHelper.getSolution(paymentResult.code) ?: "",
-                        traceId = paymentResult.traceId,
-                        transactionId = paymentResult.transactionId,
-                        transactionRequestId = paymentResult.transactionRequestId
+            // First check event type, then code within each branch
+            when (val event = basicResponse.event) {
+                is PaymentEvent.Cancel -> {
+                    // Terminal or user cancelled — route to onSuccess with the
+                    // transactionStatus from Tapro (FAILED). This is still a final
+                    // response, not a communication error.
+                    LogUtil.d(
+                        TAG,
+                        "Payment cancelled by terminal/user: eventCode=${event.eventCode}"
                     )
-                )
-            } else {
-                // Code is 0, determine based on PaymentEvent type
-                when (basicResponse.event) {
-                    is PaymentEvent.Completed -> {
-                        if (paymentResult.isFailed()) {
-                            // Terminal returned a FAILED transaction status — dispatch to onDeclined
-                            LogUtil.d(
-                                TAG,
-                                "Payment declined: transactionStatus=${paymentResult.transactionStatus}"
-                            )
-                            callback.onDeclined(paymentResult)
-                        } else {
-                            // Approved or processing
-                            LogUtil.d(
-                                TAG,
-                                "Payment completed: eventCode=${basicResponse.event.eventCode}"
-                            )
-                            callback.onSuccess(paymentResult)
-                        }
-                    }
+                    callback.onSuccess(paymentResult)
+                }
 
-                    is PaymentEvent.Cancel -> {
-                        // Event is Cancel, call onFailure
-                        LogUtil.e(
-                            TAG,
-                            "Payment cancelled: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}"
-                        )
-                        val errorCode = InnerErrorCode.fromCode(paymentResult.code)
+                is PaymentEvent.Completed -> {
+                    // Tapro processed the request and returned a final result.
+                    // ALWAYS route to onSuccess — the caller inspects
+                    // result.isSuccess() / isFailed() / isProcessing()
+                    // to determine the actual transaction outcome.
+                    // onFailure is reserved for communication errors only.
+                    LogUtil.d(
+                        TAG,
+                        "Payment completed: transactionStatus=${paymentResult.transactionStatus}, code=${paymentResult.code}"
+                    )
+                    callback.onSuccess(paymentResult)
+                }
+
+                else -> {
+                    // Non-final event types (progress, PIN entry, card insertion, etc.).
+                    // Check code first — if the device reported an error mid-flow, surface
+                    // it as onFailure rather than silently emitting a progress event.
+                    if (paymentResult.code != SUCCESS_CODE) {
+                        LogUtil.e(TAG, "Payment error during progress: code=${paymentResult.code}, message=${paymentResult.message}")
+                        val errorCode = InnerErrorCode.fromCode(paymentResult.code, paymentResult.message)
                         callback.onFailure(
                             PaymentError.create(
                                 code = paymentResult.code,
-                                message = errorCode.description,
+                                message = if (paymentResult.message.isNullOrEmpty()) errorCode.description else paymentResult.message,
                                 suggestion = ErrorStringHelper.getSolution(paymentResult.code) ?: "",
                                 traceId = paymentResult.traceId,
                                 transactionId = paymentResult.transactionId,
                                 transactionRequestId = paymentResult.transactionRequestId
                             )
                         )
-                    }
-
-                    else -> {
-                        // Other event types, call onProgress
+                    } else {
                         LogUtil.d(
                             TAG,
-                            "Payment in progress: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}, progress=${basicResponse.event.progress}"
+                            "Payment in progress: eventCode=${event.eventCode}, eventMsg=${event.eventMsg}, progress=${event.progress}"
                         )
-                        callback.onProgress(basicResponse.event)
+                        callback.onProgress(event)
                     }
                 }
             }

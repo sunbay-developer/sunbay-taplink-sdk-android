@@ -7,20 +7,23 @@ import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 /**
  * Payment callback interface
  *
- * Lifecycle for a successful card-present transaction:
+ * Callback lifecycle for a card-present transaction:
  * 1. [onProgress] — fired multiple times as the transaction advances (card read, PIN, online auth, etc.)
- * 2. [onSuccess] — fired when the terminal returns a final result. **Check [PaymentResult.isSuccess]
- *    or implement [onDeclined] to distinguish an approved from a declined transaction.**
- * 3. [onDeclined] — optional convenience callback fired when the terminal returns a FAILED/declined
- *    status. Override this instead of checking status inside [onSuccess].
- * 4. [onFailure] — fired when a technical or communication error prevents the transaction from
- *    completing (e.g., connection lost, timeout, invalid request). This is NOT a card decline.
+ * 2. [onSuccess] — fired when the terminal returns a **final** result. This fires for **all**
+ *    terminal-confirmed outcomes: approved, declined, and cancelled. Inspect [PaymentResult] to
+ *    determine the actual outcome:
+ *    - [PaymentResult.isSuccess] — transaction approved by issuer
+ *    - [PaymentResult.isFailed] — transaction declined, cancelled, or failed by issuer/terminal
+ *    - [PaymentResult.isProcessing] — gateway still deciding; poll with `client.query()`
+ * 3. [onFailure] — fired **only** when a technical or communication error prevents the terminal
+ *    from returning any response (connection lost, timeout, invalid request, etc.).
+ *    This is NOT a card decline — it means no result was received at all.
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 interface PaymentCallback {
-    
+
     /**
      * Transaction progress update.
      *
@@ -30,35 +33,37 @@ interface PaymentCallback {
      * @param event Progress event with stage code and description
      */
     fun onProgress(event: PaymentEvent)
-    
+
     /**
-     * Transaction completed — result received from the terminal.
+     * Terminal returned a final transaction response.
      *
-     * **Important:** this callback fires for both approved AND declined results.
-     * Always check [PaymentResult.isSuccess] to determine the actual outcome, or implement
-     * [onDeclined] to handle declined transactions separately.
+     * This callback fires for **all** terminal-confirmed outcomes — approved, declined, and
+     * cancelled. Always inspect the result status to determine the actual outcome:
      *
-     * @param result Transaction result; call [PaymentResult.isSuccess] to check approval
+     * ```kotlin
+     * override fun onSuccess(result: PaymentResult) {
+     *     when {
+     *         result.isSuccess()    -> handleApproved(result)
+     *         result.isFailed()     -> handleDeclined(result)
+     *         result.isProcessing() -> pollForFinalStatus(result)
+     *     }
+     * }
+     * ```
+     *
+     * Note: Cancelled/aborted transactions arrive as FAILED (transactionStatus = "FAILED").
+     *
+     * @param result Transaction result; inspect [PaymentResult.isSuccess], [PaymentResult.isFailed],
+     *   and [PaymentResult.isProcessing] to determine the outcome
      */
     fun onSuccess(result: PaymentResult)
 
     /**
-     * Transaction declined by the issuer or terminal.
-     *
-     * This is a convenience callback fired when the terminal returns a FAILED status.
-     * The default implementation delegates to [onSuccess] for backward compatibility —
-     * override this method to handle declines separately from approvals.
-     *
-     * @param result Transaction result with decline details
-     */
-    fun onDeclined(result: PaymentResult) {
-        onSuccess(result)
-    }
-    
-    /**
      * Transaction failure — technical or communication error.
      *
-     * This indicates the transaction could **not** be completed, not that it was declined.
+     * This indicates the transaction **could not be completed** — no response was received from
+     * the terminal. This is NOT a card decline; declines arrive via [onSuccess] with
+     * [PaymentResult.isFailed] returning `true`.
+     *
      * Common causes: connection lost, request timeout (error 306), invalid parameters.
      *
      * See [PaymentError.code], [PaymentError.suggestion], and [PaymentError.canRetryWithSameId]
@@ -67,8 +72,7 @@ interface PaymentCallback {
      * @param error Error details including code, message, and retry guidance
      */
     fun onFailure(error: PaymentError)
-    
-}
 
+}
 
 
