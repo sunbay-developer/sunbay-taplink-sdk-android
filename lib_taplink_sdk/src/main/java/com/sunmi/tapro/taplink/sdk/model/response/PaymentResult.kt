@@ -18,7 +18,7 @@ data class PaymentResult(
     // ========== Basic response fields ==========
     
     /**
-     * Response code ("0" indicates success)
+     * Response code ("100" indicates success)
      */
     val code: String,
     
@@ -192,29 +192,32 @@ data class PaymentResult(
     val originalTransactionRequestId: String? = null
 ) {
     /**
-     * Check if transaction is successful
-     * 
-     * @return true if response code is "0" and transaction status is "SUCCESS"
+     * Check if transaction is successful.
+     *
+     * @return true if response code is "100" (gateway success) and transaction status is "SUCCESS"
      */
     fun isSuccess(): Boolean {
-        return "0" == code && "SUCCESS" == transactionStatus
+        return "100" == code && "SUCCESS" == transactionStatus
     }
-    
+
     /**
-     * Check if transaction is processing
-     * 
+     * Check if transaction is processing (pending gateway decision).
+     *
      * @return true if transaction status is "PROCESSING"
      */
     fun isProcessing(): Boolean {
         return "PROCESSING" == transactionStatus
     }
-    
+
     /**
-     * Check if transaction is failed
-     * 
-     * @return true if transaction status is "FAILED" or response code is not "0"
+     * Check if transaction was declined by the issuer or terminal.
+     *
+     * Note: a failed transaction is still a final response — it arrives via [onSuccess].
+     * Technical/communication errors arrive via [onFailure] instead.
+     *
+     * @return true if transaction status is "FAILED"
      */
     fun isFailed(): Boolean {
-        return "FAILED" == transactionStatus || "0" != code
+        return "FAILED" == transactionStatus
     }
 }

@@ -1035,7 +1035,6 @@ class TransactionProgressActivity : AppCompatActivity() {
         val resultTitle = when (result.transactionStatus?.uppercase()) {
             "FAILED" -> "Transaction Failed"
             "DECLINED" -> "Transaction Declined"
-            "CANCELLED" -> "Transaction Cancelled"
             "TIMEOUT" -> "Transaction Timeout"
             else -> "Transaction Failed"
         }
@@ -1785,9 +1784,6 @@ class TransactionProgressActivity : AppCompatActivity() {
                 errorCode.contains("DECLINED", ignoreCase = true) -> {
                     append("The transaction was declined. This is a normal result and no further action is needed.")
                 }
-                errorCode.contains("CANCELLED", ignoreCase = true) -> {
-                    append("The transaction was cancelled. This may have been done by the user or the system.")
-                }
                 else -> {
                     append("Please try again or contact support if the issue persists.")
                 }
@@ -1795,8 +1791,7 @@ class TransactionProgressActivity : AppCompatActivity() {
         }
         
         // Show error result directly for non-retryable errors
-        if (errorCode.contains("DECLINED", ignoreCase = true) || 
-            errorCode.contains("CANCELLED", ignoreCase = true)) {
+        if (errorCode.contains("DECLINED", ignoreCase = true)) {
             showResult(null, errorCode, errorMessage)
         } else {
             // Show error dialog with query option for other errors
@@ -2097,14 +2092,7 @@ class TransactionProgressActivity : AppCompatActivity() {
                 Log.d(TAG, "Transaction updated with success status: ${result.transactionId}")
             } else {
                 // Failure case - update with failed status and error information
-                val finalStatus = when {
-                    errorCode?.contains("ABORT", ignoreCase = true) == true -> 
-                        com.sunmi.tapro.taplink.demo.model.TransactionStatus.CANCELLED
-                    errorCode?.contains("CANCEL", ignoreCase = true) == true -> 
-                        com.sunmi.tapro.taplink.demo.model.TransactionStatus.CANCELLED
-                    else -> 
-                        com.sunmi.tapro.taplink.demo.model.TransactionStatus.FAILED
-                }
+                val finalStatus = com.sunmi.tapro.taplink.demo.model.TransactionStatus.FAILED
                 
                 com.sunmi.tapro.taplink.demo.repository.TransactionRepository.updateTransactionStatus(
                     transactionRequestId = transaction.transactionRequestId,

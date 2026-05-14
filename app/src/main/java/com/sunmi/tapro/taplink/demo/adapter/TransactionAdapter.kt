@@ -140,7 +140,6 @@ class TransactionAdapter(
             TransactionStatus.FAILED -> 0xFFF44336.toInt()   // Red
             TransactionStatus.PENDING -> 0xFFFF9800.toInt()  // Orange
             TransactionStatus.PROCESSING -> 0xFF2196F3.toInt() // Blue
-            TransactionStatus.CANCELLED -> 0xFF9E9E9E.toInt() // Gray
         }
     }
 

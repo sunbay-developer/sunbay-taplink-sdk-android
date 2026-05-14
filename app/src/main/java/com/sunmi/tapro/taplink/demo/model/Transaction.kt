@@ -141,7 +141,6 @@ data class Transaction(
             TransactionStatus.PROCESSING -> "Processing"
             TransactionStatus.SUCCESS -> "Success"
             TransactionStatus.FAILED -> "Failed"
-            TransactionStatus.CANCELLED -> "Cancelled"
         }
     }
     
