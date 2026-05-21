@@ -315,7 +315,7 @@ class PaymentManager(
     ): InnerCallback {
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
-                LogUtil.e(TAG, "Received error: code=$code, msg=$msg, traceId=$traceId")
+                LogUtil.e(TAG, "[TAPLINK-TX] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
                 callback.onFailure(
                     code = code,
                     errorMsg = msg,

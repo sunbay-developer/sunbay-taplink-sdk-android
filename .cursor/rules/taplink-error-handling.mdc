@@ -195,7 +195,7 @@ client.sale(request, object : PaymentCallback {
         when {
             result.isSuccess()    -> showPaymentSuccess(result)
             result.isProcessing() -> queryWithPolling(result.transactionRequestId!!)
-            result.isFailed()     -> showPaymentFailed(result.transactionResultMsg)
+            result.isFailed()     -> showPaymentFailed(result.message)
         }
     }
 

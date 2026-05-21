@@ -320,10 +320,12 @@ All transaction operations return this object through `onSuccess`.
 
 | Field | Type | Description |
 |------|------|-------------|
-| `transactionResultCode` | String? | Transaction result code |
-| `transactionResultMsg` | String? | Transaction result message |
+| `transactionResultCode` | String? | Transaction result code (e.g., "K004") |
+| `transactionResultMsg` | String? | Transaction result message (same as `message` when failed) |
 | `description` | String? | Transaction description |
 | `attach` | String? | Additional data |
+
+> **Note**: When `result.isFailed()`, use `result.code` and `result.message` for error analysis. The `message` field contains the detailed error info (e.g., "K004: Insufficient funds (051)").
 
 #### Batch close / tip / refund fields
 

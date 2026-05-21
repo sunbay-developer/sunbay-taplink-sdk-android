@@ -1299,7 +1299,7 @@ class TransactionProgressActivity : AppCompatActivity() {
         }
         
         // Show transaction result message (this is the important part for transaction failures)
-        detailMessageText.text = result.transactionResultMsg ?: result.message ?: "--"
+        detailMessageText.text = result.message ?: "--"
     }
     
     /**

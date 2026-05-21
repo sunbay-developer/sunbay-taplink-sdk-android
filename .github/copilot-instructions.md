@@ -233,7 +233,7 @@ val callback = object : PaymentCallback {
             when {
                 result.isSuccess()    -> showSuccess(result.transactionId)
                 result.isProcessing() -> pollTransactionStatus(result.transactionRequestId!!)
-                result.isFailed()     -> showError(result.transactionResultMsg)
+                result.isFailed()     -> showError(result.message)
             }
         }
     }

@@ -137,8 +137,9 @@ private fun processPayment() {
                 }
                 result.isFailed()     -> {
                     // Transaction declined, cancelled, or failed by issuer/terminal
+                    // Use result.code and result.message for detailed error analysis
                     Toast.makeText(this@MainActivity,
-                        "Payment failed: ${result.transactionResultMsg}",
+                        "Payment failed: ${result.message}",
                         Toast.LENGTH_SHORT).show()
                 }
                 result.isProcessing() -> {
@@ -234,7 +235,7 @@ TaplinkSDK.getClient().sale(request, object : PaymentCallback {
         when {
             result.isSuccess()    -> confirmPayment(result)
             result.isProcessing() -> pollStatus(result.transactionRequestId!!)
-            result.isFailed()     -> showDeclined(result.transactionResultMsg)
+            result.isFailed()     -> showDeclined(result.message)
         }
     }
     override fun onFailure(error: PaymentError) {
