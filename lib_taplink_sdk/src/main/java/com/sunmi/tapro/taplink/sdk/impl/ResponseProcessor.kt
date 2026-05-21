@@ -73,6 +73,7 @@ class ResponseProcessor {
             if (isError) {
                 val errorCode = jsonObject.get("errorCode")?.asString ?: "UNKNOWN_ERROR"
                 val errorMsg = jsonObject.get("eventMsg")?.asString ?: "Unknown error"
+                LogUtil.d(TAG, "[TAPLINK-TX] TraceId=$traceId | ECR Error received: code=$errorCode, msg=$errorMsg")
                 callback?.onError(errorCode, errorMsg)
             } else {
                 callback?.onResponse(responseJson)
@@ -113,7 +114,8 @@ class ResponseProcessor {
                     // response, not a communication error.
                     LogUtil.d(
                         TAG,
-                        "Payment cancelled by terminal/user: eventCode=${event.eventCode}"
+                        "[TAPLINK-TX] TraceId=${paymentResult.traceId} | Cancel: code=${paymentResult.code}, " +
+                                "transactionResultCode=${paymentResult.transactionResultCode}, message=${paymentResult.message}"
                     )
                     callback.onSuccess(paymentResult)
                 }
@@ -126,7 +128,9 @@ class ResponseProcessor {
                     // onFailure is reserved for communication errors only.
                     LogUtil.d(
                         TAG,
-                        "Payment completed: transactionStatus=${paymentResult.transactionStatus}, code=${paymentResult.code}"
+                        "[TAPLINK-TX] TraceId=${paymentResult.traceId} | Completed: code=${paymentResult.code}, " +
+                                "transactionResultCode=${paymentResult.transactionResultCode}, message=${paymentResult.message}, " +
+                                "status=${paymentResult.transactionStatus}"
                     )
                     callback.onSuccess(paymentResult)
                 }

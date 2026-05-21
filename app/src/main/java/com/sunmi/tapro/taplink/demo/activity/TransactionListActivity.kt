@@ -236,7 +236,7 @@ class TransactionListActivity : AppCompatActivity() {
                 append("Complete Time: ${result.completeTime ?: "N/A"}\n")
             } else if (result.transactionStatus == "FAILED") {
                 append("Error Code: ${result.transactionResultCode ?: "N/A"}\n")
-                append("Error Message: ${result.transactionResultMsg ?: "N/A"}\n")
+                append("Error Message: ${result.message ?: "N/A"}\n")
             }
             
             if (!result.description.isNullOrEmpty()) {
@@ -276,7 +276,7 @@ class TransactionListActivity : AppCompatActivity() {
                 transactionId = result.transactionId,
                 authCode = result.authCode,
                 errorCode = if (status == TransactionStatus.FAILED) result.transactionResultCode else null,
-                errorMessage = if (status == TransactionStatus.FAILED) result.transactionResultMsg else null,
+                errorMessage = if (status == TransactionStatus.FAILED) result.message else null,
                 orderAmount = result.amount?.orderAmount,
                 totalAmount = result.amount?.transAmount,
                 surchargeAmount = result.amount?.surchargeAmount,
@@ -322,7 +322,7 @@ class TransactionListActivity : AppCompatActivity() {
                 timestamp = System.currentTimeMillis(),
                 authCode = result.authCode,
                 errorCode = if (status == TransactionStatus.FAILED) result.transactionResultCode else null,
-                errorMessage = if (status == TransactionStatus.FAILED) result.transactionResultMsg else null,
+                errorMessage = if (status == TransactionStatus.FAILED) result.message else null,
                 surchargeAmount = result.amount?.surchargeAmount,
                 tipAmount = result.amount?.tipAmount,
                 taxAmount = result.amount?.taxAmount,

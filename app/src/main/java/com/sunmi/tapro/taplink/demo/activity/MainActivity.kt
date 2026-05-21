@@ -1142,7 +1142,7 @@ class MainActivity : Activity() {
             transactionId = result.transactionId,
             authCode = result.authCode,
             errorCode = if (status == TransactionStatus.FAILED) result.transactionResultCode else null,
-            errorMessage = if (status == TransactionStatus.FAILED) result.transactionResultMsg else null,
+            errorMessage = if (status == TransactionStatus.FAILED) result.message else null,
             orderAmount = result.amount?.orderAmount,
             totalAmount = result.amount?.transAmount,
             surchargeAmount = result.amount?.surchargeAmount,
@@ -1174,7 +1174,7 @@ class MainActivity : Activity() {
                 transactionId = result.transactionId,
                 authCode = result.authCode,
                 errorCode = if (status == TransactionStatus.FAILED) result.transactionResultCode else null,
-                errorMessage = if (status == TransactionStatus.FAILED) result.transactionResultMsg else null,
+                errorMessage = if (status == TransactionStatus.FAILED) result.message else null,
                 orderAmount = result.amount?.orderAmount,
                 totalAmount = result.amount?.transAmount,
                 surchargeAmount = result.amount?.surchargeAmount,
@@ -1229,7 +1229,7 @@ class MainActivity : Activity() {
                 result.transactionId ?: Constants.Messages.PLACEHOLDER_NA,
                 result.transactionStatus,
                 result.transactionResultCode ?: Constants.Messages.PLACEHOLDER_NA,
-                result.transactionResultMsg ?: Constants.Messages.PLACEHOLDER_NA
+                result.message ?: Constants.Messages.PLACEHOLDER_NA
             ),
             isSuccess = false
         )

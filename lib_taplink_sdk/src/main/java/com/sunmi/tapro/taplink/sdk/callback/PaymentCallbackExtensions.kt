@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.callback
 
+import com.google.gson.JsonParser
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 import com.sunmi.tapro.taplink.communication.util.LogUtil
@@ -70,13 +71,19 @@ fun PaymentCallback.onFailure(
     transactionRequestId: String? = null
 ) {
     val errorCode = InnerErrorCode.fromCode(code, errorMsg)
-    val message = errorCode.description
+
+    // Try to parse structured JSON msg from Tapro (format: {"message":"...","suggestion":"...","traceId":"..."})
+    val parsed = parseStructuredErrorMsg(errorMsg)
+    val message = parsed?.message ?: errorMsg ?: errorCode.description
+    val suggestion = parsed?.suggestion
+        ?: ErrorStringHelper.getSolution(code) ?: ""
+    val resolvedTraceId = parsed?.traceId ?: traceId
 
     val paymentError = PaymentError.create(
         code = code,
         message = message,
-        suggestion = ErrorStringHelper.getSolution(code) ?: "",
-        traceId = traceId,
+        suggestion = suggestion,
+        traceId = resolvedTraceId,
         referenceOrderId = referenceOrderId,
         transactionId = transactionId,
         transactionRequestId = transactionRequestId
@@ -84,3 +91,29 @@ fun PaymentCallback.onFailure(
 
     onFailure(paymentError)
 }
+
+/**
+ * Parse structured JSON error message from Tapro service.
+ * Returns null if msg is not valid JSON or doesn't have the expected structure.
+ * This ensures backward compatibility — plain string messages are used as-is.
+ */
+private fun parseStructuredErrorMsg(msg: String?): ParsedErrorMsg? {
+    if (msg.isNullOrBlank()) return null
+    return try {
+        val json = JsonParser.parseString(msg).asJsonObject
+        ParsedErrorMsg(
+            message = json.get("message")?.asString,
+            suggestion = json.get("suggestion")?.asString,
+            traceId = json.get("traceId")?.asString
+        )
+    } catch (e: Exception) {
+        // Not a JSON string — this is fine, just use as plain text
+        null
+    }
+}
+
+private data class ParsedErrorMsg(
+    val message: String?,
+    val suggestion: String?,
+    val traceId: String?
+)

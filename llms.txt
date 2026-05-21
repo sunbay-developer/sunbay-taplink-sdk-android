@@ -71,7 +71,7 @@ client.sale(request, object : PaymentCallback {
         when {
             result.isSuccess()    -> confirmPayment(result)
             result.isProcessing() -> pollStatus(result.transactionRequestId!!)
-            result.isFailed()     -> showError(result.transactionResultMsg)
+            result.isFailed()     -> showError(result.message)
         }
     }
     override fun onFailure(error: PaymentError) { handleError(error) }
@@ -311,14 +311,9 @@ object : PaymentCallback {
             }
             result.isFailed()     -> {
                 // transactionStatus == "FAILED" → Declined, do NOT fulfill order
-                showDeclined(result.transactionResultMsg)
+                showDeclined(result.message)
             }
         }
-    }
-
-    override fun onDeclined(result: PaymentResult) {
-        // Optional override for clean success/decline separation
-        showDeclined("Card declined: ${result.transactionResultMsg}")
     }
 
     override fun onFailure(error: PaymentError) {

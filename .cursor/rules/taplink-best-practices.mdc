@@ -191,7 +191,7 @@ override fun onSuccess(result: PaymentResult) {
     when {
         result.isSuccess()    -> confirmPayment(result)
         result.isProcessing() -> queryWithPolling(result.transactionRequestId!!)
-        result.isFailed()     -> showError(result.transactionResultMsg ?: "Transaction failed")
+        result.isFailed()     -> showError(result.message ?: "Transaction failed")
     }
 }
 ```

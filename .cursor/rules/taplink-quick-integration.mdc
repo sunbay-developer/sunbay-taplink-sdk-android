@@ -84,7 +84,7 @@ fun pay(amountCents: Long) {
             runOnUiThread {
                 if (result.isSuccess()) showSuccess(result)
                 else if (result.isProcessing()) queryStatus(result.transactionRequestId!!)
-                else showFailed(result.transactionResultMsg)
+                else showFailed(result.message)
             }
         }
         override fun onFailure(error: PaymentError) {
