@@ -3,6 +3,7 @@ package com.sunmi.tapro.taplink.sdk.impl
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
+import org.json.JSONObject
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.model.base.BasicResponse
@@ -47,40 +48,122 @@ class ResponseProcessor {
      * Process received response and route to appropriate callback
      */
     fun processResponse(responseJson: String, callbackManager: LocalCallbackManager<InnerCallback?>) {
+        // First attempt strict Gson parsing; fall back to lenient org.json parsing
+        // when the server returns a malformed payload (e.g. un-escaped JSON inside
+        // a string field such as eventMsg).
+        val parsed = parseResponseSafely(responseJson)
+        if (parsed == null) {
+            LogUtil.e(TAG, "Failed to parse response as JSON: $responseJson")
+            return
+        }
+
+        val (traceId, eventCode, errorCode, eventMsg) = parsed
+
+        if (traceId.isNullOrBlank()) {
+            LogUtil.e(TAG, "Received data without traceId, ignoring: $responseJson")
+            return
+        }
+
+        // Determine if this is an error response
+        val isError = eventCode == ERROR_EVENT_CODE
+
+        // Determine if callback should be removed
+        val shouldRemove = shouldRemoveCallback(responseJson) || isError
+
+        val callback = if (shouldRemove) {
+            callbackManager.getAndRemoveCallbackByTraceId(traceId)
+        } else {
+            callbackManager.getCallbackByTraceId(traceId)
+        }
+
+        // Call appropriate callback method based on response type
+        if (isError) {
+            LogUtil.d(TAG, "[TAPLINK-TX] TraceId=$traceId | ECR Error received: code=$errorCode, msg=$eventMsg")
+            callback?.onError(errorCode ?: "UNKNOWN_ERROR", eventMsg ?: "Unknown error")
+        } else {
+            callback?.onResponse(responseJson)
+        }
+    }
+
+    /**
+     * Parsed fields extracted from a raw response string.
+     */
+    private data class ParsedResponse(
+        val traceId: String?,
+        val eventCode: String?,
+        val errorCode: String?,
+        val eventMsg: String?
+    )
+
+    /**
+     * Try to parse the response JSON with Gson first; if that fails (e.g. the server
+     * embeds an un-escaped JSON object inside a string field), fall back to
+     * [org.json.JSONObject] which is more lenient, and finally to a regex-based
+     * extraction so we can still route the error to the correct callback.
+     */
+    private fun parseResponseSafely(responseJson: String): ParsedResponse? {
+        // --- attempt 1: strict Gson ---
         try {
-            val jsonObject = JsonParser.parseString(responseJson).asJsonObject
-            val traceId = jsonObject.get("traceId")?.asString
-            val eventCode = jsonObject.get("eventCode")?.asString?.uppercase()
+            val obj = JsonParser.parseString(responseJson).asJsonObject
+            return ParsedResponse(
+                traceId = obj.get("traceId")?.asString,
+                eventCode = obj.get("eventCode")?.asString?.uppercase(),
+                errorCode = obj.get("errorCode")?.asString,
+                eventMsg = obj.get("eventMsg")?.asString
+            )
+        } catch (_: Exception) {
+            // fall through to lenient parse
+        }
 
-            if (traceId.isNullOrBlank()) {
-                LogUtil.e(TAG, "Received data without traceId, ignoring: $responseJson")
-                return
-            }
+        // --- attempt 2: org.json (lenient) ---
+        try {
+            val obj = JSONObject(responseJson)
+            return ParsedResponse(
+                traceId = obj.optString("traceId").ifEmpty { null },
+                eventCode = obj.optString("eventCode").uppercase().ifEmpty { null },
+                errorCode = obj.optString("errorCode").ifEmpty { null },
+                eventMsg = obj.optString("eventMsg").ifEmpty { null }
+            )
+        } catch (_: Exception) {
+            // fall through to regex extraction
+        }
 
-            // Determine if this is an error response
-            val isError = eventCode == ERROR_EVENT_CODE
+        // --- attempt 3: regex extraction for badly-formed JSON ---
+        LogUtil.w(TAG, "Both JSON parsers failed, attempting regex extraction")
+        return extractFieldsViaRegex(responseJson)
+    }
 
-            // Determine if callback should be removed
-            val shouldRemove = shouldRemoveCallback(responseJson) || isError
+    /**
+     * Last-resort field extraction using simple regex patterns.
+     * Handles cases where the JSON is structurally invalid (e.g. un-escaped
+     * nested JSON objects in string values).
+     */
+    private fun extractFieldsViaRegex(responseJson: String): ParsedResponse? {
+        return try {
+            fun extractField(key: String): String? =
+                Regex(""""$key"\s*:\s*"([^"]*?)"""").find(responseJson)?.groupValues?.get(1)
+                    ?.ifEmpty { null }
 
-            val callback = if (shouldRemove) {
-                callbackManager.getAndRemoveCallbackByTraceId(traceId)
-            } else {
-                callbackManager.getCallbackByTraceId(traceId)
-            }
+            val traceId = extractField("traceId")
+            val eventCode = extractField("eventCode")?.uppercase()
+            val errorCode = extractField("errorCode")
+            // eventMsg may itself be a JSON object — grab everything between the first
+            // occurrence of `"eventMsg":` and the outer closing brace of the root object.
+            val eventMsg = Regex(""""eventMsg"\s*:\s*(.+)$""")
+                .find(responseJson.trimEnd().trimEnd('}').trimEnd())
+                ?.groupValues?.get(1)
+                ?.trim()
+                ?.trimEnd(',')
+                ?.let { raw ->
+                    // Strip surrounding quotes if it was a plain string value
+                    if (raw.startsWith('"') && raw.endsWith('"')) raw.drop(1).dropLast(1) else raw
+                }
 
-            // Call appropriate callback method based on response type
-            if (isError) {
-                val errorCode = jsonObject.get("errorCode")?.asString ?: "UNKNOWN_ERROR"
-                val errorMsg = jsonObject.get("eventMsg")?.asString ?: "Unknown error"
-                LogUtil.d(TAG, "[TAPLINK-TX] TraceId=$traceId | ECR Error received: code=$errorCode, msg=$errorMsg")
-                callback?.onError(errorCode, errorMsg)
-            } else {
-                callback?.onResponse(responseJson)
-            }
+            if (traceId == null && eventCode == null) null
+            else ParsedResponse(traceId, eventCode, errorCode, eventMsg)
         } catch (e: Exception) {
-            // If unable to parse as JSON, might be old format error response
-            LogUtil.e(TAG, "Failed to parse response as JSON: $responseJson, error=${e.message}")
+            LogUtil.e(TAG, "Regex extraction also failed: ${e.message}")
+            null
         }
     }
 

@@ -304,7 +304,7 @@ All transaction operations return this object through `onSuccess`.
 | Field | Type | Description |
 |------|------|-------------|
 | `cardInfo` | CardInfo? | Card details |
-| `receiptJson` | String? | Receipt JSON data |
+| `receiptJson` | String? | Receipt data as JSON string for self-printing; see [receiptJson Field Structure](#receiptjson-field-structure) |
 
 #### Voucher and trace data
 
@@ -356,6 +356,101 @@ override fun onSuccess(result: PaymentResult) {
     }
 }
 ```
+
+### receiptJson Field Structure
+
+When `printReceipt` is set to `NONE`, the integrator handles receipt printing. The `receiptJson` field contains all data needed to compose a US-compliant receipt.
+
+> **Note**: `receiptJson` is populated for all completed transactions regardless of the `printReceipt` setting. Merchant header info (merchant name, address, logo) is NOT included — integrators manage their own merchant data.
+
+Parse with standard `JSONObject` (Android built-in) or any JSON library:
+
+```kotlin
+val receipt = JSONObject(result.receiptJson)
+val aid = receipt.optString("aid") // "A000000025010402"
+```
+
+#### Transaction fields
+
+| JSON Key | Type | Description | Card Network |
+|----------|------|-------------|:------------:|
+| `result_msg` | String | Transaction result (e.g., "SUCCESS", "DECLINED") | — |
+| `txnId` | String | Transaction sequence number | — |
+| `txnType` | String | Transaction type display name (e.g., "Credit Sale") | — |
+| `transData` | String | Transaction date (MM/DD/YYYY) | Required |
+| `transTime` | String | Transaction time (HH:MM:SS) | Required |
+
+#### Card information fields
+
+| JSON Key | Type | Description | Card Network |
+|----------|------|-------------|:------------:|
+| `cardNumber` | String | Masked PAN, only last 4 digits (e.g., "**** 1007") | Required |
+| `payMethodId` | String | Card brand (e.g., "VISA", "MASTERCARD", "AMEX") | Required |
+| `entryMode` | String | Entry mode (CONTACT, CONTACTLESS, SWIPE, MANUAL) | Required |
+| `cardholder` | String | Cardholder name (from chip, may be empty) | Optional |
+
+#### Authorization fields
+
+| JSON Key | Type | Description | Card Network |
+|----------|------|-------------|:------------:|
+| `authCode` | String | Authorization code from issuer | Required |
+| `orderId` | String | Transaction ID | — |
+| `keyOrderId` | String | Merchant reference order ID | — |
+| `terminalReqId` | String | Terminal request ID | — |
+| `rrn` | String | Retrieval Reference Number | Optional |
+
+#### Amount fields
+
+All amounts are pre-formatted with currency symbol (e.g., "$7.90"). No formatting needed.
+
+| JSON Key | Type | Description | Card Network |
+|----------|------|-------------|:------------:|
+| `orderAmount` | String | Order/subtotal amount | — |
+| `taxAmount` | String | Tax amount (when applicable) | — |
+| `tipAmount` | String | Tip amount (only present when tip > $0) | — |
+| `surchargeAmount` | String | Surcharge amount | — |
+| `cashbackAmount` | String | Cashback amount | — |
+| `customFeeAmount` | String | Custom service fee amount | — |
+| `customFeeName` | String | Custom fee label (e.g., "Service Fee:") | — |
+| `cashDiscountAmount` | String | Cash discount description | — |
+| `totalAmount` | String | Total transaction amount | Required |
+
+#### EMV chip data fields
+
+Present only for CONTACT and CONTACTLESS entry modes. **Required by Visa/Mastercard for EMV receipts.**
+
+| JSON Key | Type | Description | Card Network |
+|----------|------|-------------|:------------:|
+| `aid` | String | Application Identifier (AID) — EMV Tag 9F06 | **Required** |
+| `appName` | String | Application Preferred Name — EMV Tag 50/9F12 | **Required** |
+| `tvr` | String | Terminal Verification Results — Tag 95 | Optional |
+| `tsi` | String | Transaction Status Information — Tag 9B | Optional |
+| `atc` | String | Application Transaction Counter — Tag 9F36 | Optional |
+| `ARQC` | String | Application Cryptogram — Tag 9F26 | Optional |
+
+#### Verification and print control fields
+
+| JSON Key | Type | Description | Card Network |
+|----------|------|-------------|:------------:|
+| `verify` | String | CVM result (e.g., "PIN Verified", "Signature", "Not Authenticated") | Required |
+| `printSignatureLine` | Boolean | Whether signature line should be printed | — |
+| `signature` | String | Electronic signature data (Base64, if captured) | — |
+| `printCopy` | String | Copy type indicator (Merchant/Customer/empty) | — |
+| `qrcode` | String | QR code data for transaction lookup | — |
+
+#### Field availability by entry mode
+
+| Field Group | CONTACT | CONTACTLESS | SWIPE | MANUAL |
+|-------------|:-------:|:-----------:|:-----:|:------:|
+| Card info (`cardNumber`, `payMethodId`) | ✅ | ✅ | ✅ | ✅ |
+| `cardholder` | ✅ | ⚠️ | ⚠️ | ❌ |
+| EMV data (`aid`, `appName`, `tvr`, `tsi`, `atc`, `ARQC`) | ✅ | ✅ | ❌ | ❌ |
+| `authCode` | ✅ | ✅ | ✅ | ✅ |
+| `printSignatureLine` | CVM-dependent | CVM-dependent | CVM-dependent | CVM-dependent |
+
+> **Tip Section**: `receiptJson` does NOT include tip UI layout fields (tip write-in line, tip suggestions, grand total line). These are managed by the integrator. Only `tipAmount` is returned when a confirmed tip value exists.
+
+> **US Compliance**: For EMV chip/contactless transactions, Visa and Mastercard require printing `aid` (AID) and `appName` (Application Preferred Name) on the receipt. See [Receipt Data (receiptJson)](./README.md#receipt-data-receiptjson) for full compliance reference.
 
 ---
 
@@ -486,6 +581,7 @@ Returned only from `onFailure`, which represents communication or technical erro
 ## Related Documents
 
 - [README.md](./README.md) — Integration guide and usage examples
+- [README.md — Receipt Data](./README.md#receipt-data-receiptjson) — US POS receipt compliance field reference
 - [sunbay-open-docs](https://docs.sunbay.us/en) — Online documentation
 
 ---

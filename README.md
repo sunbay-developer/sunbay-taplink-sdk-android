@@ -1128,6 +1128,161 @@ override fun onProgress(event: PaymentEvent) {
 }
 ```
 
+## Receipt Data (receiptJson)
+
+When `printReceipt = NONE`, Tapro does not print — the SDK returns all receipt data in `PaymentResult.receiptJson` for integrators to compose and print receipts themselves.
+
+> **Key points:**
+> - `receiptJson` is populated for ALL completed transactions regardless of `printReceipt` setting
+> - Merchant header (name, address, logo) is NOT included — integrators manage their own merchant info
+> - Tip Section UI layout fields are NOT included — only confirmed `tipAmount` is returned when tip > $0
+> - All amounts are pre-formatted with currency symbol (e.g., `"$7.90"`) — print as-is
+
+### Quick Start
+
+```kotlin
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORD-001")
+    .setTransactionRequestId("REQ_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo.of(790L, "USD"))
+    .setPrintReceipt(PrintReceipt.NONE)
+    .build()
+
+taplinkSDK.sale(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResult) {
+        if (result.isSuccess()) {
+            result.receiptJson?.let { json ->
+                val receipt = JSONObject(json)
+
+                // ★ Card Network Required (must print for EMV transactions)
+                val aid = receipt.optString("aid")           // "A000000025010402"
+                val appName = receipt.optString("appName")   // "AMERICANEXPRESS"
+                val cardNumber = receipt.optString("cardNumber")  // "**** 1007"
+                val totalAmount = receipt.optString("totalAmount") // "$7.90"
+                val authCode = receipt.optString("authCode")       // "TAS394"
+                val cvm = receipt.optString("verify")              // "Not Authenticated"
+
+                // Transaction info
+                val txnType = receipt.optString("txnType")     // "Credit Sale"
+                val date = receipt.optString("transData")       // "05/22/2026"
+                val time = receipt.optString("transTime")       // "03:41:51"
+
+                printToMyPrinter(receipt)
+            }
+        }
+    }
+    override fun onProgress(event: String, message: String) { }
+    override fun onFailure(error: PaymentError) { }
+})
+```
+
+### Field Reference
+
+#### Transaction Fields
+
+| JSON Key | Description | Compliance |
+|----------|-------------|:----------:|
+| `result_msg` | Transaction result ("SUCCESS", "DECLINED") | — |
+| `txnId` | Transaction sequence number | — |
+| `txnType` | Transaction type ("Credit Sale", "Debit Refund") | Recommended |
+| `transData` | Date (MM/DD/YYYY) | ★ Required |
+| `transTime` | Time (HH:MM:SS) | ★ Required |
+
+#### Card Fields
+
+| JSON Key | Description | Compliance |
+|----------|-------------|:----------:|
+| `cardNumber` | Masked PAN, last 4 only ("**** 1007") | ★ Required |
+| `payMethodId` | Card brand ("VISA", "MASTERCARD", "AMEX") | Recommended |
+| `entryMode` | Entry mode (CONTACT, CONTACTLESS, SWIPE, MANUAL) | Recommended |
+| `cardholder` | Cardholder name (from chip, may be empty) | Optional |
+
+#### Authorization Fields
+
+| JSON Key | Description | Compliance |
+|----------|-------------|:----------:|
+| `authCode` | Authorization code from issuer | ★ Required |
+| `orderId` | Transaction ID | — |
+| `keyOrderId` | Merchant reference order ID | — |
+| `terminalReqId` | Terminal request ID | — |
+| `rrn` | Retrieval Reference Number | Optional |
+
+#### Amount Fields (pre-formatted, print as-is)
+
+| JSON Key | Description | Compliance |
+|----------|-------------|:----------:|
+| `orderAmount` | Order/subtotal amount ("$7.90") | — |
+| `taxAmount` | Tax amount | — |
+| `tipAmount` | Tip amount (only when tip > $0) | — |
+| `surchargeAmount` | Surcharge amount | — |
+| `cashbackAmount` | Cashback amount | — |
+| `customFeeAmount` | Custom service fee | — |
+| `customFeeName` | Custom fee label | — |
+| `cashDiscountAmount` | Cash discount | — |
+| `totalAmount` | Total transaction amount | ★ Required |
+
+#### EMV Chip Data (CONTACT/CONTACTLESS only)
+
+| JSON Key | Description | EMV Tag | Compliance |
+|----------|-------------|:-------:|:----------:|
+| `aid` | Application Identifier (AID) | 9F06 | ★ **Required** |
+| `appName` | Application Preferred Name | 50/9F12 | ★ **Required** |
+| `tvr` | Terminal Verification Results | 95 | Recommended |
+| `tsi` | Transaction Status Information | 9B | Recommended |
+| `atc` | Application Transaction Counter | 9F36 | Optional |
+| `ARQC` | Application Cryptogram | 9F26 | Optional |
+
+> ⚠️ EMV fields only present for chip (CONTACT) and tap (CONTACTLESS) transactions. Not available for SWIPE or MANUAL.
+
+#### Verification & Print Control
+
+| JSON Key | Type | Description | Compliance |
+|----------|------|-------------|:----------:|
+| `verify` | String | CVM result ("PIN Verified", "Signature", "Not Authenticated") | ★ Required |
+| `printSignatureLine` | Boolean | Whether signature line should be printed | — |
+| `signature` | String | Electronic signature (Base64) | — |
+| `printCopy` | String | Copy type (Merchant/Customer/empty) | — |
+| `qrcode` | String | QR code data for receipt lookup | — |
+
+### US Compliance Summary
+
+For EMV transactions, Visa and Mastercard **require** these fields on the receipt:
+
+| Required Field | JSON Key | Regulatory Basis |
+|----------------|----------|------------------|
+| Application Identifier | `aid` | Visa Core Rules; MC SRP 5.7.1 |
+| Application Name | `appName` | Visa Core Rules; MC SRP 5.7.1 |
+| Masked Card Number | `cardNumber` | PCI DSS Requirement 3.3 |
+| Total Amount | `totalAmount` | All card networks |
+| Authorization Code | `authCode` | All card networks |
+| Date / Time | `transData` / `transTime` | All card networks |
+| CVM Result | `verify` | EMVCo Book 4 |
+
+### Minimum Compliant Receipt Layout
+
+```
+[MERCHANT NAME - integrator managed]
+[MERCHANT ADDRESS - integrator managed]
+─────────────────────────────────────
+Date: 05/22/2026    Time: 03:41:51
+Type: Credit Sale
+Card: **** 1007     Brand: AMEX
+Entry: CONTACTLESS
+
+Amount:         $7.90
+Auth Code:      TAS394
+
+AID: A000000025010402          ★
+App: AMERICANEXPRESS           ★
+
+CVM: Not Authenticated
+
+[Signature line if printSignatureLine=true]
+─────────────────────────────────────
+```
+
+---
+
 ## API Reference
 
 > For detailed request/response field tables and complete callback reference, see **[API-REFERENCE.md](./API-REFERENCE.md)**.
