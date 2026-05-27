@@ -226,13 +226,12 @@ data class PaymentResult(
      * Convert this result to a [PaymentError] for unified error display.
      *
      * Useful when migrating from SDK ≤ v1.0.6 where declined transactions were delivered
-     * via `onFailure(PaymentError)`. Call this inside [onTransactionDeclined] or
-     * inside an `onSuccess` handler for `isFailed()` results to reuse existing error-display
-     * code without rewriting it.
+     * via `onFailure(PaymentError)`. Call this inside an `onSuccess` handler for
+     * `isFailed()` results to reuse existing error-display code without rewriting it.
      *
      * ```kotlin
-     * override fun onTransactionDeclined(result: PaymentResult) {
-     *     showError(result.toPaymentError())   // reuses legacy error UI
+     * override fun onSuccess(result: PaymentResult) {
+     *     if (result.isFailed()) showError(result.toPaymentError())
      * }
      * ```
      *

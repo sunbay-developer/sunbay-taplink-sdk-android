@@ -1,7 +1,18 @@
 # Taplink SDK for Android — AI Integration Reference
 
 **Taplink SDK** is a semi-integrated payment SDK for Android POS applications provided by SUNBAY.
+Latest public release target: **1.0.7**.
 It supports three connection modes: App-to-App (Local), LAN (WLAN), and Cable (USB/Serial).
+
+## Current Callback Semantics
+
+- `onProgress(event)` keeps reporting transaction progress.
+- `onSuccess(result)` is the only callback for terminal-confirmed outcomes: approved, declined, and processing.
+- Use `result.isSuccess()`, `result.isFailed()`, and `result.isProcessing()` to branch.
+- `onFailure(error)` is reserved for communication or technical errors only.
+- `PaymentCallbackAdapter` only provides empty defaults; handle outcomes in `onSuccess`.
+- `PaymentResult.toPaymentError()` is available for migrating legacy decline/error UIs.
+- `CANCELLED` status and `isCancelled()` are removed; cancelled or aborted transactions arrive as `FAILED`.
 
 ---
 

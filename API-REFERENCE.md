@@ -44,28 +44,25 @@ interface PaymentCallback {
 
 ### PaymentCallbackAdapter
 
-`PaymentCallbackAdapter` is an abstract class that implements `PaymentCallback` with empty defaults. It also exposes three **semantic helper methods** that the default `onSuccess` dispatches to automatically:
-
-| Method | When it is called | Description |
-|--------|------------------|-------------|
-| `onTransactionApproved(result)` | `result.isSuccess() == true` | Transaction approved by the issuer |
-| `onTransactionDeclined(result)` | `result.isFailed() == true` | Transaction declined, cancelled, or aborted |
-| `onTransactionProcessing(result)` | `result.isProcessing() == true` | Gateway still processing; poll with `query()` |
-| `onFailure(error)` | Communication error | No response received from terminal |
+`PaymentCallbackAdapter` is an abstract class that implements `PaymentCallback` with empty defaults. Use it when you want to override only the callbacks you need.
 
 ```kotlin
-// Recommended pattern using semantic helpers
 client.sale(request, object : PaymentCallbackAdapter() {
-    override fun onTransactionApproved(result: PaymentResult)   { showApproved(result) }
-    override fun onTransactionDeclined(result: PaymentResult)   { showDeclined(result) }
-    override fun onTransactionProcessing(result: PaymentResult) { startPolling(result) }
-    override fun onFailure(error: PaymentError) { showError(error.message) }
+    override fun onSuccess(result: PaymentResult) {
+        when {
+            result.isSuccess()    -> showApproved(result)
+            result.isFailed()     -> showError(result.toPaymentError())
+            result.isProcessing() -> startPolling(result)
+        }
+    }
+
+    override fun onFailure(error: PaymentError) {
+        showError(error.message)
+    }
 })
 ```
 
-Overriding `onSuccess()` directly also works if you prefer a single entry point — the semantic helpers are only called from the default `onSuccess` implementation.
-
-> **Migration note (v1.0.6 → v1.0.7):** In v1.0.6 and earlier, declined transactions were routed to `onFailure(PaymentError)`. From v1.0.7 onwards they arrive in `onSuccess` with `result.isFailed() == true`. Move your decline-handling logic to `onTransactionDeclined` or add an `isFailed()` check inside `onSuccess`. See README §"Migrating from v1.0.6" for full before/after examples.
+> **Migration note (v1.0.6 → v1.0.7):** In v1.0.6 and earlier, declined transactions were routed to `onFailure(PaymentError)`. From v1.0.7 onwards they arrive in `onSuccess` with `result.isFailed() == true`. If you want to reuse an existing `PaymentError`-based UI, call `result.toPaymentError()` inside `onSuccess`. See README §"Migrating from v1.0.6" for full before/after examples.
 
 ---
 
@@ -614,4 +611,4 @@ Returned only from `onFailure`, which represents communication or technical erro
 
 ---
 
-*SDK version: 1.0.6.7-SNAPSHOT*
+*SDK version: 1.0.7*
