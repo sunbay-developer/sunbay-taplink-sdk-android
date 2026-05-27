@@ -195,7 +195,9 @@ class LocalServiceKernel constructor(
                 val errorCode = code ?: "UNKNOWN_ERROR"
                 val errorMsg = msg ?: "Unknown error"
                 val errorResponse = try {
-                    """{"traceId":"$traceId","eventCode":"ERROR","errorCode":"$errorCode","eventMsg":"$errorMsg"}"""
+                    // Use Gson to properly escape the errorMsg value, which may itself be a JSON string
+                    val escapedMsg = gson.toJson(errorMsg)
+                    """{"traceId":"$traceId","eventCode":"ERROR","errorCode":"$errorCode","eventMsg":$escapedMsg}"""
                 } catch (e: Exception) {
                     "ERROR: $errorCode - $errorMsg"
                 }
