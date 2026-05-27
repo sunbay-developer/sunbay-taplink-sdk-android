@@ -1,6 +1,6 @@
 # Taplink SDK for Android
 
-[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
+[![Version](https://img.shields.io/badge/version-1.0.7-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
 [![Min SDK](https://img.shields.io/badge/minSdk-25-green.svg)](https://developer.android.com/about/versions/android-7.1)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.7.10-purple.svg)](https://kotlinlang.org/)
 
@@ -39,7 +39,7 @@ Add the following dependency to your app module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.6")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.7")
 }
 ```
 
@@ -1350,21 +1350,20 @@ client.query(request: QueryRequest, callback: PaymentCallback)
 ### Changelog
 
 #### v1.0.7
-- **Breaking change**: Declined transactions are now delivered via `onSuccess(result)` with `result.isFailed() == true`. In v1.0.5.x and earlier they were routed to `onFailure(PaymentError)`.
-- `PaymentCallbackAdapter` now provides semantic helper methods: `onTransactionApproved`, `onTransactionDeclined`, `onTransactionProcessing` — see migration guide below.
+- **Breaking change**: Declined transactions are now delivered via `onSuccess(result)` with `result.isFailed() == true`. In v1.0.6 and earlier they were routed to `onFailure(PaymentError)`.
 - `PaymentResult.toPaymentError()` added as a migration convenience bridge.
 - `CANCELLED` transaction status removed; cancelled/aborted transactions are reported as `FAILED`.
 
-#### v1.0.5.x and earlier
+#### v1.0.6 and earlier
 - Declined transactions routed to `onFailure(PaymentError)`.
 
 ---
 
-### Migrating from v1.0.5.x
+### Migrating from v1.0.6
 
 The callback routing changed in v1.0.7. Here is a before/after comparison:
 
-**Before (v1.0.5.x)**
+**Before (v1.0.6 and earlier)**
 
 ```kotlin
 client.sale(request, object : PaymentCallback {
@@ -1379,14 +1378,14 @@ client.sale(request, object : PaymentCallback {
 })
 ```
 
-**After (v1.0.7) — Option A: override `onSuccess` directly**
+**After (v1.0.7)**
 
 ```kotlin
 client.sale(request, object : PaymentCallbackAdapter() {
     override fun onSuccess(result: PaymentResult) {
         when {
             result.isSuccess()    -> showApproved(result)
-            result.isFailed()     -> showDeclined(result)   // was: onFailure
+            result.isFailed()     -> showError(result.toPaymentError())   // reuses legacy error UI
             result.isProcessing() -> startPolling(result)
         }
     }
@@ -1395,27 +1394,6 @@ client.sale(request, object : PaymentCallbackAdapter() {
         showError(error.message)
     }
 })
-```
-
-**After (v1.0.7) — Option B: use semantic helper methods (recommended)**
-
-```kotlin
-client.sale(request, object : PaymentCallbackAdapter() {
-    override fun onTransactionApproved(result: PaymentResult)  { showApproved(result) }
-    override fun onTransactionDeclined(result: PaymentResult)  { showDeclined(result) }
-    override fun onTransactionProcessing(result: PaymentResult){ startPolling(result) }
-    override fun onFailure(error: PaymentError) { showError(error.message) }
-})
-```
-
-**Reusing existing error display (using `toPaymentError()`)**
-
-If your existing `showError()` accepts a `PaymentError`, you can call `toPaymentError()` on a declined result to reuse it without changes:
-
-```kotlin
-override fun onTransactionDeclined(result: PaymentResult) {
-    showError(result.toPaymentError())   // reuses legacy error UI unchanged
-}
 ```
 
 ## Technical Stack
