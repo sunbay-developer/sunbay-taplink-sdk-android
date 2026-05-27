@@ -725,6 +725,10 @@ client.postAuth(request, paymentCallback)
 
 Query transaction status, especially useful for timeout scenarios.
 
+> **Background Processing:** The query operation is processed entirely in the background by Tapro — it does **not** bring the Tapro app to the foreground or display any UI. The result is returned directly through the callback without activity launch.
+>
+> ⚠️ **Important:** Since Tapro does not display any UI during query, you **must** implement your own loading/waiting indicator in your app (e.g., a progress spinner or "Querying transaction status..." message) while waiting for the query callback to return.
+
 ```kotlin
 val query = QueryRequest()
     .setTransactionRequestId("TXN20231119001")

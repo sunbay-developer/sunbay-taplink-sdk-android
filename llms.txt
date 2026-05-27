@@ -136,7 +136,7 @@ val config = ConnectionConfig.createDefault()  // tries APP_TO_APP → Cable →
 | `client.tipAdjust()` | `TipAdjustRequest` | Adjust tip after sale |
 | `client.abort()` | `AbortRequest` | Cancel in-progress transaction |
 | `client.batchClose()` | `BatchCloseRequest` | End-of-day settlement |
-| `client.query()` | `QueryRequest` | Query transaction status |
+| `client.query()` | `QueryRequest` | Query transaction status (runs in background, no Tapro UI shown — implement your own loading indicator) |
 
 ### Refund
 ```kotlin
@@ -357,9 +357,15 @@ object : PaymentCallback {
 | 307–311 | Transaction rejected/duplicate/failed | ❌ New ID |
 
 ### Error 306 — Timeout Pattern (MANDATORY)
+
+> **UI Note:** Query runs entirely in the background — Tapro will NOT show any UI or loading screen.
+> You MUST implement your own loading/waiting indicator while the query is in progress.
+> Show a spinner or "Querying transaction status..." message between calling `client.query()` and receiving the callback.
+
 ```kotlin
 override fun onFailure(error: PaymentError) {
     if (error.code == "306") {
+        showLoading("Querying transaction status...")  // Your own loading UI
         pollStatus(error.transactionRequestId!!)  // MUST query before any retry
     }
 }
@@ -395,6 +401,7 @@ fun pollStatus(txnRequestId: String, attempt: Int = 1) {
 4. **Error 306**: Always query status before retrying. Never create a new transaction blindly.
 5. **lib_taplink_communication**: Never import directly. Only use `lib_taplink_sdk`.
 6. **Callbacks on background thread**: Always `runOnUiThread {}` for UI updates in callbacks.
+7. **Query has no Tapro UI**: `client.query()` runs in background — you MUST show your own loading indicator while waiting for the callback.
 7. **Cleanup**: Always call `disconnect()` + `removeConnectionListener()` in `onDestroy()`.
 8. **tipConfig vs tipAmount**: Mutually exclusive. Set one or neither, never both.
 9. **tipAmount placement**: Keep tip out of `orderAmount` and set `tipAmount` separately when known upfront, or tax may also be applied to the tip portion.
@@ -451,6 +458,7 @@ result.isFailed()          // transactionStatus=="FAILED" || code!="0"
 - [ ] All amounts in smallest currency unit
 - [ ] `transactionRequestId` is unique per transaction (use UUID)
 - [ ] Error 306: query-first logic implemented
+- [ ] Query UI: loading indicator shown while `client.query()` is in progress (Tapro shows no UI)
 - [ ] Error 307/308: new ID logic implemented
 - [ ] `disconnect()` + `removeConnectionListener()` in `onDestroy()`
 - [ ] USB permission handling for Cable mode
