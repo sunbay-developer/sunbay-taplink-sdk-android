@@ -1130,10 +1130,12 @@ override fun onProgress(event: PaymentEvent) {
 
 ## Receipt Data (receiptJson)
 
-When `printReceipt = NONE`, Tapro does not print — the SDK returns all receipt data in `PaymentResult.receiptJson` for integrators to compose and print receipts themselves.
+`PaymentResult.receiptJson` is returned in every completed transaction response, containing all receipt fields needed to compose a printed receipt. Integrators can use this data as needed — for self-printing, digital receipts, or record-keeping.
 
 > **Key points:**
-> - `receiptJson` is populated for ALL completed transactions regardless of `printReceipt` setting
+> - `receiptJson` is returned for ALL completed transactions regardless of `printReceipt` setting
+> - When `printReceipt = NONE`, Tapro does not print — use `receiptJson` to self-print
+> - When `printReceipt = MERCHANT/CUSTOMER/BOTH`, Tapro prints AND returns `receiptJson`
 > - Merchant header (name, address, logo) is NOT included — integrators manage their own merchant info
 > - Tip Section UI layout fields are NOT included — only confirmed `tipAmount` is returned when tip > $0
 > - All amounts are pre-formatted with currency symbol (e.g., `"$7.90"`) — print as-is
@@ -1141,18 +1143,25 @@ When `printReceipt = NONE`, Tapro does not print — the SDK returns all receipt
 ### Quick Start
 
 ```kotlin
+// receiptJson is always returned; use PrintReceipt.NONE if you want to self-print
 val request = SaleRequest.builder()
     .setReferenceOrderId("ORD-001")
     .setTransactionRequestId("REQ_${System.currentTimeMillis()}")
     .setAmount(AmountInfo.of(790L, "USD"))
-    .setPrintReceipt(PrintReceipt.NONE)
+    .setPrintReceipt(PrintReceipt.NONE)  // Optional: suppress Tapro printing
     .build()
 
 taplinkSDK.sale(request, object : PaymentCallback {
     override fun onSuccess(result: PaymentResult) {
         if (result.isSuccess()) {
             result.receiptJson?.let { json ->
-                val receipt = JSONObject(json)
+                val rawJson = JSONObject(json)
+                // Handle nameValuePairs wrapper (Gson serialization artifact)
+                val receipt = if (rawJson.has("nameValuePairs")) {
+                    rawJson.getJSONObject("nameValuePairs")
+                } else {
+                    rawJson
+                }
 
                 // ★ Card Network Required (must print for EMV transactions)
                 val aid = receipt.optString("aid")           // "A000000025010402"
@@ -1336,8 +1345,78 @@ client.query(request: QueryRequest, callback: PaymentCallback)
 
 ## Version Information
 
-- **Current Version**: 1.0.6
-- **Version Code**: 6
+- **Current Version**: 1.0.7
+
+### Changelog
+
+#### v1.0.7
+- **Breaking change**: Declined transactions are now delivered via `onSuccess(result)` with `result.isFailed() == true`. In v1.0.5.x and earlier they were routed to `onFailure(PaymentError)`.
+- `PaymentCallbackAdapter` now provides semantic helper methods: `onTransactionApproved`, `onTransactionDeclined`, `onTransactionProcessing` — see migration guide below.
+- `PaymentResult.toPaymentError()` added as a migration convenience bridge.
+- `CANCELLED` transaction status removed; cancelled/aborted transactions are reported as `FAILED`.
+
+#### v1.0.5.x and earlier
+- Declined transactions routed to `onFailure(PaymentError)`.
+
+---
+
+### Migrating from v1.0.5.x
+
+The callback routing changed in v1.0.7. Here is a before/after comparison:
+
+**Before (v1.0.5.x)**
+
+```kotlin
+client.sale(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResult) {
+        // Only called for approved transactions
+        showApproved(result)
+    }
+    override fun onFailure(error: PaymentError) {
+        // Called for BOTH declines AND communication errors
+        showError(error.message)
+    }
+})
+```
+
+**After (v1.0.7) — Option A: override `onSuccess` directly**
+
+```kotlin
+client.sale(request, object : PaymentCallbackAdapter() {
+    override fun onSuccess(result: PaymentResult) {
+        when {
+            result.isSuccess()    -> showApproved(result)
+            result.isFailed()     -> showDeclined(result)   // was: onFailure
+            result.isProcessing() -> startPolling(result)
+        }
+    }
+    override fun onFailure(error: PaymentError) {
+        // Only communication errors now
+        showError(error.message)
+    }
+})
+```
+
+**After (v1.0.7) — Option B: use semantic helper methods (recommended)**
+
+```kotlin
+client.sale(request, object : PaymentCallbackAdapter() {
+    override fun onTransactionApproved(result: PaymentResult)  { showApproved(result) }
+    override fun onTransactionDeclined(result: PaymentResult)  { showDeclined(result) }
+    override fun onTransactionProcessing(result: PaymentResult){ startPolling(result) }
+    override fun onFailure(error: PaymentError) { showError(error.message) }
+})
+```
+
+**Reusing existing error display (using `toPaymentError()`)**
+
+If your existing `showError()` accepts a `PaymentError`, you can call `toPaymentError()` on a declined result to reuse it without changes:
+
+```kotlin
+override fun onTransactionDeclined(result: PaymentResult) {
+    showError(result.toPaymentError())   // reuses legacy error UI unchanged
+}
+```
 
 ## Technical Stack
 

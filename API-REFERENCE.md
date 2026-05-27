@@ -21,8 +21,8 @@ All transaction APIs share the same callback interface:
 
 ```kotlin
 interface PaymentCallback {
+    fun onProgress(event: PaymentEvent)
     fun onSuccess(result: PaymentResult)
-    fun onProgress(event: String, message: String)
     fun onFailure(error: PaymentError)
 }
 ```
@@ -39,6 +39,33 @@ interface PaymentCallback {
 - Declined / cancelled / aborted transaction → `onSuccess`, `result.isFailed() == true`
 - Processing transaction → `onSuccess`, `result.isProcessing() == true`
 - Connection timeout or delivery failure → `onFailure`
+
+---
+
+### PaymentCallbackAdapter
+
+`PaymentCallbackAdapter` is an abstract class that implements `PaymentCallback` with empty defaults. It also exposes three **semantic helper methods** that the default `onSuccess` dispatches to automatically:
+
+| Method | When it is called | Description |
+|--------|------------------|-------------|
+| `onTransactionApproved(result)` | `result.isSuccess() == true` | Transaction approved by the issuer |
+| `onTransactionDeclined(result)` | `result.isFailed() == true` | Transaction declined, cancelled, or aborted |
+| `onTransactionProcessing(result)` | `result.isProcessing() == true` | Gateway still processing; poll with `query()` |
+| `onFailure(error)` | Communication error | No response received from terminal |
+
+```kotlin
+// Recommended pattern using semantic helpers
+client.sale(request, object : PaymentCallbackAdapter() {
+    override fun onTransactionApproved(result: PaymentResult)   { showApproved(result) }
+    override fun onTransactionDeclined(result: PaymentResult)   { showDeclined(result) }
+    override fun onTransactionProcessing(result: PaymentResult) { startPolling(result) }
+    override fun onFailure(error: PaymentError) { showError(error.message) }
+})
+```
+
+Overriding `onSuccess()` directly also works if you prefer a single entry point — the semantic helpers are only called from the default `onSuccess` implementation.
+
+> **Migration note (v1.0.6 → v1.0.7):** In v1.0.6 and earlier, declined transactions were routed to `onFailure(PaymentError)`. From v1.0.7 onwards they arrive in `onSuccess` with `result.isFailed() == true`. Move your decline-handling logic to `onTransactionDeclined` or add an `isFailed()` check inside `onSuccess`. See README §"Migrating from v1.0.6" for full before/after examples.
 
 ---
 
@@ -304,7 +331,7 @@ All transaction operations return this object through `onSuccess`.
 | Field | Type | Description |
 |------|------|-------------|
 | `cardInfo` | CardInfo? | Card details |
-| `receiptJson` | String? | Receipt data as JSON string for self-printing; see [receiptJson Field Structure](#receiptjson-field-structure) |
+| `receiptJson` | String? | Receipt data as JSON string, returned in every completed transaction; use for self-printing or record-keeping. |
 
 #### Voucher and trace data
 
@@ -346,6 +373,7 @@ All transaction operations return this object through `onSuccess`.
 | `isSuccess()` | Boolean | Returns `true` when `code == "100"` and `transactionStatus == "SUCCESS"` |
 | `isFailed()` | Boolean | Returns `true` when `transactionStatus == "FAILED"` |
 | `isProcessing()` | Boolean | Returns `true` when `transactionStatus == "PROCESSING"` |
+| `toPaymentError()` | PaymentError | Converts this failed result to a `PaymentError` for unified error display (migration bridge from v1.0.6) |
 
 ```kotlin
 override fun onSuccess(result: PaymentResult) {
@@ -359,9 +387,9 @@ override fun onSuccess(result: PaymentResult) {
 
 ### receiptJson Field Structure
 
-When `printReceipt` is set to `NONE`, the integrator handles receipt printing. The `receiptJson` field contains all data needed to compose a US-compliant receipt.
+`receiptJson` is returned in every completed transaction response. It contains all data needed to compose a US-compliant receipt. Integrators can use it for self-printing (when `printReceipt = NONE`) or for digital receipt / record-keeping purposes regardless of print mode.
 
-> **Note**: `receiptJson` is populated for all completed transactions regardless of the `printReceipt` setting. Merchant header info (merchant name, address, logo) is NOT included — integrators manage their own merchant data.
+> **Note**: Merchant header info (merchant name, address, logo) is NOT included — integrators manage their own merchant data.
 
 Parse with standard `JSONObject` (Android built-in) or any JSON library:
 

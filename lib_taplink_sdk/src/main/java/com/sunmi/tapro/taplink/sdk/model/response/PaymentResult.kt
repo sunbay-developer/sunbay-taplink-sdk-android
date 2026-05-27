@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.response
 
+import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.model.common.BatchAmount
 import com.sunmi.tapro.taplink.sdk.model.common.BatchCloseInfo
 import com.sunmi.tapro.taplink.sdk.model.common.CardInfo
@@ -220,4 +221,29 @@ data class PaymentResult(
     fun isFailed(): Boolean {
         return "FAILED" == transactionStatus
     }
+
+    /**
+     * Convert this result to a [PaymentError] for unified error display.
+     *
+     * Useful when migrating from SDK ≤ v1.0.6 where declined transactions were delivered
+     * via `onFailure(PaymentError)`. Call this inside [onTransactionDeclined] or
+     * inside an `onSuccess` handler for `isFailed()` results to reuse existing error-display
+     * code without rewriting it.
+     *
+     * ```kotlin
+     * override fun onTransactionDeclined(result: PaymentResult) {
+     *     showError(result.toPaymentError())   // reuses legacy error UI
+     * }
+     * ```
+     *
+     * @return [PaymentError] populated from this result's decline details
+     */
+    fun toPaymentError(): PaymentError =
+        PaymentError.create(
+            code = code,
+            message = transactionResultMsg ?: message ?: "Transaction declined",
+            traceId = traceId,
+            transactionId = transactionId,
+            transactionRequestId = transactionRequestId
+        )
 }
