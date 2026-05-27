@@ -216,10 +216,14 @@ class TaplinkSDK private constructor() : TaplinkApi {
         /**
          * Get Tapro version number
          *
-         * Get Tapro version number of connected payment terminal.
-         * Version number can only be obtained after successful connection.
+         * Returns the Tapro version of the connected payment terminal.
          *
-         * @return String Tapro version number, returns null if not connected or version not obtained
+         * **Note:** This value is `null` or `"unknown"` immediately after [connect] fires
+         * [ConnectionListener.onConnected]. The real version is populated by Tapro during
+         * INIT, which happens on the first transaction. Call this method after the first
+         * transaction completes to get the actual version string.
+         *
+         * @return String Tapro version number, or null/`"unknown"` if not yet available
          */
         @JvmStatic
         @JvmName("getSDKTaproVersion")
