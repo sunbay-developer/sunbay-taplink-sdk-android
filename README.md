@@ -80,9 +80,13 @@ class MainActivity : AppCompatActivity() {
         
         TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
-                // Connection successful
-                Toast.makeText(this@MainActivity, 
-                    "Connected to Tapro $taproVersion", 
+                // Physical connection established.
+                // Note: deviceId and taproVersion are not yet available at this point —
+                // they are populated by Tapro during the first transaction (INIT).
+                // Use TaplinkSDK.getConnectedDeviceId() and TaplinkSDK.getTaproVersion()
+                // after the first transaction completes to read the actual values.
+                Toast.makeText(this@MainActivity,
+                    "Connected to Tapro",
                     Toast.LENGTH_SHORT).show()
             }
             
@@ -168,6 +172,8 @@ private fun processPayment() {
 That's it! You've completed the basic integration in just 3 steps.
 
 **Session `INIT`:** After a physical connection is established, the SDK runs **INIT** with Tapro on the **first payment operation** (not necessarily inside `onConnected`). If the transport drops, INIT state is cleared and the next transaction performs INIT again—avoid assuming INIT remains valid across disconnect/reconnect.
+
+**`deviceId` and `taproVersion` in `onConnected`:** These parameters are placeholders at the time `onConnected` fires. The actual device ID and Tapro version are exchanged during INIT, which happens on the first transaction. To read the real values, call `TaplinkSDK.getConnectedDeviceId()` and `TaplinkSDK.getTaproVersion()` after the first transaction completes.
 
 ---
 
