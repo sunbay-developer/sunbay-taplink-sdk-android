@@ -6,9 +6,9 @@ plugins {
 
 // ==================== Constants Configuration ====================
 object SdkVersion {
-    const val CODE = 13
+    const val CODE = 14
 
-    const val NAME = "1.0.6.9"
+    const val NAME = "1.0.7"
 }
 
 object BuildConfig {
