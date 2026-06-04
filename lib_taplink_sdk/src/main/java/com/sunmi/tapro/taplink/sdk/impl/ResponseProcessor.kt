@@ -89,6 +89,15 @@ class ResponseProcessor {
      */
     fun handleResponse(result: String, callback: PaymentCallback, request: PaymentRequest) {
         try {
+            // 先尝试识别是否为 Headless 中间事件（简化 JSON 格式，无 appSign/version）
+            val headlessEvent = tryParseAsHeadlessIntermediateEvent(result)
+            if (headlessEvent != null) {
+                LogUtil.d(TAG, "Headless intermediate event: eventCode=${headlessEvent.eventCode}")
+                callback.onProgress(headlessEvent)
+                return
+            }
+
+
             val basicResponse = gson.fromJson(result, BasicResponse::class.java)
             LogUtil.d(
                 TAG,
@@ -174,6 +183,67 @@ class ResponseProcessor {
             )
         }
     }
+    /**
+     * Try to parse response as a Headless intermediate event.
+     *
+     * Headless mode intermediate events use a simplified JSON format:
+     * {
+     *   "eventId": "EVT_TXN20250101001_007",
+     *   "eventCode": "CardDetected",
+     *   "cancelable": false,
+     *   "timestamp": 1735689600000,
+     *   "transactionRequestId": "TXN20250101001",
+     *   "data": { "entryMode": "CONTACT", "cardBrand": "VISA" }
+     * }
+     *
+     * These events do NOT have appSign/version/bizData/action fields.
+     *
+     * @return PaymentEvent.HeadlessEvent if parsing succeeds, null otherwise
+     */
+    private fun tryParseAsHeadlessIntermediateEvent(json: String): PaymentEvent? {
+        return try {
+            val jsonObject = JsonParser.parseString(json).asJsonObject
+
+            // Check for Headless event signature: has "eventCode" + "eventId" but no "appSign"
+            val hasEventId = jsonObject.has("eventId")
+            val hasEventCode = jsonObject.has("eventCode")
+            val hasAppSign = jsonObject.has("appSign")
+
+            if (hasEventId && hasEventCode && !hasAppSign) {
+                val eventCode = jsonObject.get("eventCode").asString
+                val eventId = jsonObject.get("eventId")?.asString
+                val cancelable = jsonObject.get("cancelable")?.asBoolean ?: false
+
+                // Parse optional data map
+                val dataMap = if (jsonObject.has("data") && jsonObject.get("data").isJsonObject) {
+                    val dataObj = jsonObject.getAsJsonObject("data")
+                    dataObj.entrySet().associate { it.key to it.value.asString }
+                } else null
+
+                // Try to match a predefined event first
+                val predefined = PaymentEvent.fromEventCode(eventCode)
+                if (predefined !is PaymentEvent.HeadlessEvent) {
+                    // Matched a predefined event — return it directly
+                    return predefined
+                }
+
+                // Return as HeadlessEvent with full metadata
+                PaymentEvent.HeadlessEvent(
+                    eventCode = eventCode,
+                    eventMsg = "Headless: $eventCode",
+                    cancelable = cancelable,
+                    eventId = eventId,
+                    data = dataMap,
+                )
+            } else {
+                null // Not a Headless intermediate event
+            }
+        } catch (e: Exception) {
+            null // Parse failed, not a Headless event
+        }
+    }
+
+
 
     /**
      * Determine if callback should be removed

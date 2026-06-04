@@ -281,6 +281,42 @@ class TaplinkSDK private constructor() : TaplinkApi {
             return getInstance().clientInstance
         }
 
+        // ==================== Headless Mode APIs ====================
+
+        /**
+         * Cancel the current in-progress transaction.
+         *
+         * Only effective when the transaction is in a cancelable stage.
+         * In Headless mode, use this when you need to abort a transaction
+         * that hasn't reached the online processing stage yet.
+         *
+         * @param transactionRequestId The ID of the transaction to cancel (optional)
+         * @param callback Callback to receive the cancellation result
+         */
+        @JvmStatic
+        @JvmName("cancelSDKTransaction")
+        fun cancelTransaction(transactionRequestId: String? = null, callback: PaymentCallback) {
+            getInstance().cancelTransaction(transactionRequestId, callback)
+        }
+
+        /**
+         * Query the current transaction status.
+         *
+         * Used for crash recovery — when the POS app restarts,
+         * call this to check if a transaction is still in progress.
+         *
+         * @param transactionRequestId The transaction request ID to query
+         * @param callback Callback to receive the status
+         */
+        @JvmStatic
+        @JvmName("querySDKTransactionStatus")
+        fun queryTransactionStatus(transactionRequestId: String, callback: PaymentCallback) {
+            getInstance().queryTransactionStatus(transactionRequestId, callback)
+        }
+
+
+
+
         // ==================== Backward Compatible Interfaces (Deprecated) ====================
 
         /**
@@ -371,6 +407,18 @@ class TaplinkSDK private constructor() : TaplinkApi {
     override fun getConnectionConfig(): ConnectionConfig? {
         return apiImpl.getConnectionConfig()
     }
+
+    // ==================== Headless Mode APIs (Instance Methods) ====================
+
+    override fun cancelTransaction(transactionRequestId: String?, callback: PaymentCallback) {
+        apiImpl.cancelTransaction(transactionRequestId, callback)
+    }
+
+    override fun queryTransactionStatus(transactionRequestId: String, callback: PaymentCallback) {
+        apiImpl.queryTransactionStatus(transactionRequestId, callback)
+    }
+
+
 
     // ==================== Backward Compatible Interfaces (Instance Methods, Deprecated) ====================
 
