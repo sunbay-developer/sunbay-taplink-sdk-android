@@ -314,6 +314,21 @@ class TaplinkSDK private constructor() : TaplinkApi {
             getInstance().queryTransactionStatus(transactionRequestId, callback)
         }
 
+        /**
+         * Switch the current Headless transaction to manual card entry.
+         *
+         * This API sends a dedicated control request and is only effective when
+         * the current in-progress transaction is at WAITING_CARD stage.
+         *
+         * @param transactionRequestId The transaction request ID to switch (optional)
+         * @param callback Callback to receive the switch result
+         */
+        @JvmStatic
+        @JvmName("switchSDKToManualEntry")
+        fun switchToManualEntry(transactionRequestId: String? = null, callback: PaymentCallback) {
+            getInstance().switchToManualEntry(transactionRequestId, callback)
+        }
+
 
 
 
@@ -416,6 +431,10 @@ class TaplinkSDK private constructor() : TaplinkApi {
 
     override fun queryTransactionStatus(transactionRequestId: String, callback: PaymentCallback) {
         apiImpl.queryTransactionStatus(transactionRequestId, callback)
+    }
+
+    override fun switchToManualEntry(transactionRequestId: String?, callback: PaymentCallback) {
+        apiImpl.switchToManualEntry(transactionRequestId, callback)
     }
 
 

@@ -200,6 +200,16 @@ interface TaplinkApi {
      */
     fun queryTransactionStatus(transactionRequestId: String, callback: PaymentCallback)
 
+    /**
+     * Switch current Headless transaction to manual card entry.
+     *
+     * This control action is only valid when the in-progress transaction
+     * is currently at WAITING_CARD stage.
+     *
+     * @param transactionRequestId The transaction request ID to switch (optional, for validation)
+     * @param callback Callback to receive switch result
+     */
+    fun switchToManualEntry(transactionRequestId: String? = null, callback: PaymentCallback)
+
 
 }
-

@@ -79,7 +79,13 @@ enum class TransactionAction(val value: String) {
      * Abort transaction.
      * Terminates the current ongoing transaction.
      */
-    ABORT("ABORT");
+    ABORT("ABORT"),
+
+    /**
+     * Switch current transaction to manual card entry.
+     * Headless-only control action, valid during WAITING_CARD stage.
+     */
+    SWITCH_TO_MANUAL_ENTRY("SWITCH_TO_MANUAL_ENTRY");
 
     companion object {
         /**
