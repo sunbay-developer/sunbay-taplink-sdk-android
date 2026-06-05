@@ -31,12 +31,36 @@ sealed class PaymentEvent(
      */
     open val cancelable: Boolean = false,
 
+    /**
+     * Global unique event ID for idempotent handling in Headless mode.
+     * Present when Tapro emits intermediate Headless callbacks.
+     */
+    open val eventId: String? = null,
+
+    /**
+     * Transaction request ID for correlating callbacks with the transaction.
+     * Present when Tapro emits intermediate Headless callbacks.
+     */
+    open val transactionRequestId: String? = null,
+
+    /**
+     * Merchant reference order ID, if provided by POS.
+     * Present when Tapro emits intermediate Headless callbacks.
+     */
+    open val referenceOrderId: String? = null,
+
+    /**
+     * Event-specific payload (e.g. entryMode / print failure reason).
+     * Present when Tapro emits intermediate Headless callbacks.
+     */
+    open val data: Map<String, String>? = null,
+
 
 
     /**
      * Timestamp.
      */
-    val timestamp: Long = System.currentTimeMillis()
+    open val timestamp: Long = System.currentTimeMillis()
 ) {
     /**
      * Processing event.
@@ -195,9 +219,23 @@ sealed class PaymentEvent(
         override val eventCode: String,
         override val eventMsg: String,
         override val cancelable: Boolean = false,
-        val eventId: String? = null,
-        val data: Map<String, String>? = null,
-    ) : PaymentEvent(eventCode, eventMsg, 50, cancelable)
+        override val eventId: String? = null,
+        override val transactionRequestId: String? = null,
+        override val referenceOrderId: String? = null,
+        override val data: Map<String, String>? = null,
+        override val timestamp: Long = System.currentTimeMillis(),
+        val rawEventCode: String? = null,
+    ) : PaymentEvent(
+        eventCode = eventCode,
+        eventMsg = eventMsg,
+        progress = 50,
+        cancelable = cancelable,
+        eventId = eventId,
+        transactionRequestId = transactionRequestId,
+        referenceOrderId = referenceOrderId,
+        data = data,
+        timestamp = timestamp
+    )
 
 
 

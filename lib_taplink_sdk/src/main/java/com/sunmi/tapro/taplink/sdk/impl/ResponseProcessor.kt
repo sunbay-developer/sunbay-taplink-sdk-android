@@ -213,27 +213,54 @@ class ResponseProcessor {
                 val eventCode = jsonObject.get("eventCode").asString
                 val eventId = jsonObject.get("eventId")?.asString
                 val cancelable = jsonObject.get("cancelable")?.asBoolean ?: false
+                val transactionRequestId = jsonObject.get("transactionRequestId")
+                    ?.takeUnless { it.isJsonNull }
+                    ?.asString
+                val referenceOrderId = jsonObject.get("referenceOrderId")
+                    ?.takeUnless { it.isJsonNull }
+                    ?.asString
+                val timestamp = jsonObject.get("timestamp")
+                    ?.takeUnless { it.isJsonNull }
+                    ?.asLong
+                    ?: System.currentTimeMillis()
 
                 // Parse optional data map
                 val dataMap = if (jsonObject.has("data") && jsonObject.get("data").isJsonObject) {
                     val dataObj = jsonObject.getAsJsonObject("data")
-                    dataObj.entrySet().associate { it.key to it.value.asString }
+                    dataObj.entrySet().associate { (key, value) ->
+                        val normalizedValue = if (value.isJsonPrimitive) {
+                            value.asJsonPrimitive.asString
+                        } else {
+                            value.toString()
+                        }
+                        key to normalizedValue
+                    }
                 } else null
 
-                // Try to match a predefined event first
+                // 归一化 eventCode/eventMsg，兼容现有业务按 WAITING_CARD 等常量判断。
                 val predefined = PaymentEvent.fromEventCode(eventCode)
-                if (predefined !is PaymentEvent.HeadlessEvent) {
-                    // Matched a predefined event — return it directly
-                    return predefined
+                val normalizedEventCode = if (predefined is PaymentEvent.HeadlessEvent) {
+                    eventCode
+                } else {
+                    predefined.eventCode
+                }
+                val normalizedEventMsg = if (predefined is PaymentEvent.HeadlessEvent) {
+                    "Headless: $eventCode"
+                } else {
+                    predefined.eventMsg
                 }
 
                 // Return as HeadlessEvent with full metadata
                 PaymentEvent.HeadlessEvent(
-                    eventCode = eventCode,
-                    eventMsg = "Headless: $eventCode",
+                    eventCode = normalizedEventCode,
+                    eventMsg = normalizedEventMsg,
                     cancelable = cancelable,
                     eventId = eventId,
+                    transactionRequestId = transactionRequestId,
+                    referenceOrderId = referenceOrderId,
                     data = dataMap,
+                    timestamp = timestamp,
+                    rawEventCode = eventCode
                 )
             } else {
                 null // Not a Headless intermediate event
@@ -250,6 +277,14 @@ class ResponseProcessor {
      */
     private fun shouldRemoveCallback(responseJson: String): Boolean {
         return try {
+            // Headless 中间事件（eventId 存在且无 appSign）只用于进度透传，不能释放回调。
+            val jsonObject = JsonParser.parseString(responseJson).asJsonObject
+            val hasEventId = jsonObject.has("eventId")
+            val hasAppSign = jsonObject.has("appSign")
+            if (hasEventId && !hasAppSign) {
+                return false
+            }
+
             val eventCode = extractEventCode(responseJson)
             if (eventCode == null) {
                 return false
