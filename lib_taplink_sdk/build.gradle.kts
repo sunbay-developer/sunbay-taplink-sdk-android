@@ -8,7 +8,7 @@ plugins {
 object SdkVersion {
     const val CODE = 14
 
-    const val NAME = "1.0.7"
+    const val NAME = "1.0.7.1"
 }
 
 object BuildConfig {
@@ -74,7 +74,8 @@ dependencies {
 
     embed(project(":lib_taplink_communication"))
 
-    implementation(libs.gson)
+    implementation(libs.jackson.databind)
+    implementation(libs.jackson.module.kotlin)
     
     // Exclude transitive kotlin-stdlib from coroutines to use our forced version
     implementation(libs.kotlinx.coroutines.core) {

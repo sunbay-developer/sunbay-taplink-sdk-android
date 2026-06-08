@@ -1,6 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
-import com.google.gson.annotations.SerializedName
+import com.fasterxml.jackson.annotation.JsonProperty
 
 /**
  * Payment method information class.
@@ -15,7 +15,7 @@ data class PaymentMethodInfo(
      * Payment method category (optional).
      * Values: CARD, EBT, QR-MPM, QR-CPM
      */
-    @SerializedName("category")
+    @JsonProperty("category")
     private val _category: String? = null,
 
     /**
@@ -23,7 +23,7 @@ data class PaymentMethodInfo(
      * Must not be specified when category = CARD; the system will automatically identify the payment method.
      * Values: VISA, MASTERCARD, EBT, DISCOVER, AMEX, JCB, UNIONPAY, DANA, DINERSCLUB, WECHAT_PAY, ALIPAY
      */
-    @SerializedName("id")
+    @JsonProperty("id")
     private val _id: String? = null,
 
     /**
@@ -31,7 +31,7 @@ data class PaymentMethodInfo(
      * Must not be specified when category = CARD.
      * Can only be specified when category = EBT and id = EBT; in that case valid values are SNAP, VOUCHER, BENEFIT.
      */
-    @SerializedName("subId")
+    @JsonProperty("subId")
     private val _subId: String? = null
 ) {
     /**

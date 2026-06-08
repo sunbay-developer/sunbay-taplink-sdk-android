@@ -1,7 +1,9 @@
 package com.sunmi.tapro.taplink.sdk.manager
 
 import android.content.Context
-import com.google.gson.Gson
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.R
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
@@ -44,10 +46,9 @@ class PaymentManager(
 ) {
     private val TAG = "PaymentManager"
 
-    /**
-     * Gson instance for JSON serialization
-     */
-    private val gson = Gson()
+    private val mapper: ObjectMapper = ObjectMapper()
+        .registerKotlinModule()
+        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
 
     /**
      * Callback manager for managing multiple async request callbacks
@@ -201,8 +202,8 @@ class PaymentManager(
                 secretKey = config.secretKey
             )
 
-            // Convert BasicRequest to JSON string
-            val requestJson = gson.toJson(basicRequest)
+            // Serialise BasicRequest to JSON string for transport
+            val requestJson = mapper.writeValueAsString(basicRequest)
             LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
 
             // Create internal callback for receiving raw response
