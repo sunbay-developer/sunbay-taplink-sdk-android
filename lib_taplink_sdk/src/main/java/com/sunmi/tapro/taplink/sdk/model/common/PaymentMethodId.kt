@@ -1,69 +1,98 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 支付方式ID枚举
- * 
- * 定义所有支持的具体支付方式ID
- * 
+ * Payment method ID enumeration.
+ *
+ * Defines all supported specific payment method IDs.
+ *
  * @author TaPro Team
  * @since 2025-01-XX
  */
-enum class PaymentMethodId {
-    // ========== 二维码支付 ==========
+enum class PaymentMethodId(val value: String) {
     /**
-     * 微信支付
+     * Visa.
      */
-    WECHAT,
-    
+    VISA("VISA"),
+
     /**
-     * 支付宝
+     * Mastercard.
      */
-    ALIPAY,
-    
-    // ========== EBT 子支付方式 ==========
+    MASTERCARD("MASTERCARD"),
+
     /**
-     * SNAP（补充营养援助计划）
+     * Electronic Benefit Transfer.
      */
-    SNAP,
-    
+    EBT("EBT"),
+
     /**
-     * Voucher（代金券）
+     * Discover.
      */
-    VOUCHER,
-    
+    DISCOVER("DISCOVER"),
+
     /**
-     * Withdraw（提现）
+     * American Express.
      */
-    WITHDRAW,
-    
+    AMEX("AMEX"),
+
     /**
-     * Benefit（福利）
+     * JCB.
      */
-    BENEFIT;
-    
+    JCB("JCB"),
+
+    /**
+     * UnionPay.
+     */
+    UNIONPAY("UNIONPAY"),
+
+    /**
+     * DANA.
+     */
+    DANA("DANA"),
+
+    /**
+     * Diners Club.
+     */
+    DINERSCLUB("DINERSCLUB"),
+
+    /**
+     * WeChat Pay.
+     */
+    WECHAT_PAY("WECHAT_PAY"),
+
+    /**
+     * Alipay.
+     */
+    ALIPAY("ALIPAY");
+
     companion object {
         /**
-         * 从字符串转换为枚举
-         * 
-         * @param value 字符串值
-         * @return PaymentMethodId? 对应的枚举值，如果无法识别则返回 null
+         * Converts from string to enum.
+         *
+         * @param value the string value
+         * @return the corresponding enum value, or null if not recognized
          */
         fun fromString(value: String?): PaymentMethodId? {
             if (value.isNullOrBlank()) return null
-            
-            return try {
-                valueOf(value.uppercase().replace("-", "_"))
-            } catch (e: IllegalArgumentException) {
-                null
+
+            return when (value.uppercase().replace("-", "_")) {
+                "VISA" -> VISA
+                "MASTERCARD" -> MASTERCARD
+                "EBT" -> EBT
+                "DISCOVER" -> DISCOVER
+                "AMEX" -> AMEX
+                "JCB" -> JCB
+                "UNIONPAY" -> UNIONPAY
+                "DANA" -> DANA
+                "DINERSCLUB" -> DINERSCLUB
+                "WECHAT_PAY" -> WECHAT_PAY
+                "ALIPAY" -> ALIPAY
+                else -> null
             }
         }
     }
-    
-    /**
-     * 转换为字符串（用于API传输）
-     */
-    fun toApiString(): String {
-        return name
-    }
-}
 
+    /**
+     * Converts to string (for API transmission).
+     */
+    fun toApiString(): String = value
+}

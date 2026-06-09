@@ -7,7 +7,7 @@ package com.sunmi.tapro.taplink.communication.interfaces
  * Provides both success response and error response callback methods
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 interface InnerCallback {
     /**

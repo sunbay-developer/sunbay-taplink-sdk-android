@@ -7,10 +7,10 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.*
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.settlement.BatchCloseRequest
 
 /**
- * 支付请求适配器
+ * Payment request adapter
  *
- * 将具体的交易请求类型适配为统一的 PaymentRequest 格式
- * 负责业务层的数据转换和字段映射
+ * Adapt the specific transaction request types to a unified PaymentRequest format
+ * Be responsible for data conversion and field mapping at the business layer
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -18,7 +18,7 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.settlement.BatchClo
 object PaymentRequestAdapter {
 
     /**
-     * 将SaleRequest转换为PaymentRequest
+     * Convert SaleRequest to PaymentRequest
      */
     fun convertSaleRequest(request: SaleRequest): PaymentRequest {
         return PaymentRequest(
@@ -28,17 +28,20 @@ object PaymentRequestAdapter {
             description = request.description,
             amount = request.amount,
             paymentMethod = request.paymentMethod,
+            cardNetworkType = request.cardNetworkType,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            tipConfig = request.tipConfig,
+            printReceipt = request.printReceipt,
         )
     }
 
     /**
-     * 将AuthRequest转换为PaymentRequest
+     * Convert AuthRequest to PaymentRequest
      */
     fun convertAuthRequest(request: AuthRequest): PaymentRequest {
-        // 将AuthAmountInfo转换为AmountInfo
+        // Convert AuthAmountInfo to AmountInfo
         val amountInfo = AmountInfo(
             orderAmount = request.amount.orderAmount,
             pricingCurrency = request.amount.pricingCurrency
@@ -53,15 +56,16 @@ object PaymentRequestAdapter {
             paymentMethod = request.paymentMethod,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            printReceipt = request.printReceipt
         )
     }
 
     /**
-     * 将ForcedAuthRequest转换为PaymentRequest
+     * Convert ForcedAuthRequest to PaymentRequest
      */
     fun convertForcedAuthRequest(request: ForcedAuthRequest): PaymentRequest {
-        // 将AuthAmountInfo转换为AmountInfo
+        // Convert AuthAmountInfo to AmountInfo
         val amountInfo = AmountInfo(
             orderAmount = request.amount.orderAmount,
             pricingCurrency = request.amount.pricingCurrency
@@ -76,12 +80,13 @@ object PaymentRequestAdapter {
             paymentMethod = request.paymentMethod,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            printReceipt = request.printReceipt
         )
     }
 
     /**
-     * 将RefundRequest转换为PaymentRequest
+     * Convert RefundRequest to PaymentRequest
      */
     fun convertRefundRequest(request: RefundRequest): PaymentRequest {
         return PaymentRequest(
@@ -93,14 +98,16 @@ object PaymentRequestAdapter {
             originalTransactionId = request.originalTransactionId,
             originalTransactionRequestId = request.originalTransactionRequestId,
             paymentMethod = request.paymentMethod,
+            cardNetworkType = request.cardNetworkType,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            printReceipt = request.printReceipt
         )
     }
 
     /**
-     * 将VoidRequest转换为PaymentRequest
+     * Convert VoidRequest to PaymentRequest
      */
     fun convertVoidRequest(request: VoidRequest): PaymentRequest {
         return PaymentRequest(
@@ -110,12 +117,13 @@ object PaymentRequestAdapter {
             originalTransactionId = request.originalTransactionId,
             originalTransactionRequestId = request.originalTransactionRequestId,
             attach = request.attach,
-            notifyUrl = request.notifyUrl
+            notifyUrl = request.notifyUrl,
+            printReceipt = request.printReceipt
         )
     }
 
     /**
-     * 将PostAuthRequest转换为PaymentRequest
+     * Convert PostAuthRequest to PaymentRequest
      */
     fun convertPostAuthRequest(request: PostAuthRequest): PaymentRequest {
         return PaymentRequest(
@@ -127,15 +135,17 @@ object PaymentRequestAdapter {
             originalTransactionRequestId = request.originalTransactionRequestId,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            tipConfig = request.tipConfig,
+            printReceipt = request.printReceipt,
         )
     }
 
     /**
-     * 将IncrementalAuthRequest转换为PaymentRequest
+     * Convert IncrementalAuthRequest to PaymentRequest
      */
     fun convertIncrementalAuthRequest(request: IncrementalAuthRequest): PaymentRequest {
-        // 将AuthAmountInfo转换为AmountInfo
+        // Convert AuthAmountInfo to AmountInfo
         val amountInfo = AmountInfo(
             orderAmount = request.amount.orderAmount,
             pricingCurrency = request.amount.pricingCurrency
@@ -150,12 +160,13 @@ object PaymentRequestAdapter {
             originalTransactionRequestId = request.originalTransactionRequestId,
             attach = request.attach,
             notifyUrl = request.notifyUrl,
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            printReceipt = request.printReceipt
         )
     }
 
     /**
-     * 将AbortRequest转换为PaymentRequest
+     * Convert AbortRequest to PaymentRequest
      */
     fun convertAbortRequest(request: AbortRequest): PaymentRequest {
         return PaymentRequest(
@@ -168,11 +179,12 @@ object PaymentRequestAdapter {
     }
 
     /**
-     * 将TipAdjustRequest转换为PaymentRequest
+     * Convert TipAdjustRequest to PaymentRequest
      */
     fun convertTipAdjustRequest(request: TipAdjustRequest): PaymentRequest {
         return PaymentRequest(
             action = TransactionAction.TIP_ADJUST.value,
+            transactionRequestId = request.transactionRequestId,
             originalTransactionId = request.originalTransactionId,
             originalTransactionRequestId = request.originalTransactionRequestId,
             tipAmount = request.tipAmount,
@@ -182,13 +194,13 @@ object PaymentRequestAdapter {
     }
 
     /**
-     * 将BatchCloseRequest转换为PaymentRequest
+     * Convert BatchCloseRequest to PaymentRequest
      */
     fun convertBatchCloseRequest(request: BatchCloseRequest): PaymentRequest {
         return PaymentRequest(
             action = TransactionAction.BATCH_CLOSE.value,
             transactionRequestId = request.transactionRequestId,
-            description = request.description ?: "批次关闭",
+            description = request.description ?: "Batch Close",
             requestTimeout = request.requestTimeout
         )
     }

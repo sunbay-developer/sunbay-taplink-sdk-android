@@ -1,7 +1,6 @@
 package com.sunmi.tapro.taplink.communication.lan
 
 import android.content.Context
-import android.text.TextUtils
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel
@@ -20,25 +19,25 @@ import java.net.URI
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * LAN客户端服务内核类
+ * LAN client service kernel class
  *
- * 重组后的架构：
- * - 正确继承AsyncServiceKernel，充分利用基础功能
- * - 使用管理器模式分解复杂职责
- * - 专注于LAN网络通信（主要是WebSocket）
- * - 修复竞态条件问题，确保操作互斥和回调正确性
+ * Refactored architecture:
+ * - Correctly inherits AsyncServiceKernel, fully utilizes base functionality
+ * - Uses manager pattern to decompose complex responsibilities
+ * - Focuses on LAN network communication (mainly WebSocket)
+ * - Fixes race condition issues, ensures operation mutex and callback correctness
  *
- * 管理器组件：
- * - ConnectionManager: WebSocket连接管理
- * - ServiceDiscoveryManager: mDNS服务发现
- * - HeartbeatManager: 心跳机制管理
+ * Manager components:
+ * - ConnectionManager: WebSocket connection management
+ * - ServiceDiscoveryManager: mDNS service discovery
+ * - HeartbeatManager: Heartbeat mechanism management
  *
- * @param appId 应用ID
- * @param appSecretKey 应用密钥
- * @param context Android上下文
+ * @param appId Application ID
+ * @param appSecretKey Application secret key
+ * @param context Android context
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class LanClientKernel(
     appId: String,
@@ -50,58 +49,58 @@ class LanClientKernel(
         private const val TAG = "LanClientKernel"
         private const val NSD_SERVICE_TYPE = "_taplink._tcp"
 
-        // 服务发现重试配置
-        private const val SERVICE_DISCOVERY_MAX_RETRIES = 3  // 最大重试次数
-        private const val SERVICE_DISCOVERY_RETRY_DELAY_MS = 1000L  // 初始重试延迟（毫秒）
-        private const val SERVICE_DISCOVERY_RETRY_DELAY_MULTIPLIER = 2  // 重试延迟倍数（递增延迟）
+        // Service discovery retry configuration
+        private const val SERVICE_DISCOVERY_MAX_RETRIES = 3  // Maximum retry count
+        private const val SERVICE_DISCOVERY_RETRY_DELAY_MS = 1000L  // Initial retry delay (milliseconds)
+        private const val SERVICE_DISCOVERY_RETRY_DELAY_MULTIPLIER = 2  // Retry delay multiplier (incremental delay)
     }
 
     override fun getTag(): String = TAG
 
-    // ==================== 并发控制 ====================
+    // ==================== Concurrency Control ====================
 
     /**
-     * 操作互斥锁，确保同时只有一个连接操作
+     * Operation mutex lock, ensures only one connection operation at a time
      */
     private val operationMutex = Mutex()
 
     /**
-     * 状态更新互斥锁，保护状态更新操作
+     * Status update mutex lock, protects status update operations
      */
     private val statusMutex = Mutex()
 
     /**
-     * 当前正在执行的操作类型
+     * Current operation type being executed
      */
     private var currentOperation: String? = null
 
     /**
-     * 操作标识生成器
+     * Operation identifier generator
      */
     private val operationIdGenerator = AtomicLong(0)
 
     /**
-     * 当前操作ID
+     * Current operation ID
      */
     private var currentOperationId: String? = null
 
     /**
-     * 服务地址变化监听器（独立于连接回调，用于持久监听）
+     * Service address change listener (independent of connection callback, for persistent monitoring)
      */
     private var serviceAddressChangeListener: ServiceAddressChangeListener? = null
 
     /**
-     * 服务地址变化监听器接口
+     * Service address change listener interface
      */
     interface ServiceAddressChangeListener {
         /**
-         * 当检测到服务地址变更时调用
-         * @param serviceName 服务名称
-         * @param newHost 新的主机地址
-         * @param newPort 新的端口号
-         * @param oldHost 旧的主机地址
-         * @param oldPort 旧的端口号
-         * @return Boolean - true: 需要重连, false: 不需要重连
+         * Called when service address change is detected
+         * @param serviceName Service name
+         * @param newHost New host address
+         * @param newPort New port number
+         * @param oldHost Old host address
+         * @param oldPort Old port number
+         * @return Boolean - true: need to reconnect, false: no need to reconnect
          */
         fun onServiceAddressChanged(
             serviceName: String,
@@ -113,9 +112,9 @@ class LanClientKernel(
     }
 
     /**
-     * 设置服务地址变化监听器
+     * Set service address change listener
      *
-     * @param listener 监听器，为 null 时清除监听器
+     * @param listener Listener, clears listener when null
      */
     fun setServiceAddressChangeListener(listener: ServiceAddressChangeListener?) {
         synchronized(this) {
@@ -126,52 +125,52 @@ class LanClientKernel(
 
     fun getServiceAddressChangeListener(): ServiceAddressChangeListener? = serviceAddressChangeListener
 
-    // ==================== 管理器组件 ====================
+    // ==================== Manager Components ====================
 
     /**
-     * WebSocket连接管理器
+     * WebSocket connection manager
      */
     private val connectionManager = ConnectionManager()
 
     /**
-     * 服务发现管理器
+     * Service discovery manager
      */
     private val serviceDiscoveryManager = ServiceDiscoveryManager(context)
 
     /**
-     * 心跳管理器
+     * Heartbeat manager
      */
     private val heartbeatManager = HeartbeatManager()
 
-    // ==================== 状态管理 ====================
+    // ==================== State Management ====================
 
     /**
-     * 当前连接的URI
+     * Currently connected URI
      */
     private var currentUri: URI? = null
 
     /**
-     * 当前连接的服务信息
+     * Currently connected service information
      */
     private var currentService: ServiceInfo? = null
 
     /**
-     * 是否正在进行服务监听
+     * Whether service monitoring is in progress
      */
     private var isServiceMonitoring = false
 
     /**
-     * 是否为主动断开
+     * Whether it's a manual disconnect
      */
     private var isManualDisconnect = false
 
     /**
-     * 上次触发服务地址变化的时间戳（用于防抖）
+     * Timestamp of last service address change trigger (for debouncing)
      */
     private var lastServiceAddressChangeTime: Long = 0
 
     /**
-     * 防抖时间间隔（毫秒），避免短时间内重复触发重连
+     * Debounce time interval (milliseconds), avoid repeated reconnection triggers in short time
      */
     private val SERVICE_ADDRESS_CHANGE_DEBOUNCE_MS = 2000L
 
@@ -179,21 +178,21 @@ class LanClientKernel(
         setupConnectionManager()
     }
 
-    // ==================== 安全操作执行器 ====================
+    // ==================== Safe Operation Executor ====================
 
     /**
-     * 安全执行连接操作，确保操作互斥
+     * Safely execute connection operation, ensuring operation mutex
      */
     private suspend fun executeConnectionOperation(
         operationType: String,
         callback: ConnectionCallback,
         operation: suspend (String) -> Unit
     ) {
-        // 检查是否已有操作在进行
-        // 注意：即使 TaplinkServiceKernel 已经确保在 connect() 之前先 disconnect()，
-        // 这里仍然需要互斥锁保护，因为：
-        // 1. 可能有其他线程并发调用
-        // 2. 可能有内部重连操作（服务发现、心跳失败等）在进行
+        // Check if another operation is in progress
+        // Note: Even though TaplinkServiceKernel ensures disconnect() before connect(),
+        // mutex protection is still needed here because:
+        // 1. There may be concurrent calls from other threads
+        // 2. There may be internal reconnection operations (service discovery, heartbeat failure, etc.) in progress
         if (!operationMutex.tryLock()) {
             val currentOp = currentOperation
             LogUtil.w(TAG, "Another operation is in progress: $currentOp, rejecting $operationType")
@@ -207,31 +206,31 @@ class LanClientKernel(
         val operationId = generateOperationId()
 
         try {
-            // 设置当前操作信息
+            // Set current operation information
             currentOperation = operationType
             currentOperationId = operationId
 
-            // 注意：回调已由基类 AsyncServiceKernel 的 currentConnectionCallback 管理
-            // 不需要额外的回调管理器，因为连接操作是互斥的（operationMutex 保护）
+            // Note: Callback is already managed by AsyncServiceKernel's currentConnectionCallback
+            // No need for additional callback manager, because connection operations are mutually exclusive (protected by operationMutex)
 
             LogUtil.d(TAG, "Starting $operationType operation: $operationId")
 
-            // 执行操作
+            // Execute operation
             operation(operationId)
 
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error in $operationType operation: ${e.message}")
 
-            // 通知错误：使用基类的 notifyConnectionError()
+            // Notify error: use base class's notifyConnectionError()
             notifyConnectionError("Operation failed: ${e.message}", InnerErrorCode.E241)
 
         } finally {
-            // 注意：不在这里清除 currentOperationId，因为连接成功回调可能在 finally 之后异步触发
-            // currentOperationId 会在连接成功/失败回调中清除
+            // Note: Do not clear currentOperationId here, because connection success callback may be triggered asynchronously after finally
+            // currentOperationId will be cleared in connection success/failure callback
             currentOperation = null
-            // currentOperationId 保留，直到连接成功/失败回调中清除
+            // currentOperationId is retained until cleared in connection success/failure callback
 
-            // 释放互斥锁
+            // Release mutex lock
             operationMutex.unlock()
 
             LogUtil.d(TAG, "Completed $operationType operation: $operationId")
@@ -239,21 +238,21 @@ class LanClientKernel(
     }
 
     /**
-     * 生成操作ID
+     * Generate operation ID
      */
     private fun generateOperationId(): String {
         return "${System.currentTimeMillis()}_${operationIdGenerator.incrementAndGet()}"
     }
 
     /**
-     * 检查操作是否仍然有效
+     * Check if operation is still valid
      */
     private fun isOperationValid(operationId: String): Boolean {
         return currentOperationId == operationId
     }
 
     /**
-     * 安全更新状态
+     * Safely update status
      */
     private suspend fun updateStatusSafely(newStatus: InnerConnectionStatus) {
         statusMutex.withLock {
@@ -265,22 +264,22 @@ class LanClientKernel(
     }
 
     /**
-     * 检查 WebSocket 连接是否已建立
+     * Check if WebSocket connection is established
      *
-     * 优先使用 ConnectionManager 的实际状态，而不是 currentInnerConnectionStatus
-     * 因为 ConnectionManager 的状态更准确（检查了 WebSocket 的实际状态）
+     * Prefer using ConnectionManager's actual status over currentInnerConnectionStatus
+     * because ConnectionManager's status is more accurate (checks WebSocket's actual status)
      *
-     * @return true 如果 WebSocket 连接已建立，false 否则
+     * @return true if WebSocket connection is established, false otherwise
      */
     private fun isWebSocketConnected(): Boolean {
         return connectionManager.isConnected()
     }
 
     /**
-     * 检查是否应该跳过服务处理（已连接或正在连接到相同地址）
+     * Check if should skip service processing (already connected or connecting to same address)
      *
-     * @param service 要检查的服务
-     * @return true 如果应该跳过，false 否则
+     * @param service Service to check
+     * @return true if should skip, false otherwise
      */
     private fun shouldSkipServiceProcessing(service: ServiceInfo): Boolean {
         val isSameAddress = currentService != null &&
@@ -293,7 +292,7 @@ class LanClientKernel(
         return isSameAddress && (isCurrentlyConnected || isCurrentlyConnecting)
     }
 
-    // ==================== AsyncServiceKernel 抽象方法实现 ====================
+    // ==================== AsyncServiceKernel Abstract Method Implementation ====================
 
     override fun getServiceType(): String = "LAN"
 
@@ -304,7 +303,7 @@ class LanClientKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
-        // 取消旧连接任务，避免并发连接
+        // Cancel old connection task to avoid concurrent connections
         connectJob?.cancel()
         connectJob = launchInScope {
             executeConnectionOperation("CONNECT", connectionCallback) { operationId ->
@@ -312,10 +311,10 @@ class LanClientKernel(
                     val lanResult = parseResult as ProtocolParseResult.LanProtocol
                     LogUtil.d(TAG, "Performing LAN connection to: ${lanResult.ip}:${lanResult.port} ($operationId)")
 
-                    // 注意：不在这里检查 isOperationValid，因为互斥锁已经保护了操作互斥性
-                    // 正常情况下不会有多个操作同时进行
+                    // Note: Do not check isOperationValid here, because mutex already protects operation mutex
+                    // Normally there won't be multiple operations simultaneously
 
-                    // 构建WebSocket URI，使用协议解析结果中的 secure 字段
+                    // Build WebSocket URI, use secure field from protocol parse result
                     val uri = try {
                         val scheme = if (lanResult.secure) "wss" else "ws"
                         URI("$scheme://${lanResult.ip}:${lanResult.port}")
@@ -325,35 +324,35 @@ class LanClientKernel(
 
                     currentUri = uri
 
-                    // 更新状态为连接中
+                    // Update status to connecting
                     updateStatusSafely(InnerConnectionStatus.CONNECTING)
 
-                    // 注意：不在这里检查 isOperationValid，因为互斥锁已经保护了操作互斥性
+                    // Note: Do not check isOperationValid here, because mutex already protects operation mutex
 
-                    // 尝试直接连接
+                    // Try direct connection
                     val result = connectionManager.connect(uri)
                     when (result) {
                         is ConnectionManager.ConnectionResult.Success -> {
                             LogUtil.d(TAG, "Direct connection successful ($operationId)")
 
-                            // 注意：不在这里检查 isOperationValid，因为：
-                            // 1. onOpen 回调是异步的，可能在 connect() 返回之前就已经执行
-                            // 2. onConnected() 回调会清除 currentOperationId
-                            // 3. 如果在这里检查，可能会误判为操作被取消，导致连接被断开
-                            // 4. 连接成功的处理会通过 ConnectionManager 的监听器触发
-                            // 5. 如果操作真的被取消，onConnected() 回调中会处理断开逻辑
+                            // Note: Do not check isOperationValid here because:
+                            // 1. onOpen callback is asynchronous, may execute before connect() returns
+                            // 2. onConnected() callback will clear currentOperationId
+                            // 3. If checked here, may misjudge operation as cancelled, causing connection to be disconnected
+                            // 4. Connection success handling will be triggered through ConnectionManager's listener
+                            // 5. If operation is really cancelled, onConnected() callback will handle disconnect logic
 
-                            // 连接成功的处理会通过 ConnectionManager 的监听器触发
-                            // 监听器会调用 notifyConnectionSuccess() 作为统一的连接成功通知出口
+                            // Connection success handling will be triggered through ConnectionManager's listener
+                            // Listener will call notifyConnectionSuccess() as unified connection success notification outlet
                         }
 
                         is ConnectionManager.ConnectionResult.Failure -> {
                             LogUtil.w(TAG, "Direct connection failed: ${result.error} ($operationId)")
 
-                            // 注意：不在这里检查 isOperationValid，因为互斥锁已经保护了操作互斥性
-                            // 服务发现是长时间操作，会在服务发现逻辑中检查 isOperationValid
+                            // Note: Don't check isOperationValid here, because mutex already protects operation mutual exclusivity
+                            // Service discovery is a long operation, will check isOperationValid in service discovery logic
 
-                            // 尝试服务发现
+                            // Try service discovery
                             tryServiceDiscoveryForOperation(operationId)
                         }
                     }
@@ -367,23 +366,23 @@ class LanClientKernel(
     }
 
     /**
-     * 为特定操作尝试服务发现（带重试机制）
+     * Try service discovery for specific operation (with retry mechanism)
      */
     private suspend fun tryServiceDiscoveryForOperation(operationId: String) {
         var lastException: Exception? = null
         var retryCount = 0
 
-        // 重试循环
+        // Retry loop
         while (retryCount <= SERVICE_DISCOVERY_MAX_RETRIES) {
             try {
-                // 检查操作是否仍然有效
+                // Check if operation is still valid
                 if (!isOperationValid(operationId)) {
                     LogUtil.w(TAG, "Service discovery cancelled: $operationId")
                     return
                 }
 
                 if (retryCount > 0) {
-                    // 计算递增延迟：1秒、2秒、4秒...
+                    // Calculate incremental delay: 1 second, 2 seconds, 4 seconds...
                     var delayMs = SERVICE_DISCOVERY_RETRY_DELAY_MS
                     repeat(retryCount - 1) {
                         delayMs *= SERVICE_DISCOVERY_RETRY_DELAY_MULTIPLIER
@@ -393,7 +392,7 @@ class LanClientKernel(
                         "Retrying service discovery (attempt ${retryCount + 1}/${SERVICE_DISCOVERY_MAX_RETRIES + 1}) after ${delayMs}ms delay ($operationId)"
                     )
                     delay(delayMs)
-                    // 延迟后再次检查操作是否仍然有效（可能在延迟期间模式已切换）
+                    // Check again if operation is still valid after delay (mode may have switched during delay)
                     if (!isOperationValid(operationId)) {
                         LogUtil.w(TAG, "Service discovery cancelled after delay: $operationId")
                         return
@@ -402,14 +401,14 @@ class LanClientKernel(
                     LogUtil.d(TAG, "Starting service discovery for operation: $operationId")
                 }
 
-                // 尝试服务发现
+                // Try service discovery
                 val services = serviceDiscoveryManager.discoverServices(NSD_SERVICE_TYPE)
 
                 if (services.isNotEmpty()) {
                     LogUtil.d(TAG, "Found ${services.size} services for operation: $operationId (attempt ${retryCount + 1})")
 
-                    // 通知上层发现的服务，由上层决定是否需要重连
-                    // 找到第一个有效服务并通知上层（使用持久监听器）
+                    // Notify upper layer of discovered services, let upper layer decide if reconnection is needed
+                    // Find first valid service and notify upper layer (using persistent listener)
                     var notified = false
                     for (service in services) {
                         if (service.isValid()) {
@@ -438,7 +437,7 @@ class LanClientKernel(
                             notified = true
                             if (shouldReconnect) {
                                 LogUtil.d(TAG, "Upper layer decided to reconnect, service discovery completed ($operationId)")
-                                // 上层会处理重连，这里直接返回
+                                // Upper layer will handle reconnection, return directly here
                                 return
                             } else {
                                 LogUtil.d(
@@ -451,7 +450,7 @@ class LanClientKernel(
 
                     if (!notified) {
                         LogUtil.w(TAG, "No valid services found in discovered services ($operationId)")
-                        // 继续重试服务发现
+                        // Continue retrying service discovery
                         if (retryCount < SERVICE_DISCOVERY_MAX_RETRIES) {
                             lastException = Exception("No valid services found (attempt ${retryCount + 1})")
                             retryCount++
@@ -460,19 +459,19 @@ class LanClientKernel(
                             throw Exception("No valid services found after ${SERVICE_DISCOVERY_MAX_RETRIES + 1} attempts")
                         }
                     } else {
-                        // 已通知上层，但上层决定不重连，服务发现完成
+                        // Upper layer notified, but decided not to reconnect, service discovery completed
                         LogUtil.d(TAG, "Service discovery completed, upper layer will handle connection ($operationId)")
                         return
                     }
                 } else {
-                    // 没有发现服务
+                    // No services discovered
                     LogUtil.w(
                         TAG,
                         "No services found via service discovery (attempt ${retryCount + 1}/${SERVICE_DISCOVERY_MAX_RETRIES + 1}) ($operationId)"
                     )
 
-                    // 检查当前连接状态
-                    // 使用 ConnectionManager 的实际状态，而不是 currentInnerConnectionStatus
+                    // Check current connection status
+                    // Use ConnectionManager's actual status, not currentInnerConnectionStatus
                     val isCurrentlyConnected = isWebSocketConnected()
                     val isCurrentlyConnecting = currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING
 
@@ -481,13 +480,13 @@ class LanClientKernel(
                         return
                     }
 
-                    // 如果还有重试机会，继续重试
+                    // If there are still retry opportunities, continue retrying
                     if (retryCount < SERVICE_DISCOVERY_MAX_RETRIES) {
                         lastException = Exception("No services found (attempt ${retryCount + 1})")
                         retryCount++
                         continue
                     } else {
-                        // 所有重试都失败
+                        // All retries failed
                         throw Exception("No available services found after ${SERVICE_DISCOVERY_MAX_RETRIES + 1} attempts")
                     }
                 }
@@ -496,8 +495,8 @@ class LanClientKernel(
                 lastException = e
                 LogUtil.w(TAG, "Service discovery attempt ${retryCount + 1} failed: ${e.message} ($operationId)")
 
-                // 检查当前连接状态
-                // 使用 ConnectionManager 的实际状态，而不是 currentInnerConnectionStatus
+                // Check current connection status
+                // Use ConnectionManager's actual status, not currentInnerConnectionStatus
                 val isCurrentlyConnected = isWebSocketConnected()
                 val isCurrentlyConnecting = currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING
 
@@ -506,21 +505,21 @@ class LanClientKernel(
                     return
                 }
 
-                // 检查是否应该重试
+                // Check if should retry
                 if (retryCount < SERVICE_DISCOVERY_MAX_RETRIES) {
-                    // 区分不同类型的错误
+                    // Distinguish different types of errors
                     val isRetryableError = isRetryableServiceDiscoveryError(e)
                     if (isRetryableError) {
                         retryCount++
                         LogUtil.d(TAG, "Retryable error detected, will retry service discovery ($operationId)")
                         continue
                     } else {
-                        // 不可重试的错误（如操作被取消），直接抛出
+                        // Non-retryable errors (such as operation cancelled), throw directly
                         LogUtil.w(TAG, "Non-retryable error detected, aborting service discovery ($operationId)")
                         throw e
                     }
                 } else {
-                    // 所有重试都失败
+                    // All retries failed
                     LogUtil.e(
                         TAG,
                         "Service discovery failed after ${SERVICE_DISCOVERY_MAX_RETRIES + 1} attempts: ${e.message} ($operationId)"
@@ -533,20 +532,20 @@ class LanClientKernel(
             }
         }
 
-        // 如果所有重试都失败，抛出最后一个异常
+        // If all retries failed, throw last exception
         throw lastException ?: Exception("Service discovery failed after ${SERVICE_DISCOVERY_MAX_RETRIES + 1} attempts")
     }
 
     /**
-     * 判断服务发现错误是否可重试
+     * Determine if service discovery error is retryable
      *
-     * @param e 异常
-     * @return true 如果错误可重试，false 否则
+     * @param e Exception
+     * @return true if error is retryable, false otherwise
      */
     private fun isRetryableServiceDiscoveryError(e: Exception): Boolean {
         val errorMessage = e.message?.lowercase() ?: ""
 
-        // 可重试的错误类型
+        // Retryable error types
         val retryableErrors = listOf(
             "timeout",
             "network",
@@ -557,19 +556,19 @@ class LanClientKernel(
             "service discovery"
         )
 
-        // 不可重试的错误类型（如操作被取消）
+        // Non-retryable error types (such as operation cancelled)
         val nonRetryableErrors = listOf(
             "cancelled",
             "operation cancelled",
             "invalid"
         )
 
-        // 检查是否是不可重试的错误
+        // Check if it's a non-retryable error
         if (nonRetryableErrors.any { errorMessage.contains(it) }) {
             return false
         }
 
-        // 检查是否是可重试的错误
+        // Check if it's a retryable error
         return retryableErrors.any { errorMessage.contains(it) }
     }
 
@@ -596,19 +595,19 @@ class LanClientKernel(
         try {
             LogUtil.d(TAG, "Performing LAN disconnect")
 
-            // 标记为主动断开
+            // Mark as manual disconnect
             isManualDisconnect = true
 
-            // 停止心跳
+            // Stop heartbeat
             stopHeartbeat()
 
-            // 停止服务发现（主动断开时停止）
+            // Stop service discovery (stop when manual disconnect)
             stopServiceDiscovery()
 
-            // 断开WebSocket连接
+            // Disconnect WebSocket connection
             connectionManager.disconnect()
 
-            // 清理资源
+            // Clean up resources
             cleanupResources()
 
             LogUtil.d(TAG, "LAN disconnect completed")
@@ -619,37 +618,39 @@ class LanClientKernel(
     }
 
     /**
-     * 心跳失败时的断开处理
+     * Disconnect handling when heartbeat fails
      *
-     * 心跳失败时只断开连接，不停止mDNS服务发现，以便在设备恢复后能够重新发现并连接
+     * When heartbeat fails, only disconnect connection, do not stop mDNS service discovery,
+     * so that device can be rediscovered and reconnected after recovery
      */
     private fun disconnectOnHeartbeatFailure() {
         launchInScope {
             try {
                 LogUtil.d(TAG, "Disconnecting due to heartbeat failure, keeping service discovery active")
 
-                // 不标记为主动断开（因为是被动断开）
-                // isManualDisconnect 保持为 false
+                // Do not mark as manual disconnect (because it's passive disconnect)
+                // isManualDisconnect remains false
 
-                // 停止心跳
+                // Stop heartbeat
                 stopHeartbeat()
 
-                // 安全更新状态
+                // Safely update status
                 updateStatusSafely(InnerConnectionStatus.ERROR)
 
-                // 通知连接错误：使用基类的 notifyConnectionError()
+                // Notify connection error: use base class's notifyConnectionError()
                 notifyConnectionError("Connection lost due to heartbeat failure", InnerErrorCode.E213)
 
-                // 不停止服务发现，保持mDNS服务发现运行，以便在设备恢复后能够重新发现
+                // Do not stop service discovery, keep mDNS service discovery running,
+                // so that device can be rediscovered after recovery
 
-                // 断开WebSocket连接
+                // Disconnect WebSocket connection
                 connectionManager.disconnect()
 
-                // 清理连接相关资源，但保留服务发现相关资源
+                // Clean up connection-related resources, but keep service discovery-related resources
                 currentUri = null
                 currentService = null
-                // 注意：不调用 cleanupResources()，因为它会清理所有资源
-                // 也不调用 stopServiceDiscovery()，保持服务发现运行
+                // Note: Do not call cleanupResources(), because it will clean up all resources
+                // Also do not call stopServiceDiscovery(), keep service discovery running
 
                 LogUtil.d(TAG, "Connection disconnected due to heartbeat failure, service discovery remains active")
 
@@ -659,22 +660,24 @@ class LanClientKernel(
         }
     }
 
-    // ==================== 管理器设置和集成 ====================
+    // ==================== Manager Setup and Integration ====================
 
     /**
-     * 设置WebSocket连接管理器（更新版本）
+     * Setup WebSocket connection manager (updated version)
      */
     private fun setupConnectionManager() {
-        // 设置连接状态监听器
+        // Set connection status listener
         connectionManager.setConnectionListener(object : ConnectionManager.ConnectionListener {
             override fun onConnected() {
+                // Update status SYNCHRONOUSLY first so canSendData() is true
+                // before any external callback fires. Heartbeat start and notification
+                // happen asynchronously afterwards.
+                updateStatus(InnerConnectionStatus.CONNECTED)
+
                 launchInScope {
                     LogUtil.d(TAG, "LAN connection established")
 
-                    // 安全更新状态
-                    updateStatusSafely(InnerConnectionStatus.CONNECTED)
-
-                    // 创建服务信息（如果需要）
+                    // Create service information (if needed)
                     if (currentService == null && currentUri != null) {
                         try {
                             val host = currentUri?.host ?: ""
@@ -694,23 +697,23 @@ class LanClientKernel(
                         }
                     }
 
-                    // 启动心跳
+                    // Start heartbeat
                     startHeartbeat()
 
-                    // 启动服务监听
+                    // Start service monitoring
                     startServiceMonitoring()
 
-                    // 统一连接成功通知出口：只使用基类的 notifyConnectionSuccess()
-                    // 直接使用基类的 currentConnectionCallback，不需要额外的回调管理器
+                    // Unified connection success notification outlet: only use base class's notifyConnectionSuccess()
+                    // Directly use base class's currentConnectionCallback, no need for additional callback manager
                     val connectionData = mapOf("uri" to currentUri?.toString())
                     val operationIdToClear = currentOperationId
 
-                    // 清除当前操作ID
+                    // Clear current operation ID
                     if (operationIdToClear != null) {
                         currentOperationId = null
                     }
 
-                    // 统一通知出口：只使用基类的 notifyConnectionSuccess()
+                    // Unified notification outlet: only use base class's notifyConnectionSuccess()
                     notifyConnectionSuccess(connectionData)
                 }
             }
@@ -722,10 +725,10 @@ class LanClientKernel(
                         "LAN connection closed: code=$code, reason=$reason, remote=$remote, isManual=$isManualDisconnect"
                     )
 
-                    // 停止心跳
+                    // Stop heartbeat
                     stopHeartbeat()
 
-                    // 构建断开信息
+                    // Build disconnect information
                     val disconnectCode = if (isManualDisconnect) {
                         InnerErrorCode.E213.code
                     } else {
@@ -740,21 +743,21 @@ class LanClientKernel(
                     val wasManual = isManualDisconnect
                     isManualDisconnect = false
 
-                    // 判断是否是连接错误
+                    // Determine if it's a connection error
                     val isError = code == 1006 || code >= 1002
 
-                    // 安全更新状态
+                    // Safely update status
                     if (isError) {
                         updateStatusSafely(InnerConnectionStatus.ERROR)
                     } else {
                         updateStatusSafely(InnerConnectionStatus.DISCONNECTED)
                     }
 
-                    // 通知连接断开：使用基类的 notifyConnectionDisconnected()
+                    // Notify connection disconnected: use base class's notifyConnectionDisconnected()
                     notifyConnectionDisconnected(disconnectCode, disconnectMessage)
 
-                    // 如果不是主动断开，且当前有连接回调，启动服务监听
-                    // 使用基类的 currentConnectionCallback 判断是否有待处理的连接
+                    // If not manual disconnect, and currently has connection callback, start service monitoring
+                    // Use base class's currentConnectionCallback to determine if there's a pending connection
                     if (!wasManual && currentConnectionCallback != null) {
                         LogUtil.d(TAG, "Passive disconnect detected, starting service monitoring")
                         if (!isServiceMonitoring) {
@@ -768,49 +771,49 @@ class LanClientKernel(
                 launchInScope {
                     LogUtil.e(TAG, "LAN connection error: ${exception.message}")
 
-                    // 安全更新状态
+                    // Safely update status
                     updateStatusSafely(InnerConnectionStatus.ERROR)
 
-                    // 通知连接错误：使用基类的 notifyConnectionError()
+                    // Notify connection error: use base class's notifyConnectionError()
                     notifyConnectionError("Connection error: ${exception.message}", InnerErrorCode.E241)
                 }
             }
         })
 
-        // 设置消息监听器
+        // Set message listener
         connectionManager.setMessageListener(object : ConnectionManager.MessageListener {
             override fun onTextMessage(message: String) {
                 LogUtil.d(TAG, "Text message received: $message")
 
-                // 检查是否是心跳响应
+                // Check if it's a heartbeat response
                 if (heartbeatManager.isHeartbeatResponse(message)) {
                     handleHeartbeatResponse()
                     return
                 }
 
-                // 传递给数据接收器（BaseServiceKernel提供）
+                // Pass to data receiver (provided by BaseServiceKernel)
                 dataReceiver?.invoke(message.toByteArray(Charsets.UTF_8))
             }
 
             override fun onBinaryMessage(data: ByteArray) {
                 LogUtil.d(TAG, "Binary message received: ${data.size} bytes:$dataReceiver")
 
-                // 传递给数据接收器（BaseServiceKernel提供）
+                // Pass to data receiver (provided by BaseServiceKernel)
                 dataReceiver?.invoke(data)
             }
         })
     }
 
-    // ==================== 服务发现功能 ====================
+    // ==================== Service Discovery Functionality ====================
 
     /**
-     * 处理服务地址变化的通用方法
+     * Common method to handle service address changes
      *
-     * @param service 新的服务信息
-     * @param oldHost 旧的主机地址
-     * @param oldPort 旧的端口号
-     * @param logPrefix 日志前缀（用于区分是 onServiceFound 还是 onServiceUpdated）
-     * @return Boolean - true: 需要重连, false: 不需要重连或处理被跳过
+     * @param service New service information
+     * @param oldHost Old host address
+     * @param oldPort Old port number
+     * @param logPrefix Log prefix (used to distinguish between onServiceFound and onServiceUpdated)
+     * @return Boolean - true: need to reconnect, false: no need to reconnect or processing skipped
      */
     private fun handleServiceAddressChange(
         service: ServiceInfo,
@@ -818,7 +821,7 @@ class LanClientKernel(
         oldPort: Int,
         logPrefix: String = "Service address change"
     ): Boolean {
-        // 检查是否应该跳过服务处理（已连接或正在连接到相同地址）
+        // Check if should skip service processing (already connected or connecting to same address)
         val shouldSkip = shouldSkipServiceProcessing(service)
         if (shouldSkip) {
             LogUtil.d(
@@ -831,7 +834,7 @@ class LanClientKernel(
             return false
         }
 
-        // 防抖检查：避免短时间内重复触发
+        // Debounce check: avoid repeated triggers in short time
         val currentTime = System.currentTimeMillis()
         val timeSinceLastChange = currentTime - lastServiceAddressChangeTime
         if (timeSinceLastChange < SERVICE_ADDRESS_CHANGE_DEBOUNCE_MS) {
@@ -844,7 +847,7 @@ class LanClientKernel(
         }
         lastServiceAddressChangeTime = currentTime
 
-        // 通知服务地址变化，SDK层会自动处理重连决策和执行
+        // Notify service address change, SDK layer will automatically handle reconnection decision and execution
         LogUtil.i(
             TAG,
             "Notifying service address changed: ${service.name}, " +
@@ -852,7 +855,7 @@ class LanClientKernel(
                     "new=${service.host}:${service.port}"
         )
 
-        // 使用持久监听器通知服务地址变化
+        // Use persistent listener to notify service address change
         val listener = serviceAddressChangeListener
         val shouldReconnect = if (listener != null) {
             try {
@@ -876,7 +879,7 @@ class LanClientKernel(
     }
 
     /**
-     * 停止服务发现
+     * Stop service discovery
      */
     private fun stopServiceDiscovery() {
         serviceDiscoveryManager.stopServiceMonitoring()
@@ -885,8 +888,8 @@ class LanClientKernel(
     }
 
     /**
-     * 启动服务监听（更新版本）
-     * 监听服务变化，处理服务器IP/端口变更等情况
+     * Start service monitoring (updated version)
+     * Monitor service changes, handle server IP/port changes, etc.
      */
     private fun startServiceMonitoring() {
         if (isServiceMonitoring) {
@@ -900,7 +903,7 @@ class LanClientKernel(
             val listener = object : ServiceDiscoveryManager.ServiceChangeListener {
                 override fun onServiceFound(service: ServiceInfo) {
                     LogUtil.i(TAG, "New service found: ${service.name} at ${service.getAddress()}")
-                    // 使用当前服务作为旧地址
+                    // Use current service as old address
                     handleServiceAddressChange(
                         service = service,
                         oldHost = currentService?.host ?: "",
@@ -912,7 +915,7 @@ class LanClientKernel(
                 override fun onServiceLost(service: ServiceInfo) {
                     LogUtil.w(TAG, "Service lost: ${service.name} at ${service.getAddress()}")
 
-                    // 如果丢失的是当前连接的服务，心跳失败会先检测到并触发断开
+                    // If lost service is currently connected service, heartbeat failure will detect first and trigger disconnect
                     if (currentService != null && service.name == currentService?.name) {
                         LogUtil.w(TAG, "Current connected service is lost, heartbeat failure will handle reconnection")
                     }
@@ -924,14 +927,14 @@ class LanClientKernel(
                         "Service updated: ${newService.name}, ${oldService.getAddress()} -> ${newService.getAddress()}"
                     )
 
-                    // 检查地址是否真的发生了变化
+                    // Check if address really changed
                     val addressChanged = oldService.host != newService.host || oldService.port != newService.port
                     if (!addressChanged) {
                         LogUtil.d(TAG, "Service updated but address unchanged, ignoring")
                         return
                     }
 
-                    // 使用旧服务作为旧地址
+                    // Use old service as old address
                     handleServiceAddressChange(
                         service = newService,
                         oldHost = oldService.host,
@@ -964,22 +967,22 @@ class LanClientKernel(
     }
 
 
-    // ==================== 心跳功能 ====================
+    // ==================== Heartbeat Functionality ====================
 
     /**
-     * 启动心跳
+     * Start heartbeat
      */
     private fun startHeartbeat() {
         try {
             val config = HeartbeatManager.HeartbeatConfig()
             val sender = object : HeartbeatManager.HeartbeatSender {
                 override suspend fun sendHeartbeat(message: String): Boolean {
-                    // 使用带网络连通性检查的心跳发送方法，确保网络可达后再发送
+                    // Use heartbeat send method with network connectivity check, ensure network is reachable before sending
                     return connectionManager.sendHeartbeatWithConnectivityCheck(message)
                 }
             }
 
-            // 设置心跳监听器
+            // Set heartbeat listener
             heartbeatManager.setHeartbeatListener(object : HeartbeatManager.HeartbeatListener {
                 override fun onHeartbeatSent(sentTime: Long) {
                     LogUtil.d(TAG, "Heartbeat sent at: $sentTime")
@@ -999,7 +1002,7 @@ class LanClientKernel(
                 override fun onHeartbeatTimeout(timeoutMs: Long, consecutiveFailures: Int) {
                     LogUtil.w(TAG, "Heartbeat timeout: ${timeoutMs}ms, consecutive failures: $consecutiveFailures")
 
-                    // 如果连续失败次数过多，可以考虑重连
+                    // If consecutive failures too many, can consider reconnection
                     if (consecutiveFailures >= 2) {
                         LogUtil.w(TAG, "Multiple heartbeat timeouts, connection may be unstable")
                     }
@@ -1008,12 +1011,12 @@ class LanClientKernel(
                 override fun onHeartbeatFailed(error: String, consecutiveFailures: Int) {
                     LogUtil.e(TAG, "Heartbeat failed: $error, consecutive failures: $consecutiveFailures")
 
-                    // 心跳连续失败，可能连接已断开
-                    if (consecutiveFailures >= 2) { // 降低阈值，更快检测问题
+                    // Heartbeat consecutive failures, connection may be disconnected
+                    if (consecutiveFailures >= 2) { // Lower threshold, detect problems faster
                         LogUtil.e(TAG, "Too many heartbeat failures, disconnecting connection but keeping service discovery")
-                        // 通知连接错误
+                        // Notify connection error
                         notifyConnectionError("Heartbeat failed: $error", InnerErrorCode.E241)
-                        // 心跳失败时断开连接，但不停止mDNS服务发现，以便在设备恢复后能够重新发现并连接
+                        // Disconnect on heartbeat failure, but don't stop mDNS service discovery, so can rediscover and reconnect after device recovery
                         disconnectOnHeartbeatFailure()
                     }
                 }
@@ -1034,7 +1037,7 @@ class LanClientKernel(
     }
 
     /**
-     * 停止心跳
+     * Stop heartbeat
      */
     private fun stopHeartbeat() {
         try {
@@ -1046,23 +1049,23 @@ class LanClientKernel(
     }
 
     /**
-     * 处理心跳响应
+     * Handle heartbeat response
      */
     private fun handleHeartbeatResponse() {
         heartbeatManager.handleHeartbeatResponse()
         LogUtil.d(TAG, "Heartbeat response processed")
     }
 
-    // ==================== 资源管理 ====================
+    // ==================== Resource Management ====================
 
     /**
-     * 清理资源（更新版本）
+     * Clean up resources (updated version)
      *
-     * 注意：此方法用于清理所有状态和资源，确保复用前状态是干净的
+     * Note: This method is used to clean up all states and resources, ensure state is clean before reuse
      */
     private fun cleanupResources() {
-        // 清理回调
-        // 重置状态变量
+        // Clean up callbacks
+        // Reset state variables
         currentUri = null
         currentService = null
         isServiceMonitoring = false
@@ -1071,7 +1074,7 @@ class LanClientKernel(
         currentOperation = null
         currentOperationId = null
 
-        // 确保所有管理器组件完全清理
+        // Ensure all manager components are completely cleaned up
         try {
             stopHeartbeat()
             stopServiceDiscovery()
@@ -1082,30 +1085,30 @@ class LanClientKernel(
         LogUtil.d(TAG, "Resources cleaned up")
     }
 
-    // ==================== 重写基类方法（如需要） ====================
+    // ==================== Override Base Class Methods (if needed) ====================
 
     override fun cleanupCommonResources() {
-        // 先执行自己的清理
+        // Execute own cleanup first
         cleanupResources()
 
-        // 再调用基类的清理
+        // Then call base class cleanup
         super.cleanupCommonResources()
     }
 
-    // ==================== 新增公共方法 ====================
+    // ==================== New Public Methods ====================
 
     /**
-     * 获取当前操作状态
+     * Get current operation status
      */
     fun getCurrentOperation(): String? = currentOperation
 
     /**
-     * 获取当前操作ID
+     * Get current operation ID
      */
     fun getCurrentOperationId(): String? = currentOperationId
 
     /**
-     * 检查是否有操作在进行
+     * Check if there's an operation in progress
      */
     fun hasOperationInProgress(): Boolean = currentOperation != null
 }

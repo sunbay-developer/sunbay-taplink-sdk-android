@@ -3,51 +3,60 @@ package com.sunmi.tapro.taplink.sdk.model.common
 import java.math.BigDecimal
 
 /**
- * 交易金额类
+ * Transaction amount class.
  * 
- * 包含详细的金额明细信息
+ * Contains detailed amount breakdown information.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class TransactionAmount(
     /**
-     * 定价货币（ISO 4217 标准，如 "USD", "EUR"）
+     * Pricing currency (ISO 4217 standard, e.g., "USD", "EUR").
      */
     val priceCurrency: String,
     
     /**
-     * 交易金额（单位：基本货币单位）
+     * Final transaction amount returned by Tapro (unit: base currency unit).
+     *
+     * This reflects the total after Tapro applies the submitted amount breakdown
+     * and any network rules such as removing surcharge for Debit Card transactions.
      */
     val transAmount: BigDecimal,
     
     /**
-     * 订单金额（单位：基本货币单位）
+     * Order amount (unit: base currency unit).
      */
     val orderAmount: BigDecimal,
     
     /**
-     * 税额（单位：基本货币单位）
+     * Tax amount (unit: base currency unit).
      */
     val taxAmount: BigDecimal? = null,
     
     /**
-     * 服务费（单位：基本货币单位）
+     * Service fee (unit: base currency unit).
      */
     val serviceFee: BigDecimal? = null,
     
     /**
-     * 附加费金额（单位：基本货币单位）
+     * Surcharge amount (unit: base currency unit).
+     *
+     * For Debit Card transactions, the returned amount may not include this surcharge
+     * because Tapro removes it before completion.
      */
     val surchargeAmount: BigDecimal? = null,
     
     /**
-     * 小费金额（单位：基本货币单位）
+     * Tip amount (unit: base currency unit).
+     *
+     * When tip is submitted separately from the order amount, this field reflects
+     * the tip portion included in the final transaction total.
      */
     val tipAmount: BigDecimal? = null,
     
     /**
-     * 现金返还金额（单位：基本货币单位）
+     * Cashback amount (unit: base currency unit).
      */
     val cashbackAmount: BigDecimal? = null
 )

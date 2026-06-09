@@ -17,7 +17,7 @@ import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 import com.sunmi.tapro.taplink.communication.util.LogUtil
-import com.sunmi.tapro.taplink.sdk.callback.onFailure
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
 
 /**
@@ -80,9 +80,10 @@ class TaplinkApiImpl : TaplinkApi {
         // Configure log level
         if (config.logEnabled) {
             when (config.logLevel) {
+                LogLevel.VERBOSE -> LogUtil.setLevel(Log.VERBOSE)
+                LogLevel.DEBUG -> LogUtil.setLevel(Log.DEBUG)
                 LogLevel.INFO -> LogUtil.setLevel(Log.INFO)
                 LogLevel.WARN -> LogUtil.setLevel(Log.WARN)
-                LogLevel.DEBUG -> LogUtil.setLevel(Log.DEBUG)
                 LogLevel.ERROR -> LogUtil.setLevel(Log.ERROR)
             }
         } else {
@@ -140,8 +141,12 @@ class TaplinkApiImpl : TaplinkApi {
             LogUtil.e(TAG, "SDK not initialized, please call init() first")
             val errorCode = InnerErrorCode.E201
             callback.onFailure(
-                errorCode = errorCode,
-                transactionRequestId = request.transactionRequestId
+                PaymentError.create(
+                    code = errorCode.code,
+                    message = errorCode.description,
+                    suggestion = ErrorStringHelper.getSolution(errorCode.code) ?: "",
+                    transactionRequestId = request.transactionRequestId
+                )
             )
             return
         }
@@ -180,15 +185,19 @@ class TaplinkApiImpl : TaplinkApi {
 
     // ==================== Utility Methods ====================
 
+    override fun isInitialized(): Boolean = connectionManager != null
+
+    override fun getConnectionStatus(): ConnectionStatus {
+        return connectionManager?.getConnectionStatus() ?: ConnectionStatus.DISCONNECTED
+    }
+
     override fun getVersion(): String {
         return config?.version ?: BuildConfig.VERSION_NAME
     }
 
     override fun clearDeviceCache() {
         LogUtil.d(TAG, "Clearing device cache")
-        // Clear device cache through connection manager
-        // This could be implemented in ConnectionManager if needed
-        // TODO: Implement device cache clearing logic
+        connectionManager?.clearDeviceCache()
     }
 
     override fun getConnectionConfig(): ConnectionConfig? {

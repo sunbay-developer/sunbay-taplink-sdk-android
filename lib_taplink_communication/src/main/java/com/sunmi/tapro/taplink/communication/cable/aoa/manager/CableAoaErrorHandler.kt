@@ -5,17 +5,17 @@ import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
- * AOA错误处理器
+ * AOA error handler
  * 
- * 负责处理AOA连接过程中的各种错误情况：
- * - 传输错误分类和处理
- * - 错误恢复策略
- * - 错误统计和分析
+ * Responsible for handling various error situations during AOA connection process:
+ * - Transfer error classification and handling
+ * - Error recovery strategies
+ * - Error statistics and analysis
  * 
- * 注意：重连逻辑由SDK层统一管理，这里只负责错误分类和本地恢复
+ * Note: Reconnection logic is uniformly managed by SDK layer, here only responsible for error classification and local recovery
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class CableAoaErrorHandler {
     
@@ -24,7 +24,7 @@ class CableAoaErrorHandler {
         private const val MAX_CONSECUTIVE_ERRORS = 5
         private const val ERROR_RECOVERY_DELAY = 100L
         private const val CRITICAL_ERROR_DELAY = 500L
-        private const val CONNECTION_GRACE_PERIOD_MS = 1000L // 连接后1秒内的断开可能是AOA切换导致
+        private const val CONNECTION_GRACE_PERIOD_MS = 1000L // Disconnection within 1 second after connection may be caused by AOA switch
     }
     
     private var consecutiveErrors = 0
@@ -33,19 +33,19 @@ class CableAoaErrorHandler {
     private var connectionEstablishedTime = 0L
     
     /**
-     * 错误类型枚举
+     * Error type enumeration
      */
     enum class ErrorType {
-        TRANSFER_ERROR,      // 传输错误 (-1)
-        TIMEOUT_ERROR,       // 超时错误 (0)
-        PARTIAL_TRANSFER,    // 部分传输
-        DEVICE_DISCONNECTED, // 设备断开
-        INTERFACE_ERROR,     // 接口错误
-        UNKNOWN_ERROR        // 未知错误
+        TRANSFER_ERROR,      // Transfer error (-1)
+        TIMEOUT_ERROR,       // Timeout error (0)
+        PARTIAL_TRANSFER,    // Partial transfer
+        DEVICE_DISCONNECTED, // Device disconnected
+        INTERFACE_ERROR,     // Interface error
+        UNKNOWN_ERROR        // Unknown error
     }
     
     /**
-     * 错误处理结果
+     * Error handling result
      */
     data class ErrorHandlingResult(
         val shouldContinue: Boolean,
@@ -55,12 +55,12 @@ class CableAoaErrorHandler {
     )
     
     /**
-     * 处理数据接收错误
+     * Handle data receive error
      * 
-     * @param bytesRead 读取的字节数
-     * @param isDeviceConnected 设备是否仍然连接
-     * @param currentStatus 当前连接状态
-     * @param sessionPhase 当前会话阶段（可选，用于判断是否在AOA切换期）
+     * @param bytesRead Bytes read
+     * @param isDeviceConnected Whether device is still connected
+     * @param currentStatus Current connection status
+     * @param sessionPhase Current session phase (optional, used to determine if in AOA switch period)
      */
     suspend fun handleReceiveError(
         bytesRead: Int,
@@ -75,11 +75,11 @@ class CableAoaErrorHandler {
         LogUtil.w(TAG, "Handling receive error: type=$errorType, bytesRead=$bytesRead, " +
                 "consecutiveErrors=$consecutiveErrors, totalErrors=$totalErrors, phase=$sessionPhase")
         
-        // 【修复】AOA协议切换期间，设备断开是正常现象，不应该中断接收循环
+        // [Fix] During AOA protocol switch, device disconnection is normal, should not interrupt receive loop
         val isAoaSwitchPhase = sessionPhase == AoaSessionPhase.SENDING_AOA || 
                                sessionPhase == AoaSessionPhase.WAIT_AOA_ATTACH
         
-        // 【修复】连接建立后的短时间内（grace period），设备断开可能是AOA切换导致，应该容忍
+        // [Fix] Within short time after connection establishment (grace period), device disconnection may be caused by AOA switch, should tolerate
         val isWithinGracePeriod = connectionEstablishedTime > 0 && 
                                   (System.currentTimeMillis() - connectionEstablishedTime) < CONNECTION_GRACE_PERIOD_MS
         
@@ -96,7 +96,7 @@ class CableAoaErrorHandler {
         
         return when (errorType) {
             ErrorType.TIMEOUT_ERROR -> {
-                // 超时不算错误，继续尝试
+                // Timeout is not an error, continue trying
                 ErrorHandlingResult(
                     shouldContinue = true,
                     shouldBreak = false,
@@ -168,7 +168,7 @@ class CableAoaErrorHandler {
             }
             
             else -> {
-                // 其他错误类型的默认处理
+                // Default handling for other error types
                 consecutiveErrors++
                 ErrorHandlingResult(
                     shouldContinue = consecutiveErrors < MAX_CONSECUTIVE_ERRORS,
@@ -181,7 +181,7 @@ class CableAoaErrorHandler {
     }
     
     /**
-     * 处理数据发送错误
+     * Handle data send error
      */
     fun handleSendError(
         result: Int,
@@ -240,7 +240,7 @@ class CableAoaErrorHandler {
                     ErrorHandlingResult(
                         shouldContinue = true,
                         shouldBreak = false,
-                        delayMs = ERROR_RECOVERY_DELAY * 2, // 超时错误延迟更长
+                        delayMs = ERROR_RECOVERY_DELAY * 2, // Timeout errors have longer delay
                         newStatus = null
                     )
                 }
@@ -253,7 +253,7 @@ class CableAoaErrorHandler {
                         shouldContinue = false,
                         shouldBreak = true,
                         delayMs = 0,
-                        newStatus = null // 部分传输不一定是错误状态
+                        newStatus = null // Partial transfer is not necessarily an error status
                     )
                 } else {
                     LogUtil.d(TAG, "Partial transfer, retrying")
@@ -267,7 +267,7 @@ class CableAoaErrorHandler {
             }
             
             else -> {
-                // 默认处理
+                // Default handling
                 ErrorHandlingResult(
                     shouldContinue = attempt < maxAttempts - 1,
                     shouldBreak = attempt >= maxAttempts - 1,
@@ -279,7 +279,7 @@ class CableAoaErrorHandler {
     }
     
     /**
-     * 处理异常错误
+     * Handle exception error
      */
     suspend fun handleException(
         exception: Exception,
@@ -307,7 +307,7 @@ class CableAoaErrorHandler {
                 ErrorHandlingResult(
                     shouldContinue = true,
                     shouldBreak = false,
-                    delayMs = CRITICAL_ERROR_DELAY, // 异常后延迟更长
+                    delayMs = CRITICAL_ERROR_DELAY, // Longer delay after exception
                     newStatus = null
                 )
             }
@@ -323,7 +323,7 @@ class CableAoaErrorHandler {
     }
     
     /**
-     * 分类接收错误
+     * Classify receive error
      */
     private fun classifyReceiveError(bytesRead: Int, isDeviceConnected: Boolean): ErrorType {
         return when {
@@ -336,7 +336,7 @@ class CableAoaErrorHandler {
     }
     
     /**
-     * 分类发送错误
+     * Classify send error
      */
     private fun classifySendError(result: Int, expectedSize: Int, isDeviceConnected: Boolean): ErrorType {
         return when {
@@ -350,7 +350,7 @@ class CableAoaErrorHandler {
     }
     
     /**
-     * 重置错误计数（成功操作后调用）
+     * Reset error count (called after successful operation)
      */
     fun resetErrorCount() {
         if (consecutiveErrors > 0) {
@@ -360,7 +360,7 @@ class CableAoaErrorHandler {
     }
     
     /**
-     * 标记连接已建立（用于grace period计算）
+     * Mark connection established (for grace period calculation)
      */
     fun markConnectionEstablished() {
         connectionEstablishedTime = System.currentTimeMillis()
@@ -368,32 +368,32 @@ class CableAoaErrorHandler {
     }
     
     /**
-     * 重置连接时间（断开连接时调用）
+     * Reset connection time (called when disconnecting)
      */
     fun resetConnectionTime() {
         connectionEstablishedTime = 0L
     }
     
     /**
-     * 获取错误统计
+     * Get error statistics
      */
     fun getErrorStats(): String {
         return "Consecutive: $consecutiveErrors, Total: $totalErrors"
     }
     
     /**
-     * 是否应该进行错误恢复
+     * Whether should attempt error recovery
      */
     fun shouldAttemptRecovery(): Boolean {
         val currentTime = System.currentTimeMillis()
         val timeSinceLastError = currentTime - lastErrorTime
         
-        // 如果错误频率太高，不尝试恢复
+        // If error frequency is too high, don't attempt recovery
         return timeSinceLastError > 1000 || consecutiveErrors < MAX_CONSECUTIVE_ERRORS
     }
     
     /**
-     * 记录错误时间
+     * Record error time
      */
     fun recordErrorTime() {
         lastErrorTime = System.currentTimeMillis()

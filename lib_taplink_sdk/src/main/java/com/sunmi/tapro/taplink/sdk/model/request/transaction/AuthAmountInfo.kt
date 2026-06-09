@@ -3,12 +3,12 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 import java.math.BigDecimal
 
 /**
- * 预授权金额信息
+ * Authorization Amount Information
  *
- * 用于预授权相关交易的简化金额结构，只包含基本金额和币种
+ * Simplified amount structure for authorization-related transactions, containing only basic amount and currency
  *
- * @param orderAmount 交易金额，使用基本货币单位（如美元）
- * @param pricingCurrency 标价币种，遵循ISO 4217标准
+ * @param orderAmount Transaction amount, using basic currency unit (e.g., USD)
+ * @param pricingCurrency Pricing currency, following ISO 4217 standard
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -25,13 +25,13 @@ data class AuthAmountInfo(
     
     companion object {
         /**
-         * 创建AuthAmountInfo的构建器
+         * Create AuthAmountInfo builder
          */
         fun builder(): Builder = Builder()
     }
     
     /**
-     * AuthAmountInfo构建器
+     * AuthAmountInfo Builder
      */
     class Builder {
         private var orderAmount: BigDecimal = BigDecimal.ZERO

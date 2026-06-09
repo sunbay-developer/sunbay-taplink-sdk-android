@@ -1,24 +1,24 @@
 package com.sunmi.tapro.taplink.communication.local.constant
 
 /**
- * 本地服务常量类
+ * Local service constants class
  *
- * 定义本地IPC服务相关的常量
+ * Defines constants related to local IPC service
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object LocalServiceConstant {
 
     /**
-     * 默认的Service Action
-     * 用于通过Intent绑定服务
+     * Default Service Action
+     * Used to bind service via Intent
      */
     const val DEFAULT_ACTION = "com.sunmi.tapro.taplink.service.local.ACTION_TRANSACTION"
 
     /**
-     * 默认的包名
-     * 用于通过packageName和action启动服务
+     * Default package name
+     * Used to start service via packageName and action
      */
     const val DEFAULT_PACKAGE_NAME = "com.sunmi.tapro"
 }

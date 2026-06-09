@@ -70,7 +70,7 @@
     <string name="error_302_description">Request data format error</string>
     <string name="error_302_solution">Check if parameter format meets API documentation requirements</string>
     
-    <string name="error_303_description">Unsupported transaction type</string>
+    <string name="error_303_description">Unsupported transaction type / API not permitted</string>
     <string name="error_303_solution">Check action parameter (SALE/REFUND/VOID, etc.)</string>
     
     <string name="error_304_description">Request send failed</string>

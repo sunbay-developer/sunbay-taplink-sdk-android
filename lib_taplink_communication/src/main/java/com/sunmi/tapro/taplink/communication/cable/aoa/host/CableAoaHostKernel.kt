@@ -20,25 +20,29 @@ import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.protocol.HexFrameBuffer
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
+import com.sunmi.tapro.taplink.communication.cable.vsp.VspHandshake
 import com.sunmi.tapro.taplink.communication.util.InnerUtil
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.CountDownLatch
 
 /**
- * 简化的 AOA Host Kernel
+ * Simplified AOA Host Kernel
  *
- * 核心改进：
- * 1. 移除 session/token 机制，用简单的状态机替代
- * 2. 单一连接入口，所有触发路径都通过 connect() 进入
- * 3. 幂等操作，重复调用 connect() 是安全的
- * 4. 状态即真相，状态变量直接反映资源状态
+ * Core improvements:
+ * 1. Remove session/token mechanism, replace with simple state machine
+ * 2. Single connection entry point, all trigger paths enter through connect()
+ * 3. Idempotent operations, repeated calls to connect() are safe
+ * 4. State is truth, state variables directly reflect resource state
  *
  * @author TaPro Team
  * @since 2025-01-18
@@ -49,40 +53,52 @@ class CableAoaHostKernel(
     private val context: Context
 ) : AsyncServiceKernel(appId, appSecretKey) {
 
+    private companion object {
+        const val BULK_OUT_RETRY_DELAY_MS = 50L
+        const val AOA_SWITCH_TIMEOUT_MS = 8000L
+    }
+
     private val TAG = "SimplifiedAoaHostKernel"
 
-    // ============ 状态定义 ============
+    // ============ State Definition ============
 
     /**
-     * 连接状态枚举
+     * Connection state enumeration
      *
-     * 状态转换规则：
+     * State transition rules:
      * IDLE -> REQUESTING_PERMISSION -> SWITCHING_AOA -> CONNECTING -> CONNECTED
      *   |                                                                |
      *   +----------------------------------------------------------------+
      *                            (disconnect)
      */
     private enum class ConnectionState {
-        IDLE,                    // 空闲，未连接
-        REQUESTING_PERMISSION,   // 正在请求权限
-        SWITCHING_AOA,          // 正在发送 AOA 协议，等待设备切换
-        CONNECTING,             // 正在建立连接（open device, claim interface）
-        CONNECTED,              // 已连接
-        DISCONNECTING,          // 正在断开
-        ERROR                   // 错误状态
+        IDLE,                    // Idle, not connected
+        REQUESTING_PERMISSION,   // Requesting permission
+        SWITCHING_AOA,          // Sending AOA protocol, waiting for device switch
+        CONNECTING,             // Establishing connection (open device, claim interface)
+        CONNECTED,              // Connected
+        DISCONNECTING,          // Disconnecting
+        ERROR                   // Error state
     }
 
-    // 当前状态（唯一的真相来源）
+    // Current state (single source of truth)
     @Volatile
     private var state: ConnectionState = ConnectionState.IDLE
 
-    // 状态锁（保护状态转换）
+    // State lock (protects state transitions)
     private val stateLock = Any()
 
     // USB Manager
     private val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
-    // ============ 连接资源 ============
+    /**
+     * [AsyncServiceKernel.disconnect] calls [kotlinx.coroutines.Job.cancelChildren] on [scope] first.
+     * A [scope.launch] that invokes [disconnect] is itself a child of [scope] and can be cancelled
+     * before [performDisconnect] completes. Use this scope for disconnect from receive/send paths.
+     */
+    private val deferredDisconnectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // ============ Connection Resources ============
 
     @Volatile
     private var currentDevice: UsbDevice? = null
@@ -99,17 +115,17 @@ class CableAoaHostKernel(
     @Volatile
     private var endpointOut: UsbEndpoint? = null
 
-    // 接收协程
+    // Receive coroutine
     private var receiveJob: Job? = null
 
-    // HexFrame 缓冲区
+    // HexFrame buffer
     private var hexFrameBuffer: HexFrameBuffer? = null
 
-    // 当前连接回调
+    // Current connection callback
     @Volatile
     private var currentCallback: ConnectionCallback? = null
 
-    // ============ 权限等待机制 ============
+    // ============ Permission Wait Mechanism ============
 
     @Volatile
     private var permissionLatch: CountDownLatch? = null
@@ -120,15 +136,13 @@ class CableAoaHostKernel(
     @Volatile
     private var pendingPermissionDevice: UsbDevice? = null
 
-    // ============ AOA 设备等待机制 ============
-
     @Volatile
     private var aoaDeviceLatch: CountDownLatch? = null
 
     @Volatile
     private var originalDevice: UsbDevice? = null
 
-    // ============ 公共 API ============
+    // ============ Public API ============
 
     override fun getServiceType(): String = "SimplifiedAoaHost"
 
@@ -141,12 +155,12 @@ class CableAoaHostKernel(
     }
 
     /**
-     * 连接到设备（唯一的连接入口）
+     * Connect to device (single connection entry point)
      *
-     * 幂等操作：
-     * - 如果已连接，直接返回成功
-     * - 如果正在连接，忽略重复调用
-     * - 如果空闲，开始连接
+     * Idempotent operation:
+     * - If already connected, return success directly
+     * - If connecting, ignore duplicate calls
+     * - If idle, start connection
      */
     override fun performConnect(
         parseResult: ProtocolParseResult,
@@ -184,12 +198,12 @@ class CableAoaHostKernel(
             }
         }
 
-        // 保存回调
+        // Save callback
         currentCallback = connectionCallback
 
-        // 开始连接流程（在协程中执行）
+        // Start connection flow (execute in coroutine)
         scope.launch {
-            // 如果正在断开，等待完成
+            // If disconnecting, wait for completion
             waitForState(ConnectionState.IDLE, timeout = 5000)
 
             startConnection(connectionCallback)
@@ -198,7 +212,7 @@ class CableAoaHostKernel(
 
 
     /**
-     * 断开连接（唯一的断开入口）
+     * Disconnect (single disconnect entry point)
      */
     override fun performDisconnect() {
         LogUtil.i(TAG, "=== Disconnect requested, current state: $state ===")
@@ -222,7 +236,7 @@ class CableAoaHostKernel(
             }
         }
 
-        // 清理资源（不在锁内执行，避免阻塞）
+        // Clean up resources (not executed in lock to avoid blocking)
         cleanupResources()
 
         synchronized(stateLock) {
@@ -230,7 +244,7 @@ class CableAoaHostKernel(
             updateStatus(InnerConnectionStatus.DISCONNECTED)
         }
 
-        // 通知应用层断开
+        // Notify application layer of disconnection
         notifyConnectionDisconnected(
             InnerErrorCode.E212.code,
             "Device disconnected"
@@ -239,20 +253,27 @@ class CableAoaHostKernel(
         LogUtil.i(TAG, "=== Disconnect completed ===")
     }
 
+    private fun scheduleKernelDisconnect(reason: String) {
+        LogUtil.w(TAG, "Scheduling kernel disconnect: $reason")
+        deferredDisconnectScope.launch {
+            disconnect()
+        }
+    }
+
     /**
-     * 发送数据
+     * Send data
      *
-     * 注意：父类 AsyncServiceKernel 已经使用 sendMutex 加锁，这里不需要再加锁
+     * Note: Parent class AsyncServiceKernel already uses sendMutex for locking, no need to add lock here
      */
     override suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
-        // 快速检查状态
+        // Quick state check
         if (state != ConnectionState.CONNECTED) {
             LogUtil.w(TAG, "Send data failed: not connected, state=$state")
             callback?.onError(InnerErrorCode.E304.code, "Not connected")
             return
         }
 
-        // 获取连接和端点的快照
+        // Get snapshot of connection and endpoint
         val conn = connection
         val epOut = endpointOut
 
@@ -262,7 +283,7 @@ class CableAoaHostKernel(
             return
         }
 
-        // 再次检查状态（可能在等待父类锁期间断开了）
+        // Check state again (may have disconnected while waiting for parent class lock)
         if (state != ConnectionState.CONNECTED) {
             LogUtil.w(TAG, "Send data failed: disconnected while waiting for lock")
             callback?.onError(InnerErrorCode.E304.code, "Connection lost")
@@ -276,10 +297,21 @@ class CableAoaHostKernel(
             LogUtil.d(TAG, "  Hex: $hexStr")
             LogUtil.d(TAG, "  Text: $textStr")
 
-            val result = conn.bulkTransfer(epOut, data, data.size, 3000)
+            var result = conn.bulkTransfer(epOut, data, data.size, 3000)
             if (result < 0) {
-                LogUtil.e(TAG, "❌ Bulk transfer failed: $result")
+                delay(BULK_OUT_RETRY_DELAY_MS)
+                if (state == ConnectionState.CONNECTED && connection === conn && endpointOut === epOut) {
+                    result = conn.bulkTransfer(epOut, data, data.size, 3000)
+                }
+            }
+            if (result < 0) {
+                LogUtil.e(
+                    TAG,
+                    "❌ Bulk OUT failed after retry ($result); peer may have closed link while USB still enumerated"
+                )
                 callback?.onError(InnerErrorCode.E304.code, "Bulk transfer failed")
+                // Tapro app disconnect often leaves the USB device visible; receive loop only sees IN timeouts.
+                scheduleKernelDisconnect("AOA bulk OUT failure")
             } else {
                 LogUtil.d(TAG, "✅ Data sent successfully: $result bytes")
             }
@@ -292,18 +324,19 @@ class CableAoaHostKernel(
 
 
     /**
-     * 释放资源
+     * Release resources
      */
     fun release() {
         LogUtil.i(TAG, "=== Release started ===")
 
-        // 取消所有协程
+        deferredDisconnectScope.cancel()
+        // Cancel all coroutines
         scope.cancel()
 
-        // 清理资源
+        // Clean up resources
         cleanupResources()
 
-        // 注销广播接收器
+        // Unregister broadcast receivers
         try {
             context.unregisterReceiver(permissionReceiver)
             LogUtil.d(TAG, "Permission receiver unregistered")
@@ -325,16 +358,16 @@ class CableAoaHostKernel(
         LogUtil.i(TAG, "=== Release completed ===")
     }
 
-    // ============ 内部实现 ============
+    // ============ Internal Implementation ============
 
     /**
-     * 开始连接流程
+     * Start connection flow
      */
     private suspend fun startConnection(callback: ConnectionCallback) {
         try {
             updateStatus(InnerConnectionStatus.CONNECTING)
 
-            // 1. 查找设备
+            // 1. Find device
             val device = findTargetDevice()
             if (device == null) {
                 handleConnectionError("No USB device found", callback, InnerErrorCode.E212.code)
@@ -343,7 +376,7 @@ class CableAoaHostKernel(
 
             LogUtil.i(TAG, "Found device: ${getDeviceDisplayKey(device)}")
 
-            // 2. 检查是否已在 AOA 模式
+            // 2. Check if already in AOA mode
             if (isAoaDevice(device)) {
                 LogUtil.i(TAG, "Device already in AOA mode, connecting directly")
                 connectToAoaDevice(device, callback)
@@ -360,11 +393,11 @@ class CableAoaHostKernel(
 
 
     /**
-     * 切换设备到 AOA 模式
+     * Switch device to AOA mode
      */
     private suspend fun switchToAoaMode(device: UsbDevice, callback: ConnectionCallback) {
         try {
-            // 1. 请求权限（如果需要）
+            // 1. Request permission (if needed)
             if (!usbManager.hasPermission(device)) {
                 synchronized(stateLock) {
                     state = ConnectionState.REQUESTING_PERMISSION
@@ -374,10 +407,10 @@ class CableAoaHostKernel(
                 LogUtil.i(TAG, "Permission granted")
             }
 
-            // 2. 保存原始设备引用
+            // 2. Save original device reference
             originalDevice = device
 
-            // 3. 发送 AOA 协议
+            // 3. Send AOA protocol
             synchronized(stateLock) {
                 state = ConnectionState.SWITCHING_AOA
             }
@@ -385,16 +418,20 @@ class CableAoaHostKernel(
             sendAoaProtocol(device)
             LogUtil.i(TAG, "AOA protocol sent, waiting for device to switch")
 
-            // 4. 等待 AOA 设备出现
-            val aoaDevice = waitForAoaDevice(timeout = 15000)
+            // 4. Wait for AOA device to appear
+            val aoaDevice = waitForAoaDevice(timeout = AOA_SWITCH_TIMEOUT_MS)
             if (aoaDevice == null) {
-                handleConnectionError("AOA device not found after switch (timeout 15s)", callback, InnerErrorCode.E212.code)
+                handleConnectionError(
+                    "AOA device not found after switch (timeout ${AOA_SWITCH_TIMEOUT_MS / 1000}s), will try next protocol",
+                    callback,
+                    InnerErrorCode.E212.code
+                )
                 return
             }
 
             LogUtil.i(TAG, "AOA device appeared: ${getDeviceDisplayKey(aoaDevice)}")
 
-            // 5. 连接到 AOA 设备
+            // 5. Connect to AOA device
             connectToAoaDevice(aoaDevice, callback)
 
         } catch (e: Exception) {
@@ -404,11 +441,11 @@ class CableAoaHostKernel(
     }
 
     /**
-     * 连接到 AOA 设备
+     * Connect to AOA device
      */
     private suspend fun connectToAoaDevice(device: UsbDevice, callback: ConnectionCallback) {
         synchronized(stateLock) {
-            // 幂等检查：如果已连接，直接返回
+            // Idempotent check: if already connected, return directly
             if (state == ConnectionState.CONNECTED) {
                 LogUtil.i(TAG, "Already connected in connectToAoaDevice")
                 handleConnectionSuccess(callback, null)
@@ -421,20 +458,20 @@ class CableAoaHostKernel(
         try {
             LogUtil.i(TAG, "Connecting to AOA device: ${getDeviceDisplayKey(device)}")
 
-            // 1. 请求权限（如果需要）
+            // 1. Request permission (if needed)
             if (!usbManager.hasPermission(device)) {
                 LogUtil.i(TAG, "Requesting permission for AOA device")
                 requestPermissionAndWait(device)
                 LogUtil.i(TAG, "AOA device permission granted")
             }
 
-            // 2. 打开设备
+            // 2. Open device
             val conn = usbManager.openDevice(device)
                 ?: throw Exception("Failed to open AOA device")
 
             LogUtil.d(TAG, "Device opened successfully")
 
-            // 3. 查找接口和端点
+            // 3. Find interface and endpoints
             val interfaceData = findAoaInterface(device)
             if (interfaceData == null) {
                 conn.close()
@@ -444,7 +481,7 @@ class CableAoaHostKernel(
             val (iface, epIn, epOut) = interfaceData
             LogUtil.d(TAG, "Found AOA interface with endpoints")
 
-            // 4. Claim 接口
+            // 4. Claim interface
             if (!conn.claimInterface(iface, true)) {
                 conn.close()
                 throw Exception("Failed to claim interface")
@@ -453,7 +490,7 @@ class CableAoaHostKernel(
             LogUtil.d(TAG, "Interface claimed successfully")
 
 
-            // 5. 打印端点信息（调试用）
+            // 5. Print endpoint information (for debugging)
             LogUtil.i(TAG, "=== Endpoint Information ===")
             LogUtil.i(TAG, "Endpoint IN:")
             if (epIn != null) {
@@ -469,13 +506,46 @@ class CableAoaHostKernel(
             LogUtil.i(TAG, "  Max Packet Size: ${epOut.maxPacketSize}")
             LogUtil.i(TAG, "===========================")
 
-            // 6. 清空端点缓冲区（重要！防止读取旧数据）
-            // 注意：只清空 IN 端点（接收端点），不清空 OUT 端点（发送端点）
+            // 6. Flush endpoint buffer (important! prevent reading old data)
+            // Note: Only flush IN endpoint (receive endpoint), don't flush OUT endpoint (send endpoint)
             if (epIn != null) {
                 flushEndpoint(conn, epIn)
             }
 
-            // 7. 保存资源
+            // 6b. Application-layer handshake (same REQ/ACK contract as VSP / RS232 Host)
+            // Ensures the peer is actually serving Taplink on this bulk link before reporting CONNECTED.
+            if (epIn == null) {
+                LogUtil.w(TAG, "AOA: no IN endpoint — cannot run Taplink handshake")
+                conn.releaseInterface(iface)
+                conn.close()
+                handleConnectionError(
+                    "AOA device has no IN endpoint for handshake",
+                    callback,
+                    InnerErrorCode.E212.code
+                )
+                return
+            }
+            if (!performTaplinkAppHandshake(conn, epIn, epOut)) {
+                LogUtil.w(TAG, "AOA Taplink handshake failed — peer may be VSP-only or not ready")
+                try {
+                    conn.releaseInterface(iface)
+                } catch (e: Exception) {
+                    LogUtil.w(TAG, "releaseInterface after handshake fail: ${e.message}")
+                }
+                try {
+                    conn.close()
+                } catch (e: Exception) {
+                    LogUtil.w(TAG, "close after handshake fail: ${e.message}")
+                }
+                handleConnectionError(
+                    "AOA Taplink handshake failed — peer not responding on AOA bulk (try VSP/RS232)",
+                    callback,
+                    InnerErrorCode.E212.code
+                )
+                return
+            }
+
+            // 7. Save resources
             synchronized(stateLock) {
                 currentDevice = device
                 connection = conn
@@ -488,7 +558,7 @@ class CableAoaHostKernel(
 
             LogUtil.i(TAG, "Connection resources saved, state=CONNECTED")
 
-            // 8. 初始化 HexFrame 缓冲区
+            // 8. Initialize HexFrame buffer
             hexFrameBuffer = HexFrameBuffer(
                 scope = scope,
                 onFrameReceived = { frame ->
@@ -496,10 +566,10 @@ class CableAoaHostKernel(
                 }
             )
 
-            // 9. 启动接收
+            // 9. Start receiving
             startReceive()
 
-            // 10. 回调成功
+            // 10. Callback success
             LogUtil.i(TAG, "=== Connection established successfully ===")
             handleConnectionSuccess(callback, null)
 
@@ -511,22 +581,22 @@ class CableAoaHostKernel(
     }
 
     /**
-     * 清空 USB 端点缓冲区
+     * Flush USB endpoint buffer
      * 
-     * 重要：防止读取上一次连接残留的旧数据
+     * Important: prevent reading old data left from previous connection
      */
     private fun flushEndpoint(connection: UsbDeviceConnection, endpoint: UsbEndpoint) {
         try {
             val buffer = ByteArray(endpoint.maxPacketSize)
             var flushedBytes = 0
             var iterations = 0
-            val maxIterations = 10  // 最多尝试 10 次
+            val maxIterations = 10  // Maximum 10 attempts
             
             LogUtil.d(TAG, "Flushing endpoint 0x${Integer.toHexString(endpoint.address.toInt() and 0xFF)}...")
             
-            // 持续读取直到没有数据或达到最大次数
+            // Continue reading until no data or max iterations reached
             while (iterations < maxIterations) {
-                val bytesRead = connection.bulkTransfer(endpoint, buffer, buffer.size, 100)  // 100ms 超时
+                val bytesRead = connection.bulkTransfer(endpoint, buffer, buffer.size, 100)  // 100ms timeout
                 if (bytesRead > 0) {
                     flushedBytes += bytesRead
                     iterations++
@@ -546,17 +616,78 @@ class CableAoaHostKernel(
     }
 
     /**
-     * 清理资源
+     * After USB bulk endpoints are ready, verify the peer is serving Taplink on AOA (same markers as
+     * [VspHandshake] used by VSP / RS232). Mirrors [SerialServiceKernel] active REQ probe + peer ACK/REQ.
+     *
+     * @return true if ACK seen, or peer REQ answered with ACK (mutual completion).
+     */
+    private suspend fun performTaplinkAppHandshake(
+        conn: UsbDeviceConnection,
+        epIn: UsbEndpoint,
+        epOut: UsbEndpoint
+    ): Boolean {
+        val reqBytes = VspHandshake.REQ.toByteArray(Charsets.UTF_8)
+        val ackMarker = VspHandshake.ACK
+        val reqMarker = VspHandshake.REQ
+        val buffer = ByteArray(epIn.maxPacketSize.coerceAtLeast(64))
+        val acc = StringBuilder(256)
+
+        LogUtil.i(
+            TAG,
+            "AOA Taplink handshake starting (timeout=${VspHandshake.DEFAULT_TIMEOUT_MS}ms, interval=${VspHandshake.DEFAULT_INTERVAL_MS}ms)"
+        )
+
+        val deadline = System.currentTimeMillis() + VspHandshake.DEFAULT_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            var written = conn.bulkTransfer(epOut, reqBytes, reqBytes.size, 3000)
+            if (written < 0) {
+                LogUtil.w(TAG, "AOA handshake: bulk OUT failed ($written), retrying")
+                delay(50)
+                continue
+            }
+
+            val intervalEnd = System.currentTimeMillis() + VspHandshake.DEFAULT_INTERVAL_MS
+            while (System.currentTimeMillis() < intervalEnd && System.currentTimeMillis() < deadline) {
+                val n = conn.bulkTransfer(epIn, buffer, buffer.size, 150)
+                if (n > 0) {
+                    acc.append(String(buffer.copyOf(n), Charsets.UTF_8))
+                    val s = acc.toString()
+                    when {
+                        s.contains(ackMarker) -> {
+                            LogUtil.i(TAG, "AOA handshake: received ACK")
+                            return true
+                        }
+                        s.contains(reqMarker) -> {
+                            val ackBytes = ackMarker.toByteArray(Charsets.UTF_8)
+                            val w2 = conn.bulkTransfer(epOut, ackBytes, ackBytes.size, 3000)
+                            LogUtil.i(TAG, "AOA handshake: peer REQ seen, sent ACK (w=$w2)")
+                            return true
+                        }
+                    }
+                    if (acc.length > 4096) {
+                        acc.setLength(0)
+                    }
+                }
+                delay(VspHandshake.POLL_INTERVAL_MS)
+            }
+        }
+
+        LogUtil.w(TAG, "AOA handshake: timeout waiting for ACK / peer REQ")
+        return false
+    }
+
+    /**
+     * Clean up resources
      */
     private fun cleanupResources() {
         LogUtil.d(TAG, "Cleaning up resources...")
 
-        // 1. 先清空引用（防止新的操作使用旧资源）
+        // 1. Clear references first (prevent new operations from using old resources)
         val oldConnection = connection
         val oldInterface = interface_
         val oldReceiveJob = receiveJob
         
-        // 立即清空引用
+        // Clear references immediately
         currentDevice = null
         connection = null
         interface_ = null
@@ -564,11 +695,11 @@ class CableAoaHostKernel(
         endpointOut = null
         originalDevice = null
 
-        // 2. 停止接收协程（使用本地引用）
+        // 2. Stop receive coroutine (use local reference)
         oldReceiveJob?.cancel()
         receiveJob = null
         
-        // 等待接收协程完全停止（最多 500ms）
+        // Wait for receive coroutine to fully stop (max 500ms)
         val startTime = System.currentTimeMillis()
         while (oldReceiveJob?.isActive == true && System.currentTimeMillis() - startTime < 500) {
             Thread.sleep(10)
@@ -580,11 +711,11 @@ class CableAoaHostKernel(
             LogUtil.d(TAG, "Receive job stopped successfully")
         }
 
-        // 3. 停止 HexFrame 缓冲区
+        // 3. Stop HexFrame buffer
         hexFrameBuffer?.stop()
         hexFrameBuffer = null
 
-        // 4. 释放接口（使用本地引用）
+        // 4. Release interface (use local reference)
         oldInterface?.let { iface ->
             try {
                 oldConnection?.releaseInterface(iface)
@@ -594,7 +725,7 @@ class CableAoaHostKernel(
             }
         }
 
-        // 5. 关闭连接（使用本地引用）
+        // 5. Close connection (use local reference)
         oldConnection?.let { conn ->
             try {
                 conn.close()
@@ -604,8 +735,8 @@ class CableAoaHostKernel(
             }
         }
 
-        // 6. 清理通用资源（回调、数据接收器等）
-        // 注意：这会清除 dataReceiver，如果需要保持 dataReceiver，应该在重连时重新注册
+        // 6. Clean up common resources (callbacks, data receivers, etc.)
+        // Note: This will clear dataReceiver, if need to keep dataReceiver, should re-register when reconnecting
         // cleanupCommonResources()
 
         LogUtil.d(TAG, "Resources cleaned up")
@@ -613,7 +744,7 @@ class CableAoaHostKernel(
 
 
     /**
-     * 重置到空闲状态（不加锁版本，调用方需持有锁）
+     * Reset to idle state (non-locked version, caller must hold lock)
      */
     private fun resetToIdleUnsafe() {
         cleanupResources()
@@ -623,7 +754,7 @@ class CableAoaHostKernel(
 
 
     /**
-     * 等待状态变为指定值
+     * Wait for state to become specified value
      */
     private suspend fun waitForState(targetState: ConnectionState, timeout: Long) {
         val startTime = System.currentTimeMillis()
@@ -636,10 +767,10 @@ class CableAoaHostKernel(
         }
     }
 
-    // ============ 权限处理 ============
+    // ============ Permission Handling ============
 
     /**
-     * 请求权限并等待结果
+     * Request permission and wait for result
      */
     private suspend fun requestPermissionAndWait(device: UsbDevice) {
         permissionLatch = CountDownLatch(1)
@@ -651,7 +782,7 @@ class CableAoaHostKernel(
 
         LogUtil.i(TAG, "Permission request sent, waiting for response...")
 
-        // 等待权限响应（最多 30 秒）
+        // Wait for permission response (max 30 seconds)
         val granted = withTimeoutOrNull(30000) {
             permissionLatch?.await()
             !permissionDenied
@@ -667,7 +798,7 @@ class CableAoaHostKernel(
     }
 
     /**
-     * 创建权限请求 Intent
+     * Create permission request Intent
      */
     private fun createPermissionIntent(device: UsbDevice): PendingIntent {
         val requestCode = device.deviceName.hashCode() and 0x7FFFFFFF
@@ -683,10 +814,10 @@ class CableAoaHostKernel(
     }
 
 
-    // ============ AOA 协议处理 ============
+    // ============ AOA Protocol Handling ============
 
     /**
-     * 发送 AOA 协议
+     * Send AOA protocol
      */
     private fun sendAoaProtocol(device: UsbDevice) {
         val conn = usbManager.openDevice(device)
@@ -706,12 +837,12 @@ class CableAoaHostKernel(
     }
 
     /**
-     * 等待 AOA 设备出现
+     * Wait for AOA device to appear
      */
     private suspend fun waitForAoaDevice(timeout: Long): UsbDevice? {
         aoaDeviceLatch = CountDownLatch(1)
 
-        // 先检查是否已经存在
+        // Check if already exists first
         val existing = findAoaDevice()
         if (existing != null) {
             LogUtil.i(TAG, "AOA device already exists")
@@ -720,24 +851,26 @@ class CableAoaHostKernel(
 
         LogUtil.i(TAG, "Waiting for AOA device to appear (timeout: ${timeout}ms)...")
 
-        // 等待设备出现
+        // Wait for device to appear. runInterruptible makes blocking await() respond to coroutine cancellation (timeout).
         val appeared = withTimeoutOrNull(timeout) {
-            aoaDeviceLatch?.await()
+            runInterruptible(Dispatchers.IO) {
+                aoaDeviceLatch?.await()
+            }
             true
         }
 
         if (appeared != true) {
-            LogUtil.w(TAG, "Timeout waiting for AOA device")
+            LogUtil.w(TAG, "Timeout waiting for AOA device (${timeout}ms) - device did not switch to AOA mode, will try next protocol")
             return null
         }
 
         return findAoaDevice()
     }
 
-    // ============ 设备查找 ============
+    // ============ Device Search ============
 
     /**
-     * 查找目标设备
+     * Find target device
      */
     private fun findTargetDevice(): UsbDevice? {
         val devices = usbManager.deviceList
@@ -752,25 +885,26 @@ class CableAoaHostKernel(
             LogUtil.d(TAG, "  - ${getDeviceDisplayKey(device)}")
         }
 
-        // 优先查找 AOA 设备
+        // Prefer AOA device
         val aoaDevice = findAoaDevice()
         if (aoaDevice != null) {
             return aoaDevice
         }
 
-        // 否则返回第一个设备
-        return devices.values.firstOrNull()
+        // Prefer Sunmi device, otherwise return first device
+        return devices.values.firstOrNull { "Sunmi".equals(it.manufacturerName, ignoreCase = true) }
+            ?: devices.values.firstOrNull()
     }
 
     /**
-     * 查找 AOA 设备
+     * Find AOA device
      */
     private fun findAoaDevice(): UsbDevice? {
         return usbManager.deviceList.values.find { isAoaDevice(it) }
     }
 
     /**
-     * 判断是否是 AOA 设备
+     * Determine if device is AOA device
      */
     private fun isAoaDevice(device: UsbDevice): Boolean {
         return UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)
@@ -778,13 +912,13 @@ class CableAoaHostKernel(
 
 
     /**
-     * 查找 AOA 接口和端点
+     * Find AOA interface and endpoints
      */
     private fun findAoaInterface(device: UsbDevice): Triple<UsbInterface, UsbEndpoint?, UsbEndpoint>? {
         for (i in 0 until device.interfaceCount) {
             val iface = device.getInterface(i)
 
-            // 查找 AOA 标准接口 (class=255, subclass=66, protocol=1)
+            // Find AOA standard interface (class=255, subclass=66, protocol=1)
             if (iface.interfaceClass == 255 &&
                 iface.interfaceSubclass == 66 &&
                 iface.interfaceProtocol == 1 &&
@@ -798,7 +932,7 @@ class CableAoaHostKernel(
                 }
             }
 
-            // 备选：Vendor specific 接口
+            // Alternative: Vendor specific interface
             if (iface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC &&
                 iface.endpointCount >= 2
             ) {
@@ -815,7 +949,7 @@ class CableAoaHostKernel(
     }
 
     /**
-     * 查找 Bulk 端点
+     * Find Bulk endpoints
      */
     private fun findBulkEndpoints(iface: UsbInterface): Pair<UsbEndpoint?, UsbEndpoint>? {
         var epIn: UsbEndpoint? = null
@@ -832,7 +966,7 @@ class CableAoaHostKernel(
             }
         }
 
-        // OUT 端点是必须的，IN 端点可选
+        // OUT endpoint is required, IN endpoint is optional
         return if (epOut != null) {
             Pair(epIn, epOut)
         } else {
@@ -840,33 +974,33 @@ class CableAoaHostKernel(
         }
     }
 
-    // ============ 数据接收 ============
+    // ============ Data Receiving ============
 
     /**
-     * 启动数据接收
+     * Start data receiving
      */
     private fun startReceive() {
-        // 取消旧的接收协程
+        // Cancel old receive coroutine
         val oldJob = receiveJob
         receiveJob = null
         oldJob?.cancel()
 
-        // 获取当前连接资源的快照（在启动新协程前）
+        // Get snapshot of current connection resources (before starting new coroutine)
         val currentConn = connection
         val currentEpIn = endpointIn
         val currentDev = currentDevice
         
-        // 验证资源有效性
+        // Validate resource validity
         if (currentConn == null || currentEpIn == null || currentDev == null) {
             LogUtil.w(TAG, "Cannot start receive: resources not ready")
             return
         }
         
-        // 生成连接ID（用于验证资源是否过期）
+        // Generate connection ID (for validating if resources are expired)
         val connectionId = System.currentTimeMillis()
         LogUtil.i(TAG, "📡 Starting receive loop with connectionId=$connectionId")
 
-        receiveJob = scope.launch(Dispatchers.IO) {  // 使用 IO 调度器
+        receiveJob = scope.launch(Dispatchers.IO) {  // Use IO dispatcher
             val buffer = ByteArray(16384)
 
             LogUtil.i(TAG, "📡 Data receive loop started (Host mode) on thread: ${Thread.currentThread().name}")
@@ -878,14 +1012,14 @@ class CableAoaHostKernel(
             while (isActive && state == ConnectionState.CONNECTED) {
                 loopCount++
                 
-                // 每次循环都验证资源是否仍然有效（防止使用过期资源）
+                // Validate resources are still valid on each loop (prevent using expired resources)
                 if (connection != currentConn || endpointIn != currentEpIn || currentDevice != currentDev) {
                     LogUtil.w(TAG, "⚠️ Connection resources changed, stopping stale receive loop (connectionId=$connectionId)")
                     break
                 }
 
                 try {
-                    // 每 100 次循环打印一次心跳日志（减少日志量）
+                    // Print heartbeat log every 100 loops (reduce log volume)
                     if (loopCount % 100 == 1) {
                         LogUtil.d(TAG, "💓 Receive loop heartbeat #$loopCount (connectionId=$connectionId)")
                     }
@@ -894,7 +1028,7 @@ class CableAoaHostKernel(
 
                     when {
                         bytesRead > 0 -> {
-                            // 成功接收数据
+                            // Successfully received data
                             val data = buffer.copyOf(bytesRead)
                             val hexStr = InnerUtil.bytes2HexStr(data)
                             val textStr = try {
@@ -907,32 +1041,30 @@ class CableAoaHostKernel(
                             LogUtil.d(TAG, "  Hex: $hexStr")
                             LogUtil.d(TAG, "  Text: $textStr")
 
-                            // 直接调用 dataReceiver，不通过 HexFrameBuffer（用于测试纯文本数据）
+                            // Directly call dataReceiver, not through HexFrameBuffer (for testing plain text data)
                             dataReceiver?.invoke(data)
 
                             LogUtil.d(TAG, "✅ Data delivered to receiver")
                         }
 
                         bytesRead < 0 -> {
-                            // 传输错误或超时
-                            // 注意：bulkTransfer 超时也会返回 -1，不一定是真正的错误
+                            // Transfer error or timeout
+                            // Note: bulkTransfer timeout also returns -1, not necessarily a real error
                             
-                            // 检查设备是否真的断开
+                            // Check if device is really disconnected
                             if (!isDeviceStillConnected()) {
                                 LogUtil.w(TAG, "❌ Device disconnected, stopping receive loop")
-                                scope.launch {
-                                    disconnect()
-                                }
+                                scheduleKernelDisconnect("USB device removed (IN bulk timeout)")
                                 break
                             }
                             
-                            // 设备还在，可能只是超时或暂时没有数据
-                            // 继续接收，不打印日志（避免日志过多）
+                            // Device still exists, may just be timeout or temporarily no data
+                            // Continue receiving, don't print log (avoid too many logs)
                             delay(10)
                         }
 
                         else -> {
-                            // bytesRead == 0: 超时，没有数据（理论上不会到这里，因为超时通常返回 -1）
+                            // bytesRead == 0: timeout, no data (theoretically shouldn't reach here, because timeout usually returns -1)
                             delay(10)
                         }
                     }
@@ -941,16 +1073,14 @@ class CableAoaHostKernel(
                         LogUtil.e(TAG, "❌ Receive error: ${e.message} (connectionId=$connectionId)")
                         e.printStackTrace()
 
-                        // 检查是否是设备断开导致的异常
+                        // Check if exception is caused by device disconnection
                         if (!isDeviceStillConnected()) {
                             LogUtil.w(TAG, "❌ Device disconnected detected in exception handler, triggering disconnect")
-                            scope.launch {
-                                disconnect()
-                            }
+                            scheduleKernelDisconnect("USB device removed (receive exception)")
                             break
                         }
 
-                        // 设备还在，可能是暂时的异常，继续接收
+                        // Device still exists, may be temporary exception, continue receiving
                         delay(100)
                     } else {
                         break
@@ -964,7 +1094,7 @@ class CableAoaHostKernel(
 
 
     /**
-     * 检查设备是否仍然连接
+     * Check if device is still connected
      */
     private fun isDeviceStillConnected(): Boolean {
         val device = currentDevice ?: return false
@@ -976,10 +1106,10 @@ class CableAoaHostKernel(
         }
     }
 
-    // ============ 广播接收器 ============
+    // ============ Broadcast Receivers ============
 
     /**
-     * 权限广播接收器
+     * Permission broadcast receiver
      */
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -998,7 +1128,7 @@ class CableAoaHostKernel(
 
             LogUtil.i(TAG, "Permission broadcast: device=${device?.deviceName}, granted=$granted")
 
-            // 检查是否是我们请求的设备
+            // Check if it's the device we requested
             if (device != null && isSameDevice(device, pendingPermissionDevice)) {
                 permissionDenied = !granted
                 permissionLatch?.countDown()
@@ -1007,7 +1137,7 @@ class CableAoaHostKernel(
     }
 
     /**
-     * 设备插拔广播接收器
+     * Device attach/detach broadcast receiver
      */
     private val deviceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -1023,7 +1153,7 @@ class CableAoaHostKernel(
                     if (device != null) {
                         LogUtil.i(TAG, "Device attached: ${getDeviceDisplayKey(device)}")
 
-                        // 如果是 AOA 设备且正在等待，唤醒等待
+                        // If it's an AOA device and we're waiting, wake up the waiter
                         if (isAoaDevice(device) && state == ConnectionState.SWITCHING_AOA) {
                             LogUtil.i(TAG, "AOA device appeared, notifying waiter")
                             aoaDeviceLatch?.countDown()
@@ -1042,12 +1172,10 @@ class CableAoaHostKernel(
                     if (device != null) {
                         LogUtil.i(TAG, "Device detached: ${getDeviceDisplayKey(device)}")
 
-                        // 如果是当前连接的设备，触发断开
+                        // If it's the currently connected device, trigger disconnect
                         if (isSameDevice(device, currentDevice) && state == ConnectionState.CONNECTED) {
                             LogUtil.w(TAG, "Current device detached, disconnecting")
-                            scope.launch {
-                                disconnect()
-                            }
+                            scheduleKernelDisconnect("ACTION_USB_DEVICE_DETACHED")
                         }
                     }
                 }
@@ -1055,17 +1183,17 @@ class CableAoaHostKernel(
         }
     }
 
-    // ============ 辅助方法 ============
+    // ============ Helper Methods ============
 
     /**
-     * 获取设备的稳定标识键
+     * Get stable identifier key for device
      */
     private fun getDeviceKey(device: UsbDevice): String {
         return "${device.deviceName}_${device.vendorId}_${device.productId}_${device.deviceId}"
     }
 
     /**
-     * 获取设备的显示标识
+     * Get display identifier for device
      */
     private fun getDeviceDisplayKey(device: UsbDevice): String {
         return "${device.deviceName} (VID=${String.format("0x%04X", device.vendorId)}, PID=${
@@ -1073,11 +1201,11 @@ class CableAoaHostKernel(
                 "0x%04X",
                 device.productId
             )
-        })"
+        },${device.manufacturerName})"
     }
 
     /**
-     * 比较两个设备是否相同
+     * Compare if two devices are the same
      */
     private fun isSameDevice(device1: UsbDevice?, device2: UsbDevice?): Boolean {
         if (device1 == null || device2 == null) {
@@ -1086,10 +1214,10 @@ class CableAoaHostKernel(
         return getDeviceKey(device1) == getDeviceKey(device2)
     }
 
-    // ============ 初始化 ============
+    // ============ Initialization ============
 
     init {
-        // 注册权限广播接收器
+        // Register permission broadcast receiver
         val permissionFilter = IntentFilter().apply {
             addAction("android.hardware.usb.action.USB_PERMISSION")
         }
@@ -1105,7 +1233,7 @@ class CableAoaHostKernel(
             LogUtil.e(TAG, "Failed to register permission receiver: ${e.message}")
         }
 
-        // 注册设备插拔广播接收器
+        // Register device attach/detach broadcast receiver
         val deviceFilter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)

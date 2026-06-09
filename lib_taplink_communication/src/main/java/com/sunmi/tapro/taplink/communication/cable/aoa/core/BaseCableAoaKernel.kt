@@ -24,39 +24,39 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * USB AOA 连接会话阶段
+ * USB AOA connection session phase
  * 
- * 用于区分连接流程的不同阶段，正确处理 AOA 切换期的 DETACHED 事件
+ * Used to distinguish different phases of connection flow, correctly handle DETACHED events during AOA switching
  */
 enum class AoaSessionPhase {
-    IDLE,                           // 空闲
-    REQUEST_ORIGINAL_PERMISSION,    // 请求原始设备权限
-    SENDING_AOA,                    // 发送 AOA 协议
-    WAIT_AOA_ATTACH,                // 等待 AOA 设备出现（此时允许原始设备 detach）
-    REQUEST_AOA_PERMISSION,          // 请求 AOA 设备权限
-    OPENING_IO,                     // 正在打开 IO
-    RUNNING,                        // 运行中（数据通信）
-    CLOSING                         // 正在关闭
+    IDLE,                           // Idle
+    REQUEST_ORIGINAL_PERMISSION,    // Request original device permission
+    SENDING_AOA,                    // Sending AOA protocol
+    WAIT_AOA_ATTACH,                // Wait for AOA device to appear (original device detach allowed at this time)
+    REQUEST_AOA_PERMISSION,          // Request AOA device permission
+    OPENING_IO,                     // Opening IO
+    RUNNING,                        // Running (data communication)
+    CLOSING                         // Closing
 }
 
 /**
- * USB AOA IO 资源包
+ * USB AOA IO resource bundle
  * 
- * 注意：
- * - connection: Host 模式使用（UsbDevice），Accessory 模式为 null（使用 ParcelFileDescriptor）
- * - inputStream/outputStream: Accessory 模式使用，Host 模式为 null（使用 bulkTransfer）
+ * Note:
+ * - connection: Used in Host mode (UsbDevice), null in Accessory mode (uses ParcelFileDescriptor)
+ * - inputStream/outputStream: Used in Accessory mode, null in Host mode (uses bulkTransfer)
  */
 data class AoaIoBundle(
-    val connection: UsbDeviceConnection?,  // Host 模式使用，Accessory 模式为 null
-    val inputStream: InputStream?,         // Accessory 模式使用，Host 模式为 null
-    val outputStream: OutputStream?        // Accessory 模式使用，Host 模式为 null
+    val connection: UsbDeviceConnection?,  // Used in Host mode, null in Accessory mode
+    val inputStream: InputStream?,         // Used in Accessory mode, null in Host mode
+    val outputStream: OutputStream?        // Used in Accessory mode, null in Host mode
 )
 
 /**
- * USB AOA 连接会话
+ * USB AOA connection session
  * 
- * 核心：每次连接流程创建一个 Session（包含 token、scope、资源、阶段），
- * 所有协程都必须在 session.scope 内启动，session 结束时自动 cancel 全部子任务。
+ * Core: Create a Session for each connection flow (contains token, scope, resources, phase),
+ * all coroutines must be launched within session.scope, automatically cancel all child tasks when session ends.
  */
 data class UsbAoaSession(
     val token: Long,
@@ -66,23 +66,23 @@ data class UsbAoaSession(
     val io: AtomicReference<AoaIoBundle?> = AtomicReference(null)
 ) {
     /**
-     * 检查会话是否仍然活跃
+     * Check if session is still active
      */
     fun isActive(currentToken: Long): Boolean = token == currentToken && token != 0L
 }
 
 /**
- * USB AOA内核共同基类
+ * USB AOA kernel common base class
  *
- * 提供Host和Accessory模式的共同功能：
- * - USB管理器初始化
- * - 协议验证
- * - 基础连接管理
- * - 数据接收任务管理
- * - Session 生命周期管理（防止旧协程/旧广播误伤新连接）
+ * Provides common functionality for Host and Accessory modes:
+ * - USB manager initialization
+ * - Protocol validation
+ * - Basic connection management
+ * - Data receive task management
+ * - Session lifecycle management (prevent old coroutines/old broadcasts from affecting new connections)
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 abstract class BaseUsbAoaKernel(
     appId: String,
@@ -97,36 +97,36 @@ abstract class BaseUsbAoaKernel(
 
     protected val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
-    // ==================== Session 生命周期管理 ====================
+    // ==================== Session Lifecycle Management ====================
 
     /**
-     * 操作序列号生成器（使用 AtomicLong 确保线程安全且唯一）
+     * Operation sequence number generator (uses AtomicLong to ensure thread-safe and unique)
      */
     private val opSeq = AtomicLong(0L)
 
     /**
-     * 当前活跃的会话（连接会话）
+     * Current active session (connection session)
      * 
-     * 用于防止旧协程/旧广播误伤新连接：
-     * - 每次连接时创建新的 session
-     * - 所有协程都在 session.scope 内启动
-     * - session 结束时自动 cancel 全部子任务
-     * - IO 资源归 session 所有，避免旧会话 close 新会话资源
+     * Used to prevent old coroutines/old broadcasts from affecting new connections:
+     * - Create new session for each connection
+     * - All coroutines launched within session.scope
+     * - Automatically cancel all child tasks when session ends
+     * - IO resources belong to session, avoid old session closing new session resources
      */
     private val sessionRef = AtomicReference<UsbAoaSession?>(null)
 
     /**
-     * IO 资源互斥锁
+     * IO resource mutex lock
      * 
-     * 用于保证 open/close 的原子性，避免并发操作导致资源泄漏
+     * Used to ensure atomicity of open/close, avoid resource leaks from concurrent operations
      */
     protected val ioMutex = kotlinx.coroutines.sync.Mutex()
 
     /**
-     * 创建新的会话
+     * Create new session
      * 
-     * @param reason 操作原因（用于日志）
-     * @return 新的会话
+     * @param reason Operation reason (for logging)
+     * @return New session
      */
     protected open fun createSession(reason: String): UsbAoaSession {
         val token = opSeq.incrementAndGet()
@@ -141,35 +141,35 @@ abstract class BaseUsbAoaKernel(
     }
 
     /**
-     * 结束指定 token 的会话
+     * End session with specified token
      * 
-     * @param token 会话 token
-     * @param reason 结束原因（用于日志）
+     * @param token Session token
+     * @param reason End reason (for logging)
      */
     protected suspend fun endSession(token: Long, reason: String) {
         val session = sessionRef.get()
         if (session != null && session.token == token) {
             sessionRef.compareAndSet(session, null)
             LogUtil.i(TAG, "=== SESSION ENDED: token=$token, reason=$reason ===")
-            // 先取消所有子任务（让子任务有机会正常退出）
+            // First cancel all child tasks (give child tasks chance to exit normally)
             session.scope.cancel("Session ended: $reason")
-            // 然后关闭 IO 资源
+            // Then close IO resources
             ioMutex.withLock {
                 val io = session.io.getAndSet(null)
                 io?.let {
-                    // 关闭 inputStream（Accessory 模式使用，Host 模式为 null）
+                    // Close inputStream (used in Accessory mode, null in Host mode)
                     try {
                         it.inputStream?.close()
                     } catch (e: Exception) {
                         LogUtil.w(TAG, "Failed to close input stream: ${e.message}")
                     }
-                    // 关闭 outputStream（Accessory 模式使用，Host 模式为 null）
+                    // Close outputStream (used in Accessory mode, null in Host mode)
                     try {
                         it.outputStream?.close()
                     } catch (e: Exception) {
                         LogUtil.w(TAG, "Failed to close output stream: ${e.message}")
                     }
-                    // 关闭 connection（Host 模式使用，Accessory 模式为 null）
+                    // Close connection (used in Host mode, null in Accessory mode)
                     it.connection?.let { conn ->
                         try {
                             conn.close()
@@ -185,17 +185,17 @@ abstract class BaseUsbAoaKernel(
     }
 
     /**
-     * 获取当前活跃的会话
+     * Get current active session
      */
     protected fun currentSession(): UsbAoaSession? = sessionRef.get()
 
     /**
-     * 获取当前活跃的操作令牌（向后兼容）
+     * Get current active operation token (backward compatible)
      */
     protected fun currentOpToken(): Long = currentSession()?.token ?: 0L
 
     /**
-     * 检查操作令牌是否活跃（是否为当前连接）
+     * Check if operation token is active (whether it's current connection)
      */
     protected fun isTokenActive(token: Long): Boolean {
         val session = currentSession()
@@ -203,20 +203,20 @@ abstract class BaseUsbAoaKernel(
     }
 
     /**
-     * 检查会话是否仍然活跃
+     * Check if session is still active
      */
     protected fun isSessionActive(session: UsbAoaSession?): Boolean {
         return session != null && sessionRef.get() == session
     }
 
-    // ==================== 数据接收任务管理 ====================
+    // ==================== Data Receive Task Management ====================
 
-    // 数据接收任务（已废弃，使用 session.scope 管理）
+    // Data receive task (deprecated, use session.scope to manage)
     @Deprecated("Use session.scope to manage receive job", ReplaceWith("session.scope.launch { ... }"))
     protected var dataReceiveJob: Job? = null
 
     /**
-     * 重启数据接收任务（已废弃，使用 session.scope 管理）
+     * Restart data receive task (deprecated, use session.scope to manage)
      */
     @Deprecated("Use session.scope to manage receive job", ReplaceWith("session.scope.launch { ... }"))
     protected fun restartDataReceive(start: () -> Job) {
@@ -224,37 +224,37 @@ abstract class BaseUsbAoaKernel(
         dataReceiveJob = start()
     }
 
-    // ==================== AsyncServiceKernel抽象方法实现 ====================
+    // ==================== AsyncServiceKernel Abstract Method Implementation ====================
 
     /**
-     * 获取服务类型名称（用于日志）
+     * Get service type name (for logging)
      */
     override fun getServiceType(): String {
         return "USB AOA"
     }
 
     /**
-     * 获取期望的协议类型描述
+     * Get expected protocol type description
      */
     override fun getExpectedProtocolType(): String {
         return "USB"
     }
 
     /**
-     * 验证协议类型是否有效
+     * Validate if protocol type is valid
      */
     override fun isValidProtocolType(parseResult: ProtocolParseResult): Boolean {
         return parseResult is ProtocolParseResult.UsbProtocol
     }
 
     /**
-     * 执行具体的连接逻辑
+     * Execute specific connection logic
      * 
-     * 优化：
-     * 1. 创建新 session，取消旧 session，避免并发连接
-     * 2. 【修复】立即设置 session 到 sessionRef，确保 requestPermission() 能获取到有效 token
-     * 3. 在 session.scope 内启动连接流程
-     * 4. 统一异常兜底，确保异常一定回调错误
+     * Optimizations:
+     * 1. Create new session, cancel old session, avoid concurrent connections
+     * 2. [Fix] Immediately set session to sessionRef, ensure requestPermission() can get valid token
+     * 3. Launch connection flow within session.scope
+     * 4. Unified exception fallback, ensure exceptions always callback error
      */
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
         if (parseResult !is ProtocolParseResult.UsbProtocol) {
@@ -262,7 +262,7 @@ abstract class BaseUsbAoaKernel(
             return
         }
 
-        // 取消旧连接任务和旧 session
+        // Cancel old connection task and old session
         connectJob?.cancel()
         val oldSession = sessionRef.getAndSet(null)
         oldSession?.let {
@@ -271,14 +271,14 @@ abstract class BaseUsbAoaKernel(
             }
         }
 
-        // 【修复 P0-1】立即创建新 session 并设置到 sessionRef
-        // 这样可以确保后续的 requestPermission() 调用时，currentOpToken() 能返回有效值
-        // 避免 pendingPermissionOpToken = 0 导致 permission 广播被误判为 stale
+        // [Fix P0-1] Immediately create new session and set to sessionRef
+        // This ensures that when requestPermission() is called later, currentOpToken() can return valid value
+        // Avoid pendingPermissionOpToken = 0 causing permission broadcast to be misjudged as stale
         val session = createSession("performConnect")
         sessionRef.set(session)
         LogUtil.i(TAG, "Session created and set: token=${session.token}")
 
-        // 在 session.scope 内启动连接流程（单层 launch）
+        // Launch connection flow within session.scope (single layer launch)
         connectJob = session.scope.launch {
             LogUtil.i(TAG, "Starting performUsbConnect in coroutine, token=${session.token}")
             runCatching {
@@ -286,24 +286,24 @@ abstract class BaseUsbAoaKernel(
             }.onFailure { t ->
                 LogUtil.e(TAG, "performUsbConnect failed: ${t.message}")
                 t.printStackTrace()
-                // 统一异常兜底，确保异常一定回调错误
+                // Unified exception fallback, ensure exceptions always callback error
                 handleConnectionError(
                     t.message ?: InnerErrorCode.E254.description,
                     connectionCallback,
                     InnerErrorCode.E254.code
                 )
-                // 结束 session（在协程内调用 suspend 函数）
+                // End session (call suspend function within coroutine)
                 endSession(session.token, "connect failed: ${t.message}")
             }
         }
     }
 
     /**
-     * 执行USB连接逻辑（由子类实现）
+     * Execute USB connection logic (implemented by subclass)
      * 
-     * @param parseResult USB协议解析结果
-     * @param connectionCallback 连接回调
-     * @param session 连接会话，包含 token、scope、phase、io 等
+     * @param parseResult USB protocol parse result
+     * @param connectionCallback Connection callback
+     * @param session Connection session, contains token, scope, phase, io, etc.
      */
     protected abstract suspend fun performUsbConnect(
         parseResult: ProtocolParseResult.UsbProtocol,
@@ -312,27 +312,27 @@ abstract class BaseUsbAoaKernel(
     )
 
     /**
-     * 启动数据接收（由子类实现）
+     * Start data receive (implemented by subclass)
      * 
-     * 注意：子类应该在 session.scope 内启动接收任务，确保 session 结束时自动取消
+     * Note: Subclass should launch receive task within session.scope, ensure automatic cancellation when session ends
      * 
-     * @param session 连接会话
-     * @param inputStream 输入流
+     * @param session Connection session
+     * @param inputStream Input stream
      */
     protected abstract fun startDataReceive(session: UsbAoaSession, inputStream: InputStream?)
 
     /**
-     * 断开连接（内部方法，由子类实现）
+     * Disconnect connection (internal method, implemented by subclass)
      * 
-     * @param token 会话 token，用于验证断开的是当前会话
-     * @param reason 断开原因（用于日志）
+     * @param token Session token, used to verify disconnecting is current session
+     * @param reason Disconnect reason (for logging)
      */
     protected abstract suspend fun disconnectInternal(token: Long, reason: String)
 
     /**
-     * 执行具体的断开连接逻辑
+     * Execute specific disconnect logic
      * 
-     * 注意：connectJob 的取消已经在 AsyncServiceKernel.disconnect() 中完成，这里不需要重复取消
+     * Note: connectJob cancellation is already done in AsyncServiceKernel.disconnect(), no need to cancel again here
      */
     override fun performDisconnect() {
         val session = currentSession()
@@ -344,16 +344,16 @@ abstract class BaseUsbAoaKernel(
     }
 
     /**
-     * 清理公共资源
+     * Clean up common resources
      * 
-     * 注意：connectJob 的清理已经在 AsyncServiceKernel.cleanupCommonResources() 中完成
-     * 这里只需要清理 USB AOA 特有的 session
+     * Note: connectJob cleanup is already done in AsyncServiceKernel.cleanupCommonResources()
+     * Only need to clean up USB AOA specific session here
      */
     override fun cleanupCommonResources() {
         super.cleanupCommonResources()
 
-        // 结束当前 session（会自动取消所有子任务和关闭 IO 资源）
-        // 使用 runBlocking 调用 endSession，避免重复 close IO
+        // End current session (will automatically cancel all child tasks and close IO resources)
+        // Use runBlocking to call endSession, avoid duplicate close IO
         val session = sessionRef.getAndSet(null)
         session?.let {
             runBlocking {
@@ -363,7 +363,7 @@ abstract class BaseUsbAoaKernel(
     }
 
     /**
-     * 清理资源（由子类实现）
+     * Clean up resources (implemented by subclass)
      */
     abstract fun release()
 }

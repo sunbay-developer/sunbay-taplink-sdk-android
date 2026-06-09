@@ -1,23 +1,37 @@
 package com.sunmi.tapro.taplink.communication.util
 
 import android.content.Context
-import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 
 /**
- * 错误字符串资源辅助类
- * 
- * 用于从资源文件中获取错误描述和解决方案的本地化字符串
- * 
+ * Error string resource helper class.
+ *
+ * Used to retrieve localized strings for error descriptions and solutions from resource files.
+ *
+ * Must be initialized via [init] before use (called automatically by [TaplinkServiceKernel]).
+ *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object ErrorStringHelper {
+
+    private var appContext: Context? = null
+
+    /**
+     * Initialize the helper with an application context.
+     *
+     * Called once from [TaplinkServiceKernel] constructor — callers do not need to invoke this directly.
+     *
+     * @param context Any [Context]; the application context is stored internally.
+     */
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
     
     /**
-     * 获取错误描述
+     * Get error description
      * 
-     * @param code 错误码
-     * @return 错误描述字符串，如果未找到则返回默认值
+     * @param code Error code
+     * @return Error description string, returns default value if not found
      */
     fun getDescription(code: String): String {
         val context = getContext() ?: return getDefaultDescription(code)
@@ -33,10 +47,10 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取解决方案
+     * Get solution
      * 
-     * @param code 错误码
-     * @return 解决方案字符串，如果未找到则返回null
+     * @param code Error code
+     * @return Solution string, returns null if not found
      */
     fun getSolution(code: String): String? {
         val context = getContext() ?: return getDefaultSolution(code)
@@ -52,18 +66,18 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取应用上下文
+     * Get application context
      */
     private fun getContext(): Context? {
-        return TaplinkServiceKernel.getInstance()?.getContext()
+        return appContext
     }
     
     /**
-     * 获取字符串资源ID
+     * Get string resource ID
      * 
-     * @param context 上下文
-     * @param resourceName 资源名称
-     * @return 资源ID，如果未找到则返回0
+     * @param context Context
+     * @param resourceName Resource name
+     * @return Resource ID, returns 0 if not found
      */
     private fun getStringResourceId(context: Context, resourceName: String): Int {
         return try {
@@ -78,7 +92,7 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取默认错误描述（当资源文件不可用时的后备方案）
+     * Get default error description (fallback when resource files are unavailable)
      */
     private fun getDefaultDescription(code: String): String {
         return when (code.uppercase()) {
@@ -88,17 +102,17 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取默认解决方案（当资源文件不可用时的后备方案）
+     * Get default solution (fallback when resource files are unavailable)
      */
     private fun getDefaultSolution(code: String): String? {
-        return null // 当资源文件不可用时，不提供默认解决方案
+        return null // Do not provide default solution when resource files are unavailable
     }
     
     /**
-     * 获取错误分类的显示名称
+     * Get error category display name
      * 
-     * @param categoryName 分类名称（如 "initialization", "connection"）
-     * @return 分类显示名称，如果未找到则返回默认值
+     * @param categoryName Category name (e.g., "initialization", "connection")
+     * @return Category display name, returns default value if not found
      */
     fun getCategoryDisplayName(categoryName: String): String {
         val context = getContext() ?: return getDefaultCategoryDisplayName(categoryName)
@@ -114,10 +128,10 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取错误分类的描述
+     * Get error category description
      * 
-     * @param categoryName 分类名称（如 "initialization", "connection"）
-     * @return 分类描述，如果未找到则返回默认值
+     * @param categoryName Category name (e.g., "initialization", "connection")
+     * @return Category description, returns default value if not found
      */
     fun getCategoryDescription(categoryName: String): String {
         val context = getContext() ?: return getDefaultCategoryDescription(categoryName)
@@ -133,7 +147,7 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取默认分类显示名称（当资源文件不可用时的后备方案）
+     * Get default category display name (fallback when resource files are unavailable)
      */
     private fun getDefaultCategoryDisplayName(categoryName: String): String {
         return when (categoryName.lowercase()) {
@@ -147,7 +161,7 @@ object ErrorStringHelper {
     }
     
     /**
-     * 获取默认分类描述（当资源文件不可用时的后备方案）
+     * Get default category description (fallback when resource files are unavailable)
      */
     private fun getDefaultCategoryDescription(categoryName: String): String {
         return when (categoryName.lowercase()) {

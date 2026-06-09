@@ -1,23 +1,28 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
+import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
+import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 
 /**
- * 销售交易请求
+ * Sale Transaction Request
  *
- * 用于发起销售交易的请求类，包含所有必需和可选的字段
+ * Request class for initiating sale transactions, containing all required and optional fields
  *
- * @param referenceOrderId 参考订单号（必需，6-32字符）
- * @param transactionRequestId 交易请求ID（必需）
- * @param amount 金额信息（必需）
- * @param description 交易描述（可选，最多128字符）
- * @param paymentMethod 支付方式信息（可选）
- * @param attach 附加信息（可选）
- * @param notifyUrl 通知URL（可选）
- * @param requestTimeout 请求超时时间（可选，单位：秒）
- * @param staffInfo 员工信息（可选）
+ * @param referenceOrderId Reference order ID (required, 6-32 characters)
+ * @param transactionRequestId Transaction request ID (required)
+ * @param amount Amount information (required)
+ * @param description Transaction description (optional, maximum 128 characters)
+ * @param paymentMethod Payment method information (optional)
+ * @param cardNetworkType Card network type (optional, values: CREDIT, DEBIT)
+ * @param attach Additional information (optional)
+ * @param notifyUrl Notification URL (optional)
+ * @param requestTimeout Request timeout duration (optional, unit: seconds)
+ * @param staffInfo Staff information (optional)
+ * @param tipConfig Tip configuration (optional, mutually exclusive with amount.tipAmount)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -28,10 +33,13 @@ data class SaleRequest(
     val amount: AmountInfo,
     val description: String? = null,
     val paymentMethod: PaymentMethodInfo? = null,
+    val cardNetworkType: CardNetworkType? = null,
     val attach: String? = null,
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
-    val staffInfo: StaffInfo? = null
+    val staffInfo: StaffInfo? = null,
+    val tipConfig: TipConfig? = null,
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -39,18 +47,19 @@ data class SaleRequest(
             TransactionRequestValidator.validateReferenceOrderId(referenceOrderId),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
             TransactionRequestValidator.validateAmount(amount),
+            TransactionRequestValidator.validateTipConfig(amount.tipAmount, tipConfig),
         )
     }
 
     companion object {
         /**
-         * 创建SaleRequest构建器
+         * Create SaleRequest builder
          */
         fun builder(): Builder = Builder()
     }
 
     /**
-     * SaleRequest构建器
+     * SaleRequest Builder
      */
     class Builder {
         private var referenceOrderId: String? = null
@@ -58,13 +67,16 @@ data class SaleRequest(
         private var amount: AmountInfo? = null
         private var description: String? = null
         private var paymentMethod: PaymentMethodInfo? = null
+        private var cardNetworkType: CardNetworkType? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
+        private var tipConfig: TipConfig? = null
+        private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         /**
-         * 设置参考订单号
+         * Set reference order ID
          */
         fun setReferenceOrderId(referenceOrderId: String): Builder {
             this.referenceOrderId = referenceOrderId
@@ -72,7 +84,7 @@ data class SaleRequest(
         }
 
         /**
-         * 设置交易请求ID
+         * Set transaction request ID
          */
         fun setTransactionRequestId(transactionRequestId: String): Builder {
             this.transactionRequestId = transactionRequestId
@@ -80,7 +92,7 @@ data class SaleRequest(
         }
 
         /**
-         * 设置金额信息
+         * Set amount information
          */
         fun setAmount(amount: AmountInfo): Builder {
             this.amount = amount
@@ -88,7 +100,7 @@ data class SaleRequest(
         }
 
         /**
-         * 设置交易描述
+         * Set transaction description
          */
         fun setDescription(description: String?): Builder {
             this.description = description
@@ -96,7 +108,7 @@ data class SaleRequest(
         }
 
         /**
-         * 设置支付方式信息
+         * Set payment method information
          */
         fun setPaymentMethod(paymentMethod: PaymentMethodInfo): Builder {
             this.paymentMethod = paymentMethod
@@ -104,7 +116,15 @@ data class SaleRequest(
         }
 
         /**
-         * 设置附加信息
+         * Set card network type
+         */
+        fun setCardNetworkType(cardNetworkType: CardNetworkType): Builder {
+            this.cardNetworkType = cardNetworkType
+            return this
+        }
+
+        /**
+         * Set additional information
          */
         fun setAttach(attach: String): Builder {
             this.attach = attach
@@ -112,7 +132,7 @@ data class SaleRequest(
         }
 
         /**
-         * 设置通知URL
+         * Set notification URL
          */
         fun setNotifyUrl(notifyUrl: String): Builder {
             this.notifyUrl = notifyUrl
@@ -120,7 +140,7 @@ data class SaleRequest(
         }
 
         /**
-         * 设置请求超时时间
+         * Set request timeout duration
          */
         fun setRequestTimeout(requestTimeout: Long): Builder {
             this.requestTimeout = requestTimeout
@@ -128,7 +148,7 @@ data class SaleRequest(
         }
 
         /**
-         * 设置员工信息
+         * Set staff information
          */
         fun setStaffInfo(staffInfo: StaffInfo): Builder {
             this.staffInfo = staffInfo
@@ -136,9 +156,25 @@ data class SaleRequest(
         }
 
         /**
-         * 构建SaleRequest实例
+         * Set tip configuration
+         */
+        fun setTipConfig(tipConfig: TipConfig): Builder {
+            this.tipConfig = tipConfig
+            return this
+        }
+
+        /**
+         * Set print receipt
+         */
+        fun setPrintReceipt(printReceipt: PrintReceipt): Builder {
+            this.printReceipt = printReceipt
+            return this
+        }
+
+        /**
+         * Build SaleRequest instance
          * 
-         * @throws TransactionRequestValidationException 如果验证失败
+         * @throws TransactionRequestValidationException If validation fails
          */
         fun build(): SaleRequest {
             val request = SaleRequest(
@@ -147,10 +183,13 @@ data class SaleRequest(
                 amount = requireNotNull(amount) { "amount is required" },
                 description = description,
                 paymentMethod = paymentMethod,
+                cardNetworkType = cardNetworkType,
                 attach = attach,
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
-                staffInfo = staffInfo
+                staffInfo = staffInfo,
+                tipConfig = tipConfig,
+                printReceipt = printReceipt,
             )
 
             val validationResult = request.validate()

@@ -6,54 +6,54 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import java.net.URI
 
 /**
- * 统一协议管理工具类
+ * Unified protocol management utility class
  *
- * 整合协议构建和解析功能，避免在不同层次重复处理协议逻辑
+ * Integrates protocol building and parsing functionality to avoid duplicate protocol logic handling across different layers
  *
- * 功能特性：
- * 1. 协议字符串解析
- * 2. 协议字符串构建
- * 3. 协议格式验证
- * 4. 协议类型转换
+ * Features:
+ * 1. Protocol string parsing
+ * 2. Protocol string building
+ * 3. Protocol format validation
+ * 4. Protocol type conversion
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object ProtocolManager {
 
     private const val TAG = "ProtocolManager"
 
-    // ==================== 协议解析 ====================
+    // ==================== Protocol Parsing ====================
 
     /**
-     * 解析协议字符串
+     * Parse protocol string
      *
-     * @param protocol 协议字符串
-     * @return ProtocolParseResult 解析结果
+     * @param protocol Protocol string
+     * @return ProtocolParseResult Parse result
      */
     fun parseProtocol(protocol: String): ProtocolParseResult {
         return ProtocolParser.parse(protocol)
     }
 
     /**
-     * 验证协议格式是否有效
+     * Validate if protocol format is valid
      *
-     * @param protocol 协议字符串
-     * @return Boolean 是否有效
+     * @param protocol Protocol string
+     * @return Boolean Whether valid
      */
     fun isValidProtocol(protocol: String): Boolean {
         val result = parseProtocol(protocol)
         return result !is ProtocolParseResult.Error
     }
 
-    // ==================== 协议构建 ====================
+    // ==================== Protocol Building ====================
 
     /**
-     * 构建本地服务协议
+     * Build local service protocol
      *
-     * @param packageName 包名
-     * @param action 动作（可选）
-     * @return String 协议字符串
+     * @param packageName Package name
+     * @param action Action (optional)
+     * @return String Protocol string
      */
     fun buildLocalProtocol(
         packageName: String = LocalServiceConstant.DEFAULT_PACKAGE_NAME,
@@ -63,25 +63,25 @@ object ProtocolManager {
     }
 
     /**
-     * 构建局域网协议
+     * Build LAN protocol
      *
-     * @param host 主机地址
-     * @param port 端口号
-     * @param secure 是否使用安全连接（wss）
-     * @return String 协议字符串
+     * @param host Host address
+     * @param port Port number
+     * @param secure Whether to use secure connection (wss)
+     * @return String Protocol string
      */
     fun buildLanProtocol(host: String, port: Int, secure: Boolean = false): String {
         return ProtocolConstants.buildLanProtocol(host, port, secure)
     }
 
     /**
-     * 构建虚拟串口协议
+     * Build virtual serial port protocol
      *
-     * @param baudRate 波特率
-     * @param dataBits 数据位
-     * @param parity 校验位
-     * @param stopBits 停止位
-     * @return String 协议字符串
+     * @param baudRate Baud rate
+     * @param dataBits Data bits
+     * @param parity Parity bit
+     * @param stopBits Stop bits
+     * @return String Protocol string
      */
     fun buildVspProtocol(
         baudRate: Int = 115200,
@@ -93,33 +93,40 @@ object ProtocolManager {
     }
 
     /**
-     * 构建USB Host协议
+     * Build USB Host protocol
      *
-     * @param deviceName 设备名称（可选）
-     * @param deviceId 设备ID（可选）
-     * @return String 协议字符串
+     * @param deviceName Device name (optional)
+     * @param deviceId Device ID (optional)
+     * @return String Protocol string
      */
     fun buildUsbHostProtocol(deviceName: String? = null, deviceId: String? = null): String {
         return ProtocolConstants.buildUsbHostProtocol(deviceName, deviceId)
     }
 
     /**
-     * 构建USB Accessory协议
+     * Build USB Accessory protocol
      *
-     * @return String 协议字符串
+     * @return String Protocol string
      */
     fun buildUsbAccessoryProtocol(): String {
         return ProtocolConstants.buildUsbAccessoryProtocol()
     }
 
     /**
-     * 构建RS232协议
+     * Build RS232 protocol
      *
-     * @param devicePath 设备路径
-     * @param baudRate 波特率
-     * @return String 协议字符串
+     * @param baudRate Baud rate (default 115200)
+     * @param dataBits Data bits (default 8)
+     * @param parity Parity bit (default "n")
+     * @param stopBits Stop bits (default 1)
+     * @return String Protocol string
      */
-    fun buildRs232Protocol(): String {
-        return ProtocolConstants.buildRs232Protocol()
+    fun buildRs232Protocol(
+        baudRate: Int = 115200,
+        dataBits: Int = 8,
+        parity: String = "n",
+        stopBits: Int = 1
+    ): String {
+        return ProtocolConstants.buildRs232Protocol(baudRate, dataBits, parity, stopBits)
     }
 }

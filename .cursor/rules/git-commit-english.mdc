@@ -1,0 +1,24 @@
+---
+description: Git commit messages must be written in English
+alwaysApply: true
+---
+
+# Git Commit Messages Must Be in English
+
+All git commit messages **must** be written in English, including:
+
+- Commit title (subject line)
+- Commit body (description)
+- Any bullet points or changelog entries
+
+Use conventional commit format:
+
+```
+feat: add cable protocol auto-retry strategy
+fix: resolve VSP error callback not propagating to upper layer
+refactor: replace blocking detection with try-order approach
+docs: update integration guide
+chore: bump SDK version to 1.0.6
+```
+
+Even if the user communicates in Chinese or another language, always write the commit message in English.

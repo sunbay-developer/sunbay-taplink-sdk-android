@@ -6,17 +6,17 @@ import java.io.IOException
 import java.net.*
 
 /**
- * 网络连通性检查器
+ * Network connectivity checker
  * 
- * 用于检测与特定主机的网络连通性，补充WebSocket连接状态检查的不足
+ * Used to detect network connectivity to specific hosts, supplementing WebSocket connection status checks
  * 
- * 重要说明：
- * - 默认方法（isHostReachable、checkConnectivityDetailed）仅使用ping检查，不会创建TCP连接
- * - 这样设计是为了避免干扰现有的WebSocket连接，特别是当服务器只支持单客户端连接时
- * - 如果需要TCP连接检查，请使用带"WithTcp"后缀的方法，但要确认服务器支持多客户端连接
+ * Important notes:
+ * - Default methods (isHostReachable, checkConnectivityDetailed) only use ping checks, do not create TCP connections
+ * - This design is to avoid interfering with existing WebSocket connections, especially when server only supports single client connection
+ * - If TCP connection check is needed, use methods with "WithTcp" suffix, but confirm server supports multiple client connections
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class NetworkConnectivityChecker {
     
@@ -27,13 +27,13 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 检查与指定主机的网络连通性
+     * Check network connectivity to specified host
      * 
-     * 注意：为避免干扰现有连接，此方法仅使用ping检查，不会创建TCP连接
+     * Note: To avoid interfering with existing connections, this method only uses ping checks, does not create TCP connections
      * 
-     * @param host 目标主机
-     * @param port 目标端口（仅用于日志记录，实际检查使用ping）
-     * @param timeoutMs 超时时间（毫秒）
+     * @param host Target host
+     * @param port Target port (only for logging, actual check uses ping)
+     * @param timeoutMs Timeout duration (milliseconds)
      * @return true if reachable, false otherwise
      */
     suspend fun isHostReachable(
@@ -45,8 +45,8 @@ class NetworkConnectivityChecker {
             try {
                 LogUtil.d(TAG, "Checking connectivity to $host:$port with timeout ${timeoutMs}ms (using ping only)")
                 
-                // 仅使用ping检查，避免TCP连接干扰现有连接
-                // 对于只支持单客户端的服务器，TCP连接检查会导致现有连接断开
+                // Only use ping check to avoid TCP connection interfering with existing connections
+                // For servers that only support single client, TCP connection check will cause existing connection to disconnect
                 val pingReachable = checkPingConnectivity(host, timeoutMs)
                 if (pingReachable) {
                     LogUtil.d(TAG, "Host $host is reachable via ping")
@@ -64,14 +64,14 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 检查与指定主机的网络连通性（包含TCP检查）
+     * Check network connectivity to specified host (includes TCP check)
      * 
-     * 警告：此方法会创建TCP连接，可能会干扰现有连接！
-     * 仅在确认服务器支持多客户端连接时使用
+     * Warning: This method will create TCP connection, may interfere with existing connections!
+     * Only use when confirmed server supports multiple client connections
      * 
-     * @param host 目标主机
-     * @param port 目标端口
-     * @param timeoutMs 超时时间（毫秒）
+     * @param host Target host
+     * @param port Target port
+     * @param timeoutMs Timeout duration (milliseconds)
      * @return true if reachable, false otherwise
      */
     suspend fun isHostReachableWithTcp(
@@ -83,14 +83,14 @@ class NetworkConnectivityChecker {
             try {
                 LogUtil.d(TAG, "Checking connectivity to $host:$port with TCP and ping")
                 
-                // 方法1：尝试TCP连接
+                // Method 1: Try TCP connection
                 val tcpReachable = checkTcpConnectivity(host, port, timeoutMs)
                 if (tcpReachable) {
                     LogUtil.d(TAG, "Host $host:$port is reachable via TCP")
                     return@withContext true
                 }
                 
-                // 方法2：尝试ping（如果TCP失败）
+                // Method 2: Try ping (if TCP fails)
                 val pingReachable = checkPingConnectivity(host, PING_TIMEOUT_MS)
                 if (pingReachable) {
                     LogUtil.d(TAG, "Host $host is reachable via ping")
@@ -108,7 +108,7 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 检查TCP连通性
+     * Check TCP connectivity
      */
     private suspend fun checkTcpConnectivity(host: String, port: Int, timeoutMs: Int): Boolean {
         return try {
@@ -134,7 +134,7 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 检查Ping连通性
+     * Check Ping connectivity
      */
     private suspend fun checkPingConnectivity(host: String, timeoutMs: Int): Boolean {
         return try {
@@ -151,11 +151,11 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 批量检查多个主机的连通性
+     * Batch check connectivity of multiple hosts
      * 
-     * @param hosts 主机列表（host:port格式）
-     * @param timeoutMs 每个主机的超时时间
-     * @return 可达主机的列表
+     * @param hosts Host list (host:port format)
+     * @param timeoutMs Timeout for each host
+     * @return List of reachable hosts
      */
     suspend fun checkMultipleHosts(
         hosts: List<Pair<String, Int>>, 
@@ -164,7 +164,7 @@ class NetworkConnectivityChecker {
         return withContext(Dispatchers.IO) {
             val reachableHosts = mutableListOf<Pair<String, Int>>()
             
-            // 并发检查所有主机
+            // Concurrently check all hosts
             val jobs = hosts.map { (host, port) ->
                 async {
                     if (isHostReachable(host, port, timeoutMs)) {
@@ -175,7 +175,7 @@ class NetworkConnectivityChecker {
                 }
             }
             
-            // 等待所有检查完成
+            // Wait for all checks to complete
             jobs.awaitAll()
             
             LogUtil.d(TAG, "Connectivity check completed: ${reachableHosts.size}/${hosts.size} hosts reachable")
@@ -184,7 +184,7 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 连通性检查结果
+     * Connectivity check result
      */
     data class ConnectivityResult(
         val isReachable: Boolean,
@@ -194,14 +194,14 @@ class NetworkConnectivityChecker {
     )
     
     /**
-     * 详细的连通性检查（仅使用ping）
+     * Detailed connectivity check (ping only)
      * 
-     * 注意：为避免干扰现有连接，此方法仅使用ping检查
+     * Note: To avoid interfering with existing connections, this method only uses ping checks
      * 
-     * @param host 目标主机
-     * @param port 目标端口（仅用于日志记录）
-     * @param timeoutMs 超时时间
-     * @return 详细的检查结果
+     * @param host Target host
+     * @param port Target port (only for logging)
+     * @param timeoutMs Timeout duration
+     * @return Detailed check result
      */
     suspend fun checkConnectivityDetailed(
         host: String, 
@@ -212,7 +212,7 @@ class NetworkConnectivityChecker {
             try {
                 LogUtil.d(TAG, "Performing detailed connectivity check for $host:$port (ping only)")
                 
-                // 仅使用ping检查，避免TCP连接干扰现有连接
+                // Only use ping check to avoid TCP connection interfering with existing connections
                 val pingResult = checkPingConnectivityDetailed(host, timeoutMs)
                 return@withContext pingResult
                 
@@ -230,15 +230,15 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 详细的连通性检查（包含TCP检查）
+     * Detailed connectivity check (includes TCP check)
      * 
-     * 警告：此方法会创建TCP连接，可能会干扰现有连接！
-     * 仅在确认服务器支持多客户端连接时使用
+     * Warning: This method will create TCP connection, may interfere with existing connections!
+     * Only use when confirmed server supports multiple client connections
      * 
-     * @param host 目标主机
-     * @param port 目标端口
-     * @param timeoutMs 超时时间
-     * @return 详细的检查结果
+     * @param host Target host
+     * @param port Target port
+     * @param timeoutMs Timeout duration
+     * @return Detailed check result
      */
     suspend fun checkConnectivityDetailedWithTcp(
         host: String, 
@@ -247,13 +247,13 @@ class NetworkConnectivityChecker {
     ): ConnectivityResult {
         return withContext(Dispatchers.IO) {
             try {
-                // 先尝试TCP连接
+                // First try TCP connection
                 val tcpResult = checkTcpConnectivityDetailed(host, port, timeoutMs)
                 if (tcpResult.isReachable) {
                     return@withContext tcpResult
                 }
                 
-                // TCP失败，尝试ping
+                // TCP failed, try ping
                 val pingResult = checkPingConnectivityDetailed(host, PING_TIMEOUT_MS)
                 return@withContext pingResult
                 
@@ -271,7 +271,7 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 详细的TCP连通性检查
+     * Detailed TCP connectivity check
      */
     private suspend fun checkTcpConnectivityDetailed(
         host: String, 
@@ -313,7 +313,7 @@ class NetworkConnectivityChecker {
     }
     
     /**
-     * 详细的Ping连通性检查
+     * Detailed Ping connectivity check
      */
     private suspend fun checkPingConnectivityDetailed(
         host: String, 

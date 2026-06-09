@@ -1,27 +1,29 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
+import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
- * 退款交易请求
+ * Refund Transaction Request
  *
- * 支持两种退款模式：
- * 1. 引用退款：基于原始交易ID或交易请求ID进行退款
- * 2. 非引用退款：基于参考订单号进行独立退款
+ * Supports two refund modes:
+ * 1. Referenced refund: Based on original transaction ID or transaction request ID
+ * 2. Non-referenced refund: Independent refund based on reference order ID
  *
- * @param transactionRequestId 交易请求ID（必需）
- * @param amount 退款金额信息（必需）
- * @param description 交易描述（可选，最多128字符）
- * @param originalTransactionId 原始交易ID（引用退款时使用）
- * @param originalTransactionRequestId 原始交易请求ID（引用退款时使用）
- * @param referenceOrderId 参考订单号（非引用退款时使用，6-32字符）
- * @param paymentMethod 支付方式信息（非引用退款时可选）
- * @param attach 附加信息（可选）
- * @param notifyUrl 通知URL（可选）
- * @param requestTimeout 请求超时时间（可选，单位：秒）
- * @param staffInfo 员工信息（可选）
+ * @param transactionRequestId Transaction request ID (required)
+ * @param amount Refund amount information (required)
+ * @param description Transaction description (optional, maximum 128 characters)
+ * @param originalTransactionId Original transaction ID (used for referenced refund)
+ * @param originalTransactionRequestId Original transaction request ID (used for referenced refund)
+ * @param referenceOrderId Reference order ID (used for non-referenced refund, 6-32 characters)
+ * @param paymentMethod Payment method information (optional for non-referenced refund)
+ * @param attach Additional information (optional)
+ * @param notifyUrl Notification URL (optional)
+ * @param requestTimeout Request timeout duration (optional, unit: seconds)
+ * @param staffInfo Staff information (optional)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -30,17 +32,19 @@ data class RefundRequest(
     val transactionRequestId: String,
     val amount: AmountInfo,
     val description: String? = null,
-    // 引用退款字段
+    // Referenced refund fields
     val originalTransactionId: String? = null,
     val originalTransactionRequestId: String? = null,
-    // 非引用退款字段
+    // Non-referenced refund fields
     val referenceOrderId: String? = null,
     val paymentMethod: PaymentMethodInfo? = null,
-    // 通用可选字段
+    val cardNetworkType: CardNetworkType? = null,
+    // Common optional fields
     val attach: String? = null,
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
-    val staffInfo: StaffInfo? = null
+    val staffInfo: StaffInfo? = null,
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO
 ) : BaseTransactionRequest() {
 
     init {
@@ -53,13 +57,13 @@ data class RefundRequest(
     }
 
     /**
-     * 判断是否为引用退款
+     * Check if this is a referenced refund
      */
     fun isReferencedRefund(): Boolean = 
         originalTransactionId != null || originalTransactionRequestId != null
 
     /**
-     * 判断是否为非引用退款
+     * Check if this is a non-referenced refund
      */
     fun isNonReferencedRefund(): Boolean = 
         referenceOrderId != null
@@ -71,10 +75,10 @@ data class RefundRequest(
         )
 
         val modeValidation = if (isReferencedRefund()) {
-            // 引用退款验证
+            // Referenced refund validation
             ValidationResult.success()
         } else {
-            // 非引用退款验证
+            // Non-referenced refund validation
             TransactionRequestValidator.validateReferenceOrderId(referenceOrderId)
         }
 
@@ -83,18 +87,18 @@ data class RefundRequest(
 
     companion object {
         /**
-         * 创建引用退款构建器
+         * Create referenced refund builder
          */
         fun referencedBuilder(): ReferencedBuilder = ReferencedBuilder()
 
         /**
-         * 创建非引用退款构建器
+         * Create non-referenced refund builder
          */
         fun nonReferencedBuilder(): NonReferencedBuilder = NonReferencedBuilder()
     }
 
     /**
-     * 引用退款构建器
+     * Referenced Refund Builder
      */
     class ReferencedBuilder {
         private var transactionRequestId: String? = null
@@ -102,10 +106,12 @@ data class RefundRequest(
         private var description: String? = null
         private var originalTransactionId: String? = null
         private var originalTransactionRequestId: String? = null
+        private var cardNetworkType: CardNetworkType? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
+        private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         fun setTransactionRequestId(transactionRequestId: String): ReferencedBuilder {
             this.transactionRequestId = transactionRequestId
@@ -132,6 +138,11 @@ data class RefundRequest(
             return this
         }
 
+        fun setCardNetworkType(cardNetworkType: CardNetworkType): ReferencedBuilder {
+            this.cardNetworkType = cardNetworkType
+            return this
+        }
+
         fun setAttach(attach: String): ReferencedBuilder {
             this.attach = attach
             return this
@@ -147,6 +158,11 @@ data class RefundRequest(
             return this
         }
 
+        fun setPrintReceipt(printReceipt: PrintReceipt): ReferencedBuilder {
+            this.printReceipt = printReceipt
+            return this
+        }
+
         fun build(): RefundRequest {
             require(originalTransactionId != null || originalTransactionRequestId != null) {
                 "Either originalTransactionId or originalTransactionRequestId must be provided for referenced refund"
@@ -158,9 +174,11 @@ data class RefundRequest(
                 description = description,
                 originalTransactionId = originalTransactionId,
                 originalTransactionRequestId = originalTransactionRequestId,
+                cardNetworkType = cardNetworkType,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                printReceipt = printReceipt
             )
 
             val validationResult = request.validate()
@@ -173,7 +191,7 @@ data class RefundRequest(
     }
 
     /**
-     * 非引用退款构建器
+     * Non-referenced Refund Builder
      */
     class NonReferencedBuilder {
         private var transactionRequestId: String? = null
@@ -181,9 +199,11 @@ data class RefundRequest(
         private var description: String? = null
         private var referenceOrderId: String? = null
         private var paymentMethod: PaymentMethodInfo? = null
+        private var cardNetworkType: CardNetworkType? = null
         private var attach: String? = null
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
+        private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         fun setTransactionRequestId(transactionRequestId: String): NonReferencedBuilder {
             this.transactionRequestId = transactionRequestId
@@ -210,6 +230,11 @@ data class RefundRequest(
             return this
         }
 
+        fun setCardNetworkType(cardNetworkType: CardNetworkType): NonReferencedBuilder {
+            this.cardNetworkType = cardNetworkType
+            return this
+        }
+
         fun setAttach(attach: String): NonReferencedBuilder {
             this.attach = attach
             return this
@@ -225,6 +250,11 @@ data class RefundRequest(
             return this
         }
 
+        fun setPrintReceipt(printReceipt: PrintReceipt): NonReferencedBuilder {
+            this.printReceipt = printReceipt
+            return this
+        }
+
         fun build(): RefundRequest {
             val request = RefundRequest(
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
@@ -232,9 +262,11 @@ data class RefundRequest(
                 description = description,
                 referenceOrderId = requireNotNull(referenceOrderId) { "referenceOrderId is required for non-referenced refund" },
                 paymentMethod = paymentMethod,
+                cardNetworkType = cardNetworkType,
                 attach = attach,
                 notifyUrl = notifyUrl,
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                printReceipt = printReceipt
             )
 
             val validationResult = request.validate()

@@ -15,6 +15,7 @@ import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
+import com.sunmi.tapro.taplink.communication.cable.vsp.VspHandshake
 import com.sunmi.tapro.taplink.communication.protocol.HexFrameBuffer
 import com.sunmi.tapro.taplink.communication.protocol.HexFrameProtocol
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
@@ -23,39 +24,61 @@ import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.hoho.android.usbserial.util.SerialInputOutputManager
+import kotlin.jvm.Volatile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 
+/** Interval for USB host presence check while RS232 (USB-serial) is connected. */
+private const val SERIAL_LINK_CHECK_INTERVAL_MS = 5_000L
+
+/** Same cadence as [VspHandshake.DEFAULT_INTERVAL_MS] — both ends send REQ so peer loss is detectable. */
+private const val RS232_HSK_REQ_INTERVAL_MS = 1_000L
+
+private const val RS232_HSK_SILENCE_CHECK_MS = 1_000L
+
+/** No handshake or application payload from peer after we have seen at least one — likely far-end unplug or dead link. */
+private const val RS232_HSK_PEER_SILENCE_MS = 5_000L
+
 /**
- * RS232串口服务内核实现类
+ * USB layer outcome for [continueConnection] / [connectToSerialDevice].
+ * [SerialReady] means the serial port is open; app-level "connected" still waits for [VspHandshake] from peer.
+ */
+private sealed class SerialUsbConnectResult {
+    object Failed : SerialUsbConnectResult()
+    object PermissionPending : SerialUsbConnectResult()
+    object SerialReady : SerialUsbConnectResult()
+}
+
+/**
+ * RS232 serial port service kernel implementation class
  *
- * 参考RS232Kernel和RS232NormalAdapter的实现，继承自AsyncServiceKernel
- * 支持USB转串口设备的自动检测和连接，使用十六进制传输协议
+ * References RS232Kernel and RS232NormalAdapter implementations, inherits from AsyncServiceKernel
+ * Supports automatic detection and connection of USB-to-serial devices, uses hexadecimal transmission protocol
  *
- * 协议格式：rs232://baudRate/dataBits/parity/stopBits?device=deviceName
+ * Protocol format: rs232://baudRate/dataBits/parity/stopBits?device=deviceName
  *
- * 功能特性：
- * - 支持多种USB转串口芯片（PL2303、CH340、FTDI等）
- * - 自动设备检测和驱动匹配
- * - USB权限管理
- * - 异步数据收发
- * - 十六进制数据传输（高性能模式）
- * - 完整的生命周期管理
+ * Features:
+ * - Supports multiple USB-to-serial chips (PL2303, CH340, FTDI, etc.)
+ * - Automatic device detection and driver matching
+ * - USB permission management
+ * - Asynchronous data transmission and reception
+ * - Hexadecimal data transmission (high-performance mode)
+ * - Complete lifecycle management
  *
- * 十六进制传输协议：
- * - 帧结构：FF + 长度(4位) + 数据(十六进制) + 校验和(2位) + FE
- * - 优势：固定帧边界、校验和验证、高传输效率
- * - 解决了JSON分片和数据错乱问题
+ * Hexadecimal transmission protocol:
+ * - Frame structure: FF + Length(4 bits) + Data(hex) + Checksum(2 bits) + FE
+ * - Advantages: Fixed frame boundaries, checksum verification, high transmission efficiency
+ * - Solves JSON fragmentation and data corruption issues
  *
- * @param appId 应用ID
- * @param appSecretKey 应用密钥
- * @param context Android上下文
+ * @param appId Application ID
+ * @param appSecretKey Application secret key
+ * @param context Android context
  *
  * @author TaPro Team
  * @since 2025-01-03
@@ -68,16 +91,16 @@ open class SerialServiceKernel(
 
     private val TAG = "SerialServiceKernel"
 
-    // USB管理器
+    // USB manager
     private val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
-    // USB串口相关
+    // USB serial port related
     private var usbSerialPort: UsbSerialPort? = null
     private var usbSerialDriver: UsbSerialDriver? = null
     private var usbConnection: UsbDeviceConnection? = null
     private var usbIoManager: SerialInputOutputManager? = null
 
-    // 串口配置参数
+    // Serial port configuration parameters
     private var baudRate: Int = 115200
     private var dataBits: Int = 8
     private var parity: Int = UsbSerialPort.PARITY_NONE
@@ -85,40 +108,77 @@ open class SerialServiceKernel(
     private var targetDeviceName: String? = null
     private var portNum: Int = 0
 
-    // 权限管理
+    /** Preserved for [notifyConnectionSuccess] extra map (parity/stopBits as in [ProtocolParseResult.SerialProtocol]). */
+    private var lastSerialParityLabel: String = ""
+    private var lastSerialStopBitsProtocol: Int = 1
+
+    /** Must match PendingIntent intent action and IntentFilter (Android USB permission pattern). */
     private val permissionAction = "com.sunmi.tapro.taplink.serial.USB_PERMISSION"
-    private val permissionPendingIntent: PendingIntent = createPermissionPendingIntent()
+
     private var pendingDevice: UsbDevice? = null
     private var isReceiverRegistered: Boolean = false
 
-    // USB权限状态
+    // USB permission status
     private enum class UsbPermission {
         Unknown, Requested, Granted, Denied
     }
 
     private var usbPermission = UsbPermission.Unknown
 
-    // 超时管理
+    // Timeout management
     private var permissionTimeoutJob: Job? = null
 
-    // ==================== 十六进制数据处理 (高性能传输模式) ====================
+    /**
+     * Periodic USB presence check while CONNECTED.
+     *
+     * **VSP** uses application-level liveness: the peer sends `VspHandshake.REQ` and the client
+     * replies with ACK from `VSPClientKernel.sendHandshakeAck` inside the read loop — not LAN
+     * `HeartbeatManager`. I/O errors then go through `handleConnectionError`.
+     *
+     * **RS232 Hex** uses `SerialInputOutputManager` + hex framing, not the VSP text read loop, so the
+     * same REQ/ACK path is not wired here; unplug often drops the device from `UsbManager.deviceList`
+     * before `onRunError`. This job adds a **host-side attach check**, complementary to VSP's peer-driven
+     * handshake rather than a duplicate of `sendHandshakeAck`.
+     */
+    private var serialLinkWatchdogJob: Job? = null
+
+    private var serialHandshakeSendJob: Job? = null
+    private var serialHandshakeSilenceJob: Job? = null
+
+    /** True between USB serial open and first peer [VspHandshake] marker (REQ/ACK). */
+    @Volatile
+    private var awaitingPeerHandshake: Boolean = false
+
+    private var peerHandshakeAwaitSendJob: Job? = null
+    private var peerHandshakeAwaitTimeoutJob: Job? = null
+
+    private val handshakeStreamLock = Any()
+    private val handshakeStreamBuf = StringBuilder(256)
+
+    @Volatile
+    private var lastPeerHandshakeActivityMillis: Long = 0L
+
+    /** Once true, missing peer handshake or application payload for [RS232_HSK_PEER_SILENCE_MS] is treated as disconnect. */
+    @Volatile
+    private var peerHandshakeEverSeen: Boolean = false
+
+    // ==================== Hexadecimal Data Processing (High-Performance Transmission Mode) ====================
     
     /**
-     * 十六进制帧缓冲区管理器
+     * Hexadecimal frame buffer manager
      */
     private var hexFrameBuffer: HexFrameBuffer? = null
 
-    // USB探测器
+    // USB prober
     private val usbDefaultProber = UsbSerialProber.getDefaultProber()
     private var usbCustomProber: UsbSerialProber? = null
 
-    // 权限请求广播接收器
+    // Permission request broadcast receiver
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             LogUtil.d(TAG, "USB permission broadcast received: ${intent.action}")
-
             if (permissionAction == intent.action) {
-                // 取消超时任务
+                // Cancel timeout task
                 permissionTimeoutJob?.cancel()
                 permissionTimeoutJob = null
 
@@ -127,9 +187,22 @@ open class SerialServiceKernel(
 
                 LogUtil.d(TAG, "USB permission result: $permissionGranted")
 
-                // 重新尝试连接
+                // Retry connection — USB open then wait for peer handshake before reporting CONNECTED
                 scope.launch {
-                    continueConnection()
+                    when (continueConnection()) {
+                        SerialUsbConnectResult.Failed -> {
+                            if (usbPermission == UsbPermission.Denied) {
+                                notifyConnectionError("USB permission denied", InnerErrorCode.E232)
+                            } else {
+                                notifyConnectionError(
+                                    "Failed to open serial device after USB permission granted",
+                                    InnerErrorCode.E232
+                                )
+                            }
+                        }
+                        SerialUsbConnectResult.PermissionPending -> Unit
+                        SerialUsbConnectResult.SerialReady -> startPeerHandshakeAwait()
+                    }
                 }
             }
         }
@@ -137,18 +210,26 @@ open class SerialServiceKernel(
 
     init {
         registerPermissionReceiver()
-        
-        // 初始化十六进制帧缓冲区
-        hexFrameBuffer = HexFrameBuffer(
-            scope = scope,
-            onFrameReceived = { frame ->
-                // 发送给数据接收器
-                dataReceiver?.invoke(frame)
-            }
-        )
     }
 
-    // ==================== AsyncServiceKernel 抽象方法实现 ====================
+    /**
+     * [HexFrameBuffer.stop] shuts down its single-thread executor and cannot be restarted.
+     * After [performDisconnect] we null the reference; each new USB session gets a fresh buffer.
+     */
+    private fun prepareHexFrameBufferForConnection() {
+        if (hexFrameBuffer == null) {
+            hexFrameBuffer = HexFrameBuffer(
+                scope = scope,
+                onFrameReceived = { frame ->
+                    dataReceiver?.invoke(frame)
+                }
+            )
+        } else {
+            hexFrameBuffer?.clear()
+        }
+    }
+
+    // ==================== AsyncServiceKernel Abstract Method Implementation ====================
 
     override fun getServiceType(): String = "RS232 Serial USB (Hex)"
 
@@ -159,16 +240,11 @@ open class SerialServiceKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
+        // After disconnect, kernel may be reused; cleanup unregisters USB permission receiver — re-register each connect
+        registerPermissionReceiver()
+
         val serialProtocol = parseResult as ProtocolParseResult.SerialProtocol
-
-        // 解析协议参数
-        baudRate = serialProtocol.baudRate
-        dataBits = serialProtocol.dataBits
-        parity = parseParityFromString(serialProtocol.parity)
-        stopBits = parseStopBitsFromInt(serialProtocol.stopBits)
-
-        // 解析目标设备名称（如果有）
-        targetDeviceName = extractDeviceName(serialProtocol.toString())
+        applySerialProtocolParams(serialProtocol)
 
         LogUtil.d(TAG, "Connecting to RS232 serial device (Hex mode):")
         LogUtil.d(TAG, "  baudRate=$baudRate, dataBits=$dataBits")
@@ -177,31 +253,60 @@ open class SerialServiceKernel(
 
         scope.launch {
             try {
-                // 清空缓冲区
-                hexFrameBuffer?.clear()
-                
-                val success = connectToSerialDevice()
-                if (success) {
-                    // 通知连接成功
-                    notifyConnectionSuccess(
-                        mapOf(
-                            "baudRate" to baudRate.toString(),
-                            "dataBits" to dataBits.toString(),
-                            "parity" to (serialProtocol.parity),
-                            "stopBits" to (serialProtocol.stopBits).toString(),
-                            "device" to (getConnectedDeviceName()),
-                            "portNum" to portNum.toString(),
-                            "mode" to "hex"
-                        )
-                    )
-                } else {
+                val ok = runSerialConnectLoop()
+                if (!ok) {
                     notifyConnectionError("Failed to connect to serial device", InnerErrorCode.E232)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to connect serial device: ${e.message}")
                 notifyConnectionError(e.message ?: "Unknown error", InnerErrorCode.E232)
             }
         }
+    }
+
+    /**
+     * Parses [ProtocolParseResult.SerialProtocol] into this kernel's baud/parity/stop bits and optional device filter.
+     */
+    private fun applySerialProtocolParams(serialProtocol: ProtocolParseResult.SerialProtocol) {
+        baudRate = serialProtocol.baudRate
+        dataBits = serialProtocol.dataBits
+        parity = parseParityFromString(serialProtocol.parity)
+        stopBits = parseStopBitsFromInt(serialProtocol.stopBits)
+        targetDeviceName = extractDeviceName(serialProtocol.toString())
+        lastSerialParityLabel = serialProtocol.parity
+        lastSerialStopBitsProtocol = serialProtocol.stopBits
+    }
+
+    /**
+     * One attempt to open USB serial and notify success; returns false without notifying on failure.
+     * TaPro [TaproRS232ServiceKernel] uses this inside [runSerialConnectLoop] to poll until a cable is plugged in.
+     */
+    protected suspend fun connectSerialSingleAttempt(): Boolean {
+        return try {
+            prepareHexFrameBufferForConnection()
+            clearHandshakeStreamBuffer()
+            when (connectToSerialDevice()) {
+                SerialUsbConnectResult.Failed -> false
+                SerialUsbConnectResult.PermissionPending -> true
+                SerialUsbConnectResult.SerialReady -> {
+                    startPeerHandshakeAwait()
+                    true
+                }
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "connectSerialSingleAttempt: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Default: single [connectSerialSingleAttempt] (no internal retry loop; caller triggers [performConnect]).
+     * TaPro `TaproRS232ServiceKernel` (app `lib_taplink_service`) overrides to poll until the USB serial is ready.
+     */
+    protected open suspend fun runSerialConnectLoop(): Boolean {
+        return connectSerialSingleAttempt()
     }
 
     override suspend fun performSendData(traceId: String, data: ByteArray, callback: InnerCallback?) {
@@ -211,26 +316,22 @@ open class SerialServiceKernel(
             return
         }
 
+        // sendData already holds sendMutex; do not nest withSendLock (Mutex is not reentrant).
         try {
             val originalString = String(data)
             LogUtil.d(TAG, "Serial sending original data: $originalString (${data.size} bytes)")
 
-            // 使用HexFrameProtocol编码数据
             val frameData = HexFrameProtocol.encode(data)
-            
             LogUtil.d(TAG, "Serial sending hex frame: ${String(frameData)} (${frameData.size} bytes)")
 
-            // 发送数据
             usbSerialPort?.write(frameData, 2000)
-
             LogUtil.d(TAG, "Serial hex data sent successfully: ${frameData.size} bytes")
-
         } catch (e: IOException) {
             LogUtil.e(TAG, "Failed to send serial hex data: ${e.message}")
             callback?.onError(InnerErrorCode.E304.code, e.message ?: InnerErrorCode.E304.description)
 
-            // 发送失败可能表示连接断开
-            handleConnectionError()
+            // Send failure may indicate connection lost — must notify ConnectionCallback so SDK layer runs DISCONNECTED/ERROR flow
+            notifySerialLinkLost("Serial send failed: ${e.message ?: "IOException"}")
         } catch (e: Exception) {
             LogUtil.e(TAG, "Unexpected error sending serial hex data: ${e.message}")
             callback?.onError(InnerErrorCode.E304.code, e.message ?: InnerErrorCode.E304.description)
@@ -241,23 +342,30 @@ open class SerialServiceKernel(
         LogUtil.d(TAG, "=== Serial Hex Disconnect Started ===")
 
         try {
-            // 取消权限超时任务
+            stopPeerHandshakeAwait()
+            stopSerialLinkWatchdog()
+            stopRs232HandshakeKeepalive()
+            peerHandshakeEverSeen = false
+            lastPeerHandshakeActivityMillis = 0L
+            clearHandshakeStreamBuffer()
+
+            // Cancel permission timeout task
             permissionTimeoutJob?.cancel()
             permissionTimeoutJob = null
 
-            // 停止并清空缓冲区
-            hexFrameBuffer?.stop()
-
-            // 停止IO管理器
+            // Stop reads before tearing down the hex buffer so late chunks are not dropped as "buffer stopped"
             usbIoManager?.setListener(null)
             usbIoManager?.stop()
             usbIoManager = null
 
-            // 关闭串口
+            hexFrameBuffer?.stop()
+            hexFrameBuffer = null
+
+            // Close serial port
             usbSerialPort?.close()
             usbSerialPort = null
 
-            // 关闭USB连接
+            // Close USB connection
             usbConnection?.close()
             usbConnection = null
 
@@ -271,10 +379,10 @@ open class SerialServiceKernel(
         LogUtil.d(TAG, "=== Serial Hex Disconnect Finished ===")
     }
 
-    // ==================== 串口连接操作方法 ====================
+    // ==================== Serial Port Connection Operation Methods ====================
 
     /**
-     * 检查串口连接是否就绪
+     * Check if serial port connection is ready
      */
     private fun isSerialReady(): Boolean {
         return currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED &&
@@ -282,75 +390,178 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 连接到串口设备
+     * Connect to serial port device (USB open only; peer handshake is [startPeerHandshakeAwait]).
      */
-    private suspend fun connectToSerialDevice(): Boolean {
-        // 重置权限状态
+    private suspend fun connectToSerialDevice(): SerialUsbConnectResult {
         usbPermission = UsbPermission.Unknown
-
         return continueConnection()
     }
 
     /**
-     * 继续连接流程
+     * Continue connection process.
+     * Do not reset [usbPermission] here — [permissionReceiver] calls this after the user grants/denies.
      */
-    private suspend fun continueConnection(): Boolean {
+    private suspend fun continueConnection(): SerialUsbConnectResult {
         return try {
-            // 检查权限状态
             if (usbPermission == UsbPermission.Denied) {
                 LogUtil.e(TAG, "USB permission denied")
-                return false
+                return SerialUsbConnectResult.Failed
             }
 
-            // 查找USB设备
             val device = findUsbDevice()
             if (device == null) {
                 LogUtil.e(TAG, "No suitable USB serial device found")
-                return false
+                return SerialUsbConnectResult.Failed
             }
 
-            // 获取驱动
             val driver = getUsbSerialDriver(device)
             if (driver == null) {
                 LogUtil.e(TAG, "No driver found for device: ${device.deviceName}")
-                return false
+                return SerialUsbConnectResult.Failed
             }
 
-            // 检查端口
             if (driver.ports.isEmpty()) {
                 LogUtil.e(TAG, "Device has no available ports")
-                return false
+                return SerialUsbConnectResult.Failed
             }
 
-            // 打开USB连接
             val connection = openUsbConnection(device)
             if (connection == null) {
-                // 可能需要请求权限
                 if (usbPermission == UsbPermission.Unknown) {
                     requestUsbPermission(device)
-                    return true // 权限请求已发送，等待结果
+                    return SerialUsbConnectResult.PermissionPending
                 }
-                return false
+                return SerialUsbConnectResult.Failed
             }
 
-            // 建立串口连接
-            return establishSerialConnection(driver, connection)
-
+            if (establishSerialConnection(driver, connection)) SerialUsbConnectResult.SerialReady
+            else SerialUsbConnectResult.Failed
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to connect to serial device: ${e.message}")
-            false
+            SerialUsbConnectResult.Failed
         }
     }
 
     /**
-     * 查找USB设备 (参考RS232NormalAdapter.findUsbDevice)
+     * After USB serial is open: **actively** send [VspHandshake.REQ] immediately, then on each
+     * [RS232_HSK_REQ_INTERVAL_MS] until peer REQ/ACK or application payload is seen ([completePeerHandshake]), or until
+     * [VspHandshake.DEFAULT_TIMEOUT_MS] elapses ([failPeerHandshakeAwait]).
+     *
+     * After [notifyConnectionSuccess], [startRs232HandshakeKeepalive] continues REQ/ACK liveness;
+     * [serialHandshakeSilenceJob] treats no peer handshake or payload activity for [RS232_HSK_PEER_SILENCE_MS] as disconnect.
+     */
+    private fun startPeerHandshakeAwait() {
+        if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTING) {
+            LogUtil.w(TAG, "startPeerHandshakeAwait ignored: status=$currentInnerConnectionStatus")
+            return
+        }
+        stopPeerHandshakeAwait()
+        awaitingPeerHandshake = true
+        peerHandshakeEverSeen = false
+        lastPeerHandshakeActivityMillis = System.currentTimeMillis()
+
+        peerHandshakeAwaitSendJob = scope.launch {
+            try {
+                var first = true
+                while (isActive && awaitingPeerHandshake) {
+                    try {
+                        withSendLock {
+                            val port = usbSerialPort ?: return@withSendLock
+                            port.write(VspHandshake.REQ.toByteArray(Charsets.UTF_8), 2000)
+                        }
+                        if (first) {
+                            first = false
+                            LogUtil.d(TAG, "Peer handshake: first REQ sent immediately after serial open (active probe)")
+                        }
+                    } catch (e: Exception) {
+                        LogUtil.e(TAG, "Peer handshake REQ send failed: ${e.message}")
+                        failPeerHandshakeAwait("Peer handshake REQ failed: ${e.message ?: "IOException"}")
+                        break
+                    }
+                    if (!awaitingPeerHandshake) break
+                    delay(RS232_HSK_REQ_INTERVAL_MS)
+                }
+            } catch (_: CancellationException) {
+                LogUtil.d(TAG, "Peer handshake await send job cancelled")
+            }
+        }
+
+        peerHandshakeAwaitTimeoutJob = scope.launch {
+            try {
+                delay(VspHandshake.DEFAULT_TIMEOUT_MS)
+                if (awaitingPeerHandshake) {
+                    LogUtil.e(TAG, "Peer handshake timed out after ${VspHandshake.DEFAULT_TIMEOUT_MS}ms")
+                    failPeerHandshakeAwait(
+                        "Peer handshake timeout (${VspHandshake.DEFAULT_TIMEOUT_MS}ms) — no REQ/ACK from peer"
+                    )
+                }
+            } catch (_: CancellationException) {
+                LogUtil.d(TAG, "Peer handshake await timeout cancelled")
+            }
+        }
+
+        LogUtil.d(
+            TAG,
+            "Waiting for peer VSP handshake (timeout=${VspHandshake.DEFAULT_TIMEOUT_MS}ms) before reporting CONNECTED"
+        )
+    }
+
+    private fun stopPeerHandshakeAwait() {
+        awaitingPeerHandshake = false
+        peerHandshakeAwaitSendJob?.cancel()
+        peerHandshakeAwaitSendJob = null
+        peerHandshakeAwaitTimeoutJob?.cancel()
+        peerHandshakeAwaitTimeoutJob = null
+    }
+
+    /**
+     * First peer handshake seen — complete SDK "connected" and start post-connect jobs.
+     */
+    private fun completePeerHandshake() {
+        if (!awaitingPeerHandshake) return
+        stopPeerHandshakeAwait()
+
+        notifyConnectionSuccess(
+            mapOf(
+                "baudRate" to baudRate.toString(),
+                "dataBits" to dataBits.toString(),
+                "parity" to lastSerialParityLabel,
+                "stopBits" to lastSerialStopBitsProtocol.toString(),
+                "device" to (getConnectedDeviceName()),
+                "portNum" to portNum.toString(),
+                "mode" to "hex"
+            )
+        )
+        startSerialLinkWatchdog()
+        startRs232HandshakeKeepalive()
+        onPostSerialConnected()
+        LogUtil.d(TAG, "Peer handshake OK — CONNECTED reported to SDK")
+    }
+
+    private fun failPeerHandshakeAwait(message: String) {
+        if (!awaitingPeerHandshake) return
+        stopPeerHandshakeAwait()
+        performDisconnect()
+        notifyConnectionError(message, InnerErrorCode.E232)
+    }
+
+    private fun canSendHandshakeAck(): Boolean {
+        return when (currentInnerConnectionStatus) {
+            InnerConnectionStatus.CONNECTED -> true
+            InnerConnectionStatus.CONNECTING -> awaitingPeerHandshake
+            else -> false
+        }
+    }
+
+    /**
+     * Find USB device (references RS232NormalAdapter.findUsbDevice)
      */
     private fun findUsbDevice(): UsbDevice? {
         val usbDeviceList = usbManager.deviceList.values
 
         LogUtil.d(TAG, "Scanning ${usbDeviceList.size} USB devices...")
 
-        // 参考RS232NormalAdapter的设备查找逻辑
+        // Reference RS232NormalAdapter device search logic
         for (device in usbDeviceList) {
             val manufacturerName = device.manufacturerName
             val productId = device.productId
@@ -360,10 +571,10 @@ open class SerialServiceKernel(
             LogUtil.d(TAG, "productId: $productIdString vendorId: $vendorId")
             LogUtil.d(TAG, "manufacturerName: $manufacturerName")
 
-            // 首先尝试默认探测器
+            // First try default prober
             var driver = usbDefaultProber.probeDevice(device)
             if (driver == null) {
-                // 尝试自定义探测器
+                // Try custom prober
                 driver = usbCustomProber?.probeDevice(device)
             }
 
@@ -373,14 +584,14 @@ open class SerialServiceKernel(
                 return device
             }
 
-            // 检查是否是SUNMI设备（参考RS232NormalAdapter逻辑）
+            // Check if it's a SUNMI device (reference RS232NormalAdapter logic)
             val isSunmiDevice = manufacturerName?.contains("SUNMI", ignoreCase = true) == true
             if (isSunmiDevice) {
                 LogUtil.d(TAG, "Found SUNMI device, creating custom prober")
                 usbCustomProber = createCustomProber(vendorId, productId)
                 driver = usbCustomProber?.probeDevice(device)
                 if (driver != null) {
-                    // 查找可用端口
+                    // Find available ports
                     for (port in 0 until driver.ports.size) {
                         LogUtil.d(TAG, "The VSP port: $port driver: $driver")
                         portNum = port
@@ -389,7 +600,7 @@ open class SerialServiceKernel(
                 }
             }
 
-            // 如果指定了目标设备名称，进行匹配
+            // If target device name is specified, perform matching
             if (targetDeviceName != null) {
                 val deviceMatches = device.deviceName.contains(targetDeviceName!!, ignoreCase = true) ||
                         (manufacturerName?.contains(targetDeviceName!!, ignoreCase = true) == true)
@@ -399,12 +610,11 @@ open class SerialServiceKernel(
                 }
             }
         }
-
         return null
     }
 
     /**
-     * 获取USB串口驱动 (参考RS232NormalAdapter.getUsbSerialDriver)
+     * Get USB serial driver (references RS232NormalAdapter.getUsbSerialDriver)
      */
     private fun getUsbSerialDriver(device: UsbDevice): UsbSerialDriver? {
         var driver = usbDefaultProber.probeDevice(device)
@@ -415,24 +625,24 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 创建自定义探测器（支持特殊设备）
-     * 参考RS232NormalAdapter中的自定义探测器创建
+     * Create custom prober (supports special devices)
+     * References custom prober creation in RS232NormalAdapter
      */
     private fun createCustomProber(vendorId: Int, productId: Int): UsbSerialProber? {
-        // 这里可以添加对特殊设备的支持
-        // 例如SUNMI设备或其他自定义USB转串口设备
-        // 参考RS232CustomProbe.getCustomProbe(vendorId, productId)
+        // Can add support for special devices here
+        // For example SUNMI devices or other custom USB-to-serial devices
+        // Reference RS232CustomProbe.getCustomProbe(vendorId, productId)
         return null
     }
 
     /**
-     * 打开USB设备连接 (参考RS232NormalAdapter.openUsbConnection)
+     * Open USB device connection (references RS232NormalAdapter.openUsbConnection)
      */
     private fun openUsbConnection(device: UsbDevice): UsbDeviceConnection? {
         var hasPermission = usbManager.hasPermission(device)
 
         if (!hasPermission) {
-            // 尝试自动授权（参考RS232NormalAdapter.grantUsbDevicePermission）
+            // Try auto-grant permission (references RS232NormalAdapter.grantUsbDevicePermission)
             hasPermission = grantUsbDevicePermission(device)
         }
 
@@ -444,7 +654,7 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 请求USB权限
+     * Request USB permission
      */
     private fun requestUsbPermission(device: UsbDevice) {
         LogUtil.d(TAG, "Requesting USB permission for: ${device.deviceName}")
@@ -453,11 +663,11 @@ open class SerialServiceKernel(
         pendingDevice = device
 
         try {
-            usbManager.requestPermission(device, permissionPendingIntent)
+            usbManager.requestPermission(device, createUsbPermissionPendingIntent(device))
 
-            // 启动超时任务
+            // Start timeout task
             permissionTimeoutJob = scope.launch {
-                delay(5000) // 5秒超时
+                delay(5000) // 5 second timeout
                 if (usbPermission == UsbPermission.Requested) {
                     LogUtil.e(TAG, "USB permission request timeout")
                     usbPermission = UsbPermission.Denied
@@ -472,7 +682,7 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 尝试自动授权USB设备权限 (参考RS232NormalAdapter.grantUsbDevicePermission)
+     * Try to auto-grant USB device permission (references RS232NormalAdapter.grantUsbDevicePermission)
      */
     private fun grantUsbDevicePermission(device: UsbDevice): Boolean {
         return try {
@@ -488,25 +698,25 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 建立串口连接 (参考RS232NormalAdapter的连接建立过程)
+     * Establish serial port connection (references RS232NormalAdapter connection establishment process)
      */
     private fun establishSerialConnection(driver: UsbSerialDriver, connection: UsbDeviceConnection): Boolean {
         return try {
-            // 使用指定的端口号（参考RS232NormalAdapter）
+            // Use specified port number (references RS232NormalAdapter)
             val port = driver.ports[portNum]
 
-            // 打开串口
+            // Open serial port
             port.open(connection)
 
-            // 设置串口参数
+            // Set serial port parameters
             port.setParameters(baudRate, dataBits, stopBits, parity)
 
-            // 保存引用
+            // Save references
             usbSerialPort = port
             usbSerialDriver = driver
             usbConnection = connection
 
-            // 启动IO管理器
+            // Start IO manager
             usbIoManager = SerialInputOutputManager(port, serialInputOutputListener)
             usbIoManager?.start()
 
@@ -523,47 +733,290 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 串口数据监听器 - 十六进制版本
-     * 使用HexFrameBuffer进行数据处理
+     * Serial port data listener - hexadecimal version
+     * Uses HexFrameBuffer for data processing
      */
     private val serialInputOutputListener = object : SerialInputOutputManager.Listener {
         override fun onNewData(data: ByteArray?) {
             if (data != null && data.isNotEmpty()) {
-                // 参考RS232NormalAdapter的日志记录方式
-                val dataString = String(data)
-                LogUtil.d(TAG, "The RS232 hex receive: $dataString")
-                
-                // 添加到缓冲区进行处理
-                hexFrameBuffer?.addData(data)
+                LogUtil.d(TAG, "RS232 raw chunk (${data.size} bytes)")
+                feedIncomingWithHandshakeSeparation(data)
             }
         }
 
         override fun onRunError(exception: Exception?) {
-            LogUtil.e(TAG, "Serial hex IO error: ${exception?.message}")
-            LogUtil.e(TAG, "onRunError()")
+            LogUtil.e(TAG, "Serial hex IO error (read/thread): ${exception?.message}")
+            LogUtil.e(TAG, "SerialInputOutputManager.onRunError — USB detach or serial close often surfaces here")
             exception?.printStackTrace()
 
-            if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
-                handleConnectionError()
+            notifySerialLinkLost("Serial IO error: ${exception?.message ?: "onRunError"}")
+        }
+    }
+
+    /**
+     * USB unplug / read thread exit / send IOException: propagate to [ConnectionCallback.onDisconnected]
+     * so ConnectionManager can treat as connection error (fail pending, ERROR/DISCONNECTED), not only kernel ERROR state.
+     */
+    private fun notifySerialLinkLost(
+        detail: String,
+        errorCode: String = InnerErrorCode.E232.code
+    ) {
+        if (awaitingPeerHandshake) {
+            failPeerHandshakeAwait(detail)
+            return
+        }
+        if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTED) {
+            return
+        }
+        stopSerialLinkWatchdog()
+        stopRs232HandshakeKeepalive()
+        LogUtil.w(TAG, "Serial link lost: $detail")
+        val cb = currentConnectionCallback
+        if (cb != null) {
+            handleConnectionError(detail, cb, errorCode)
+        } else {
+            updateStatus(InnerConnectionStatus.ERROR)
+        }
+    }
+
+    private fun startSerialLinkWatchdog() {
+        stopSerialLinkWatchdog()
+        serialLinkWatchdogJob = scope.launch {
+            LogUtil.d(
+                TAG,
+                "Serial link watchdog started (interval=${SERIAL_LINK_CHECK_INTERVAL_MS}ms) — USB host presence check"
+            )
+            try {
+                while (isActive) {
+                    delay(SERIAL_LINK_CHECK_INTERVAL_MS)
+                    if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTED) break
+                    if (!isUsbSerialDeviceStillAttached()) {
+                        LogUtil.w(TAG, "Serial watchdog: USB serial device no longer listed by UsbManager (likely detached)")
+                        notifySerialLinkLost(
+                            "USB serial device detached (link watchdog)",
+                            InnerErrorCode.E213.code
+                        )
+                        break
+                    }
+                }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                LogUtil.d(TAG, "Serial link watchdog cancelled")
+            }
+        }
+    }
+
+    private fun stopSerialLinkWatchdog() {
+        serialLinkWatchdogJob?.cancel()
+        serialLinkWatchdogJob = null
+    }
+
+    /** True if the connected [UsbDevice] still appears in the current USB device list. */
+    private fun isUsbSerialDeviceStillAttached(): Boolean {
+        val driver = usbSerialDriver ?: return false
+        val device = driver.device
+        return usbManager.deviceList.values.any { attached ->
+            attached.deviceName == device.deviceName &&
+                attached.vendorId == device.vendorId &&
+                attached.productId == device.productId
+        }
+    }
+
+    /**
+     * Subclasses may override (e.g. extra logging). RS232 handshake keepalive is started in the base class.
+     */
+    protected open fun onPostSerialConnected() {
+        // default no-op
+    }
+
+    /**
+     * Master switch: when false, neither periodic REQ nor peer-silence watch is started.
+     * USB watchdog + IO errors still apply.
+     *
+     * For finer control use [enableRs232HandshakePeriodicReqSend] and
+     * [enableRs232HandshakePeerSilenceWatch] (both honored only when this is true).
+     */
+    protected open fun enableRs232HandshakeKeepalive(): Boolean = true
+
+    /**
+     * While CONNECTED, periodically send [VspHandshake.REQ] ([RS232_HSK_REQ_INTERVAL_MS]).
+     * TaPro can return false and rely on [enableRs232HandshakePeerSilenceWatch] if Taplink keeps
+     * sending REQ (and TaPro keeps replying ACK) so inbound handshake traffic continues.
+     */
+    protected open fun enableRs232HandshakePeriodicReqSend(): Boolean = true
+
+    /**
+     * While CONNECTED, if we have seen peer activity (handshake REQ/ACK or application payload
+     * forwarded to the hex frame buffer) and none arrives for [RS232_HSK_PEER_SILENCE_MS],
+     * treat the link as lost.
+     */
+    protected open fun enableRs232HandshakePeerSilenceWatch(): Boolean = true
+
+    private fun clearHandshakeStreamBuffer() {
+        synchronized(handshakeStreamLock) {
+            handshakeStreamBuf.setLength(0)
+        }
+    }
+
+    /**
+     * Strip [VspHandshake] markers before hex framing; reply ACK to peer REQ (same contract as VSP client kernel).
+     * Non-marker bytes forwarded to [HexFrameBuffer] count as peer application activity for handshake completion
+     * and silence refresh (same as receiving REQ/ACK).
+     */
+    private fun feedIncomingWithHandshakeSeparation(chunk: ByteArray) {
+        synchronized(handshakeStreamLock) {
+            handshakeStreamBuf.append(String(chunk, Charsets.UTF_8))
+            val req = VspHandshake.REQ
+            val ack = VspHandshake.ACK
+            val maxMarkerLen = maxOf(req.length, ack.length)
+            val keepSuffix = maxMarkerLen - 1
+            var guard = 0
+            while (guard++ < 4096) {
+                val s = handshakeStreamBuf.toString()
+                val iReq = s.indexOf(req)
+                val iAck = s.indexOf(ack)
+                val nextReq = if (iReq >= 0) iReq else Int.MAX_VALUE
+                val nextAck = if (iAck >= 0) iAck else Int.MAX_VALUE
+                val i0 = minOf(nextReq, nextAck)
+                if (i0 == Int.MAX_VALUE) {
+                    if (s.length > keepSuffix) {
+                        val flushLen = s.length - keepSuffix
+                        addHexBufferDataRecordingPeerActivity(s.substring(0, flushLen).toByteArray(Charsets.UTF_8))
+                        handshakeStreamBuf.setLength(0)
+                        handshakeStreamBuf.append(s.substring(flushLen))
+                    }
+                    break
+                }
+                val marker = if (nextReq <= nextAck) req else ack
+                if (i0 > 0) {
+                    addHexBufferDataRecordingPeerActivity(s.substring(0, i0).toByteArray(Charsets.UTF_8))
+                }
+                onRemoteHandshakeMarker(marker)
+                val rest = i0 + marker.length
+                handshakeStreamBuf.setLength(0)
+                handshakeStreamBuf.append(s.substring(rest))
             }
         }
     }
 
     /**
-     * 处理连接错误
+     * Forwards stripped payload to the hex decoder and treats non-empty payload as successful peer liveness:
+     * completes pre-CONNECT handshake if needed, and refreshes [lastPeerHandshakeActivityMillis] while CONNECTED.
      */
-    private fun handleConnectionError() {
-        LogUtil.w(TAG, "Serial hex connection error detected")
+    private fun addHexBufferDataRecordingPeerActivity(bytes: ByteArray) {
+        if (bytes.isEmpty()) return
+        hexFrameBuffer?.addData(bytes)
+        onPeerApplicationPayloadSeen()
+    }
 
-        if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
-            updateStatus(InnerConnectionStatus.ERROR)
+    private fun onPeerApplicationPayloadSeen() {
+        peerHandshakeEverSeen = true
+        lastPeerHandshakeActivityMillis = System.currentTimeMillis()
+        if (awaitingPeerHandshake) {
+            LogUtil.d(TAG, "Peer handshake: application payload received — treating as handshake success")
+            completePeerHandshake()
         }
     }
 
-    // ==================== 工具方法 ====================
+    private fun onRemoteHandshakeMarker(marker: String) {
+        peerHandshakeEverSeen = true
+        lastPeerHandshakeActivityMillis = System.currentTimeMillis()
+        if (marker == VspHandshake.REQ) {
+            scheduleHandshakeAckSend()
+        }
+        if (awaitingPeerHandshake) {
+            completePeerHandshake()
+        }
+    }
+
+    private fun scheduleHandshakeAckSend() {
+        scope.launch {
+            try {
+                withSendLock {
+                    if (!canSendHandshakeAck()) return@withSendLock
+                    val port = usbSerialPort ?: return@withSendLock
+                    val ack = VspHandshake.ACK.toByteArray(Charsets.UTF_8)
+                    port.write(ack, 1000)
+                    LogUtil.d(TAG, "RS232 handshake ACK sent (peer REQ)")
+                }
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "RS232 handshake ACK failed: ${e.message}")
+                notifySerialLinkLost("RS232 handshake ACK failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun startRs232HandshakeKeepalive() {
+        stopRs232HandshakeKeepalive()
+        if (!enableRs232HandshakeKeepalive()) {
+            LogUtil.d(TAG, "RS232 handshake keepalive disabled by subclass")
+            return
+        }
+        val sendReq = enableRs232HandshakePeriodicReqSend()
+        val watchSilence = enableRs232HandshakePeerSilenceWatch()
+        if (!sendReq && !watchSilence) {
+            LogUtil.d(TAG, "RS232 handshake: periodic REQ and peer silence watch both disabled, nothing to start")
+            return
+        }
+
+        if (sendReq) {
+            serialHandshakeSendJob = scope.launch {
+                try {
+                    while (isActive && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
+                        delay(RS232_HSK_REQ_INTERVAL_MS)
+                        if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTED) break
+                        try {
+                            withSendLock {
+                                val port = usbSerialPort ?: return@withSendLock
+                                port.write(VspHandshake.REQ.toByteArray(Charsets.UTF_8), 2000)
+                            }
+                        } catch (e: Exception) {
+                            LogUtil.e(TAG, "RS232 handshake REQ send failed: ${e.message}")
+                            notifySerialLinkLost("RS232 handshake REQ failed: ${e.message}")
+                            break
+                        }
+                    }
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                    LogUtil.d(TAG, "RS232 handshake send job cancelled")
+                }
+            }
+        }
+
+        if (watchSilence) {
+            serialHandshakeSilenceJob = scope.launch {
+                try {
+                    while (isActive && currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
+                        delay(RS232_HSK_SILENCE_CHECK_MS)
+                        if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTED) break
+                        if (!peerHandshakeEverSeen) continue
+                        val silent =
+                            System.currentTimeMillis() - lastPeerHandshakeActivityMillis > RS232_HSK_PEER_SILENCE_MS
+                        if (silent) {
+                            LogUtil.w(TAG, "RS232 peer silent (no handshake or payload) for ${RS232_HSK_PEER_SILENCE_MS}ms")
+                            notifySerialLinkLost(
+                                "RS232 peer silent (no REQ/ACK or application data — far end may be unplugged)",
+                                InnerErrorCode.E213.code
+                            )
+                            break
+                        }
+                    }
+                } catch (_: kotlinx.coroutines.CancellationException) {
+                    LogUtil.d(TAG, "RS232 handshake silence job cancelled")
+                }
+            }
+        }
+    }
+
+    private fun stopRs232HandshakeKeepalive() {
+        serialHandshakeSendJob?.cancel()
+        serialHandshakeSendJob = null
+        serialHandshakeSilenceJob?.cancel()
+        serialHandshakeSilenceJob = null
+    }
+
+    // ==================== Utility Methods ====================
 
     /**
-     * 从协议字符串中提取设备名称
+     * Extract device name from protocol string
      */
     private fun extractDeviceName(protocol: String): String? {
         return try {
@@ -576,7 +1029,7 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 解析校验位字符串
+     * Parse parity string
      */
     private fun parseParityFromString(parity: String): Int {
         return when (parity.uppercase()) {
@@ -593,7 +1046,7 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 解析停止位
+     * Parse stop bits
      */
     private fun parseStopBitsFromInt(stopBits: Int): Int {
         return when (stopBits) {
@@ -607,14 +1060,14 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 获取当前连接的设备名称
+     * Get currently connected device name
      */
     private fun getConnectedDeviceName(): String? {
         return usbSerialDriver?.device?.deviceName
     }
 
     /**
-     * 获取当前串口配置
+     * Get current serial port configuration
      */
     fun getCurrentConfig(): Map<String, Any> {
         return mapOf(
@@ -633,12 +1086,12 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 检查串口连接状态
+     * Check serial port connection status
      */
     fun isSerialConnected(): Boolean = isSerialReady()
 
     /**
-     * 获取可用的串口设备列表
+     * Get list of available serial port devices
      */
     fun getAvailableDevices(): List<Map<String, String>> {
         return try {
@@ -668,10 +1121,10 @@ open class SerialServiceKernel(
         }
     }
 
-    // ==================== 权限管理 ====================
+    // ==================== Permission Management ====================
 
     /**
-     * 注册权限请求广播接收器
+     * Register permission request broadcast receiver
      */
     private fun registerPermissionReceiver() {
         if (!isReceiverRegistered) {
@@ -692,7 +1145,7 @@ open class SerialServiceKernel(
     }
 
     /**
-     * 注销权限请求广播接收器
+     * Unregister permission request broadcast receiver
      */
     private fun unregisterPermissionReceiver() {
         if (isReceiverRegistered) {
@@ -706,38 +1159,35 @@ open class SerialServiceKernel(
         }
     }
 
-    /**
-     * 创建权限请求PendingIntent
-     */
-    private fun createPermissionPendingIntent(): PendingIntent {
+    /** Action must match [permissionAction] and [IntentFilter] in [registerPermissionReceiver]. */
+    private fun createUsbPermissionPendingIntent(device: UsbDevice): PendingIntent {
+        val requestCode = device.deviceName.hashCode() and 0x7FFFFFFF
         val intent = Intent(permissionAction).apply {
             setPackage(context.packageName)
         }
-
         var flags = PendingIntent.FLAG_UPDATE_CURRENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             flags = flags or PendingIntent.FLAG_MUTABLE
         }
-
-        return PendingIntent.getBroadcast(context, 0, intent, flags)
+        return PendingIntent.getBroadcast(context, requestCode, intent, flags)
     }
 
     /**
-     * 清理资源
+     * Clean up resources
      */
     override fun cleanupCommonResources() {
         super.cleanupCommonResources()
         performDisconnect()
 
-        // 停止缓冲区
+        // Stop buffer
         hexFrameBuffer?.stop()
         hexFrameBuffer = null
 
-        // 清理权限相关状态
+        // Clean up permission-related state
         pendingDevice = null
         usbPermission = UsbPermission.Unknown
 
-        // 注销广播接收器
+        // Unregister broadcast receiver
         unregisterPermissionReceiver()
     }
 
@@ -745,14 +1195,14 @@ open class SerialServiceKernel(
 
     companion object {
         /**
-         * 检查系统是否支持USB Host模式
+         * Check if system supports USB Host mode
          */
         fun isUsbHostSupported(context: Context): Boolean {
             return context.packageManager.hasSystemFeature("android.hardware.usb.host")
         }
 
         /**
-         * 获取所有可用的USB设备（不仅限于串口设备）
+         * Get all available USB devices (not limited to serial port devices)
          */
         fun getAllUsbDevices(context: Context): List<UsbDevice> {
             val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager

@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
@@ -19,28 +20,32 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
+import kotlin.text.Charsets
 
 /**
- * VSP客户端内核类
+ * VSP client kernel class
  * 
- * 作为虚拟串口的客户端，主动连接到串口设备
- * 支持多种连接方式：
- * 1. USB转串口设备连接
- * 2. 蓝牙串口连接
- * 3. 网络串口连接
+ * Acts as a virtual serial port client, actively connects to serial port devices
+ * Supports multiple connection methods:
+ * 1. USB-to-serial device connection
+ * 2. Bluetooth serial connection
+ * 3. Network serial connection
  * 
- * 协议格式：vsp://baudRate/dataBits/parity/stopBits?device=deviceName
+ * Protocol format: vsp://baudRate/dataBits/parity/stopBits?device=deviceName
  * 
- * @param appId 应用ID
- * @param appSecretKey 应用密钥
- * @param context Android上下文
+ * @param appId Application ID
+ * @param appSecretKey Application secret key
+ * @param context Android context
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class VSPClientKernel(
     appId: String,
@@ -52,78 +57,86 @@ class VSPClientKernel(
 
     private val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
-    // USB串口相关
+    // USB serial port related
     private var usbSerialPort: UsbSerialPort? = null
     private var usbSerialDriver: UsbSerialDriver? = null
     private var usbConnection: UsbDeviceConnection? = null
     private var dataReceiveJob: Job? = null
 
-    // 权限请求相关
+    /**
+     * App-scoped action for [UsbManager.requestPermission] PendingIntent (same pattern as Android USB host samples).
+     * Must match [IntentFilter] and the Intent passed to [PendingIntent.getBroadcast].
+     */
     private val permissionAction = "com.sunmi.tapro.taplink.vsp.USB_PERMISSION"
-    private val permissionPendingIntent: PendingIntent = createPermissionPendingIntent()
+
     private var pendingDevice: UsbDevice? = null
 
-    // VSP配置参数
+    /**
+     * [cleanupCommonResources] unregisters the USB permission receiver; [TaplinkServiceKernel] reuses this
+     * kernel when status is DISCONNECTED, so [init] does not run again — must re-register on each connect.
+     */
+    @Volatile
+    private var usbPermissionReceiverRegistered: Boolean = false
+
+    /**
+     * Set when the port is open and we are waiting for [VspHandshake] with the server (same as
+     * [VSPServiceKernel.performHandshake] success on the service side).
+     */
+    @Volatile
+    private var handshakeWaiter: CompletableDeferred<Unit>? = null
+
+    // VSP configuration parameters
     private var baudRate: Int = 115200
     private var dataBits: Int = 8
     private var parity: Int = UsbSerialPort.PARITY_NONE
     private var stopBits: Int = UsbSerialPort.STOPBITS_1
     private var targetDeviceName: String? = null
 
-    // 权限请求广播接收器
+    // Permission request broadcast receiver
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             LogUtil.d(TAG, "USB permission broadcast received: ${intent.action}")
 
             if (permissionAction == intent.action) {
                 synchronized(this@VSPClientKernel) {
-                    val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    val device: UsbDevice? = readUsbDeviceFromPermissionIntent(intent)
                     val permissionGranted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
                     LogUtil.d(TAG, "USB permission result:")
-                    LogUtil.d(TAG, "  Device: ${device?.deviceName}")
+                    LogUtil.d(TAG, "  Device: ${device?.deviceName} VID=${device?.vendorId} PID=${device?.productId}")
                     LogUtil.d(TAG, "  Permission granted: $permissionGranted")
-                    LogUtil.d(TAG, "  Pending device: ${pendingDevice?.deviceName}")
-                    if (device != null && device == pendingDevice) {
+                    LogUtil.d(TAG, "  Pending device: ${pendingDevice?.deviceName} VID=${pendingDevice?.vendorId} PID=${pendingDevice?.productId}")
+                    // Intent delivers a new UsbDevice instance — never use == pendingDevice
+                    if (device != null && isSameUsbDevice(device, pendingDevice)) {
                         pendingDevice = null
 
                         if (permissionGranted) {
                             LogUtil.d(TAG, "USB permission granted for VSP device: ${device.deviceName}")
-                            
-                            // 使用父类callback
-                            currentConnectionCallback?.let { callback ->
+
+                            val callback = currentConnectionCallback
+                            if (callback != null) {
                                 scope.launch {
                                     continueConnection(device, callback)
                                 }
+                            } else {
+                                LogUtil.e(TAG, "USB permission granted but currentConnectionCallback is null")
+                                notifyConnectionError("Connection callback lost after permission grant", InnerErrorCode.E232)
                             }
                         } else {
                             LogUtil.e(TAG, "USB permission denied for VSP device: ${device.deviceName}")
                             notifyConnectionError("USB permission denied by user", InnerErrorCode.E252)
                         }
                     } else {
-                        LogUtil.w(TAG, "Permission result for different or unknown device")
+                        LogUtil.w(
+                            TAG,
+                            "Permission result for different or unknown device (sameDevice=${device != null && isSameUsbDevice(device, pendingDevice)})"
+                        )
                     }
                 }
             }
         }
     }
 
-    init {
-        // 注册权限请求广播接收器
-        val permissionFilter = IntentFilter(permissionAction)
-        try {
-            ContextCompat.registerReceiver(
-                context,
-                permissionReceiver,
-                permissionFilter,
-                ContextCompat.RECEIVER_EXPORTED
-            )
-            LogUtil.d(TAG, "VSP USB permission receiver registered")
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to register VSP USB permission receiver: ${e.message}")
-        }
-    }
-
-    // ==================== AsyncServiceKernel 抽象方法实现 ====================
+    // ==================== AsyncServiceKernel Abstract Method Implementation ====================
 
     override fun getServiceType(): String = "VSP Client"
 
@@ -134,15 +147,17 @@ class VSPClientKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
+        registerUsbPermissionReceiverIfNeeded()
+
         val vspProtocol = parseResult as ProtocolParseResult.VspProtocol
         
-        // 解析协议参数
+        // Parse protocol parameters
         baudRate = vspProtocol.baudRate
         dataBits = vspProtocol.dataBits
         parity = parseParity(vspProtocol.parity)
         stopBits = parseStopBits(vspProtocol.stopBits)
         
-        // 解析目标设备名称（如果有）
+        // Parse target device name (if any)
         targetDeviceName = extractDeviceName(vspProtocol.toString())
 
         LogUtil.d(TAG, "Connecting to VSP device as client:")
@@ -152,25 +167,31 @@ class VSPClientKernel(
 
         scope.launch {
             try {
-                val success = connectToVspDevice(connectionCallback)
+                val success = connectToVspDevice()
+                val waitingPermission = synchronized(this@VSPClientKernel) { pendingDevice != null }
                 if (success) {
-                    // 启动数据接收
-                    startDataReceive()
-                    
-                    // 通知连接成功
-                    notifyConnectionSuccess(
-                        mapOf(
-                            "mode" to "client",
-                            "baudRate" to baudRate.toString(),
-                            "dataBits" to dataBits.toString(),
-                            "parity" to vspProtocol.parity,
-                            "stopBits" to vspProtocol.stopBits.toString(),
-                            "device" to (targetDeviceName ?: "auto-detected")
+                    if (awaitVspHandshake()) {
+                        notifyConnectionSuccess(
+                            mapOf(
+                                "mode" to "client",
+                                "baudRate" to baudRate.toString(),
+                                "dataBits" to dataBits.toString(),
+                                "parity" to vspProtocol.parity,
+                                "stopBits" to vspProtocol.stopBits.toString(),
+                                "device" to (targetDeviceName ?: "auto-detected"),
+                                "handshake" to "verified"
+                            )
                         )
-                    )
-                } else {
+                    } else {
+                        cleanupAfterHandshakeFailure()
+                        notifyConnectionError("VSP handshake timed out", InnerErrorCode.E232)
+                    }
+                } else if (!waitingPermission) {
                     notifyConnectionError("Failed to connect to VSP device", InnerErrorCode.E232)
                 }
+                // success == false && waitingPermission: continueConnection() will finish after permission grant
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to connect VSP client: ${e.message}")
                 notifyConnectionError(e.message ?: "Unknown error", InnerErrorCode.E232)
@@ -189,7 +210,7 @@ class VSPClientKernel(
             val dataString = String(data)
             LogUtil.d(TAG, "VSP client sending data: $dataString (${data.size} bytes)")
             
-            usbSerialPort?.write(data, 1000) // 1秒超时
+            usbSerialPort?.write(data, 1000) // 1 second timeout
             
             LogUtil.d(TAG, "VSP client data sent successfully: ${data.size} bytes")
 
@@ -197,7 +218,7 @@ class VSPClientKernel(
             LogUtil.e(TAG, "Failed to send VSP client data: ${e.message}")
             callback?.onError(InnerErrorCode.E304.code, e.message ?: InnerErrorCode.E304.description)
             
-            // 发送失败可能表示连接断开
+            // Send failure may indicate connection lost
             handleConnectionError()
         } catch (e: Exception) {
             LogUtil.e(TAG, "Unexpected error sending VSP client data: ${e.message}")
@@ -207,17 +228,17 @@ class VSPClientKernel(
 
     override fun performDisconnect() {
         LogUtil.d(TAG, "=== VSP Client Disconnect Started ===")
-        
+
+        handshakeWaiter?.cancel(CancellationException("VSP client disconnect"))
+        handshakeWaiter = null
+
         try {
-            // 停止数据接收
             dataReceiveJob?.cancel()
             dataReceiveJob = null
             
-            // 关闭串口连接
             usbSerialPort?.close()
             usbSerialPort = null
             
-            // 关闭USB连接
             usbConnection?.close()
             usbConnection = null
             
@@ -231,21 +252,31 @@ class VSPClientKernel(
         LogUtil.d(TAG, "=== VSP Client Disconnect Finished ===")
     }
 
-    // ==================== VSP客户端操作方法 ====================
+    // ==================== VSP Client Operation Methods ====================
 
     /**
-     * 检查VSP连接是否就绪（包括USB串口）
+     * Check if VSP connection is ready (including USB serial port)
      */
     private fun isVspReady(): Boolean {
         return currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED && usbSerialPort != null
     }
 
     /**
-     * 连接到VSP设备
+     * Port is open and we may still be in CONNECTING (handshake not finished yet).
+     * Receive loop must run during CONNECTING so handshake ACK/REQ can be processed.
      */
-    private suspend fun connectToVspDevice(connectionCallback: ConnectionCallback): Boolean {
+    private fun isVspReceiveLoopActive(): Boolean {
+        val st = currentInnerConnectionStatus
+        return usbSerialPort != null &&
+            (st == InnerConnectionStatus.CONNECTING || st == InnerConnectionStatus.CONNECTED)
+    }
+
+    /**
+     * Connect to VSP device
+     */
+    private suspend fun connectToVspDevice(): Boolean {
         return try {
-            // 查找可用的USB串口设备
+            // Find available USB serial port devices
             val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
 
             if (availableDrivers.isEmpty()) {
@@ -253,7 +284,7 @@ class VSPClientKernel(
                 return false
             }
 
-            // 选择目标设备
+            // Select target device
             val targetDriver = selectTargetDevice(availableDrivers)
             if (targetDriver == null) {
                 LogUtil.e(TAG, "Target VSP device not found")
@@ -262,17 +293,17 @@ class VSPClientKernel(
 
             val usbDevice = targetDriver.device
 
-            // 检查权限
+            // Check permission
             if (!usbManager.hasPermission(usbDevice)) {
                 LogUtil.d(TAG, "No permission for USB device: ${usbDevice.deviceName}, requesting permission...")
                 
-                // 请求权限
+                // Request permission
                 synchronized(this@VSPClientKernel) {
                     pendingDevice = usbDevice
                 }
                 
                 try {
-                    usbManager.requestPermission(usbDevice, permissionPendingIntent)
+                    usbManager.requestPermission(usbDevice, createUsbPermissionPendingIntent(usbDevice))
                     LogUtil.d(TAG, "USB permission request sent for VSP device: ${usbDevice.deviceName}")
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Failed to request USB permission: ${e.message}")
@@ -282,11 +313,11 @@ class VSPClientKernel(
                     return false
                 }
                 
-                // 权限请求已发送，等待用户响应
-                return true
+                // Permission request sent; continueConnection() runs from receiver — do not report success here
+                return false
             }
 
-            // 已有权限，直接连接
+            // Already have permission, connect directly
             return continueConnectionInternal(targetDriver)
 
         } catch (e: Exception) {
@@ -296,13 +327,13 @@ class VSPClientKernel(
     }
 
     /**
-     * 权限授予后继续连接
+     * Continue connection after permission granted
      */
     private suspend fun continueConnection(device: UsbDevice, connectionCallback: ConnectionCallback) {
         try {
-            // 需要重新查找driver，因为设备可能已经改变
+            // Need to re-find driver, as device may have changed
             val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
-            val targetDriver = availableDrivers.find { it.device == device }
+            val targetDriver = availableDrivers.find { isSameUsbDevice(it.device, device) }
             
             if (targetDriver == null) {
                 LogUtil.e(TAG, "Driver not found for device: ${device.deviceName}")
@@ -312,23 +343,32 @@ class VSPClientKernel(
             
             val success = continueConnectionInternal(targetDriver)
             if (success) {
-                // 启动数据接收
-                startDataReceive()
-                
-                // 通知连接成功
-                connectionCallback.onConnected(
-                    mapOf(
-                        "mode" to "client",
-                        "baudRate" to baudRate.toString(),
-                        "dataBits" to dataBits.toString(),
-                        "parity" to parity.toString(),
-                        "stopBits" to stopBits.toString(),
-                        "device" to device.deviceName
+                if (awaitVspHandshake()) {
+                    handleConnectionSuccess(
+                        connectionCallback,
+                        mapOf(
+                            "mode" to "client",
+                            "baudRate" to baudRate.toString(),
+                            "dataBits" to dataBits.toString(),
+                            "parity" to parity.toString(),
+                            "stopBits" to stopBits.toString(),
+                            "device" to device.deviceName,
+                            "handshake" to "verified"
+                        )
                     )
-                )
+                } else {
+                    cleanupAfterHandshakeFailure()
+                    handleConnectionError(
+                        "VSP handshake timed out",
+                        connectionCallback,
+                        InnerErrorCode.E232.code
+                    )
+                }
             } else {
                 connectionCallback.onDisconnected("CONNECTION_FAILED", "Failed to establish VSP connection")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error during VSP connection: ${e.message}")
             connectionCallback.onDisconnected("CONNECTION_ERROR", e.message ?: "Unknown error")
@@ -336,18 +376,18 @@ class VSPClientKernel(
     }
 
     /**
-     * 执行实际的连接操作（已有权限）
+     * Execute actual connection operation (already have permission)
      */
     private suspend fun continueConnectionInternal(targetDriver: UsbSerialDriver): Boolean {
         return try {
             val usbDevice = targetDriver.device
-            // 打开USB设备连接
+            // Open USB device connection
             val connection = usbManager.openDevice(usbDevice) ?: run {
                 LogUtil.e(TAG, "Failed to open USB device")
                 return false
             }
 
-            // 获取串口（通常使用第一个端口）
+            // Get serial port (usually use first port)
             if (targetDriver.ports.isEmpty()) {
                 LogUtil.e(TAG, "Driver has no ports available")
                 connection.close()
@@ -356,13 +396,13 @@ class VSPClientKernel(
             
             val port = targetDriver.ports[0]
 
-            // 打开串口
+            // Open serial port
             port.open(connection)
             
-            // 保存连接引用
+            // Save connection reference
             usbConnection = connection
 
-            // 设置串口参数
+            // Set serial port parameters
             port.setParameters(baudRate, dataBits, stopBits, parity)
 
             usbSerialPort = port
@@ -379,17 +419,17 @@ class VSPClientKernel(
     }
 
     /**
-     * 选择目标设备
+     * Select target device
      */
     private fun selectTargetDevice(availableDrivers: List<UsbSerialDriver>): UsbSerialDriver? {
         return if (targetDeviceName != null) {
-            // 根据设备名称查找
+            // Find by device name
             availableDrivers.find { driver ->
                 driver.device.deviceName.contains(targetDeviceName!!, ignoreCase = true) ||
                 driver.device.productName?.contains(targetDeviceName!!, ignoreCase = true) == true
             }
         } else {
-            // 使用第一个可用设备
+            // Use first available device
             availableDrivers.firstOrNull()
         }?.also { driver ->
             LogUtil.d(TAG, "Selected VSP device: ${driver.device.deviceName}")
@@ -399,39 +439,105 @@ class VSPClientKernel(
     }
 
     /**
-     * 启动数据接收循环
+     * USB port is open: start receive loop and block until application-layer handshake completes
+     * (service sends [VspHandshake.REQ], we send [VspHandshake.ACK]), same window as
+     * [VspHandshake.DEFAULT_TIMEOUT_MS].
+     */
+    private suspend fun awaitVspHandshake(): Boolean {
+        val waiter = CompletableDeferred<Unit>()
+        handshakeWaiter = waiter
+        return try {
+            startDataReceive()
+            withTimeoutOrNull(VspHandshake.DEFAULT_TIMEOUT_MS) {
+                waiter.await()
+            } != null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            LogUtil.w(TAG, "VSP handshake aborted (IO): ${e.message}")
+            false
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "VSP handshake await failed: ${e.message}")
+            false
+        } finally {
+            handshakeWaiter = null
+            if (!waiter.isCompleted) {
+                waiter.cancel(CancellationException("VSP handshake abandoned"))
+            }
+        }
+    }
+
+    private fun signalHandshakeSuccess() {
+        val w = handshakeWaiter ?: return
+        if (w.complete(Unit)) {
+            LogUtil.i(TAG, "VSP client handshake verified with server")
+        }
+    }
+
+    private fun cleanupAfterHandshakeFailure() {
+        dataReceiveJob?.cancel()
+        dataReceiveJob = null
+        performDisconnect()
+    }
+
+    /**
+     * Start data reception loop.
+     *
+     * Server initiates handshake with [VspHandshake.REQ]; client replies with [VspHandshake.ACK].
+     * Any remaining payload in the same read is forwarded to [dataReceiver] as usual.
      */
     private fun startDataReceive() {
         dataReceiveJob?.cancel()
         dataReceiveJob = scope.launch {
-            val buffer = ByteArray(16384) // 16KB buffer
+            val buffer = ByteArray(16384)
 
             LogUtil.d(TAG, "Starting VSP client data receive loop...")
             
-            while (isActive && isVspReady()) {
+            while (isActive && isVspReceiveLoopActive()) {
                 try {
                     val bytesRead = usbSerialPort?.read(buffer, 1000) ?: 0
 
                     if (bytesRead > 0) {
                         val data = buffer.copyOf(bytesRead)
-                        val dataString = String(data)
+                        val dataString = String(data, Charsets.UTF_8)
                         LogUtil.d(TAG, "VSP client data received: $dataString (${data.size} bytes)")
-                        
-                        // 通知数据接收器
+
+                        if (VspHandshake.isHandshakeMessage(dataString)) {
+                            if (VspHandshake.containsReq(dataString)) {
+                                if (sendHandshakeAck()) {
+                                    signalHandshakeSuccess()
+                                }
+                            } else if (VspHandshake.containsAck(dataString)) {
+                                // Symmetric with service handling "mutual REQ" — link already verified
+                                signalHandshakeSuccess()
+                            }
+                            val remaining = VspHandshake.stripHandshakeMarkers(dataString)
+                            if (remaining != null) {
+                                dataReceiver?.invoke(remaining.toByteArray(Charsets.UTF_8))
+                            }
+                            continue
+                        }
+
                         dataReceiver?.invoke(data)
                     }
                 } catch (e: IOException) {
                     LogUtil.e(TAG, "Error receiving VSP client data: ${e.message}")
-                    
+
+                    if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
+                        handshakeWaiter?.completeExceptionally(e)
+                    }
                     if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
                         handleConnectionError()
                     }
                     break
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Unexpected error in VSP client receive loop: ${e.message}")
-                    
+
+                    if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
+                        handshakeWaiter?.completeExceptionally(e)
+                    }
                     if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
-                        updateStatus(InnerConnectionStatus.ERROR)
+                        handleConnectionError()
                     }
                     break
                 }
@@ -442,20 +548,40 @@ class VSPClientKernel(
     }
 
     /**
-     * 处理连接错误
+     * Reply to handshake [VspHandshake.REQ] from server.
+     * @return false if ACK could not be sent (handshake cannot complete).
+     */
+    private fun sendHandshakeAck(): Boolean {
+        return try {
+            val ackBytes = VspHandshake.ACK.toByteArray(Charsets.UTF_8)
+            usbSerialPort?.write(ackBytes, 1000)
+            LogUtil.d(TAG, "Handshake ACK sent (server initiated REQ)")
+            true
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to send handshake ACK: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Handle connection error
      */
     private fun handleConnectionError() {
         LogUtil.w(TAG, "VSP client connection error detected")
         
         if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
             updateStatus(InnerConnectionStatus.ERROR)
+            notifyConnectionDisconnected(
+                InnerErrorCode.E232.code,
+                "VSP client connection error"
+            )
         }
     }
 
-    // ==================== 工具方法 ====================
+    // ==================== Utility Methods ====================
 
     /**
-     * 从协议字符串中提取设备名称
+     * Extract device name from protocol string
      */
     private fun extractDeviceName(protocol: String): String? {
         return try {
@@ -468,7 +594,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 解析校验位
+     * Parse parity
      */
     private fun parseParity(parity: String): Int {
         return when (parity.uppercase()) {
@@ -485,7 +611,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 解析停止位
+     * Parse stop bits
      */
     private fun parseStopBits(stopBits: Int): Int {
         return when (stopBits) {
@@ -499,7 +625,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 获取当前VSP配置
+     * Get current VSP configuration
      */
     fun getCurrentConfig(): Map<String, Any> {
         return mapOf(
@@ -514,12 +640,12 @@ class VSPClientKernel(
     }
 
     /**
-     * 检查连接状态
+     * Check connection status
      */
     fun isVspConnected(): Boolean = isVspReady()
 
     /**
-     * 获取可用的VSP设备列表
+     * Get list of available VSP devices
      */
     fun getAvailableDevices(): List<Map<String, String>> {
         return try {
@@ -540,65 +666,115 @@ class VSPClientKernel(
     }
 
     /**
-     * 清理资源
+     * Clean up resources
      */
     override fun cleanupCommonResources() {
         super.cleanupCommonResources()
         performDisconnect()
         
-        // 清理权限相关状态
+        // Clean up permission-related state
         synchronized(this) {
             pendingDevice = null
         }
         
-        // 注销广播接收器
-        try {
-            context.unregisterReceiver(permissionReceiver)
-            LogUtil.d(TAG, "VSP USB permission receiver unregistered")
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Error unregistering VSP USB permission receiver: ${e.message}")
-        }
+        unregisterUsbPermissionReceiverIfNeeded()
     }
 
     override fun getTag(): String = TAG
 
-    // ==================== 权限管理方法 ====================
+    // ==================== Permission Management Methods ====================
+
+    private fun registerUsbPermissionReceiverIfNeeded() {
+        synchronized(this) {
+            if (usbPermissionReceiverRegistered) return
+            try {
+                ContextCompat.registerReceiver(
+                    context,
+                    permissionReceiver,
+                    IntentFilter(permissionAction),
+                    ContextCompat.RECEIVER_EXPORTED
+                )
+                usbPermissionReceiverRegistered = true
+                LogUtil.d(TAG, "VSP USB permission receiver registered")
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Failed to register VSP USB permission receiver: ${e.message}")
+            }
+        }
+    }
+
+    private fun unregisterUsbPermissionReceiverIfNeeded() {
+        synchronized(this) {
+            if (!usbPermissionReceiverRegistered) return
+            try {
+                context.unregisterReceiver(permissionReceiver)
+                LogUtil.d(TAG, "VSP USB permission receiver unregistered")
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error unregistering VSP USB permission receiver: ${e.message}")
+            } finally {
+                usbPermissionReceiverRegistered = false
+            }
+        }
+    }
 
     /**
-     * 创建权限请求PendingIntent
+     * USB permission broadcast carries a freshly unmarshalled [UsbDevice]; reference equality with
+     * [pendingDevice] is always false. Match by stable identity.
      */
-    private fun createPermissionPendingIntent(): PendingIntent {
+    private fun isSameUsbDevice(a: UsbDevice?, b: UsbDevice?): Boolean {
+        if (a == null || b == null) return false
+        return a.deviceName == b.deviceName &&
+            a.vendorId == b.vendorId &&
+            a.productId == b.productId
+    }
+
+    private fun readUsbDeviceFromPermissionIntent(intent: Intent): UsbDevice? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+        }
+    }
+
+    /**
+     * PendingIntent for [UsbManager.requestPermission]. Action must equal [permissionAction] and the receiver filter.
+     * Per-device [requestCode] avoids PendingIntent collisions between devices.
+     */
+    private fun createUsbPermissionPendingIntent(device: UsbDevice): PendingIntent {
+        val requestCode = device.deviceName.hashCode() and 0x7FFFFFFF
+        val intent = Intent(permissionAction).apply {
+            setPackage(context.packageName)
+        }
         return PendingIntent.getBroadcast(
             context,
-            0,
-            Intent(permissionAction).apply {
-                setPackage(context.packageName)
-            },
+            requestCode,
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
     }
 
     /**
-     * 检查指定设备是否有权限
+     * Check if specified device has permission
      */
     fun hasPermissionForDevice(device: UsbDevice): Boolean {
         return usbManager.hasPermission(device)
     }
 
     /**
-     * 手动请求设备权限
+     * Manually request device permission
      * 
-     * 注意：此方法会更新当前的连接回调，如果正在进行连接流程，可能会影响当前连接
+     * Note: This method will update the current connection callback, if a connection process is in progress, it may affect the current connection
      */
     fun requestPermissionForDevice(device: UsbDevice, callback: ConnectionCallback) {
+        registerUsbPermissionReceiverIfNeeded()
         synchronized(this) {
             pendingDevice = device
-            // 更新当前连接回调，因为权限授予后会使用这个callback
+            // Update current connection callback, as this callback will be used after permission is granted
             currentConnectionCallback = callback
         }
         
         try {
-            usbManager.requestPermission(device, permissionPendingIntent)
+            usbManager.requestPermission(device, createUsbPermissionPendingIntent(device))
             LogUtil.d(TAG, "Manual USB permission request sent for: ${device.deviceName}")
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to request USB permission manually: ${e.message}")
@@ -611,14 +787,14 @@ class VSPClientKernel(
 
     companion object {
         /**
-         * 检查系统是否支持USB Host模式
+         * Check if system supports USB Host mode
          */
         fun isUsbHostSupported(context: Context): Boolean {
             return context.packageManager.hasSystemFeature("android.hardware.usb.host")
         }
 
         /**
-         * 获取所有可用的USB设备（不仅限于串口设备）
+         * Get all available USB devices (not limited to serial port devices)
          */
         fun getAllUsbDevices(context: Context): List<UsbDevice> {
             val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager

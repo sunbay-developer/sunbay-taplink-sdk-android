@@ -7,72 +7,72 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * 本地服务回调管理类
+ * Local service callback management class
  *
- * 用于管理多个异步请求的回调，支持根据请求ID查找和移除对应的回调
- * 提供线程安全的回调管理，支持为每个回调配置不同的超时时间
+ * Used to manage callbacks for multiple asynchronous requests, supports finding and removing corresponding callbacks by request ID
+ * Provides thread-safe callback management, supports configuring different timeout times for each callback
  *
- * @param T 回调类型
- * @param defaultTimeoutMillis 默认回调超时时间（毫秒），默认 60 秒
+ * @param T Callback type
+ * @param defaultTimeoutMillis Default callback timeout time (milliseconds), default 60 seconds
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class LocalCallbackManager<T>(
     private val defaultTimeoutMillis: Long = 60_000L,
     private val tag: String = "LocalCallbackManager"
 ) {
     /**
-     * 请求ID生成器
+     * Request ID generator
      */
     private val requestIdGenerator = AtomicLong(0)
 
     /**
-     * 回调映射表（线程安全）
-     * Key: 请求ID，Value: 回调包装对象
+     * Callback mapping table (thread-safe)
+     * Key: Request ID, Value: Callback wrapper object
      */
     private val callbackMap = ConcurrentHashMap<Long, CallbackWrapper<T>>()
 
     /**
-     * 追踪ID到回调的映射表（线程安全）
-     * Key: traceId（String），Value: 回调包装对象
+     * Trace ID to callback mapping table (thread-safe)
+     * Key: traceId (String), Value: Callback wrapper object
      */
     private val traceIdCallbackMap = ConcurrentHashMap<String, CallbackWrapper<T>>()
 
     /**
-     * 协程作用域
+     * Coroutine scope
      */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     companion object {
         /**
-         * 连接超时时间（60秒）
+         * Connection timeout (60 seconds)
          */
         const val CONNECTION_TIMEOUT = 60_000L
 
         /**
-         * 交易超时时间（180秒）
+         * Transaction timeout (180 seconds)
          */
         const val TRANSACTION_TIMEOUT = 180_000L
 
         /**
-         * 查询超时时间（30秒）
+         * Query timeout (30 seconds)
          */
         const val QUERY_TIMEOUT = 60_000L
 
         /**
-         * 初始化超时时间（60秒）
+         * Initialization timeout (60 seconds)
          */
         const val INIT_TIMEOUT = 180_000L
     }
 
     /**
-     * 添加回调（通过traceId）
+     * Add callback (by traceId)
      *
-     * @param traceId 追踪ID
-     * @param callback 回调对象
-     * @param app2app 是否为应用间模式（app2app模式不设置超时）
-     * @param timeoutMillis 自定义超时时间（毫秒），如果为null则使用默认超时时间
-     * @return Boolean 是否添加成功
+     * @param traceId Trace ID
+     * @param callback Callback object
+     * @param app2app Whether it's app-to-app mode (app2app mode doesn't set timeout)
+     * @param timeoutMillis Custom timeout time (milliseconds), if null then use default timeout time
+     * @return Boolean Whether addition was successful
      */
     fun addCallbackByTraceId(traceId: String, callback: T, app2app: Boolean, timeoutMillis: Long? = null): Boolean {
         if (traceId.isBlank()) {
@@ -92,65 +92,65 @@ class LocalCallbackManager<T>(
 
         LogUtil.d(tag, "Callback added by traceId: $traceId, timeout: ${actualTimeout}ms")
 
-        // 启动超时清理任务
+        // Start timeout cleanup task
         startTimeoutTaskForTraceId(traceId, actualTimeout)
 
         return true
     }
 
     /**
-     * 添加连接回调（使用连接超时时间）
+     * Add connection callback (using connection timeout)
      *
-     * @param traceId 追踪ID
-     * @param callback 回调对象
-     * @param app2app 是否为应用间模式
-     * @return Boolean 是否添加成功
+     * @param traceId Trace ID
+     * @param callback Callback object
+     * @param app2app Whether it's app-to-app mode
+     * @return Boolean Whether addition was successful
      */
     fun addConnectionCallback(traceId: String, callback: T, app2app: Boolean): Boolean {
         return addCallbackByTraceId(traceId, callback, app2app, CONNECTION_TIMEOUT)
     }
 
     /**
-     * 添加交易回调（使用交易超时时间）
+     * Add transaction callback (using transaction timeout)
      *
-     * @param traceId 追踪ID
-     * @param callback 回调对象
-     * @param app2app 是否为应用间模式
-     * @return Boolean 是否添加成功
+     * @param traceId Trace ID
+     * @param callback Callback object
+     * @param app2app Whether it's app-to-app mode
+     * @return Boolean Whether addition was successful
      */
     fun addTransactionCallback(traceId: String, callback: T, app2app: Boolean, requestTimeout: Long?): Boolean {
         return addCallbackByTraceId(traceId, callback, app2app, requestTimeout ?: TRANSACTION_TIMEOUT)
     }
 
     /**
-     * 添加查询回调（使用查询超时时间）
+     * Add query callback (using query timeout)
      *
-     * @param traceId 追踪ID
-     * @param callback 回调对象
-     * @param app2app 是否为应用间模式
-     * @return Boolean 是否添加成功
+     * @param traceId Trace ID
+     * @param callback Callback object
+     * @param app2app Whether it's app-to-app mode
+     * @return Boolean Whether addition was successful
      */
     fun addQueryCallback(traceId: String, callback: T, app2app: Boolean, requestTimeout: Long?): Boolean {
         return addCallbackByTraceId(traceId, callback, app2app, requestTimeout ?: QUERY_TIMEOUT)
     }
 
     /**
-     * 添加初始化回调（使用初始化超时时间）
+     * Add initialization callback (using initialization timeout)
      *
-     * @param traceId 追踪ID
-     * @param callback 回调对象
-     * @param app2app 是否为应用间模式
-     * @return Boolean 是否添加成功
+     * @param traceId Trace ID
+     * @param callback Callback object
+     * @param app2app Whether it's app-to-app mode
+     * @return Boolean Whether addition was successful
      */
     fun addInitCallback(traceId: String, callback: T, app2app: Boolean, requestTimeout: Long?): Boolean {
         return addCallbackByTraceId(traceId, callback, app2app, requestTimeout ?: INIT_TIMEOUT)
     }
 
     /**
-     * 获取回调（通过traceId，不移除）
+     * Get callback (by traceId, don't remove)
      *
-     * @param traceId 追踪ID
-     * @return T? 回调对象，如果不存在或已超时则返回null
+     * @param traceId Trace ID
+     * @return T? Callback object, returns null if doesn't exist or has timed out
      */
     fun getCallbackByTraceId(traceId: String): T? {
         if (traceId.isBlank()) {
@@ -159,7 +159,7 @@ class LocalCallbackManager<T>(
 
         val wrapper = traceIdCallbackMap[traceId]
         if (wrapper != null) {
-            // 检查是否超时
+            // Check if timed out
             if (wrapper.timestamp != -1L && System.currentTimeMillis() - wrapper.timestamp > wrapper.timeoutMillis) {
                 LogUtil.i(tag, "Callback expired by traceId: $traceId")
                 traceIdCallbackMap.remove(traceId)
@@ -171,10 +171,10 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 获取并移除回调（通过traceId）
+     * Get and remove callback (by traceId)
      *
-     * @param traceId 追踪ID
-     * @return T? 回调对象，如果不存在或已超时则返回null
+     * @param traceId Trace ID
+     * @return T? Callback object, returns null if doesn't exist or has timed out
      */
     fun getAndRemoveCallbackByTraceId(traceId: String): T? {
         if (traceId.isBlank()) {
@@ -191,10 +191,10 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 移除回调（通过traceId）
+     * Remove callback (by traceId)
      *
-     * @param traceId 追踪ID
-     * @return Boolean 是否成功移除
+     * @param traceId Trace ID
+     * @return Boolean Whether removal was successful
      */
     fun removeCallbackByTraceId(traceId: String): Boolean {
         if (traceId.isBlank()) {
@@ -209,7 +209,7 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 清理所有回调
+     * Clear all callbacks
      */
     fun clearAll() {
         val count = callbackMap.size
@@ -220,11 +220,11 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 立即触发所有待处理回调的错误
-     * 用于连接断开或进程崩溃时立即通知应用层
+     * Immediately trigger error for all pending callbacks
+     * Used to immediately notify application layer when connection is lost or process crashes
      *
-     * @param errorCode 错误码
-     * @param errorMessage 错误消息
+     * @param errorCode Error code
+     * @param errorMessage Error message
      */
     fun failAllCallbacks(errorCode: String, errorMessage: String) {
         val callbacks = traceIdCallbackMap.values.toList()
@@ -244,9 +244,9 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 清理超时的回调
+     * Clear expired callbacks
      *
-     * @return Int 清理的回调数量
+     * @return Int Number of cleared callbacks
      */
     fun clearExpired(): Int {
         val now = System.currentTimeMillis()
@@ -264,33 +264,33 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 获取当前回调数量
+     * Get current callback count
      *
-     * @return Int 回调数量
+     * @return Int Callback count
      */
     fun getCallbackCount(): Int {
         return callbackMap.size
     }
 
     /**
-     * 获取当前 traceId 回调数量
+     * Get current traceId callback count
      *
-     * @return Int traceId 回调数量
+     * @return Int traceId callback count
      */
     fun getTraceIdCallbackCount(): Int {
         return traceIdCallbackMap.size
     }
 
     /**
-     * 启动超时清理任务
+     * Start timeout cleanup task
      *
-     * @param requestId 请求ID
-     * @param timeoutMillis 超时时间（毫秒）
+     * @param requestId Request ID
+     * @param timeoutMillis Timeout time (milliseconds)
      */
     private fun startTimeoutTask(requestId: Long, timeoutMillis: Long) {
         scope.launch {
             delay(timeoutMillis)
-            // 检查回调是否仍然存在且未使用
+            // Check if callback still exists and unused
             val wrapper = callbackMap[requestId]
             if (wrapper != null) {
                 val elapsed = System.currentTimeMillis() - wrapper.timestamp
@@ -303,15 +303,15 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 启动超时清理任务（通过traceId）
+     * Start timeout cleanup task (by traceId)
      *
-     * @param traceId 追踪ID
-     * @param timeoutMillis 超时时间（毫秒）
+     * @param traceId Trace ID
+     * @param timeoutMillis Timeout time (milliseconds)
      */
     private fun startTimeoutTaskForTraceId(traceId: String, timeoutMillis: Long) {
         scope.launch {
             delay(timeoutMillis)
-            // 检查回调是否仍然存在且未使用
+            // Check if callback still exists and unused
             val wrapper = traceIdCallbackMap[traceId]
             if (wrapper != null) {
                 if (wrapper.timestamp == -1L) return@launch
@@ -326,7 +326,7 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 释放资源
+     * Release resources
      */
     fun release() {
         clearAll()
@@ -335,11 +335,11 @@ class LocalCallbackManager<T>(
     }
 
     /**
-     * 回调包装类
+     * Callback wrapper class
      *
-     * @param callback 回调对象
-     * @param timestamp 创建时间戳
-     * @param timeoutMillis 超时时间（毫秒）
+     * @param callback Callback object
+     * @param timestamp Creation timestamp
+     * @param timeoutMillis Timeout time (milliseconds)
      */
     private data class CallbackWrapper<T>(
         val callback: T,

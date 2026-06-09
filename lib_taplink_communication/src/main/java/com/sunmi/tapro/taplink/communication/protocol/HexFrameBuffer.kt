@@ -8,22 +8,22 @@ import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 
 /**
- * 十六进制帧缓冲区管理器
+ * Hexadecimal frame buffer manager
  *
- * 负责管理接收数据的缓冲、帧提取和超时处理
- * 使用单线程顺序处理，确保数据按接收顺序处理，避免并发导致的数据错乱
+ * Responsible for managing buffering, frame extraction, and timeout handling of received data
+ * Uses single-threaded sequential processing to ensure data is processed in receiving order, avoiding data corruption caused by concurrency
  *
- * 功能特性：
- * - 单线程顺序处理，保证FIFO顺序
- * - 自动帧提取和校验
- * - 缓冲区溢出保护
- * - 消息超时检测
- * - 线程安全
+ * Features:
+ * - Single-threaded sequential processing, guarantees FIFO order
+ * - Automatic frame extraction and validation
+ * - Buffer overflow protection
+ * - Message timeout detection
+ * - Thread-safe
  *
- * @param scope 协程作用域，用于超时检测
- * @param onFrameReceived 完整帧接收回调
- * @param maxBufferSize 最大缓冲区大小（字符数）
- * @param messageTimeoutMs 消息超时时间（毫秒）
+ * @param scope Coroutine scope for timeout detection
+ * @param onFrameReceived Complete frame received callback
+ * @param maxBufferSize Maximum buffer size (character count)
+ * @param messageTimeoutMs Message timeout time (milliseconds)
  *
  * @author TaPro Team
  * @since 2025-01-06
@@ -37,7 +37,7 @@ class HexFrameBuffer(
     private val TAG = "HexFrameBuffer"
 
     /**
-     * 单线程数据处理执行器，确保数据按接收顺序处理
+     * Single-threaded data processing executor, ensures data is processed in receiving order
      */
     private val dataProcessingExecutor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "HexFrameProcessor").apply {
@@ -46,22 +46,22 @@ class HexFrameBuffer(
     }
 
     /**
-     * 数据队列，保证FIFO顺序处理
+     * Data queue, guarantees FIFO sequential processing
      */
     private val dataQueue = LinkedBlockingQueue<ByteArray>()
 
     /**
-     * 十六进制数据缓冲区
+     * Hexadecimal data buffer
      */
     private val hexBuffer = StringBuilder()
 
     /**
-     * 最后接收数据的时间戳
+     * Timestamp of last received data
      */
     private var lastDataTimestamp = 0L
 
     /**
-     * 是否已启动
+     * Whether started
      */
     private var isStarted = false
 
@@ -71,10 +71,10 @@ class HexFrameBuffer(
     }
 
     /**
-     * 添加接收到的数据到处理队列
+     * Add received data to processing queue
      *
-     * @param data 接收到的数据
-     * @return 是否成功加入队列
+     * @param data Received data
+     * @return Whether successfully added to queue
      */
     fun addData(data: ByteArray): Boolean {
         if (!isStarted) {
@@ -90,7 +90,7 @@ class HexFrameBuffer(
     }
 
     /**
-     * 清空缓冲区
+     * Clear buffer
      */
     fun clear() {
         synchronized(hexBuffer) {
@@ -101,7 +101,7 @@ class HexFrameBuffer(
     }
 
     /**
-     * 获取当前缓冲区大小
+     * Get current buffer size
      */
     fun getBufferSize(): Int {
         synchronized(hexBuffer) {
@@ -110,7 +110,7 @@ class HexFrameBuffer(
     }
 
     /**
-     * 获取最后接收数据的时间戳
+     * Get timestamp of last received data
      */
     fun getLastDataTimestamp(): Long {
         synchronized(hexBuffer) {
@@ -119,7 +119,7 @@ class HexFrameBuffer(
     }
 
     /**
-     * 停止缓冲区处理
+     * Stop buffer processing
      */
     fun stop() {
         isStarted = false
@@ -130,8 +130,8 @@ class HexFrameBuffer(
     }
 
     /**
-     * 启动顺序数据处理器
-     * 使用单线程执行器确保数据按接收顺序处理，解决并发导致的数据错乱问题
+     * Start sequential data processor
+     * Uses single-threaded executor to ensure data is processed in receiving order, solves data corruption issues caused by concurrency
      */
     private fun startSequentialDataProcessor() {
         isStarted = true
@@ -141,7 +141,7 @@ class HexFrameBuffer(
 
             while (!Thread.currentThread().isInterrupted && isStarted) {
                 try {
-                    // 阻塞等待数据，保证FIFO顺序
+                    // Block waiting for data, guarantees FIFO order
                     val data = dataQueue.take()
                     processDataInOrder(data)
                 } catch (e: InterruptedException) {
@@ -158,41 +158,41 @@ class HexFrameBuffer(
     }
 
     /**
-     * 按顺序处理接收到的数据片段
-     * 替代原来的协程并发处理，确保数据顺序正确
+     * Process received data fragments in order
+     * Replaces original coroutine concurrent processing, ensures correct data order
      */
     private fun processDataInOrder(data: ByteArray) {
         val dataString = String(data, Charsets.UTF_8)
         LogUtil.d(TAG, "Processing hex data in order: $dataString (${data.size} bytes)")
 
         synchronized(hexBuffer) {
-            // 更新时间戳
+            // Update timestamp
             lastDataTimestamp = System.currentTimeMillis()
 
-            // 检查缓冲区大小
+            // Check buffer size
             if (hexBuffer.length + dataString.length > maxBufferSize) {
                 LogUtil.w(TAG, "Hex buffer overflow, clearing buffer")
                 hexBuffer.clear()
             }
 
-            // 添加到缓冲区
+            // Add to buffer
             hexBuffer.append(dataString)
 
-            // 尝试提取完整的十六进制帧
+            // Try to extract complete hexadecimal frames
             extractCompleteFrames()
         }
     }
 
     /**
-     * 从缓冲区提取完整的十六进制帧
+     * Extract complete hexadecimal frames from buffer
      */
     private fun extractCompleteFrames() {
         val bufferContent = hexBuffer.toString()
 
-        // 使用HexFrameProtocol解码
+        // Use HexFrameProtocol to decode
         val result = HexFrameProtocol.decode(bufferContent)
 
-        // 处理解码出的帧
+        // Process decoded frames
         for (frame in result.frames) {
             try {
                 onFrameReceived(frame)
@@ -201,7 +201,7 @@ class HexFrameBuffer(
             }
         }
 
-        // 清理已处理的数据
+        // Clean up processed data
         if (result.processedChars > 0) {
             hexBuffer.delete(0, result.processedChars)
             LogUtil.d(TAG, "Hex buffer cleaned, remaining: ${hexBuffer.length} chars")
@@ -209,17 +209,17 @@ class HexFrameBuffer(
     }
 
     /**
-     * 启动缓冲区超时检查器
+     * Start buffer timeout checker
      */
     private fun startBufferTimeoutChecker() {
         scope.launch {
             while (isStarted) {
-                delay(1000) // 每秒检查一次
+                delay(1000) // Check every second
 
                 synchronized(hexBuffer) {
                     val currentTime = System.currentTimeMillis()
 
-                    // 检查是否有超时的不完整消息
+                    // Check if there are incomplete messages that have timed out
                     if (hexBuffer.isNotEmpty() &&
                         lastDataTimestamp > 0 &&
                         currentTime - lastDataTimestamp > messageTimeoutMs

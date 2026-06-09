@@ -1,48 +1,44 @@
 package com.sunmi.tapro.taplink.communication.enums
 
 /**
- * 连接状态枚举
+ * Connection status enumeration
  * 
- * 定义服务连接的各种状态
+ * Defines various states of service connection
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 enum class InnerConnectionStatus {
     /**
-     * 未连接
+     * Disconnected
      */
     DISCONNECTED,
     
     /**
-     * 连接中
+     * Connecting
      */
     CONNECTING,
     
     /**
-     * 已连接
+     * Connected
      */
     CONNECTED,
 
     /**
-     * 等待连接
+     * Waiting for connection
      */
     WAITING_CONNECT,
     
     /**
-     * 重连中
+     * Reconnecting
      */
     RECONNECTING,
     
     /**
-     * 连接错误
+     * Connection error
      */
     ERROR
 }
-
-
-
-
 
 
 

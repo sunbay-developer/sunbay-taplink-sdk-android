@@ -1,143 +1,182 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 设备信息
+ * Device information.
  * 
- * 用于描述发起交易的设备详情
+ * Used to describe details of the device initiating the transaction.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class DeviceInfo(
     /**
-     * 设备类型（可选）
-     * 值：PC, LAPTOP, TABLET, MOBILE, POS, KIOSK, HANDHELD, OTHER
+     * Device type (optional).
+     * Values: PC, LAPTOP, TABLET, MOBILE, POS, KIOSK, HANDHELD, OTHER
      */
     val deviceType: String? = null,
     
     /**
-     * 操作系统类型（可选）
-     * 值：ANDROID, IOS, WINDOWS, LINUX, MACOS
+     * Operating system type (optional).
+     * Values: ANDROID, IOS, WINDOWS, LINUX, MACOS
      */
     val osType: String? = null,
     
     /**
-     * 操作系统版本（可选，如 "13.0", "14.2"）
+     * Operating system version (optional, e.g., "13.0", "14.2").
      */
     val osVersion: String? = null,
     
     /**
-     * 应用版本（可选，如 "1.0.0", "2.3.1"）
+     * Application version (optional, e.g., "1.0.0", "2.3.1").
      */
     val appVersion: String? = null,
     
     /**
-     * SDK 版本（可选，如 "1.0.0"）
+     * SDK version (optional, e.g., "1.0.0").
      */
     val sdkVersion: String? = null,
     
     /**
-     * 用户代理（可选，仅 Web 应用）
+     * User agent (optional, web applications only).
      */
     val userAgent: String? = null,
     
     /**
-     * 设备供应商（可选，如 "Samsung", "Apple", "Sunmi"）
+     * Device vendor (optional, e.g., "Samsung", "Apple", "Sunmi").
      */
     val deviceVendor: String? = null,
     
     /**
-     * 设备型号（可选，如 "T2", "P2", "iPhone 15"）
+     * Device model (optional, e.g., "T2", "P2", "iPhone 15").
      */
     val deviceModel: String? = null,
     
     /**
-     * 设备 IP 地址（可选，支持 IPv4/IPv6）
+     * Device IP address (optional, supports IPv4/IPv6).
      */
     val ip: String? = null,
     
     /**
-     * 纬度（可选，十进制度数）
+     * Latitude (optional, decimal degrees).
      */
     val latitude: String? = null,
     
     /**
-     * 经度（可选，十进制度数）
+     * Longitude (optional, decimal degrees).
      */
     val longitude: String? = null,
     
     /**
-     * 语言环境（可选，格式：语言_地区，如 "en_US", "zh_CN"）
+     * Locale (optional, format: language_region, e.g., "en_US", "zh_CN").
      */
     val locale: String? = null,
     
     /**
-     * 时区（可选，UTC 偏移或时区名称，如 "+08:00", "America/New_York"）
+     * Timezone (optional, UTC offset or timezone name, e.g., "+08:00", "America/New_York").
      */
     val timezone: String? = null
 ) {
     /**
-     * 链式调用：设置设备类型
+     * Sets the device type.
+     *
+     * @param deviceType the device type
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setDeviceType(deviceType: String): DeviceInfo = copy(deviceType = deviceType)
     
     /**
-     * 链式调用：设置操作系统类型
+     * Sets the operating system type.
+     *
+     * @param osType the OS type
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setOsType(osType: String): DeviceInfo = copy(osType = osType)
     
     /**
-     * 链式调用：设置操作系统版本
+     * Sets the operating system version.
+     *
+     * @param osVersion the OS version
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setOsVersion(osVersion: String): DeviceInfo = copy(osVersion = osVersion)
     
     /**
-     * 链式调用：设置应用版本
+     * Sets the application version.
+     *
+     * @param appVersion the app version
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setAppVersion(appVersion: String): DeviceInfo = copy(appVersion = appVersion)
     
     /**
-     * 链式调用：设置 SDK 版本
+     * Sets the SDK version.
+     *
+     * @param sdkVersion the SDK version
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setSdkVersion(sdkVersion: String): DeviceInfo = copy(sdkVersion = sdkVersion)
     
     /**
-     * 链式调用：设置用户代理
+     * Sets the user agent.
+     *
+     * @param userAgent the user agent string
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setUserAgent(userAgent: String): DeviceInfo = copy(userAgent = userAgent)
     
     /**
-     * 链式调用：设置设备供应商
+     * Sets the device vendor.
+     *
+     * @param deviceVendor the device vendor
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setDeviceVendor(deviceVendor: String): DeviceInfo = copy(deviceVendor = deviceVendor)
     
     /**
-     * 链式调用：设置设备型号
+     * Sets the device model.
+     *
+     * @param deviceModel the device model
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setDeviceModel(deviceModel: String): DeviceInfo = copy(deviceModel = deviceModel)
     
     /**
-     * 链式调用：设置设备 IP 地址
+     * Sets the device IP address.
+     *
+     * @param ip the IP address
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setIp(ip: String): DeviceInfo = copy(ip = ip)
     
     /**
-     * 链式调用：设置纬度
+     * Sets the latitude.
+     *
+     * @param latitude the latitude
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setLatitude(latitude: String): DeviceInfo = copy(latitude = latitude)
     
     /**
-     * 链式调用：设置经度
+     * Sets the longitude.
+     *
+     * @param longitude the longitude
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setLongitude(longitude: String): DeviceInfo = copy(longitude = longitude)
     
     /**
-     * 链式调用：设置语言环境
+     * Sets the locale.
+     *
+     * @param locale the locale
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setLocale(locale: String): DeviceInfo = copy(locale = locale)
     
     /**
-     * 链式调用：设置时区
+     * Sets the timezone.
+     *
+     * @param timezone the timezone
+     * @return the updated DeviceInfo instance for method chaining
      */
     fun setTimezone(timezone: String): DeviceInfo = copy(timezone = timezone)
 }

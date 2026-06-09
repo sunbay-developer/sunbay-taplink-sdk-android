@@ -14,9 +14,18 @@ interface ConnectionListener {
     
     /**
      * Connection successful
-     * 
-     * @param deviceId Device identifier
-     * @param taproVersion Tapro version number
+     *
+     * Called when the physical transport is established and the SDK is ready to
+     * accept transactions.
+     *
+     * **Important:** [deviceId] and [taproVersion] are placeholder values (`"unknown"`)
+     * at this point. The real device ID and Tapro version are exchanged during INIT,
+     * which Tapro performs on the first transaction. To read the actual values, call
+     * [TaplinkSDK.getConnectedDeviceId] and [TaplinkSDK.getTaproVersion] after the
+     * first transaction completes.
+     *
+     * @param deviceId Device identifier — placeholder until first transaction
+     * @param taproVersion Tapro version number — placeholder until first transaction
      */
     fun onConnected(deviceId: String, taproVersion: String)
     

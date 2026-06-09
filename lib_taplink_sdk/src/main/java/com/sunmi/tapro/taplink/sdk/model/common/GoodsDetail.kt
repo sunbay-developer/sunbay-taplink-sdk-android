@@ -1,55 +1,67 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
 /**
- * 商品详情类
+ * Goods detail class.
  * 
- * 用于明细交易的商品详情
+ * Used for itemized transaction goods details.
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class GoodsDetail(
     /**
-     * 商品 ID（可选）
-     * 商品/服务的唯一标识符
+     * Goods ID (optional).
+     * Unique identifier for the goods/service.
      */
     val goodsId: String? = null,
     
     /**
-     * 商品名称（可选）
-     * 商品/服务的名称或描述
+     * Goods name (optional).
+     * Name or description of the goods/service.
      */
     val goodsName: String? = null,
     
     /**
-     * 数量（可选）
-     * 单位数
+     * Quantity (optional).
+     * Number of units.
      */
     val quantity: Int? = null,
     
     /**
-     * 单价（可选，单位：分）
-     * 每单位价格，以最小货币单位计
+     * Unit price (optional, unit: cents).
+     * Price per unit in smallest currency unit.
      */
     val price: Int? = null
 ) {
     /**
-     * 链式调用：设置商品 ID
+     * Sets the goods ID.
+     *
+     * @param goodsId the goods ID
+     * @return the updated GoodsDetail instance for method chaining
      */
     fun setGoodsId(goodsId: String): GoodsDetail = copy(goodsId = goodsId)
     
     /**
-     * 链式调用：设置商品名称
+     * Sets the goods name.
+     *
+     * @param goodsName the goods name
+     * @return the updated GoodsDetail instance for method chaining
      */
     fun setGoodsName(goodsName: String): GoodsDetail = copy(goodsName = goodsName)
     
     /**
-     * 链式调用：设置数量
+     * Sets the quantity.
+     *
+     * @param quantity the quantity
+     * @return the updated GoodsDetail instance for method chaining
      */
     fun setQuantity(quantity: Int): GoodsDetail = copy(quantity = quantity)
     
     /**
-     * 链式调用：设置单价
+     * Sets the unit price.
+     *
+     * @param price the unit price
+     * @return the updated GoodsDetail instance for method chaining
      */
     fun setPrice(price: Int): GoodsDetail = copy(price = price)
 }

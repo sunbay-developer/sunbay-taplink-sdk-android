@@ -9,22 +9,22 @@ import com.sunmi.tapro.taplink.communication.protocol.UsbStandardProtocol
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
- * AOA设备工具类
+ * AOA device utility class
  * 
- * 提供AOA设备相关的工具方法：
- * - 设备查找和过滤
- * - 接口和端点分析
- * - 设备信息提取
+ * Provides AOA device-related utility methods:
+ * - Device search and filtering
+ * - Interface and endpoint analysis
+ * - Device information extraction
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object CableAoaDeviceUtils {
     
     private const val TAG = "AoaDeviceUtils"
     
     /**
-     * 端点信息数据类
+     * Endpoint information data class
      */
     data class EndpointInfo(
         val endpoint: UsbEndpoint,
@@ -34,7 +34,7 @@ object CableAoaDeviceUtils {
     )
     
     /**
-     * 接口信息数据类
+     * Interface information data class
      */
     data class InterfaceInfo(
         val usbInterface: UsbInterface,
@@ -45,7 +45,7 @@ object CableAoaDeviceUtils {
     )
     
     /**
-     * 设备分析结果数据类
+     * Device analysis result data class
      */
     data class DeviceAnalysis(
         val device: UsbDevice,
@@ -57,7 +57,7 @@ object CableAoaDeviceUtils {
     )
     
     /**
-     * 查找所有AOA设备
+     * Find all AOA devices
      */
     fun findAoaDevices(usbManager: UsbManager): List<UsbDevice> {
         return usbManager.deviceList.values.filter { device ->
@@ -66,7 +66,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 查找所有原始Android设备（非AOA模式）
+     * Find all original Android devices (non-AOA mode)
      */
     fun findOriginalAndroidDevices(usbManager: UsbManager): List<UsbDevice> {
         return usbManager.deviceList.values.filter { device ->
@@ -75,7 +75,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 根据设备名称查找设备
+     * Find device by device name
      */
     fun findDeviceByName(usbManager: UsbManager, deviceName: String): UsbDevice? {
         return usbManager.deviceList.values.find { device ->
@@ -84,7 +84,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 根据VID/PID查找设备
+     * Find device by VID/PID
      */
     fun findDeviceByVidPid(usbManager: UsbManager, vendorId: Int, productId: Int): UsbDevice? {
         return usbManager.deviceList.values.find { device ->
@@ -93,7 +93,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 分析设备接口和端点
+     * Analyze device interfaces and endpoints
      */
     fun analyzeDevice(device: UsbDevice): DeviceAnalysis {
         LogUtil.d(TAG, "Analyzing device: ${device.deviceName}")
@@ -122,14 +122,14 @@ object CableAoaDeviceUtils {
                     "subclass=${usbInterface.interfaceSubclass}, protocol=${usbInterface.interfaceProtocol}")
             LogUtil.d(TAG, "  Endpoint count: ${usbInterface.endpointCount}")
             
-            // 查找合适的接口（优先选择Vendor Specific类或有足够端点的接口）
+            // Find suitable interface (prefer Vendor Specific class or interface with sufficient endpoints)
             if (suitableInterface == null) {
                 if (usbInterface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC ||
                     (usbInterface.endpointCount >= 2 && endpoints.any { it.direction == "IN" } && endpoints.any { it.direction == "OUT" })
                 ) {
                     suitableInterface = usbInterface
                     
-                    // 查找输入和输出端点
+                    // Find input and output endpoints
                     for (endpointInfo in endpoints) {
                         if (endpointInfo.type == "BULK") {
                             when (endpointInfo.direction) {
@@ -159,7 +159,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 分析接口端点
+     * Analyze interface endpoints
      */
     private fun analyzeInterfaceEndpoints(usbInterface: UsbInterface): List<EndpointInfo> {
         val endpoints = mutableListOf<EndpointInfo>()
@@ -191,7 +191,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 检查设备是否在设备列表中
+     * Check if device is present in device list
      */
     fun isDevicePresent(usbManager: UsbManager, targetDevice: UsbDevice): Boolean {
         return usbManager.deviceList.values.any { device ->
@@ -202,7 +202,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 获取设备的详细信息字符串
+     * Get device detailed information string
      */
     fun getDeviceDetailInfo(device: UsbDevice): String {
         val analysis = analyzeDevice(device)
@@ -233,7 +233,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 比较两个设备是否相同
+     * Compare if two devices are the same
      */
     fun isSameDevice(device1: UsbDevice?, device2: UsbDevice?): Boolean {
         if (device1 == null || device2 == null) return false
@@ -244,7 +244,7 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 获取设备的简短描述
+     * Get device short description
      */
     fun getDeviceShortDescription(device: UsbDevice): String {
         val deviceType = if (UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)) {
@@ -257,10 +257,10 @@ object CableAoaDeviceUtils {
     }
     
     /**
-     * 检查接口是否适合AOA通信
+     * Check if interface is suitable for AOA communication
      */
     fun isInterfaceSuitableForAoa(usbInterface: UsbInterface): Boolean {
-        // 检查是否有足够的端点
+        // Check if has sufficient endpoints
         if (usbInterface.endpointCount < 2) {
             return false
         }
@@ -279,7 +279,7 @@ object CableAoaDeviceUtils {
             }
         }
         
-        // 至少需要一个输出端点，输入端点可选
+        // At least need one output endpoint, input endpoint is optional
         return hasOutEndpoint
     }
 }

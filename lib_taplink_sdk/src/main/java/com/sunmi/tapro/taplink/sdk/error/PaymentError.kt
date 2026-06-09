@@ -3,57 +3,57 @@ package com.sunmi.tapro.taplink.sdk.error
 import com.sunmi.tapro.taplink.communication.enums.ErrorCategory
 
 /**
- * 支付错误类
+ * Payment error class
  * 
- * 包含结构化的错误信息和处理建议
+ * Contains structured error information and handling suggestions
  *
  * @author TaPro Team
  * @since 2025-01-14
  */
 class PaymentError(
-    /** 错误详情 */
+    /** Error details */
     val detail: Detail,
     
-    /** 追踪 ID，用于问题排查 */
+    /** Trace ID for troubleshooting */
     val traceId: String? = null,
     
-    /** 商户订单号 */
+    /** Merchant order number */
     val referenceOrderId: String? = null,
     
-    /** 交易 ID */
+    /** Transaction ID */
     val transactionId: String? = null,
     
-    /** 交易请求 ID */
+    /** Transaction request ID */
     val transactionRequestId: String? = null
 ) {
-    // 向后兼容的便捷属性
-    /** 错误码（等同于 detail.code） */
+    // Backward compatible convenience properties
+    /** Error code (equivalent to detail.code) */
     val code: String get() = detail.code
     
-    /** 错误描述（等同于 detail.message） */
+    /** Error description (equivalent to detail.message) */
     val message: String get() = detail.message
     
-    /** 处理建议（等同于 detail.suggestion） */
+    /** Handling suggestion (equivalent to detail.suggestion) */
     val suggestion: String get() = detail.suggestion
     
-    /** 错误分类（等同于 detail.errorCategory） */
+    /** Error category (equivalent to detail.errorCategory) */
     val category: ErrorCategory get() = detail.errorCategory
     
-    /** 是否可以使用相同的transactionRequestId重试（等同于 detail.canRetryWithSameId） */
+    /** Whether can retry with the same transactionRequestId (equivalent to detail.canRetryWithSameId) */
     val canRetryWithSameId: Boolean get() = detail.canRetryWithSameId
     
-    // 向后兼容：orderNo 映射到 referenceOrderId
-    /** 订单号（等同于 referenceOrderId，向后兼容） */
+    // Backward compatibility: orderNo maps to referenceOrderId
+    /** Order number (equivalent to referenceOrderId, backward compatible) */
     val orderNo: String? get() = referenceOrderId
     
     /**
-     * 便捷构造函数：从错误码和消息创建 PaymentError（向后兼容）
+     * Convenience constructor: Create PaymentError from error code and message (backward compatible)
      * 
-     * @param code 错误码
-     * @param message 错误描述
-     * @param orderNo 订单号（可选，向后兼容）
-     * @param transactionId 交易 ID（可选）
-     * @param suggestion 处理建议（可选）
+     * @param code Error code
+     * @param message Error description
+     * @param orderNo Order number (optional, backward compatible)
+     * @param transactionId Transaction ID (optional)
+     * @param suggestion Handling suggestion (optional)
      */
     constructor(
         code: String,
@@ -75,17 +75,17 @@ class PaymentError(
     
     companion object {
         /**
-         * 便捷构造函数：从错误码和消息创建 PaymentError
-         * 
-         * 用于向后兼容，自动创建 Detail
-         * 
-         * @param code 错误码
-         * @param message 错误描述
-         * @param suggestion 处理建议（可选，默认为空字符串）
-         * @param traceId 追踪 ID（可选）
-         * @param referenceOrderId 商户订单号（可选）
-         * @param transactionId 交易 ID（可选）
-         * @param transactionRequestId 交易请求 ID（可选）
+         * Convenience factory: creates a [PaymentError] from an error code and message.
+         *
+         * Automatically derives [Detail.errorCategory] and [Detail.canRetryWithSameId] from [code].
+         *
+         * @param code Error code (e.g., "306", "201")
+         * @param message Human-readable error description
+         * @param suggestion Remediation hint (optional, defaults to empty string)
+         * @param traceId Trace ID for troubleshooting (optional)
+         * @param referenceOrderId Merchant order number (optional)
+         * @param transactionId Transaction ID (optional)
+         * @param transactionRequestId Transaction request ID (optional)
          */
         @JvmStatic
         fun create(
@@ -117,41 +117,41 @@ class PaymentError(
     }
     
     /**
-     * 错误详情类
-     * 包含错误的完整信息和处理建议
+     * Error detail class
+     * Contains complete error information and handling suggestions
      *
      * @author TaPro Team
      * @since 2025-01-14
      */
     data class Detail(
-        /** 错误码（如 "306", "307", "201"） */
+        /** Error code (e.g., "306", "307", "201") */
         val code: String,
         
-        /** 错误描述（如 "响应超时", "交易被拒绝"） */
+        /** Error description (e.g., "Response timeout", "Transaction rejected") */
         val message: String,
         
-        /** 处理建议（如 "先查询交易状态，确认后再重试"） */
+        /** Handling suggestion (e.g., "Query transaction status first, then retry after confirmation") */
         val suggestion: String,
         
-        /** 错误分类 */
+        /** Error category */
         val errorCategory: ErrorCategory,
         
-        /** 是否可以使用相同的transactionRequestId重试 */
+        /** Whether can retry with the same transactionRequestId */
         val canRetryWithSameId: Boolean
     ) {
         companion object {
             /**
-             * 判断是否可以使用相同的 transactionRequestId 重试
+             * Determine whether can retry with the same transactionRequestId
              * 
-             * 根据集成指南：
-             * - 306、307、308 不能使用相同ID（306需要先查询状态）
-             * - 其他所有错误码都可以使用相同ID
+             * According to integration guide:
+             * - 306, 307, 308 cannot use the same ID (306 needs to query status first)
+             * - All other error codes can use the same ID
              * 
-             * @param code 错误码
-             * @return true 表示可以使用相同ID重试，false 表示必须使用新ID
+             * @param code Error code
+             * @return true means can retry with same ID, false means must use new ID
              */
             fun canRetryWithSameId(code: String): Boolean {
-                // 306、307、308 不能使用相同ID（306需要先查询状态）
+                // 306, 307, 308 cannot use the same ID (306 needs to query status first)
                 return code !in listOf("306", "307", "308")
             }
         }

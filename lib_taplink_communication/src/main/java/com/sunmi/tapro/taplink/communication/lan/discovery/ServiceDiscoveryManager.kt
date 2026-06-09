@@ -10,17 +10,17 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 基于Android NSD的服务发现管理器
+ * Android NSD-based service discovery manager
  * 
- * 职责：
- * - 使用Android NSD API进行mDNS服务发现
- * - 管理服务监听和变化检测
- * - 维护发现的服务列表
+ * Responsibilities:
+ * - Use Android NSD API for mDNS service discovery
+ * - Manage service monitoring and change detection
+ * - Maintain discovered service list
  * 
- * @param context Android上下文
+ * @param context Android context
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class ServiceDiscoveryManager(
     private val context: Context
@@ -43,10 +43,10 @@ class ServiceDiscoveryManager(
     private val discoveredServices = ConcurrentHashMap<String, ServiceInfo>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    // 用于防止重复解析同一个服务
+    // Used to prevent duplicate resolution of the same service
     private val resolvingServices = ConcurrentHashMap<String, AtomicBoolean>()
     
-    // 用于同步服务更新操作
+    // Used to synchronize service update operations
     private val serviceUpdateLock = kotlinx.coroutines.sync.Mutex()
 
     suspend fun discoverServices(serviceType: String, timeoutMs: Long = DISCOVERY_TIMEOUT_MS): List<ServiceInfo> {
@@ -54,18 +54,18 @@ class ServiceDiscoveryManager(
             try {
                 LogUtil.d(TAG, "Starting service discovery for: $serviceType")
                 
-                // 清理之前的发现结果
+                // Clear previous discovery results
                 discoveredServices.clear()
                 resolvingServices.clear()
                 
-                // 开始发现
+                // Start discovery
                 val tempListener = createDiscoveryListener()
                 nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, tempListener)
                 
-                // 等待发现完成
+                // Wait for discovery to complete
                 delay(timeoutMs)
                 
-                // 停止发现
+                // Stop discovery
                 try {
                     nsdManager.stopServiceDiscovery(tempListener)
                 } catch (e: Exception) {
@@ -137,7 +137,7 @@ class ServiceDiscoveryManager(
     }
     
     /**
-     * 创建NSD发现监听器
+     * Create NSD discovery listener
      */
     private fun createDiscoveryListener(): NsdManager.DiscoveryListener {
         return object : NsdManager.DiscoveryListener {
@@ -148,17 +148,17 @@ class ServiceDiscoveryManager(
             
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
                 LogUtil.e(TAG, "Discovery stop failed: $serviceType, error: $errorCode")
-                // 不需要通知，因为停止失败不影响业务
+                // No need to notify, because stop failure doesn't affect business
             }
             
             override fun onDiscoveryStarted(serviceType: String) {
                 LogUtil.d(TAG, "Discovery started: $serviceType")
-                // onDiscoveryStarted 已在 startServiceMonitoring 中调用
+                // onDiscoveryStarted already called in startServiceMonitoring
             }
             
             override fun onDiscoveryStopped(serviceType: String) {
                 LogUtil.d(TAG, "Discovery stopped: $serviceType")
-                // onDiscoveryStopped 已在 stopServiceMonitoring 中调用
+                // onDiscoveryStopped already called in stopServiceMonitoring
             }
             
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
@@ -166,27 +166,27 @@ class ServiceDiscoveryManager(
                 
                 val serviceName = serviceInfo.serviceName
                 
-                // 检查服务是否已存在，如果存在，可能是重新注册，需要重新解析以检测地址变化
+                // Check if service already exists, if exists, may be re-registered, need to re-resolve to detect address changes
                 val existing = discoveredServices[serviceName]
                 if (existing != null) {
                     LogUtil.i(TAG, "Service $serviceName already exists, but received onServiceFound again - may be re-registered, allowing re-resolution to detect address changes")
-                    // 清理解析状态，允许重新解析（即使当前正在解析中，也允许重新解析以检测地址变化）
+                    // Clear resolution status, allow re-resolution (even if currently resolving, allow re-resolution to detect address changes)
                     resolvingServices.remove(serviceName)
                 }
                 
-                // 检查是否已经在解析这个服务，防止重复解析
+                // Check if already resolving this service, prevent duplicate resolution
                 val isResolving = resolvingServices.computeIfAbsent(serviceName) { AtomicBoolean(false) }
                 
                 if (isResolving.compareAndSet(false, true)) {
-                    // 成功设置为正在解析状态，开始解析
+                    // Successfully set to resolving state, start resolution
                     LogUtil.d(TAG, "Starting to resolve service: $serviceName")
                     
-                    // 解析服务信息
+                    // Resolve service information
                     nsdManager.resolveService(serviceInfo, createResolveListener(serviceName) { resolvedInfo ->
                         handleServiceResolved(serviceName, resolvedInfo)
                     })
                 } else {
-                    // 服务已经在解析中，跳过
+                    // Service already being resolved, skip
                     LogUtil.d(TAG, "Service $serviceName is already being resolved, skipping")
                 }
             }
@@ -196,7 +196,7 @@ class ServiceDiscoveryManager(
                 
                 val serviceName = serviceInfo.serviceName
                 
-                // 清理解析状态
+                // Clear resolution status
                 resolvingServices.remove(serviceName)
                 
                 val service = discoveredServices.remove(serviceName)
@@ -208,7 +208,7 @@ class ServiceDiscoveryManager(
     }
     
     /**
-     * 处理服务解析完成
+     * Handle service resolution completion
      */
     private fun handleServiceResolved(serviceName: String, resolvedInfo: NsdServiceInfo) {
         scope.launch {
@@ -220,12 +220,12 @@ class ServiceDiscoveryManager(
                     val existing = discoveredServices[service.name]
                     
                     if (existing == null) {
-                        // 新服务
+                        // New service
                         discoveredServices[service.name] = service
                         LogUtil.i(TAG, "New service discovered: ${service.name} at ${service.getAddress()}")
                         serviceChangeListener?.onServiceFound(service)
                     } else {
-                        // 服务已存在，检查是否有变化
+                        // Service already exists, check if there are changes
                         val addressChanged = existing.host != service.host || existing.port != service.port
                         if (addressChanged) {
                             LogUtil.i(
@@ -235,11 +235,11 @@ class ServiceDiscoveryManager(
                             discoveredServices[service.name] = service
                             serviceChangeListener?.onServiceUpdated(existing, service)
                         } else if (existing != service) {
-                            // 地址未变化，但其他属性变化了
+                            // Address unchanged, but other attributes changed
                             discoveredServices[service.name] = service
                             serviceChangeListener?.onServiceUpdated(existing, service)
                         } else {
-                            // 服务信息完全相同，可能是重复发现，记录日志但不触发回调
+                            // Service info completely identical, may be duplicate discovery, log but don't trigger callback
                             LogUtil.d(TAG, "Service found again with same info: ${service.name} at ${service.getAddress()}")
                         }
                     }
@@ -248,20 +248,20 @@ class ServiceDiscoveryManager(
                 LogUtil.e(TAG, "Error handling resolved service $serviceName: ${e.message}")
             } finally {
                 serviceUpdateLock.unlock()
-                // 清理解析状态
+                // Clear resolution status
                 resolvingServices.remove(serviceName)
             }
         }
     }
     
     /**
-     * 创建服务解析监听器
+     * Create service resolution listener
      */
     private fun createResolveListener(serviceName: String, onResolved: (NsdServiceInfo) -> Unit): NsdManager.ResolveListener {
         return object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 LogUtil.w(TAG, "Resolve failed: ${serviceInfo.serviceName}, error: $errorCode")
-                // 清理解析状态
+                // Clear resolution status
                 resolvingServices.remove(serviceName)
             }
             
@@ -273,7 +273,7 @@ class ServiceDiscoveryManager(
     }
     
     /**
-     * 转换NsdServiceInfo为ServiceInfo
+     * Convert NsdServiceInfo to ServiceInfo
      */
     private fun convertToServiceInfo(nsdInfo: NsdServiceInfo): ServiceInfo? {
         return try {
@@ -287,7 +287,7 @@ class ServiceDiscoveryManager(
                 type = type,
                 host = host,
                 port = port,
-                attributes = emptyMap() // NSD不直接支持TXT记录，可以后续扩展
+                attributes = emptyMap() // NSD doesn't directly support TXT records, can be extended later
             )
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to convert service info: ${e.message}")
@@ -296,7 +296,7 @@ class ServiceDiscoveryManager(
     }
     
     /**
-     * 清理资源
+     * Clean up resources
      */
     private fun cleanup() {
         isMonitoring = false
@@ -308,51 +308,51 @@ class ServiceDiscoveryManager(
     }
     
     /**
-     * 服务变化监听器
+     * Service change listener
      */
     interface ServiceChangeListener {
         /**
-         * 发现新服务
+         * New service discovered
          * 
-         * @param service 新发现的服务
+         * @param service Newly discovered service
          */
         fun onServiceFound(service: ServiceInfo)
         
         /**
-         * 服务丢失
+         * Service lost
          * 
-         * @param service 丢失的服务
+         * @param service Lost service
          */
         fun onServiceLost(service: ServiceInfo)
         
         /**
-         * 服务信息更新
+         * Service information updated
          * 
-         * @param oldService 旧的服务信息
-         * @param newService 新的服务信息
+         * @param oldService Old service information
+         * @param newService New service information
          */
         fun onServiceUpdated(oldService: ServiceInfo, newService: ServiceInfo)
         
         /**
-         * 服务发现开始
+         * Service discovery started
          * 
-         * @param serviceType 服务类型
+         * @param serviceType Service type
          */
         fun onDiscoveryStarted(serviceType: String)
         
         /**
-         * 服务发现停止
+         * Service discovery stopped
          * 
-         * @param serviceType 服务类型
+         * @param serviceType Service type
          */
         fun onDiscoveryStopped(serviceType: String)
         
         /**
-         * 服务发现失败
+         * Service discovery failed
          * 
-         * @param serviceType 服务类型
-         * @param errorCode 错误代码
-         * @param error 错误信息
+         * @param serviceType Service type
+         * @param errorCode Error code
+         * @param error Error message
          */
         fun onDiscoveryFailed(serviceType: String, errorCode: Int, error: String)
     }

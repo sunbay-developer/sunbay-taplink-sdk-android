@@ -5,9 +5,9 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * 签名工具类
+ * Signature Utility Class
  *
- * 提供HMAC-SHA256签名功能
+ * Provides HMAC-SHA256 signature functionality
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -18,11 +18,11 @@ object SignUtil {
     private const val HMAC_SHA256 = "HmacSHA256"
 
     /**
-     * 使用HMAC-SHA256算法生成签名
+     * Generate signature using HMAC-SHA256 algorithm
      *
-     * @param data 待签名的数据（通常是排序后的JSON字符串，排除appSign字段）
-     * @param secretKey 密钥
-     * @return String 签名的十六进制字符串（大写）
+     * @param data Data to be signed (usually sorted JSON string, excluding appSign field)
+     * @param secretKey Secret key
+     * @return String Signed hexadecimal string (uppercase)
      */
     fun generateHMACSHA256(data: String, secretKey: String): String {
         return try {
@@ -38,12 +38,12 @@ object SignUtil {
     }
 
     /**
-     * 验证签名
+     * Verify signature
      *
-     * @param data 原始数据
-     * @param secretKey 密钥
-     * @param signature 待验证的签名
-     * @return Boolean 签名是否有效
+     * @param data Original data
+     * @param secretKey Secret key
+     * @param signature Signature to be verified
+     * @return Boolean Whether the signature is valid
      */
     fun verifySignature(data: String, secretKey: String, signature: String): Boolean {
         val calculatedSignature = generateHMACSHA256(data, secretKey)
@@ -51,10 +51,10 @@ object SignUtil {
     }
 
     /**
-     * 将字节数组转换为十六进制字符串（大写）
+     * Convert byte array to hexadecimal string (uppercase)
      *
-     * @param bytes 字节数组
-     * @return String 十六进制字符串
+     * @param bytes Byte array
+     * @return String Hexadecimal string
      */
     private fun bytesToHex(bytes: ByteArray): String {
         val hexChars = CharArray(bytes.size * 2)
@@ -69,7 +69,7 @@ object SignUtil {
     private val hexArray = "0123456789ABCDEF".toCharArray()
 
     /**
-     * 签名异常
+     * Signature exception
      */
     class SignException(message: String, cause: Throwable? = null) : Exception(message, cause)
 }

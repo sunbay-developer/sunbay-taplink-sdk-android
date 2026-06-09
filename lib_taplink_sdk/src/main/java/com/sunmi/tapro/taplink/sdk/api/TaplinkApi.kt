@@ -7,151 +7,168 @@ import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 
 /**
- * Taplink SDK API接口
+ * Taplink SDK API interface
  *
- * 根据 Taplink SDK for Android 集成指南文档定义的完整API接口
- * 参考文档: Taplink SDK for Android - 集成指南.md
+ * Defines the complete public API contract for the Taplink SDK.
  *
- * 主要特点：
- * - 统一使用 PaymentRequest 处理所有交易类型（通过 action 字段区分）
- * - 支持同步和异步两种调用方式
- * - 使用 ConnectionConfig 统一管理所有连接模式
- * - 方法签名与文档中的 TaplinkSDK 静态方法对应
+ * Main features:
+ * - Unified use of PaymentRequest to handle all transaction types (distinguished by action field)
+ * - Supports both synchronous and asynchronous calling methods
+ * - Uses ConnectionConfig to uniformly manage all connection modes
+ * - Method signatures correspond to TaplinkSDK static methods in documentation
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 interface TaplinkApi {
 
-    // ==================== 初始化 ====================
+    // ==================== Initialization ====================
 
     /**
-     * 初始化SDK
+     * Initialize SDK
      *
-     * 初始化 Taplink SDK，配置应用信息和连接参数。必须在使用其他接口前调用。
+     * Initialize Taplink SDK, configure application information and connection parameters. Must be called before using other interfaces.
      *
-     * @param context Application 或 Activity 上下文
-     * @param config SDK配置对象
+     * @param context Application or Activity context
+     * @param config SDK configuration object
      */
     fun init(context: Context, config: TaplinkConfig)
 
-    // ==================== 连接管理 ====================
+    /**
+     * Whether the SDK has been initialized via [init].
+     *
+     * @return true if [init] has been called successfully
+     */
+    fun isInitialized(): Boolean
 
     /**
-     * 建立连接（统一连接方法）
+     * Returns the current connection status.
      *
-     * 支持所有连接模式：
-     * - 应用间模式：使用空配置，SDK自动检测
-     * - 线缆模式：使用空配置自动检测，或指定协议类型
-     * - 局域网模式：指定IP和端口（首次），或使用空配置（后续自动连接）
+     * More granular than [isConnected]: distinguishes CONNECTING, CONNECTED,
+     * WAIT_CONNECTING, DISCONNECTED, and ERROR states.
      *
-     * @param config 连接配置对象（可为null，使用默认配置）
-     * @param listener 连接监听器
+     * @return [ConnectionStatus] current status
+     */
+    fun getConnectionStatus(): ConnectionStatus
+
+    // ==================== Connection Management ====================
+
+    /**
+     * Establish connection (unified connection method)
+     *
+     * Supports all connection modes:
+     * - App-to-app mode: Use empty config, SDK auto-detects
+     * - Cable mode: Use empty config for auto-detection, or specify protocol type
+     * - LAN mode: Specify IP and port (first time), or use empty config (subsequent auto-connect)
+     *
+     * @param config Connection configuration object (can be null, uses default config)
+     * @param listener Connection listener
      */
     fun connect(config: ConnectionConfig?, listener: ConnectionListener)
 
     /**
-     * 断开连接
+     * Disconnect
      *
-     * 断开与支付终端的连接，释放资源。
+     * Disconnect from payment terminal, release resources.
      */
     fun disconnect()
 
     /**
-     * 检查连接状态
+     * Check connection status
      *
-     * @return true 如果已连接，false 否则
+     * @return true if connected, false otherwise
      */
     fun isConnected(): Boolean
 
     /**
-     * 获取已连接设备ID
+     * Get connected device ID
      *
-     * @return String 设备ID，如果未连接返回null
+     * @return String Device ID, returns null if not connected
      */
     fun getConnectedDeviceId(): String?
 
     /**
-     * 获取连接模式
+     * Get connection mode
      *
-     * @return ConnectionMode 当前连接模式，如果未连接返回null
+     * @return ConnectionMode Current connection mode, returns null if not connected
      */
     fun getConnectionMode(): String?
 
     /**
-     * 获取 Tapro 版本号
+     * Get Tapro version number
      *
-     * 获取已连接支付终端的 Tapro 版本号。
-     * 只有在连接成功后才能获取到版本号。
+     * Get Tapro version number of connected payment terminal.
+     * Version number can only be obtained after successful connection.
      *
-     * @return String Tapro 版本号，如果未连接或未获取到版本号返回null
+     * @return String Tapro version number, returns null if not connected or version not obtained
      */
     fun getTaproVersion(): String?
 
-    // ==================== 交易执行 ====================
+    // ==================== Transaction Execution ====================
 
     /**
-     * 异步执行交易（推荐）
+     * Execute transaction asynchronously (recommended)
      *
-     * 非阻塞调用，立即返回。交易结果通过回调方法传递。
-     * 推荐用于跨设备场景和需要进度反馈的场景。
+     * Non-blocking call, returns immediately. Transaction results are passed through callback methods.
+     * Recommended for cross-device scenarios and scenarios requiring progress feedback.
      *
-     * @param request 支付请求对象
-     * @param callback 支付回调接口
+     * @param request Payment request object
+     * @param callback Payment callback interface
      */
     fun execute(request: PaymentRequest, callback: PaymentCallback)
 
-    // ==================== 交易查询 ====================
+    // ==================== Transaction Query ====================
 
     /**
-     * 异步查询交易状态
+     * Query transaction status asynchronously
      *
-     * 查询交易状态，特别适用于超时场景。
-     * 可以通过交易ID或交易请求ID查询。
+     * Query transaction status, especially suitable for timeout scenarios.
+     * Can query by transaction ID or transaction request ID.
      *
-     * @param request 查询请求对象
-     * @param callback 支付回调接口
+     * @param request Query request object
+     * @param callback Payment callback interface
      */
     fun query(request: QueryRequest, callback: PaymentCallback)
 
-    // ==================== 监听器管理 ====================
+    // ==================== Listener Management ====================
 
     /**
-     * 设置连接状态监听器
+     * Set connection status listener
      *
-     * 设置连接状态监听器，实时监听连接状态变化、断线重连等事件。
+     * Set connection status listener to monitor connection status changes, reconnection events, etc. in real-time.
      *
-     * @param listener 连接状态监听器，null表示移除监听器
+     * @param listener Connection status listener, null means remove listener
      */
     fun setConnectionListener(listener: ConnectionListener?)
 
     /**
-     * 移除连接状态监听器
+     * Remove connection status listener
      *
-     * 移除之前设置的连接状态监听器。
+     * Remove previously set connection status listener.
      */
     fun removeConnectionListener()
 
-    // ==================== 实用方法 ====================
+    // ==================== Utility Methods ====================
 
     /**
-     * 获取SDK版本
+     * Get SDK version
      *
-     * @return String SDK版本号，格式：x.y.z
+     * @return String SDK version number, format: x.y.z
      */
     fun getVersion(): String
 
     /**
-     * 清除缓存的设备信息
+     * Clear cached device information
      *
-     * 清除本地缓存的设备连接信息，下次连接时需要重新配对。
+     * Clear locally cached device connection information, need to re-pair on next connection.
      */
     fun clearDeviceCache()
 
     /**
-     * 获取连接信息
+     * Get connection information
      */
     fun getConnectionConfig(): ConnectionConfig?
 }

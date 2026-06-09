@@ -1,42 +1,42 @@
 package com.sunmi.tapro.taplink.communication.protocol
 
 /**
- * 协议常量定义
+ * Protocol constants definition
  *
- * 统一定义所有支持的协议格式，供 SDK 层和 Communication 层共同使用
+ * Unified definition of all supported protocol formats for use by both SDK layer and Communication layer
  *
  * @author TaPro Team
  * @since 2025-12-17
  */
 object ProtocolConstants {
 
-    // ==================== 协议前缀 ====================
+    // ==================== Protocol Prefixes ====================
 
     /**
-     * 本地服务协议前缀
-     * 格式：local://packageName/action
-     * 示例：local://com.sunmi.tapro/com.sunmi.tapro.taplink.service.local.ACTION_TRANSACTION
+     * Local service protocol prefix
+     * Format: local://packageName/action
+     * Example: local://com.sunmi.tapro/com.sunmi.tapro.taplink.service.local.ACTION_TRANSACTION
      */
     const val LOCAL_PROTOCOL_PREFIX = "local://"
 
     /**
-     * 局域网协议前缀（WebSocket Secure）
-     * 格式：wss://host:port
-     * 示例：wss://192.168.1.100:8443
+     * LAN protocol prefix (WebSocket Secure)
+     * Format: wss://host:port
+     * Example: wss://192.168.1.100:8443
      */
     const val LAN_PROTOCOL_PREFIX = "wss://"
 
     /**
-     * 局域网协议前缀（WebSocket）
-     * 格式：ws://host:port
-     * 示例：ws://192.168.1.100:8080
+     * LAN protocol prefix (WebSocket)
+     * Format: ws://host:port
+     * Example: ws://192.168.1.100:8080
      */
     const val LAN_WS_PROTOCOL_PREFIX = "ws://"
 
     /**
-     * USB 协议前缀
-     * 格式：usb://mode/device 或 usb://device
-     * 示例：
+     * USB protocol prefix
+     * Format: usb://mode/device or usb://device
+     * Examples:
      * - usb://host/deviceName
      * - usb://accessory
      * - usb://
@@ -44,68 +44,68 @@ object ProtocolConstants {
     const val USB_PROTOCOL_PREFIX = "usb://"
 
     /**
-     * 虚拟串口协议前缀
-     * 格式：vsp://baudRate/dataBits/parity/stopBits
-     * 示例：vsp://115200/8/N/1
+     * Virtual serial port protocol prefix
+     * Format: vsp://baudRate/dataBits/parity/stopBits
+     * Example: vsp://115200/8/N/1
      */
     const val VSP_PROTOCOL_PREFIX = "vsp://"
 
     /**
-     * 串口协议前缀
-     * 格式：serial://devicePath:baudRate
-     * 示例：serial:///dev/ttyUSB0:115200
+     * Serial port protocol prefix
+     * Format: serial://devicePath:baudRate
+     * Example: serial:///dev/ttyUSB0:115200
      */
     const val SERIAL_PROTOCOL_PREFIX = "serial://"
 
     /**
-     * RS232 协议前缀（串口的别名）
-     * 格式：rs232://devicePath:baudRate
-     * 示例：rs232:///dev/ttyS0:9600
+     * RS232 protocol prefix (alias for serial port)
+     * Format: rs232://devicePath:baudRate
+     * Example: rs232:///dev/ttyS0:9600
      */
     const val RS232_PROTOCOL_PREFIX = "rs232://"
 
     /**
-     * 自动检测协议前缀
-     * 格式：auto://
-     * 系统会自动检测可用的连接方式
+     * Auto-detect protocol prefix
+     * Format: auto://
+     * System will automatically detect available connection methods
      */
     const val AUTO_PROTOCOL_PREFIX = "auto://"
 
-    // ==================== 完整协议格式 ====================
+    // ==================== Complete Protocol Formats ====================
 
     /**
-     * 默认本地服务协议
+     * Default local service protocol
      */
     const val DEFAULT_LOCAL_PROTOCOL = LOCAL_PROTOCOL_PREFIX
 
     /**
-     * 默认 USB Host 协议
+     * Default USB Host protocol
      */
     const val DEFAULT_USB_HOST_PROTOCOL = "${USB_PROTOCOL_PREFIX}host"
 
     /**
-     * USB Accessory 协议
+     * USB Accessory protocol
      */
     const val USB_ACCESSORY_PROTOCOL = "${USB_PROTOCOL_PREFIX}accessory"
 
     /**
-     * 默认虚拟串口协议（115200, 8, N, 1）
+     * Default virtual serial port protocol (115200, 8, N, 1)
      */
     const val DEFAULT_VSP_PROTOCOL = "${VSP_PROTOCOL_PREFIX}115200/8/N/1"
 
     /**
-     * 自动检测协议
+     * Auto-detect protocol
      */
     const val AUTO_DETECT_PROTOCOL = AUTO_PROTOCOL_PREFIX
 
-    // ==================== 协议构建器 ====================
+    // ==================== Protocol Builders ====================
 
     /**
-     * 构建本地服务协议
+     * Build local service protocol
      *
-     * @param packageName 包名
-     * @param action 服务 Action（可选）
-     * @return 协议字符串
+     * @param packageName Package name
+     * @param action Service Action (optional)
+     * @return Protocol string
      */
     fun buildLocalProtocol(packageName: String, action: String? = null): String {
         return if (action != null) {
@@ -116,12 +116,12 @@ object ProtocolConstants {
     }
 
     /**
-     * 构建局域网协议
+     * Build LAN protocol
      *
-     * @param host 主机地址
-     * @param port 端口号
-     * @param secure 是否使用 WSS（默认 false，使用 ws://）
-     * @return 协议字符串
+     * @param host Host address
+     * @param port Port number
+     * @param secure Whether to use WSS (default false, uses ws://)
+     * @return Protocol string
      */
     fun buildLanProtocol(host: String, port: Int, secure: Boolean = false): String {
         val prefix = if (secure) LAN_PROTOCOL_PREFIX else LAN_WS_PROTOCOL_PREFIX
@@ -129,11 +129,11 @@ object ProtocolConstants {
     }
 
     /**
-     * 构建 USB Host 协议
+     * Build USB Host protocol
      *
-     * @param deviceName 设备名称（可选）
-     * @param deviceId 设备 ID（可选）
-     * @return 协议字符串
+     * @param deviceName Device name (optional)
+     * @param deviceId Device ID (optional)
+     * @return Protocol string
      */
     fun buildUsbHostProtocol(deviceName: String? = null, deviceId: String? = null): String {
         return when {
@@ -144,22 +144,22 @@ object ProtocolConstants {
     }
 
     /**
-     * 构建 USB Accessory 协议
+     * Build USB Accessory protocol
      *
-     * @return 协议字符串
+     * @return Protocol string
      */
     fun buildUsbAccessoryProtocol(): String {
         return USB_ACCESSORY_PROTOCOL
     }
 
     /**
-     * 构建虚拟串口协议
+     * Build virtual serial port protocol
      *
-     * @param baudRate 波特率
-     * @param dataBits 数据位
-     * @param parity 校验位
-     * @param stopBits 停止位
-     * @return 协议字符串
+     * @param baudRate Baud rate
+     * @param dataBits Data bits
+     * @param parity Parity bit
+     * @param stopBits Stop bits
+     * @return Protocol string
      */
     fun buildVspProtocol(
         baudRate: Int = 115200,
@@ -171,11 +171,11 @@ object ProtocolConstants {
     }
 
     /**
-     * 构建 RS232 协议
+     * Build RS232 protocol
      *
-     * @param devicePath 设备路径
-     * @param baudRate 波特率
-     * @return 协议字符串
+     * @param devicePath Device path
+     * @param baudRate Baud rate
+     * @return Protocol string
      */
     fun buildRs232Protocol(
         baudRate: Int = 115200,
@@ -186,13 +186,13 @@ object ProtocolConstants {
         return "$RS232_PROTOCOL_PREFIX$baudRate/$dataBits/$parity/$stopBits?mode=hex"
     }
 
-    // ==================== 协议检测 ====================
+    // ==================== Protocol Detection ====================
 
     /**
-     * 检测协议类型
+     * Detect protocol type
      *
-     * @param protocol 协议字符串
-     * @return 协议类型
+     * @param protocol Protocol string
+     * @return Protocol type
      */
     fun detectProtocolType(protocol: String): ProtocolType {
         return when {
@@ -209,17 +209,17 @@ object ProtocolConstants {
     }
 
     /**
-     * 协议类型枚举
+     * Protocol type enumeration
      */
     enum class ProtocolType {
-        LOCAL,      // 本地服务
-        LAN_WSS,    // 局域网 WSS
-        LAN_WS,     // 局域网 WS
+        LOCAL,      // Local service
+        LAN_WSS,    // LAN WSS
+        LAN_WS,     // LAN WS
         USB,        // USB
-        VSP,        // 虚拟串口
-        SERIAL,     // 串口
+        VSP,        // Virtual serial port
+        SERIAL,     // Serial port
         RS232,      // RS232
-        AUTO,       // 自动检测
-        UNKNOWN     // 未知
+        AUTO,       // Auto-detect
+        UNKNOWN     // Unknown
     }
 }

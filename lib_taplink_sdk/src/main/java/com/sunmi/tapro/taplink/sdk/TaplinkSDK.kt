@@ -6,32 +6,33 @@ import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.impl.TaplinkApiImpl
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import kotlin.jvm.JvmStatic
 
 /**
- * Taplink SDK 主类
+ * Taplink SDK main class
  *
- * 提供SDK的基础功能：初始化、连接管理、版本信息等
- * 主要职责：
- * - SDK初始化和配置
- * - 连接管理（连接、断开、状态查询）
- * - 版本信息管理
- * - 设备信息管理
- * - 提供TaplinkClient实例进行交易操作
+ * Provides SDK basic functionality: initialization, connection management, version information, etc.
+ * Main responsibilities:
+ * - SDK initialization and configuration
+ * - Connection management (connect, disconnect, status query)
+ * - Version information management
+ * - Device information management
+ * - Provide TaplinkClient instance for transaction operations
  *
- * 推荐使用方式：
+ * Recommended usage:
  * ```kotlin
- * // 1. 初始化SDK
- * val config = TaplinkConfig.create(appId, merchantId, secretKey)
+ * // 1. Initialize SDK
+ * val config = TaplinkConfig.create(appId, secretKey)
  * TaplinkSDK.init(context, config)
  * 
- * // 2. 建立连接
+ * // 2. Establish connection
  * TaplinkSDK.connect(connectionConfig) { connected ->
  *     if (connected) {
- *         // 3. 获取客户端进行交易
+ *         // 3. Get client for transactions
  *         val client = TaplinkSDK.getClient()
  *         client.quickSale(
  *             totalAmount = BigDecimal("10.00"),
@@ -41,13 +42,13 @@ import kotlin.jvm.JvmStatic
  *     }
  * }
  * 
- * // 4. 断开连接
+ * // 4. Disconnect
  * TaplinkSDK.disconnect()
  * ```
  * 
- * 职责分工：
- * - **TaplinkSDK**: 初始化、连接、断开、状态管理、版本信息
- * - **TaplinkClient**: 专注交易操作（sale、refund、void等）
+ * Responsibility division:
+ * - **TaplinkSDK**: Initialization, connection, disconnect, status management, version information
+ * - **TaplinkClient**: Focus on transaction operations (sale, refund, void, etc.)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -55,12 +56,12 @@ import kotlin.jvm.JvmStatic
 class TaplinkSDK private constructor() : TaplinkApi {
 
     /**
-     * 内部代理类，实现具体的接口功能
+     * Internal proxy class, implements specific interface functionality
      */
     private val apiImpl: TaplinkApiImpl = TaplinkApiImpl()
     
     /**
-     * TaplinkClient 实例（懒加载）
+     * TaplinkClient instance (lazy loaded)
      */
     private val clientInstance: TaplinkClient by lazy { TaplinkClient(apiImpl) }
 
@@ -69,9 +70,9 @@ class TaplinkSDK private constructor() : TaplinkApi {
         private var INSTANCE: TaplinkSDK? = null
 
         /**
-         * 获取TaplinkSDK单例实例
+         * Get TaplinkSDK singleton instance
          *
-         * @return TaplinkSDK 单例实例
+         * @return TaplinkSDK Singleton instance
          */
         @JvmStatic
         fun getInstance(): TaplinkSDK {
@@ -80,15 +81,28 @@ class TaplinkSDK private constructor() : TaplinkApi {
             }
         }
 
-        // ==================== 初始化功能 ====================
+        // ==================== Initialization Functions ====================
 
         /**
-         * 初始化SDK
+         * Check whether the SDK has been initialized.
          *
-         * 初始化 Taplink SDK，配置应用信息和连接参数。必须在使用其他接口前调用。
+         * Use this to guard calls to [connect] or [getClient] before [init] has been called.
          *
-         * @param context Application 或 Activity 上下文
-         * @param config SDK配置对象
+         * @return true if [init] has already been called
+         */
+        @JvmStatic
+        @JvmName("isSDKInitialized")
+        fun isInitialized(): Boolean {
+            return getInstance().isInitialized()
+        }
+
+        /**
+         * Initialize SDK
+         *
+         * Initialize Taplink SDK, configure application information and connection parameters. Must be called before using other interfaces.
+         *
+         * @param context Application or Activity context
+         * @param config SDK configuration object
          */
         @JvmStatic
         @JvmName("initSDK")
@@ -96,18 +110,18 @@ class TaplinkSDK private constructor() : TaplinkApi {
             getInstance().init(context, config)
         }
 
-        // ==================== 连接管理功能 ====================
+        // ==================== Connection Management Functions ====================
 
         /**
-         * 建立连接
+         * Establish connection
          *
-         * 支持所有连接模式：
-         * - 应用间模式：使用空配置，SDK自动检测
-         * - 线缆模式：使用空配置自动检测，或指定协议类型
-         * - 局域网模式：指定IP和端口（首次），或使用空配置（后续自动连接）
+         * Supports all connection modes:
+         * - App-to-app mode: Use empty config, SDK auto-detects
+         * - Cable mode: Use empty config for auto-detection, or specify protocol type
+         * - LAN mode: Specify IP and port (first time), or use empty config (subsequent auto-connect)
          *
-         * @param config 连接配置对象（可为null，使用默认配置）
-         * @param listener 连接监听器
+         * @param config Connection configuration object (can be null, uses default config)
+         * @param listener Connection listener
          */
         @JvmStatic
         @JvmName("connectSDK")
@@ -116,9 +130,23 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 断开连接
+         * Returns the current connection status.
          *
-         * 断开与支付终端的连接，释放资源。
+         * More granular than [isConnected]: distinguishes CONNECTING, CONNECTED,
+         * WAIT_CONNECTING, DISCONNECTED, and ERROR states.
+         *
+         * @return [ConnectionStatus] current status
+         */
+        @JvmStatic
+        @JvmName("getSDKConnectionStatus")
+        fun getConnectionStatus(): ConnectionStatus {
+            return getInstance().getConnectionStatus()
+        }
+
+        /**
+         * Disconnect
+         *
+         * Disconnect from payment terminal, release resources.
          */
         @JvmStatic
         @JvmName("disconnectSDK")
@@ -127,9 +155,9 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 检查连接状态
+         * Check connection status
          *
-         * @return true 如果已连接，false 否则
+         * @return true if connected, false otherwise
          */
         @JvmStatic
         @JvmName("isSDKConnected")
@@ -138,11 +166,11 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 设置连接状态监听器
+         * Set connection status listener
          *
-         * 设置连接状态监听器，实时监听连接状态变化、断线重连等事件。
+         * Set connection status listener to monitor connection status changes, reconnection events, etc. in real-time.
          *
-         * @param listener 连接状态监听器，null表示移除监听器
+         * @param listener Connection status listener, null means remove listener
          */
         @JvmStatic
         @JvmName("setSDKConnectionListener")
@@ -151,9 +179,9 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 移除连接状态监听器
+         * Remove connection status listener
          *
-         * 移除之前设置的连接状态监听器。
+         * Remove previously set connection status listener.
          */
         @JvmStatic
         @JvmName("removeSDKConnectionListener")
@@ -161,12 +189,12 @@ class TaplinkSDK private constructor() : TaplinkApi {
             getInstance().removeConnectionListener()
         }
 
-        // ==================== 设备和版本信息 ====================
+        // ==================== Device and Version Information ====================
 
         /**
-         * 获取已连接设备ID
+         * Get connected device ID
          *
-         * @return String 设备ID，如果未连接返回null
+         * @return String Device ID, returns null if not connected
          */
         @JvmStatic
         @JvmName("getSDKConnectedDeviceId")
@@ -175,9 +203,9 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 获取连接模式
+         * Get connection mode
          *
-         * @return ConnectionMode 当前连接模式，如果未连接返回null
+         * @return ConnectionMode Current connection mode, returns null if not connected
          */
         @JvmStatic
         @JvmName("getSDKConnectionMode")
@@ -186,12 +214,16 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 获取 Tapro 版本号
+         * Get Tapro version number
          *
-         * 获取已连接支付终端的 Tapro 版本号。
-         * 只有在连接成功后才能获取到版本号。
+         * Returns the Tapro version of the connected payment terminal.
          *
-         * @return String Tapro 版本号，如果未连接或未获取到版本号返回null
+         * **Note:** This value is `null` or `"unknown"` immediately after [connect] fires
+         * [ConnectionListener.onConnected]. The real version is populated by Tapro during
+         * INIT, which happens on the first transaction. Call this method after the first
+         * transaction completes to get the actual version string.
+         *
+         * @return String Tapro version number, or null/`"unknown"` if not yet available
          */
         @JvmStatic
         @JvmName("getSDKTaproVersion")
@@ -200,9 +232,9 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 获取SDK版本
+         * Get SDK version
          *
-         * @return String SDK版本号，格式：x.y.z
+         * @return String SDK version number, format: x.y.z
          */
         @JvmStatic
         @JvmName("getSDKVersion")
@@ -211,9 +243,9 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 清除缓存的设备信息
+         * Clear cached device information
          *
-         * 清除本地缓存的设备连接信息，下次连接时需要重新配对。
+         * Clear locally cached device connection information, need to re-pair on next connection.
          */
         @JvmStatic
         @JvmName("clearSDKDeviceCache")
@@ -221,30 +253,44 @@ class TaplinkSDK private constructor() : TaplinkApi {
             getInstance().clearDeviceCache()
         }
 
-        // ==================== 获取交易客户端 ====================
+        /**
+         * Get last used connection configuration.
+         *
+         * Returns the configuration used for the most recent successful connection,
+         * or null if no connection has been established yet.
+         *
+         * @return [ConnectionConfig] or null
+         */
+        @JvmStatic
+        @JvmName("getSDKConnectionConfig")
+        fun getConnectionConfig(): ConnectionConfig? {
+            return getInstance().getConnectionConfig()
+        }
+
+        // ==================== Get Transaction Client ====================
 
         /**
-         * 获取TaplinkClient实例
+         * Get TaplinkClient instance
          * 
-         * 用于执行交易操作，需要先建立连接
+         * Used to execute transaction operations, need to establish connection first
          *
-         * @return TaplinkClient 交易客户端实例
+         * @return TaplinkClient Transaction client instance
          */
         @JvmStatic
         fun getClient(): TaplinkClient {
             return getInstance().clientInstance
         }
 
-        // ==================== 向后兼容接口（已弃用） ====================
+        // ==================== Backward Compatible Interfaces (Deprecated) ====================
 
         /**
-         * 异步执行交易（推荐）
+         * Execute transaction asynchronously (recommended)
          *
-         * @deprecated 推荐使用 TaplinkSDK.getClient() 的具体交易方法代替
+         * @deprecated Recommend using specific transaction methods of TaplinkSDK.getClient() instead
          */
         @Deprecated(
-            message = "推荐使用 TaplinkSDK.getClient() 的具体交易方法代替",
-            replaceWith = ReplaceWith("TaplinkSDK.getClient().sale() 或其他具体交易方法")
+            message = "Recommend using specific transaction methods of TaplinkSDK.getClient() instead",
+            replaceWith = ReplaceWith("TaplinkSDK.getClient().sale() or other specific transaction methods")
         )
         @JvmStatic
         @JvmName("executeSDK")
@@ -253,12 +299,12 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * 异步查询交易状态
+         * Query transaction status asynchronously
          *
-         * @deprecated 推荐使用 TaplinkSDK.getClient().query() 代替
+         * @deprecated Recommend using TaplinkSDK.getClient().query() instead
          */
         @Deprecated(
-            message = "推荐使用 TaplinkSDK.getClient().query() 代替",
+            message = "Recommend using TaplinkSDK.getClient().query() instead",
             replaceWith = ReplaceWith("TaplinkSDK.getClient().query(request, callback)")
         )
         @JvmStatic
@@ -268,13 +314,15 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
     }
 
-    // ==================== 初始化功能（实例方法） ====================
+    // ==================== Initialization Functions (Instance Methods) ====================
+
+    override fun isInitialized(): Boolean = apiImpl.isInitialized()
 
     override fun init(context: Context, config: TaplinkConfig) {
         apiImpl.init(context, config)
     }
 
-    // ==================== 连接管理功能（实例方法） ====================
+    // ==================== Connection Management Functions (Instance Methods) ====================
 
     override fun connect(config: ConnectionConfig?, listener: ConnectionListener) {
         apiImpl.connect(config, listener)
@@ -283,6 +331,8 @@ class TaplinkSDK private constructor() : TaplinkApi {
     override fun disconnect() {
         apiImpl.disconnect()
     }
+
+    override fun getConnectionStatus(): ConnectionStatus = apiImpl.getConnectionStatus()
 
     override fun isConnected(): Boolean {
         return apiImpl.isConnected()
@@ -296,7 +346,7 @@ class TaplinkSDK private constructor() : TaplinkApi {
         apiImpl.removeConnectionListener()
     }
 
-    // ==================== 设备和版本信息（实例方法） ====================
+    // ==================== Device and Version Information (Instance Methods) ====================
 
     override fun getConnectedDeviceId(): String? {
         return apiImpl.getConnectedDeviceId()
@@ -322,7 +372,7 @@ class TaplinkSDK private constructor() : TaplinkApi {
         return apiImpl.getConnectionConfig()
     }
 
-    // ==================== 向后兼容接口（实例方法，已弃用） ====================
+    // ==================== Backward Compatible Interfaces (Instance Methods, Deprecated) ====================
 
     override fun execute(request: PaymentRequest, callback: PaymentCallback) {
         apiImpl.execute(request, callback)

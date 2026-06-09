@@ -1,6 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    kotlin("android") version "1.7.10"
     id("com.kezong.fat-aar")
 }
 
@@ -32,6 +32,7 @@ android {
 
     kotlinOptions {
         jvmTarget = "1.8"
+        freeCompilerArgs += listOf("-Xskip-metadata-version-check")
     }
 
     buildFeatures {
@@ -41,11 +42,28 @@ android {
 }
 
 dependencies {
+    // Explicitly declare Kotlin stdlib to ensure version 1.7.10
+    // Note: Root build.gradle.kts also forces this version via resolutionStrategy,
+    // but explicit declaration ensures IDE recognition and makes dependencies clear
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.7.10")
+    
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.gson)
+    
+    // Exclude transitive kotlin-stdlib from coroutines to use our forced version
+    implementation(libs.kotlinx.coroutines.core) {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
+    }
+    implementation(libs.kotlinx.coroutines.android) {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
+    }
+    
+    implementation(libs.jackson.databind)
+    implementation(libs.jackson.module.kotlin)
     implementation(libs.java.websocket)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.usb.serial.android)
@@ -54,6 +72,3 @@ dependencies {
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
 }
-
-
-

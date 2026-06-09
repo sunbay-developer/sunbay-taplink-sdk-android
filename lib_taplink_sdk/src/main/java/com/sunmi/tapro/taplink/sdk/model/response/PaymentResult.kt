@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.response
 
+import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.model.common.BatchAmount
 import com.sunmi.tapro.taplink.sdk.model.common.BatchCloseInfo
 import com.sunmi.tapro.taplink.sdk.model.common.CardInfo
@@ -7,206 +8,241 @@ import com.sunmi.tapro.taplink.sdk.model.common.TransactionAmount
 import java.math.BigDecimal
 
 /**
- * 支付结果类
+ * Payment Result Class
  * 
- * 包含全面的交易信息
+ * Contains comprehensive transaction information
  * 
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class PaymentResult(
-    // ========== 基本响应字段 ==========
+    // ========== Basic response fields ==========
     
     /**
-     * 响应码（"0" 表示成功）
+     * Response code ("100" indicates success)
      */
     val code: String,
     
     /**
-     * 响应描述
+     * Response description
      */
     val message: String? = null,
     
     /**
-     * 追踪 ID（用于故障排查）
+     * Trace ID (for troubleshooting)
      */
     val traceId: String? = null,
     
-    // ========== 交易标识符字段 ==========
+    // ========== Transaction identifier fields ==========
     
     /**
-     * 交易 ID（Nexus（SUNBAY支付网关）交易 ID）
+     * Transaction ID (Nexus (SUNBAY payment gateway) transaction ID)
      */
     val transactionId: String? = null,
     
     /**
-     * 商户订单号/参考订单号
+     * Merchant order ID / Reference order ID
      */
     val referenceOrderId: String? = null,
     
     /**
-     * 交易请求 ID
+     * Transaction request ID
      */
     val transactionRequestId: String? = null,
     
-    // ========== 交易状态字段 ==========
+    // ========== Transaction status fields ==========
     
     /**
-     * 交易状态
-     * 值：SUCCESS, PROCESSING, FAILED
+     * Transaction status
+     * Values: SUCCESS, PROCESSING, FAILED
      */
     val transactionStatus: String? = null,
     
     /**
-     * 交易类型
-     * 值：SALE, AUTH, FORCED_AUTH, INCREMENTAL, POST_AUTH, VOID, REFUND
+     * Transaction type
+     * Values: SALE, AUTH, FORCED_AUTH, INCREMENTAL, POST_AUTH, VOID, REFUND
      */
     val transactionType: String? = null,
     
-    // ========== 金额信息 ==========
+    // ========== Amount information ==========
     
     /**
-     * 交易金额详情
+     * Transaction amount details
      */
     val amount: TransactionAmount? = null,
     
-    // ========== 时间字段 ==========
+    // ========== Time fields ==========
     
     /**
-     * 交易创建时间（ISO 8601 格式）
+     * Transaction creation time (ISO 8601 format)
      */
     val createTime: String? = null,
     
     /**
-     * 交易完成时间（ISO 8601 格式）
+     * Transaction completion time (ISO 8601 format)
      */
     val completeTime: String? = null,
     
-    // ========== 卡信息 ==========
+    // ========== Card information ==========
     
     /**
-     * 卡片信息（包含卡号、卡类型、输入方式等）
+     * Card information (includes card number, card type, input method, etc.)
      */
     val cardInfo: CardInfo? = null,
     
-    // ========== 交易凭证信息 ==========
+    // ========== Transaction voucher information ==========
     
     /**
-     * 批次号
+     * Batch number
      */
     val batchNo: Int? = null,
     
     /**
-     * 凭证号
+     * Voucher number
      */
     val voucherNo: String? = null,
     
     /**
-     * 系统跟踪审计号（STAN）
+     * System Trace Audit Number (STAN)
      */
     val stan: String? = null,
     
     /**
-     * 检索参考号（RRN）
+     * Retrieval Reference Number (RRN)
      */
     val rrn: String? = null,
     
     /**
-     * 授权码
+     * Authorization code
      */
     val authCode: String? = null,
     
-    // ========== 交易结果信息 ==========
+    // ========== Transaction result information ==========
     
     /**
-     * 交易结果码
+     * Transaction result code
      */
     val transactionResultCode: String? = null,
     
     /**
-     * 交易结果消息
+     * Transaction result message
      */
     val transactionResultMsg: String? = null,
     
-    // ========== 终端和描述信息 ==========
+    // ========== Terminal and description information ==========
     
     /**
-     * 商品描述
+     * Product description
      */
     val description: String? = null,
     
     /**
-     * 附加数据（原样返回）
+     * Additional data (returned as-is)
      */
     val attach: String? = null,
     
-    // ========== 批次关闭特定字段 ==========
+    // ========== Receipt information ==========
     
     /**
-     * 批次关闭信息（仅批次关闭）
+     * Receipt JSON data
+     * Contains the receipt information in JSON format
+     */
+    val receiptJson: String? = null,
+    
+    // ========== Batch close specific fields ==========
+    
+    /**
+     * Batch close information (batch close only)
      */
     val batchCloseInfo: BatchCloseInfo? = null,
     
-    // ========== 小费调整特定字段 ==========
+    // ========== Tip adjustment specific fields ==========
     
     /**
-     * 小费金额（仅小费调整，单位：基本货币单位）
+     * Tip amount (tip adjustment only, unit: smallest currency unit / cents)
      */
-    var tipAmount: BigDecimal? = null,
+    val tipAmount: BigDecimal? = null,
     
-    // ========== 增量授权特定字段 ==========
+    // ========== Incremental authorization specific fields ==========
     
     /**
-     * 增量金额（仅增量授权，单位：基本货币单位）
+     * Incremental amount (incremental authorization only, unit: smallest currency unit / cents)
      */
-    var incrementalAmount: BigDecimal? = null,
+    val incrementalAmount: BigDecimal? = null,
     
     /**
-     * 总授权金额（仅增量授权，单位：基本货币单位）
+     * Total authorized amount (incremental authorization only, unit: smallest currency unit / cents)
      */
-    var totalAuthorizedAmount: BigDecimal? = null,
+    val totalAuthorizedAmount: BigDecimal? = null,
     
-    // ========== 退款特定字段 ==========
+    // ========== Refund specific fields ==========
     
     /**
-     * 商户退款号（仅退款）
+     * Merchant refund number (refund only)
      */
     val merchantRefundNo: String? = null,
     
     /**
-     * 原始交易 ID（退款/撤销/授权完成）
+     * Original transaction ID (refund/void/authorization completion)
      */
     val originalTransactionId: String? = null,
     
     /**
-     * 原始交易请求 ID（退款/撤销/授权完成）
+     * Original transaction request ID (refund/void/authorization completion)
      */
     val originalTransactionRequestId: String? = null
 ) {
     /**
-     * 检查交易是否成功
-     * 
-     * @return true 如果响应码为 "0" 且交易状态为 "SUCCESS"
+     * Check if transaction is successful.
+     *
+     * @return true if response code is "100" (gateway success) and transaction status is "SUCCESS"
      */
     fun isSuccess(): Boolean {
-        return "0" == code && "SUCCESS" == transactionStatus
+        return "100" == code && "SUCCESS" == transactionStatus
     }
-    
+
     /**
-     * 检查交易是否处理中
-     * 
-     * @return true 如果交易状态为 "PROCESSING"
+     * Check if transaction is processing (pending gateway decision).
+     *
+     * @return true if transaction status is "PROCESSING"
      */
     fun isProcessing(): Boolean {
         return "PROCESSING" == transactionStatus
     }
-    
+
     /**
-     * 检查交易是否失败
-     * 
-     * @return true 如果交易状态为 "FAILED" 或响应码不为 "0"
+     * Check if transaction was declined by the issuer or terminal.
+     *
+     * Note: a failed transaction is still a final response — it arrives via [onSuccess].
+     * Technical/communication errors arrive via [onFailure] instead.
+     *
+     * @return true if transaction status is "FAILED"
      */
     fun isFailed(): Boolean {
-        return "FAILED" == transactionStatus || "0" != code
+        return "FAILED" == transactionStatus
     }
+
+    /**
+     * Convert this result to a [PaymentError] for unified error display.
+     *
+     * Useful when migrating from SDK ≤ v1.0.6 where declined transactions were delivered
+     * via `onFailure(PaymentError)`. Call this inside an `onSuccess` handler for
+     * `isFailed()` results to reuse existing error-display code without rewriting it.
+     *
+     * ```kotlin
+     * override fun onSuccess(result: PaymentResult) {
+     *     if (result.isFailed()) showError(result.toPaymentError())
+     * }
+     * ```
+     *
+     * @return [PaymentError] populated from this result's decline details
+     */
+    fun toPaymentError(): PaymentError =
+        PaymentError.create(
+            code = code,
+            message = transactionResultMsg ?: message ?: "Transaction declined",
+            traceId = traceId,
+            transactionId = transactionId,
+            transactionRequestId = transactionRequestId
+        )
 }

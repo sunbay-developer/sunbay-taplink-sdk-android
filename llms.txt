@@ -1,0 +1,465 @@
+# Taplink SDK for Android — AI Integration Reference
+
+**Taplink SDK** is a semi-integrated payment SDK for Android POS applications provided by SUNBAY.
+Latest public release target: **1.0.7**.
+It supports three connection modes: App-to-App (Local), LAN (WLAN), and Cable (USB/Serial).
+
+## Current Callback Semantics
+
+- `onProgress(event)` keeps reporting transaction progress.
+- `onSuccess(result)` is the only callback for terminal-confirmed outcomes: approved, declined, and processing.
+- Use `result.isSuccess()`, `result.isFailed()`, and `result.isProcessing()` to branch.
+- `onFailure(error)` is reserved for communication or technical errors only.
+- `PaymentCallbackAdapter` only provides empty defaults; handle outcomes in `onSuccess`.
+- `PaymentResult.toPaymentError()` is available for migrating legacy decline/error UIs.
+- `CANCELLED` status and `isCancelled()` are removed; cancelled or aborted transactions arrive as `FAILED`.
+
+---
+
+## Module Structure
+
+Only depend on `lib_taplink_sdk`. Never import from `lib_taplink_communication`.
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation(project(":lib_taplink_sdk"))
+}
+```
+
+Main package: `com.sunmi.tapro.taplink.sdk`
+
+---
+
+## 3-Step Integration
+
+### Step 1 — Initialize (Application.onCreate)
+
+```kotlin
+TaplinkSDK.init(this, TaplinkConfig(
+    appId      = BuildConfig.TAPLINK_APP_ID,
+    merchantId = BuildConfig.TAPLINK_MERCHANT_ID,
+    secretKey  = BuildConfig.TAPLINK_SECRET_KEY,
+    logEnabled = BuildConfig.DEBUG
+))
+```
+
+### Step 2 — Connect (Activity/Service)
+
+```kotlin
+// onCreate: register persistent status listener
+TaplinkSDK.setConnectionListener(object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) { /* enable UI */ }
+    override fun onDisconnected(reason: String) { /* disable UI */ }
+    override fun onError(error: ConnectionError) { /* show error */ }
+})
+
+// onResume: connect if not connected
+if (!TaplinkSDK.isConnected()) {
+    TaplinkSDK.connect(ConnectionConfig.createDefault(), oneTimeListener)
+}
+
+// onDestroy: cleanup
+TaplinkSDK.removeConnectionListener()
+TaplinkSDK.disconnect()
+```
+
+### Step 3 — Execute Transaction
+
+```kotlin
+val client = TaplinkSDK.getClient()
+
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")   // MUST be unique
+    .setAmount(AmountInfo(BigDecimal("1000"), "USD"))         // 1000 cents = $10.00
+    .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
+    .build()
+
+client.sale(request, object : PaymentCallback {
+    override fun onProgress(event: PaymentEvent) { /* update UI */ }
+    override fun onSuccess(result: PaymentResult) {
+        when {
+            result.isSuccess()    -> confirmPayment(result)
+            result.isProcessing() -> pollStatus(result.transactionRequestId!!)
+            result.isFailed()     -> showError(result.message)
+        }
+    }
+    override fun onFailure(error: PaymentError) { handleError(error) }
+})
+```
+
+---
+
+## Connection Modes
+
+### App-to-App (same device)
+```kotlin
+val config = ConnectionConfig.createAppMode()
+// or: ConnectionConfig().setConnectionMode(ConnectionMode.APP_TO_APP)
+```
+
+### LAN / WLAN
+```kotlin
+// First-time: specify IP + port (range 8443–8453)
+val config = ConnectionConfig.createLanMode(host = "192.168.1.100", port = 8443)
+
+// Subsequent: SDK uses cached device info
+val config = ConnectionConfig.createLanMode()
+```
+
+### Cable (USB / Serial)
+```kotlin
+// AUTO tries: VSP → RS232 → AOA
+val config = ConnectionConfig.createCableMode()
+// or with specific protocol:
+val config = ConnectionConfig.createCableMode(CableProtocol.USB_VSP)
+```
+
+### Auto-detect (no mode specified)
+```kotlin
+val config = ConnectionConfig.createDefault()  // tries APP_TO_APP → Cable → LAN
+```
+
+---
+
+## All Transaction Types
+
+| Method | Class | When to use |
+|--------|-------|-------------|
+| `client.sale()` | `SaleRequest` | Standard payment |
+| `client.refund()` | `RefundRequest` | Refund after sale |
+| `client.void()` | `VoidRequest` | Cancel same-day transaction |
+| `client.auth()` | `AuthRequest` | Pre-authorization (freeze funds) |
+| `client.postAuth()` | `PostAuthRequest` | Complete a pre-auth |
+| `client.incrementalAuth()` | `IncrementalAuthRequest` | Increase pre-auth amount |
+| `client.tipAdjust()` | `TipAdjustRequest` | Adjust tip after sale |
+| `client.abort()` | `AbortRequest` | Cancel in-progress transaction |
+| `client.batchClose()` | `BatchCloseRequest` | End-of-day settlement |
+| `client.query()` | `QueryRequest` | Query transaction status (runs in background, no Tapro UI shown — implement your own loading indicator) |
+
+### Refund
+```kotlin
+// Referenced (with original txn ID)
+val request = RefundRequest.referencedBuilder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_txn_id")
+    .setAmount(AmountInfo(BigDecimal("500"), "USD"))
+    .build()
+
+// Non-referenced (card swipe required)
+val request = RefundRequest.nonReferencedBuilder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setReferenceOrderId("REFUND_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo(BigDecimal("500"), "USD"))
+    .build()
+```
+
+### Void
+```kotlin
+val request = VoidRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_txn_id")
+    .build()
+```
+
+### Pre-Authorization
+```kotlin
+val request = AuthRequest.builder()
+    .setReferenceOrderId("AUTH_${System.currentTimeMillis()}")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AuthAmountInfo(authAmount = BigDecimal("5000"), pricingCurrency = "USD"))
+    .build()
+
+// Complete pre-auth
+val request = PostAuthRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_auth_txn_id")
+    .setAmount(AmountInfo(BigDecimal("4500"), "USD"))
+    .build()
+```
+
+### Tip Adjustment
+```kotlin
+val request = TipAdjustRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_sale_txn_id")
+    .setTipAmount(BigDecimal("200"))   // 200 cents = $2.00
+    .build()
+
+client.tipAdjust(request, paymentCallback)  // Use with TipMode.AFTER_SALE
+```
+
+### Abort
+```kotlin
+val request = AbortRequest.builder()
+    .setOriginalTransactionRequestId("original_txn_request_id")  // ID of in-progress transaction
+    .build()
+
+client.abort(request, paymentCallback)  // Only works before gateway authorization
+```
+
+### Incremental Authorization
+```kotlin
+val request = IncrementalAuthRequest.builder()
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setOriginalTransactionId("original_auth_txn_id")
+    .setAmount(AmountInfo(BigDecimal("5000"), "USD"))  // Additional $50.00
+    .build()
+
+client.incrementalAuth(request, paymentCallback)  // Increase pre-auth amount
+```
+
+---
+
+## AmountInfo — CRITICAL: Smallest Currency Unit
+
+All amounts are in the **smallest currency unit** (cents for USD/EUR):
+
+```
+$10.00 USD → BigDecimal("1000")   ✅
+$10.00 USD → BigDecimal("10.00")  ❌ (= $0.10, 100x wrong!)
+```
+
+```kotlin
+// Constructor style
+val amount = AmountInfo(
+    orderAmount      = BigDecimal("1000"),   // Required: base order amount before optional tip
+    pricingCurrency  = "USD",               // Required, ISO 4217
+    tipAmount        = null,                // Optional: keep separate from orderAmount when known upfront
+    taxAmount        = null,                // Optional
+    surchargeAmount  = null,                // Optional: removed if the card used is Debit Card
+    cashbackAmount   = null,                // Optional
+    serviceFee       = null                 // Optional
+)
+
+// Factory style
+val amount = AmountInfo.of(1000L, "USD")           // from Long cents
+val amount = AmountInfo.of(BigDecimal("10.00"), "USD")  // auto-converts to cents
+```
+
+Keep `orderAmount` as the base order amount only. When tip is known upfront, set `tipAmount` separately so Tapro can calculate and return the final transaction total. If tip is folded into `orderAmount`, tax may also be calculated on the tip portion.
+
+If `surchargeAmount` is present and the customer pays with a **Debit Card**, Tapro removes the surcharge amount before the transaction is completed.
+
+---
+
+## TipConfig — On-Screen Tip
+
+Use `tipConfig` when the terminal should collect tip interactively.
+Set it on `SaleRequest` or `PostAuthRequest` as a top-level field.
+`tipConfig` and `amount.tipAmount` are **mutually exclusive**.
+
+```kotlin
+val request = SaleRequest(
+    referenceOrderId = "ORDER001",
+    transactionRequestId = "TXN001",
+    amount = AmountInfo(BigDecimal("1000"), "USD"),
+    tipConfig = TipConfig(
+        onScreenTip = true,
+        tipMode     = TipMode.ON_SALE,
+        tipWithTax  = false,
+        suggestions = TipSuggestions(
+            feeMode = FeeMode.RATE,
+            values  = listOf(15, 18, 20)
+        )
+    )
+)
+```
+
+```kotlin
+val tipConfig = TipConfig(
+    onScreenTip = true,              // Required: show tip prompt on terminal
+    tipMode     = TipMode.ON_SALE,   // Required: ON_SALE or AFTER_SALE
+    tipWithTax  = false,             // Optional (default false): include tax in tip base
+    suggestions = TipSuggestions(
+        feeMode = FeeMode.RATE,              // RATE (%) or AMOUNT (fixed cents)
+        values  = listOf(15, 18, 20)         // 15%, 18%, 20%
+    )
+)
+```
+
+| TipMode | Description |
+|---------|-------------|
+| `ON_SALE` | Tip collected during sale; included in card charge |
+| `AFTER_SALE` | Tip adjusted after sale via `TipAdjust` transaction |
+
+| FeeMode | Description |
+|---------|-------------|
+| `RATE` | Percentage (e.g., `15` = 15%) |
+| `AMOUNT` | Fixed amount in smallest unit (e.g., `100` = $1.00) |
+
+---
+
+## PaymentCallback
+
+**CRITICAL:** `onSuccess` means the SDK received a valid response from Tapro—**not** that the payment was approved.
+Always check `result.transactionStatus` (via `result.isSuccess()`, `result.isProcessing()`, `result.isFailed()`) inside `onSuccess`.
+
+```kotlin
+object : PaymentCallback {
+    override fun onProgress(event: PaymentEvent) {
+        when (event.eventCode) {
+            "WAITING_CARD"      -> showMsg("Present card")
+            "WAITING_PIN"       -> showMsg("Enter PIN on terminal")
+            "WAITING_SIGNATURE" -> showMsg("Sign on terminal")
+            "WAITING_RESPONSE"  -> showMsg("Authorizing...")
+            "COMPLETED"         -> hideMsg()
+            "CANCEL"            -> showMsg("Cancelled")
+        }
+    }
+
+    override fun onSuccess(result: PaymentResult) {
+        // onSuccess ≠ approved payment — MUST check transactionStatus
+        when {
+            result.isSuccess()    -> {
+                // transactionStatus == "SUCCESS" → Approved, safe to fulfill order
+                confirmPayment(result)
+            }
+            result.isProcessing() -> {
+                // transactionStatus == "PROCESSING" → Gateway still deciding, poll for status
+                pollStatus(result.transactionRequestId!!)
+            }
+            result.isFailed()     -> {
+                // transactionStatus == "FAILED" → Declined, do NOT fulfill order
+                showDeclined(result.message)
+            }
+        }
+    }
+
+    override fun onFailure(error: PaymentError) {
+        when (error.code) {
+            "306"  -> pollStatus(error.transactionRequestId!!)  // Timeout: query first
+            "308"  -> showError("Duplicate ID, create new transaction")
+            else   -> if (error.canRetryWithSameId) retry() else showError(error.message)
+        }
+    }
+}
+```
+
+---
+
+## Error Handling
+
+### Error Categories
+| Category | Cause | Action |
+|----------|-------|--------|
+| `INITIALIZATION` | SDK not initialized | Re-call `TaplinkSDK.init()` |
+| `CONNECTION` | Connection failed/lost | Check mode, re-call `TaplinkSDK.connect()` |
+| `AUTHENTICATION` | Wrong credentials | Verify `TaplinkConfig` fields |
+| `TRANSACTION` | Transaction error | Check `error.code` and `canRetryWithSameId` |
+
+### Transaction Error Codes
+| Code | Issue | Retry |
+|------|-------|-------|
+| 301–305 | SDK/network errors | ✅ Same ID |
+| 306 | Timeout | ⚠️ Query first |
+| 307–311 | Transaction rejected/duplicate/failed | ❌ New ID |
+
+### Error 306 — Timeout Pattern (MANDATORY)
+
+> **UI Note:** Query runs entirely in the background — Tapro will NOT show any UI or loading screen.
+> You MUST implement your own loading/waiting indicator while the query is in progress.
+> Show a spinner or "Querying transaction status..." message between calling `client.query()` and receiving the callback.
+
+```kotlin
+override fun onFailure(error: PaymentError) {
+    if (error.code == "306") {
+        showLoading("Querying transaction status...")  // Your own loading UI
+        pollStatus(error.transactionRequestId!!)  // MUST query before any retry
+    }
+}
+
+fun pollStatus(txnRequestId: String, attempt: Int = 1) {
+    if (attempt > 12) { showError("Unknown status, contact support"); return }
+    client.query(QueryRequest().setTransactionRequestId(txnRequestId), object : PaymentCallback {
+        override fun onSuccess(result: PaymentResult) {
+            when (result.transactionStatus) {
+                "SUCCESS"    -> handleSuccess(result)
+                "FAILED"     -> handleFailure(result)
+                "PROCESSING" -> Handler(Looper.getMainLooper()).postDelayed(
+                    { pollStatus(txnRequestId, attempt + 1) }, 5000
+                )
+            }
+        }
+        override fun onFailure(error: PaymentError) {
+            Handler(Looper.getMainLooper()).postDelayed({ pollStatus(txnRequestId, attempt + 1) }, 5000)
+        }
+        override fun onProgress(event: PaymentEvent) {}
+    })
+}
+```
+
+---
+
+## Key Rules (Never Violate)
+
+1. **onSuccess ≠ payment approved**: `onSuccess` means SDK received valid Tapro response. **ALWAYS check `result.isSuccess()`** before fulfilling order. Declined/processing results also trigger `onSuccess`. Cancelled/aborted transactions arrive as `isFailed()`.
+2. **onFailure = communication error only**: `onFailure` fires **only** for SDK/network errors (connection lost, timeout, bad config). Card declines and cancellations NEVER arrive in `onFailure`.
+2. **Amount unit**: Always use smallest currency unit (cents). `$10.00 = BigDecimal("1000")`
+3. **transactionRequestId**: Must be globally unique per request. Never reuse after errors 307/308/309/310/311.
+4. **Error 306**: Always query status before retrying. Never create a new transaction blindly.
+5. **lib_taplink_communication**: Never import directly. Only use `lib_taplink_sdk`.
+6. **Callbacks on background thread**: Always `runOnUiThread {}` for UI updates in callbacks.
+7. **Query has no Tapro UI**: `client.query()` runs in background — you MUST show your own loading indicator while waiting for the callback.
+7. **Cleanup**: Always call `disconnect()` + `removeConnectionListener()` in `onDestroy()`.
+8. **tipConfig vs tipAmount**: Mutually exclusive. Set one or neither, never both.
+9. **tipAmount placement**: Keep tip out of `orderAmount` and set `tipAmount` separately when known upfront, or tax may also be applied to the tip portion.
+10. **Debit surcharge handling**: If `surchargeAmount` is sent and the card used is a Debit Card, Tapro removes the surcharge amount before completion.
+11. **Abort prerequisites**: Abort only works before gateway authorization (during card detection/PIN entry stages). For authorized transactions, use Void (same-day) or Refund (cross-day).
+12. **INIT is automatic**: Do not call INIT manually. It runs on the first transaction after connect.
+
+---
+
+## Java Interop Adapters
+
+For Java projects, use adapter classes instead of interfaces:
+
+```java
+// Instead of implementing ConnectionListener interface:
+TaplinkSDK.connect(config, new ConnectionListenerAdapter() {
+    @Override public void onConnected(String deviceId, String taproVersion) { ... }
+    // onDisconnected and onError have empty defaults
+});
+
+// Instead of implementing PaymentCallback interface:
+client.sale(request, new PaymentCallbackAdapter() {
+    @Override public void onSuccess(PaymentResult result) { ... }
+    @Override public void onFailure(PaymentError error) { ... }
+    // onProgress and onDeclined have empty defaults
+});
+```
+
+---
+
+## PaymentResult Key Fields
+
+```
+result.code                // "0" = success
+result.transactionStatus   // "SUCCESS" | "PROCESSING" | "FAILED"
+result.transactionId       // SUNBAY platform ID — use for void/refund/postAuth
+result.referenceOrderId    // Echoed from request
+result.amount              // TransactionAmount (total, tip, tax breakdown)
+result.cardInfo            // Card type, last 4 digits, input method
+result.authCode            // Bank authorization code
+result.rrn                 // Retrieval Reference Number
+result.stan                // System Trace Audit Number
+result.receiptJson         // Receipt data as JSON
+result.isSuccess()         // code=="0" && transactionStatus=="SUCCESS"
+result.isProcessing()      // transactionStatus=="PROCESSING"
+result.isFailed()          // transactionStatus=="FAILED" || code!="0"
+```
+
+---
+
+## Go-Live Checklist
+
+- [ ] `logEnabled = false` in production
+- [ ] All amounts in smallest currency unit
+- [ ] `transactionRequestId` is unique per transaction (use UUID)
+- [ ] Error 306: query-first logic implemented
+- [ ] Query UI: loading indicator shown while `client.query()` is in progress (Tapro shows no UI)
+- [ ] Error 307/308: new ID logic implemented
+- [ ] `disconnect()` + `removeConnectionListener()` in `onDestroy()`
+- [ ] USB permission handling for Cable mode
+- [ ] Tested disconnect/reconnect cycle

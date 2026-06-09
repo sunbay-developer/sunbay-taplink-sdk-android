@@ -1,16 +1,16 @@
 package com.sunmi.tapro.taplink.sdk.manager
 
 import android.content.Context
-import com.google.gson.Gson
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.R
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.callback.onFailure
-import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
-import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.request.QueryRequest
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolRequestBuilder
@@ -22,6 +22,8 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
 import java.math.BigDecimal
 
 /**
@@ -44,10 +46,9 @@ class PaymentManager(
 ) {
     private val TAG = "PaymentManager"
 
-    /**
-     * Gson instance for JSON serialization
-     */
-    private val gson = Gson()
+    private val mapper: ObjectMapper = ObjectMapper()
+        .registerKotlinModule()
+        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
 
     /**
      * Callback manager for managing multiple async request callbacks
@@ -87,12 +88,20 @@ class PaymentManager(
             handlePendingTransactionError(error)
         }
 
-        // Set up connection disconnected listener to clear auto-connect flag when disconnected
+        // Physical disconnect: must treat app as uninitialized; drop in-flight INIT listener
+        // so the next transaction runs INIT again instead of hitting E307 or skipping INIT.
         connectionManager.setConnectionDisconnectedListener {
-            if (hasPendingAutoConnectTransaction) {
-                LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
-                hasPendingAutoConnectTransaction = false
-            }
+            onPhysicalDisconnected()
+        }
+    }
+
+    /**
+     * Handle transport disconnect. Clear pending auto-connect state.
+     */
+    private fun onPhysicalDisconnected() {
+        if (hasPendingAutoConnectTransaction) {
+            LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
+            hasPendingAutoConnectTransaction = false
         }
     }
 
@@ -104,8 +113,8 @@ class PaymentManager(
 
         // Check connection status
         if (connectionManager.isConnected()) {
-            // Already connected, execute directly
-            sendPaymentRequest(request, callback)
+            // Already connected, ensure init then execute
+            ensureInitAndExecute(request, callback)
         } else if (connectionManager.isConnecting()) {
             // Connection in progress
             if (hasPendingAutoConnectTransaction) {
@@ -142,8 +151,8 @@ class PaymentManager(
 
             // Check connection status
             if (connectionManager.isConnected()) {
-                // Already connected, execute directly
-                sendPaymentRequest(paymentRequest, callback)
+                // Already connected, ensure init then execute
+                ensureInitAndExecute(paymentRequest, callback)
             } else if (connectionManager.isConnecting()) {
                 // Connection in progress
                 if (hasPendingAutoConnectTransaction) {
@@ -193,8 +202,8 @@ class PaymentManager(
                 secretKey = config.secretKey
             )
 
-            // Convert BasicRequest to JSON string
-            val requestJson = gson.toJson(basicRequest)
+            // Serialise BasicRequest to JSON string for transport
+            val requestJson = mapper.writeValueAsString(basicRequest)
             LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
 
             // Create internal callback for receiving raw response
@@ -307,7 +316,7 @@ class PaymentManager(
     ): InnerCallback {
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
-                LogUtil.e(TAG, "Received error: code=$code, msg=$msg, traceId=$traceId")
+                LogUtil.e(TAG, "[TAPLINK-TX] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
                 callback.onFailure(
                     code = code,
                     errorMsg = msg,
@@ -327,7 +336,7 @@ class PaymentManager(
      * Process received response data
      */
     private fun processReceivedResponse(responseJson: String) {
-        LogUtil.e(TAG, "PaymentManager:processReceivedResponse: ${responseJson}")
+        LogUtil.d(TAG, "PaymentManager:processReceivedResponse: $responseJson")
         try {
             if (responseJson.isBlank()) {
                 return
@@ -425,6 +434,21 @@ class PaymentManager(
                     return false
                 }
             }
+
+            val tipConfigValidation = TransactionRequestValidator.validateTipConfig(
+                amountInfo.tipAmount,
+                request.tipConfig
+            )
+            if (!tipConfigValidation.isValid) {
+                val validationError = tipConfigValidation.errors.first()
+                LogUtil.e(TAG, "Invalid tip configuration: ${validationError.message}")
+                callback.onFailure(
+                    errorCode = InnerErrorCode.E302,
+                    errorMessage = "${InnerErrorCode.E302.description}(${getTipConfigValidationMessage(validationError)})",
+                    transactionRequestId = request.transactionRequestId
+                )
+                return false
+            }
         }
 
         // Validate PaymentRequest tipAmount field
@@ -451,6 +475,17 @@ class PaymentManager(
         return amount.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) == 0
     }
 
+    private fun getTipConfigValidationMessage(error: ValidationError): String {
+        return when (error) {
+            ValidationError.TipConfigConflict -> context.getString(R.string.error_invalid_tip_config_conflict)
+            ValidationError.TipConfigEmptySuggestionValues ->
+                context.getString(R.string.error_invalid_tip_config_empty_suggestions)
+            ValidationError.TipConfigNegativeSuggestionValues ->
+                context.getString(R.string.error_invalid_tip_config_negative_suggestions)
+            else -> error.message
+        }
+    }
+
     /**
      * Clear all pending callbacks
      */
@@ -467,7 +502,6 @@ class PaymentManager(
      */
     fun failAllPendingTransactions(errorCode: String, errorMessage: String) {
         LogUtil.w(TAG, "Failing all pending transactions: $errorCode - $errorMessage")
-        // Clear auto-connect flag when connection is lost
         hasPendingAutoConnectTransaction = false
         callbackManager.failAllCallbacks(errorCode, errorMessage)
     }
@@ -486,7 +520,7 @@ class PaymentManager(
 
         val autoConnectListener = object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
-                LogUtil.d(TAG, "Auto-connect successful, executing payment request")
+                LogUtil.d(TAG, "Auto-connect successful, ensuring init then executing payment request")
                 // Clear flag
                 hasPendingAutoConnectTransaction = false
                 connectionManager.updateConnectionStatus(
@@ -494,8 +528,8 @@ class PaymentManager(
                     deviceId = deviceId,
                     taproVersion = taproVersion
                 )
-                // Connection successful, execute transaction
-                sendPaymentRequest(request, callback)
+                // Connection successful, ensure init then execute transaction
+                ensureInitAndExecute(request, callback)
             }
 
             override fun onError(error: ConnectionError) {
@@ -511,12 +545,11 @@ class PaymentManager(
             }
 
             override fun onDisconnected(reason: String) {
-                // Clear flag if auto-connect was interrupted
                 if (hasPendingAutoConnectTransaction) {
                     LogUtil.w(TAG, "Auto-connect disconnected: $reason")
                     hasPendingAutoConnectTransaction = false
-                    connectionManager.updateConnectionStatus(ConnectionStatus.DISCONNECTED)
-                    // Notify callback of disconnection
+                    // Do not call updateConnectionStatus(DISCONNECTED) without reason — it used to skip
+                    // connectionDisconnectedListener and left INIT state inconsistent.
                     callback.onFailure(
                         errorCode = InnerErrorCode.E213,
                         transactionRequestId = request.transactionRequestId
@@ -544,8 +577,16 @@ class PaymentManager(
             pendingTransaction = null
             val (request, callback) = transaction
             LogUtil.d(TAG, "Executing pending transaction after connection: action=${request.action}")
-            sendPaymentRequest(request, callback)
+            ensureInitAndExecute(request, callback)
         }
+    }
+
+    /**
+     * Ensure connection is ready, then execute transaction directly.
+     * INIT is handled by Tapro itself, SDK no longer sends INIT command.
+     */
+    private fun ensureInitAndExecute(request: PaymentRequest, callback: PaymentCallback) {
+        sendPaymentRequest(request, callback)
     }
 
     /**

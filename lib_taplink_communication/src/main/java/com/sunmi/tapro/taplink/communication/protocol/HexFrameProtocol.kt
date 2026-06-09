@@ -3,27 +3,27 @@ package com.sunmi.tapro.taplink.communication.protocol
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
- * 十六进制帧传输协议
+ * Hexadecimal frame transmission protocol
  *
- * 协议格式：FF + 长度(4位) + 数据(十六进制) + 校验和(2位) + FE
+ * Protocol format: FF + Length(4 digits) + Data(hexadecimal) + Checksum(2 digits) + FE
  *
- * 帧结构说明：
- * - 帧头：FF (1字节，固定)
- * - 数据长度：4位十六进制字符，表示原始数据的字节数 (例如：0010 表示16字节)
- * - 数据内容：原始数据转换为十六进制字符串
- * - 校验和：2位十六进制字符，数据字节和的低8位
- * - 帧尾：FE (1字节，固定)
+ * Frame structure:
+ * - Frame header: FF (1 byte, fixed)
+ * - Data length: 4 hexadecimal characters, represents byte count of original data (e.g., 0010 means 16 bytes)
+ * - Data content: Original data converted to hexadecimal string
+ * - Checksum: 2 hexadecimal characters, lower 8 bits of data byte sum
+ * - Frame tail: FE (1 byte, fixed)
  *
- * 优势：
- * - 固定的帧边界标记（FF/FE），易于识别完整帧
- * - 校验和验证，确保数据完整性
- * - 高传输效率，避免JSON分片问题
- * - 支持二进制数据传输
+ * Advantages:
+ * - Fixed frame boundary markers (FF/FE), easy to identify complete frames
+ * - Checksum verification, ensures data integrity
+ * - High transmission efficiency, avoids JSON fragmentation issues
+ * - Supports binary data transmission
  *
- * 使用场景：
- * - RS232串口通信
- * - USB AOA通信
- * - 其他需要可靠数据传输的场景
+ * Use cases:
+ * - RS232 serial port communication
+ * - USB AOA communication
+ * - Other scenarios requiring reliable data transmission
  *
  * @author TaPro Team
  * @since 2025-01-06
@@ -33,31 +33,31 @@ class HexFrameProtocol {
     companion object {
         private const val TAG = "HexFrameProtocol"
 
-        // 帧标记
+        // Frame markers
         private const val FRAME_START = "FF"
         private const val FRAME_END = "FE"
 
-        // 长度字段大小（十六进制字符数）
+        // Length field size (hexadecimal character count)
         private const val LENGTH_FIELD_SIZE = 4
 
-        // 校验和字段大小（十六进制字符数）
+        // Checksum field size (hexadecimal character count)
         private const val CHECKSUM_FIELD_SIZE = 2
 
         /**
-         * 将原始数据编码为十六进制帧
+         * Encode original data to hexadecimal frame
          *
-         * @param data 原始数据字节数组
-         * @return 编码后的十六进制帧字节数组
+         * @param data Original data byte array
+         * @return Encoded hexadecimal frame byte array
          */
         fun encode(data: ByteArray): ByteArray {
-            // 转换为十六进制字符串
+            // Convert to hexadecimal string
             val hexString = bytesToHex(data)
 
-            // 计算校验和
+            // Calculate checksum
             val checksum = calculateChecksum(data)
             val checksumHex = String.format("%02X", checksum.toInt() and 0xFF)
 
-            // 构建帧：FF + 长度(4位) + 数据(十六进制) + 校验和(2位) + FE
+            // Build frame: FF + Length(4 digits) + Data(hexadecimal) + Checksum(2 digits) + FE
             val frameLength = String.format("%04X", data.size)
             val frameData = "$FRAME_START$frameLength$hexString$checksumHex$FRAME_END"
 
@@ -68,10 +68,10 @@ class HexFrameProtocol {
         }
 
         /**
-         * 从缓冲区解码十六进制帧
+         * Decode hexadecimal frames from buffer
          *
-         * @param buffer 数据缓冲区
-         * @return 解码结果，包含解码的数据列表和已处理的字符数
+         * @param buffer Data buffer
+         * @return Decode result, contains decoded data list and processed character count
          */
         fun decode(buffer: String): DecodeResult {
             val decodedFrames = mutableListOf<ByteArray>()
@@ -79,29 +79,29 @@ class HexFrameProtocol {
             var startIndex = 0
 
             while (true) {
-                // 查找帧开始标记 FF
+                // Find frame start marker FF
                 val frameStart = buffer.indexOf(FRAME_START, startIndex)
                 if (frameStart == -1) break
 
-                // 检查是否有足够的数据读取长度
+                // Check if there's enough data to read length
                 if (frameStart + 2 + LENGTH_FIELD_SIZE > buffer.length) break
 
                 try {
-                    // 读取数据长度（4位十六进制）
+                    // Read data length (4 hexadecimal digits)
                     val lengthHex = buffer.substring(frameStart + 2, frameStart + 2 + LENGTH_FIELD_SIZE)
                     val dataLength = lengthHex.toInt(16)
 
                     LogUtil.d(TAG, "Found frame start at $frameStart, data length: $dataLength")
 
-                    // 计算完整帧的长度：FF(2) + 长度(4) + 数据(dataLength*2) + 校验和(2) + FE(2)
+                    // Calculate complete frame length: FF(2) + Length(4) + Data(dataLength*2) + Checksum(2) + FE(2)
                     val totalFrameLength = 2 + LENGTH_FIELD_SIZE + (dataLength * 2) + CHECKSUM_FIELD_SIZE + 2
 
                     if (frameStart + totalFrameLength > buffer.length) {
                         LogUtil.d(TAG, "Frame incomplete, waiting for more data")
-                        break // 帧不完整
+                        break // Frame incomplete
                     }
 
-                    // 检查帧尾标记 FE
+                    // Check frame tail marker FE
                     val frameEndPos = frameStart + totalFrameLength - 2
                     if (!buffer.substring(frameEndPos, frameEndPos + 2).equals(FRAME_END, ignoreCase = true)) {
                         LogUtil.w(TAG, "Invalid frame end marker at position $frameEndPos")
@@ -109,7 +109,7 @@ class HexFrameProtocol {
                         continue
                     }
 
-                    // 提取十六进制数据和校验和
+                    // Extract hexadecimal data and checksum
                     val hexDataStart = frameStart + 2 + LENGTH_FIELD_SIZE
                     val hexDataEnd = frameEndPos - CHECKSUM_FIELD_SIZE
                     val hexData = buffer.substring(hexDataStart, hexDataEnd)
@@ -117,7 +117,7 @@ class HexFrameProtocol {
 
                     LogUtil.d(TAG, "Extracted hex data: $hexData, checksum: $checksumHex")
 
-                    // 转换为原始数据
+                    // Convert to original data
                     val originalData = hexToBytes(hexData)
                     if (originalData.isEmpty()) {
                         LogUtil.w(TAG, "Failed to decode hex data: $hexData")
@@ -125,7 +125,7 @@ class HexFrameProtocol {
                         continue
                     }
 
-                    // 验证校验和
+                    // Verify checksum
                     val calculatedChecksum = calculateChecksum(originalData)
                     val expectedChecksum = checksumHex.toInt(16).toByte()
 
@@ -137,7 +137,7 @@ class HexFrameProtocol {
 
                     LogUtil.d(TAG, "Complete hex frame decoded successfully: ${String(originalData)} (${originalData.size} bytes)")
 
-                    // 添加到解码结果
+                    // Add to decode result
                     decodedFrames.add(originalData)
                     processedChars = frameStart + totalFrameLength
                     startIndex = processedChars
@@ -152,14 +152,14 @@ class HexFrameProtocol {
         }
 
         /**
-         * 字节数组转十六进制字符串
+         * Convert byte array to hexadecimal string
          */
         private fun bytesToHex(bytes: ByteArray): String {
             return bytes.joinToString("") { "%02X".format(it) }
         }
 
         /**
-         * 十六进制字符串转字节数组
+         * Convert hexadecimal string to byte array
          */
         private fun hexToBytes(hex: String): ByteArray {
             return try {
@@ -171,7 +171,7 @@ class HexFrameProtocol {
         }
 
         /**
-         * 计算校验和（数据字节和的低8位）
+         * Calculate checksum (lower 8 bits of data byte sum)
          */
         private fun calculateChecksum(data: ByteArray): Byte {
             return (data.sum() and 0xFF).toByte()
@@ -179,10 +179,10 @@ class HexFrameProtocol {
     }
 
     /**
-     * 解码结果
+     * Decode result
      *
-     * @param frames 解码出的完整帧数据列表
-     * @param processedChars 已处理的字符数（用于清理缓冲区）
+     * @param frames List of decoded complete frame data
+     * @param processedChars Processed character count (for buffer cleanup)
      */
     data class DecodeResult(
         val frames: List<ByteArray>,

@@ -1,18 +1,18 @@
 package com.sunmi.tapro.taplink.communication.lan.model
 
 /**
- * 服务信息数据类
+ * Service information data class
  *
- * 用于表示通过mDNS发现的服务信息
+ * Used to represent service information discovered via mDNS
  *
- * @param name 服务名称
- * @param type 服务类型
- * @param host 服务主机地址
- * @param port 服务端口
- * @param attributes 服务属性
+ * @param name Service name
+ * @param type Service type
+ * @param host Service host address
+ * @param port Service port
+ * @param attributes Service attributes
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 data class ServiceInfo(
     var name: String,
@@ -22,24 +22,24 @@ data class ServiceInfo(
     val attributes: Map<String, String> = emptyMap()
 ) {
     /**
-     * 获取服务地址
+     * Get service address
      *
-     * @return host:port 格式的地址
+     * @return Address in host:port format
      */
     fun getAddress(): String = "$host:$port"
 
     /**
-     * 检查服务是否有效
+     * Check if service is valid
      *
      * @return true if valid, false otherwise
      */
     fun isValid(): Boolean = host.isNotEmpty() && port > 0
 
     /**
-     * 获取服务的WebSocket URI
+     * Get service WebSocket URI
      *
-     * @param secure 是否使用安全连接（wss）
-     * @return WebSocket URI字符串
+     * @param secure Whether to use secure connection (wss)
+     * @return WebSocket URI string
      */
     fun getWebSocketUri(secure: Boolean = false): String {
         val protocol = if (secure) "wss" else "ws"
@@ -47,19 +47,19 @@ data class ServiceInfo(
     }
 
     /**
-     * 检查是否包含指定属性
+     * Check if contains specified attribute
      *
-     * @param key 属性键
+     * @param key Attribute key
      * @return true if contains the attribute, false otherwise
      */
     fun hasAttribute(key: String): Boolean = attributes.containsKey(key)
 
     /**
-     * 获取属性值
+     * Get attribute value
      *
-     * @param key 属性键
-     * @param defaultValue 默认值
-     * @return 属性值或默认值
+     * @param key Attribute key
+     * @param defaultValue Default value
+     * @return Attribute value or default value
      */
     fun getAttribute(key: String, defaultValue: String = ""): String {
         return attributes[key] ?: defaultValue

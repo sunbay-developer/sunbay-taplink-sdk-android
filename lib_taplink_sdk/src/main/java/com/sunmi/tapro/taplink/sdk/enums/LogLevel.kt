@@ -7,6 +7,9 @@ package com.sunmi.tapro.taplink.sdk.enums
  * @since 2025-01-XX
  */
 enum class LogLevel {
+    /** Verbose level — most detailed output */
+    VERBOSE,
+
     /** Debug level */
     DEBUG,
     

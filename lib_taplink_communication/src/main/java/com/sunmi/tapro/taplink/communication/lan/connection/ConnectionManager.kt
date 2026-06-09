@@ -14,29 +14,29 @@ import java.security.cert.X509Certificate
 import javax.net.ssl.SSLSocketFactory
 
 /**
- * WebSocket连接管理器
+ * WebSocket connection manager
  *
- * 职责：
- * - 管理WebSocket客户端连接
- * - 处理连接状态变化
- * - 处理消息发送和接收
- * - 集成网络连通性检查
+ * Responsibilities:
+ * - Manage WebSocket client connections
+ * - Handle connection status changes
+ * - Handle message sending and receiving
+ * - Integrate network connectivity checking
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class ConnectionManager {
 
     companion object {
         private const val TAG = "ConnectionManager"
-        // wss 连接需要 TLS 握手，给更多时间
-        // ws 连接不需要 TLS，时间可以短一些
-        private const val CONNECTION_TIMEOUT_MS_WS = 15_000L  // ws:// 15秒
-        private const val CONNECTION_TIMEOUT_MS_WSS = 45_000L  // wss:// 45秒（TLS握手需要更多时间）
+        // wss connections need TLS handshake, give more time
+        // ws connections don't need TLS, time can be shorter
+        private const val CONNECTION_TIMEOUT_MS_WS = 15_000L  // ws:// 15 seconds
+        private const val CONNECTION_TIMEOUT_MS_WSS = 45_000L  // wss:// 45 seconds (TLS handshake needs more time)
     }
     
     /**
-     * 根据 URI scheme 获取连接超时时间
+     * Get connection timeout based on URI scheme
      */
     private fun getConnectionTimeout(uri: URI): Long {
         return if (uri.scheme == "wss") {
@@ -47,9 +47,9 @@ class ConnectionManager {
     }
     
     /**
-     * 创建接受自签名证书的 SSL Socket Factory
+     * Create SSL Socket Factory that accepts self-signed certificates
      * 
-     * 注意：这仅用于 LAN 环境下的自签名证书，生产环境应使用严格的证书验证
+     * Note: This is only for self-signed certificates in LAN environments, production should use strict certificate validation
      */
     private fun createTrustAllSSLSocketFactory(): SSLSocketFactory? {
         return try {
@@ -76,7 +76,7 @@ class ConnectionManager {
     private val isConnected = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    // 网络连通性检查器
+    // Network connectivity checker
     private val connectivityChecker = NetworkConnectivityChecker()
 
     suspend fun connect(uri: URI): ConnectionResult {
@@ -84,29 +84,29 @@ class ConnectionManager {
             try {
                 LogUtil.d(TAG, "Attempting to connect to: $uri")
 
-                // 如果已连接到相同URI，检查实际连接状态
+                // If already connected to same URI, check actual connection status
                 if (isConnected.get() && currentUri == uri) {
-                    // 检查 WebSocket 实际状态
+                    // Check WebSocket actual status
                     if (client?.isOpen == true) {
                         LogUtil.d(TAG, "Already connected to $uri (WebSocket is open)")
                         return@withContext ConnectionResult.Success
                     } else {
-                        // WebSocket 已关闭但标志位未更新，需要清理并重新连接
+                        // WebSocket is closed but flag not updated, need to cleanup and reconnect
                         LogUtil.w(TAG, "URI matches but WebSocket is closed, cleaning up and reconnecting...")
                         cleanup()
-                        // 继续执行连接逻辑
+                        // Continue with connection logic
                     }
                 } else if (isConnected.get() && currentUri != uri) {
-                    // 连接到不同的 URI，需要先断开现有连接
+                    // Connecting to different URI, need to disconnect existing connection first
                     LogUtil.d(TAG, "Disconnecting existing connection to different URI: $currentUri -> $uri")
                     disconnect()
                 }
 
-                // 创建新的WebSocket客户端
+                // Create new WebSocket client
                 client = InternalWebSocketClient(uri)
                 currentUri = uri
 
-                // 如果是 wss 连接，配置 SSL Socket Factory（接受自签名证书）
+                // If wss connection, configure SSL Socket Factory (accept self-signed certificates)
                 if (uri.scheme == "wss") {
                     val sslSocketFactory = createTrustAllSSLSocketFactory()
                     if (sslSocketFactory != null) {
@@ -117,19 +117,19 @@ class ConnectionManager {
                     }
                 }
 
-                // 连接
+                // Connect
                 client?.connect()
 
-                // 根据连接类型使用不同的超时时间
+                // Use different timeout based on connection type
                 val timeoutMs = getConnectionTimeout(uri)
                 LogUtil.d(TAG, "Using connection timeout: ${timeoutMs}ms for ${uri.scheme}://${uri.host}:${uri.port}")
 
-                // 等待连接结果
+                // Wait for connection result
                 val connectionResult = withTimeoutOrNull(timeoutMs) {
                     while (!isConnected.get() && client?.isOpen != true) {
                         delay(100)
 
-                        // 检查是否连接失败
+                        // Check if connection failed
                         client?.let { c ->
                             if (c.isClosed) {
                                 throw Exception("Connection closed during handshake")
@@ -180,7 +180,7 @@ class ConnectionManager {
                 return false
             }
 
-            // 检查WebSocket连接的实际状态
+            // Check WebSocket connection actual status
             val client = this.client
             if (client == null || client.isClosed || client.isClosing) {
                 LogUtil.w(TAG, "Cannot send data: WebSocket client is closed or closing")
@@ -193,7 +193,7 @@ class ConnectionManager {
             true
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send binary data: ${e.message}")
-            // 发送失败时更新连接状态
+            // Update connection status when send fails
             isConnected.set(false)
             false
         }
@@ -206,7 +206,7 @@ class ConnectionManager {
                 return false
             }
 
-            // 检查WebSocket连接的实际状态
+            // Check WebSocket connection actual status
             val client = this.client
             if (client == null || client.isClosed || client.isClosing) {
                 LogUtil.w(TAG, "Cannot send message: WebSocket client is closed or closing")
@@ -219,19 +219,19 @@ class ConnectionManager {
             true
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send text message: ${e.message}")
-            // 发送失败时更新连接状态
+            // Update connection status when send fails
             isConnected.set(false)
             false
         }
     }
     
     /**
-     * 简化的心跳发送方法
+     * Simplified heartbeat send method
      * 
-     * 移除额外的网络连通性检查，减少发送延迟
-     * 网络问题会通过WebSocket的onError/onClose回调检测到
+     * Removes additional network connectivity checks to reduce send delay
+     * Network issues will be detected through WebSocket's onError/onClose callbacks
      * 
-     * @param message 心跳消息
+     * @param message Heartbeat message
      * @return true if sent successfully, false otherwise
      */
     suspend fun sendHeartbeat(message: String): Boolean {
@@ -243,7 +243,7 @@ class ConnectionManager {
                 return false
             }
 
-            // 直接发送心跳，不进行额外检查
+            // Send heartbeat directly, no additional checks
             client.send(message)
             LogUtil.d(TAG, "Heartbeat sent: $message")
             true
@@ -256,12 +256,12 @@ class ConnectionManager {
     }
     
     /**
-     * 发送心跳消息（带网络连通性检查）
+     * Send heartbeat message (with network connectivity check)
      * 
-     * 注意：网络连通性检查仅使用ping，不会创建TCP连接，
-     * 这样可以避免干扰现有的WebSocket连接（特别是当服务器只支持单客户端连接时）
+     * Note: Network connectivity check only uses ping, does not create TCP connection,
+     * this avoids interfering with existing WebSocket connection (especially when server only supports single client connection)
      * 
-     * @param message 心跳消息
+     * @param message Heartbeat message
      * @return true if sent successfully, false otherwise
      */
     suspend fun sendHeartbeatWithConnectivityCheck(message: String): Boolean {
@@ -271,7 +271,7 @@ class ConnectionManager {
                 return false
             }
 
-            // 检查WebSocket连接的实际状态
+            // Check WebSocket connection actual status
             val client = this.client
             if (client == null || client.isClosed || client.isClosing) {
                 LogUtil.w(TAG, "Cannot send heartbeat: WebSocket client is closed or closing")
@@ -279,31 +279,31 @@ class ConnectionManager {
                 return false
             }
 
-            // 检查网络连通性（仅对心跳进行额外检查）
+            // Check network connectivity (only additional check for heartbeat)
             val uri = currentUri
             if (uri != null) {
                 val isReachable = connectivityChecker.isHostReachable(
                     host = uri.host,
                     port = uri.port,
-                    timeoutMs = 2000 // 2秒超时
+                    timeoutMs = 2000 // 2 second timeout
                 )
                 
                 if (!isReachable) {
                     LogUtil.w(TAG, "Cannot send heartbeat: host ${uri.host}:${uri.port} is not reachable")
-                    // 网络不通时，更新连接状态但不立即断开WebSocket
-                    // 让WebSocket自己检测到网络问题并触发onError或onClose
+                    // When network is unreachable, update connection status but don't immediately disconnect WebSocket
+                    // Let WebSocket detect network issues itself and trigger onError or onClose
                     return false
                 }
             }
 
-            // 发送心跳消息
+            // Send heartbeat message
             client.send(message)
             LogUtil.d(TAG, "Heartbeat message sent with connectivity check: $message")
             true
             
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send heartbeat message: ${e.message}")
-            // 发送失败时更新连接状态
+            // Update connection status when send fails
             isConnected.set(false)
             false
         }
@@ -324,7 +324,7 @@ class ConnectionManager {
     }
 
     /**
-     * 清理资源
+     * Clean up resources
      */
     private fun cleanup() {
         isConnected.set(false)
@@ -334,7 +334,7 @@ class ConnectionManager {
     }
 
     /**
-     * 内部WebSocket客户端实现
+     * Internal WebSocket client implementation
      */
     private inner class InternalWebSocketClient(serverUri: URI) : WebSocketClient(serverUri) {
 
@@ -370,7 +370,7 @@ class ConnectionManager {
     }
 
     /**
-     * 连接结果
+     * Connection result
      */
     sealed class ConnectionResult {
         object Success : ConnectionResult()
@@ -378,46 +378,46 @@ class ConnectionManager {
     }
 
     /**
-     * 消息监听器
+     * Message listener
      */
     interface MessageListener {
         /**
-         * 接收到文本消息
+         * Text message received
          *
-         * @param message 文本消息
+         * @param message Text message
          */
         fun onTextMessage(message: String)
 
         /**
-         * 接收到二进制消息
+         * Binary message received
          *
-         * @param data 二进制数据
+         * @param data Binary data
          */
         fun onBinaryMessage(data: ByteArray)
     }
 
     /**
-     * 连接状态监听器
+     * Connection status listener
      */
     interface ConnectionListener {
         /**
-         * 连接建立成功
+         * Connection established successfully
          */
         fun onConnected()
 
         /**
-         * 连接断开
+         * Connection disconnected
          *
-         * @param code 断开代码
-         * @param reason 断开原因
-         * @param remote 是否为远程断开
+         * @param code Disconnect code
+         * @param reason Disconnect reason
+         * @param remote Whether disconnected remotely
          */
         fun onDisconnected(code: Int, reason: String, remote: Boolean)
 
         /**
-         * 连接发生错误
+         * Connection error occurred
          *
-         * @param exception 错误异常
+         * @param exception Error exception
          */
         fun onError(exception: Exception)
     }

@@ -1,22 +1,23 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 import java.math.BigDecimal
 
 /**
- * 增量预授权交易请求
+ * Incremental Authorization Transaction Request
  *
- * 用于在现有预授权基础上增加授权金额
+ * Used to increase the authorization amount on an existing pre-authorization
  *
- * @param originalTransactionId 原始预授权交易ID（与originalTransactionRequestId二选一）
- * @param originalTransactionRequestId 原始预授权交易请求ID（与originalTransactionId二选一）
- * @param transactionRequestId 交易请求ID（必需）
- * @param amount 增量授权金额信息（必需，只包含金额和币种）
- * @param description 交易描述（可选，最多128字符）
- * @param attach 附加信息（可选）
- * @param notifyUrl 通知URL（可选）
- * @param requestTimeout 请求超时时间（可选，单位：秒）
- * @param staffInfo 员工信息（可选）
+ * @param originalTransactionId Original pre-authorization transaction ID (either this or originalTransactionRequestId must be provided)
+ * @param originalTransactionRequestId Original pre-authorization transaction request ID (either this or originalTransactionId must be provided)
+ * @param transactionRequestId Transaction request ID (required)
+ * @param amount Incremental authorization amount information (required, contains only amount and currency)
+ * @param description Transaction description (optional, maximum 128 characters)
+ * @param attach Additional information (optional)
+ * @param notifyUrl Notification URL (optional)
+ * @param requestTimeout Request timeout duration (optional, unit: seconds)
+ * @param staffInfo Staff information (optional)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -30,7 +31,8 @@ data class IncrementalAuthRequest(
     val attach: String? = null,
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
-    val staffInfo: StaffInfo? = null
+    val staffInfo: StaffInfo? = null,
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO
 ) : BaseTransactionRequest() {
 
     init {
@@ -45,7 +47,7 @@ data class IncrementalAuthRequest(
     override fun validate(): ValidationResult {
         return TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateOriginalTransactionReference(
-                originalTransactionId, 
+                originalTransactionId,
                 originalTransactionRequestId
             ),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
@@ -65,13 +67,13 @@ data class IncrementalAuthRequest(
 
     companion object {
         /**
-         * 创建IncrementalAuthRequest构建器
+         * Create IncrementalAuthRequest builder
          */
         fun builder(): Builder = Builder()
     }
 
     /**
-     * IncrementalAuthRequest构建器
+     * IncrementalAuthRequest Builder
      */
     class Builder {
         private var originalTransactionId: String? = null
@@ -83,9 +85,10 @@ data class IncrementalAuthRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
+        private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         /**
-         * 设置原始预授权交易ID
+         * Set original pre-authorization transaction ID
          */
         fun setOriginalTransactionId(originalTransactionId: String): Builder {
             this.originalTransactionId = originalTransactionId
@@ -93,7 +96,7 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 设置原始预授权交易请求ID
+         * Set original pre-authorization transaction request ID
          */
         fun setOriginalTransactionRequestId(originalTransactionRequestId: String): Builder {
             this.originalTransactionRequestId = originalTransactionRequestId
@@ -101,7 +104,7 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 设置交易请求ID
+         * Set transaction request ID
          */
         fun setTransactionRequestId(transactionRequestId: String): Builder {
             this.transactionRequestId = transactionRequestId
@@ -109,7 +112,7 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 设置增量授权金额信息
+         * Set incremental authorization amount information
          */
         fun setAmount(amount: AuthAmountInfo): Builder {
             this.amount = amount
@@ -117,7 +120,7 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 设置交易描述
+         * Set transaction description
          */
         fun setDescription(description: String?): Builder {
             this.description = description
@@ -125,7 +128,7 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 设置附加信息
+         * Set additional information
          */
         fun setAttach(attach: String): Builder {
             this.attach = attach
@@ -133,7 +136,7 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 设置通知URL
+         * Set notification URL
          */
         fun setNotifyUrl(notifyUrl: String): Builder {
             this.notifyUrl = notifyUrl
@@ -141,7 +144,7 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 设置请求超时时间
+         * Set request timeout duration
          */
         fun setRequestTimeout(requestTimeout: Long): Builder {
             this.requestTimeout = requestTimeout
@@ -149,7 +152,7 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 设置员工信息
+         * Set staff information
          */
         fun setStaffInfo(staffInfo: StaffInfo): Builder {
             this.staffInfo = staffInfo
@@ -157,9 +160,17 @@ data class IncrementalAuthRequest(
         }
 
         /**
-         * 构建IncrementalAuthRequest实例
-         * 
-         * @throws TransactionRequestValidationException 如果验证失败
+         * Set print receipt
+         */
+        fun setPrintReceipt(printReceipt: PrintReceipt): Builder {
+            this.printReceipt = printReceipt
+            return this
+        }
+
+        /**
+         * Build IncrementalAuthRequest instance
+         *
+         * @throws TransactionRequestValidationException If validation fails
          */
         fun build(): IncrementalAuthRequest {
             val request = IncrementalAuthRequest(
@@ -171,7 +182,8 @@ data class IncrementalAuthRequest(
                 attach = attach,
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
-                staffInfo = staffInfo
+                staffInfo = staffInfo,
+                printReceipt = printReceipt
             )
 
             val validationResult = request.validate()

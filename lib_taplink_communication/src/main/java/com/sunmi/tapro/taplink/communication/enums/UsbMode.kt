@@ -1,26 +1,22 @@
 package com.sunmi.tapro.taplink.communication.enums
 
 /**
- * USB模式枚举
+ * USB mode enumeration
  * 
- * 用于区分USB AOA协议的两种模式：
- * - HOST: Android设备作为USB主机，控制外部USB设备
- * - ACCESSORY: Android设备作为USB配件，被外部USB主机控制
+ * Used to distinguish between two modes of USB AOA protocol:
+ * - HOST: Android device acts as USB host, controlling external USB devices
+ * - ACCESSORY: Android device acts as USB accessory, controlled by external USB host
  * 
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 enum class UsbMode {
-    /** USB Host模式：Android设备作为USB主机 */
+    /** USB Host mode: Android device acts as USB host */
     HOST,
     
-    /** USB Accessory模式：Android设备作为USB配件 */
+    /** USB Accessory mode: Android device acts as USB accessory */
     ACCESSORY
 }
-
-
-
-
 
 
 

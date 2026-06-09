@@ -141,7 +141,7 @@ public class InnerUtil {
                 serial = Build.getSerial();
                 return serial;
             } else {
-                //安卓8以下使用Build.SERIAL相同方式
+                // Android 8 and below use same method as Build.SERIAL
                 //return Build.SERIAL;
                 try {
                     serial = (String) get.invoke(c, "ro.serialno");

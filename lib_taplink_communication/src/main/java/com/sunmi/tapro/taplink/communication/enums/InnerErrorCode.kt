@@ -3,142 +3,142 @@ package com.sunmi.tapro.taplink.communication.enums
 import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 
 /**
- * 错误码定义
+ * Error code definitions
  *
- * 根据 Taplink SDK 集成指南定义的所有错误码及其说明
- * 支持多语言本地化，错误描述和解决方案从资源文件中获取
+ * All error codes and their descriptions according to Taplink SDK integration guide
+ * Supports multi-language localization, error descriptions and solutions retrieved from resource files
  *
- * 错误码范围说明：
- * - 100: 成功响应
- * - 20x: 初始化错误
- * - 21x: 连接状态/失败
- * - 23x: 本地模式连接失败
- * - 24x: 局域网模式连接失败
- * - 25x: USB模式连接失败
- * - 30x: 交易处理错误
+ * Error code range descriptions:
+ * - 100: Success response
+ * - 20x: Initialization errors
+ * - 21x: Connection status/failure
+ * - 23x: Local mode connection failure
+ * - 24x: LAN mode connection failure
+ * - 25x: USB mode connection failure
+ * - 30x: Transaction processing errors
  *
  * @author TaPro Team
  * @since 2025-01-14
  */
 sealed class InnerErrorCode(
-    /** 错误码 */
+    /** Error code */
     val code: String
 ) {
     /**
-     * 获取错误码所属的分类
+     * Get the category this error code belongs to
      */
     val category: ErrorCategory
         get() = ErrorCategory.fromCode(code)
 
-    /** 错误说明（从资源文件获取） */
+    /** Error description (retrieved from resource files) */
     val description: String
         get() = getDescriptionForCode(code)
 
     /**
-     * 获取错误码对应的描述
+     * Get description for the error code
      */
     protected open fun getDescriptionForCode(code: String): String {
         return ErrorStringHelper.getDescription(code)
     }
 
-    // ==================== 成功响应 ====================
-    /** 100 - 操作成功 */
+    // ==================== Success Response ====================
+    /** 100 - Operation successful */
     object Success : InnerErrorCode("100")
 
-    // ==================== 初始化错误 (20x) ====================
-    /** 201 - SDK未初始化 */
+    // ==================== Initialization Errors (20x) ====================
+    /** 201 - SDK not initialized */
     object E201 : InnerErrorCode("201")
 
-    /** 202 - SDK服务异常 */
+    /** 202 - SDK service exception */
     object E202 : InnerErrorCode("202")
 
-    /** 203 - Tapro初始化失败 */
+    /** 203 - Tapro initialization failed */
     object E203 : InnerErrorCode("203")
 
-    // ==================== 连接状态/失败 (21x) ====================
-    /** 211 - 连接已存在，无需重复连接 */
+    // ==================== Connection Status/Failure (21x) ====================
+    /** 211 - Connection already exists, no need to reconnect */
     object E211 : InnerErrorCode("211")
 
-    /** 212 - 设备未连接 */
+    /** 212 - Device not connected */
     object E212 : InnerErrorCode("212")
 
-    /** 213 - 连接已断开 */
+    /** 213 - Connection disconnected */
     object E213 : InnerErrorCode("213")
 
-    /** 214 - 无法建立连接 */
+    /** 214 - Unable to establish connection */
     object E214 : InnerErrorCode("214")
 
-    /** 221 - 认证失败 */
+    /** 221 - Authentication failed */
     object E221 : InnerErrorCode("221")
 
-    // ==================== 本地模式连接失败 (23x) ====================
-    /** 231 - Tapro应用未安装 */
+    // ==================== Local Mode Connection Failure (23x) ====================
+    /** 231 - Tapro application not installed */
     object E231 : InnerErrorCode("231")
 
-    /** 232 - 无法连接到Tapro */
+    /** 232 - Unable to connect to Tapro */
     object E232 : InnerErrorCode("232")
 
-    // ==================== 局域网模式连接失败 (24x) ====================
-    /** 241 - 无法连接到服务端 */
+    // ==================== LAN Mode Connection Failure (24x) ====================
+    /** 241 - Unable to connect to server */
     object E241 : InnerErrorCode("241")
 
-    /** 242 - 无法发现服务端 */
+    /** 242 - Unable to discover server */
     object E242 : InnerErrorCode("242")
 
-    // ==================== USB模式连接失败 (25x) ====================
-    /** 251 - 251 USB模式连接失败 */
+    // ==================== USB Mode Connection Failure (25x) ====================
+    /** 251 - USB mode connection failed */
     object E251 : InnerErrorCode("251")
 
-    /** 252 - USB权限被拒绝 */
+    /** 252 - USB permission denied */
     object E252 : InnerErrorCode("252")
 
-    /** 253 - USB连接超时 */
+    /** 253 - USB connection timeout */
     object E253 : InnerErrorCode("253")
 
-    /** 254 - USB协议不支持 */
+    /** 254 - USB protocol not supported */
     object E254 : InnerErrorCode("254")
 
-    /** 255 - 串口设备未就绪 */
+    /** 255 - Serial port device not ready */
     object E255 : InnerErrorCode("255")
 
-    // ==================== 交易处理错误 (30x) ====================
-    /** 301 - 缺少必填参数 */
+    // ==================== Transaction Processing Errors (30x) ====================
+    /** 301 - Missing required parameters */
     object E301 : InnerErrorCode("301")
 
-    /** 302 - 请求数据格式错误 */
+    /** 302 - Request data format error */
     object E302 : InnerErrorCode("302")
 
-    /** 303 - 不支持的交易类型 */
+    /** 303 - Unsupported transaction type */
     object E303 : InnerErrorCode("303")
 
-    /** 304 - 请求发送失败 */
+    /** 304 - Request send failed */
     object E304 : InnerErrorCode("304")
 
-    /** 305 - 交易正在进行 */
+    /** 305 - Transaction in progress */
     object E305 : InnerErrorCode("305")
 
-    /** 306 - 响应超时（需先查询交易状态） */
+    /** 306 - Response timeout (need to query transaction status first) */
     object E306 : InnerErrorCode("306")
 
-    /** 307 - 交易被拒绝（必须使用新ID重试） */
+    /** 307 - Transaction rejected (must retry with new ID) */
     object E307 : InnerErrorCode("307")
 
-    /** 308 - 交易处理中（需先查询交易状态） */
+    /** 308 - Transaction processing (need to query transaction status first) */
     object E308 : InnerErrorCode("308")
 
-    /** 309 - 交易已终止（不要重试） */
+    /** 309 - Transaction terminated (do not retry) */
     object E309 : InnerErrorCode("309")
 
-    /** 310 - 余额不足（必须使用新ID重试） */
+    /** 310 - Insufficient balance (must retry with new ID) */
     object E310 : InnerErrorCode("310")
 
-    /** 311 - 密码错误 */
+    /** 311 - Password error */
     object E311 : InnerErrorCode("311")
 
-    /** 312 - 查询交易失败 */
+    /** 312 - Query transaction failed */
     object E312 : InnerErrorCode("312")
 
-    // ==================== 未知错误码 ====================
+    // ==================== Unknown Error Code ====================
     class Unknown(
         errorCode: String,
         private val customDescription: String? = null
@@ -152,10 +152,10 @@ sealed class InnerErrorCode(
     companion object {
 
         /**
-         * 根据错误码字符串获取对应的 ErrorCode 对象
+         * Get corresponding ErrorCode object based on error code string
          *
-         * @param code 错误码字符串
-         * @return ErrorCode 对象，如果未找到则返回 Unknown
+         * @param code Error code string
+         * @return ErrorCode object, returns Unknown if not found
          */
         fun fromCode(code: String?, errorMsg: String? = ""): InnerErrorCode {
             if (code.isNullOrBlank()) {
@@ -163,38 +163,38 @@ sealed class InnerErrorCode(
             }
 
             return when (code.uppercase()) {
-                // 成功响应
+                // Success response
                 "0", "100" -> Success
 
-                // 新错误码 (20x-39x)
-                // 初始化错误 (20x)
+                // New error codes (20x-39x)
+                // Initialization errors (20x)
                 "201" -> E201
                 "202" -> E202
                 "203" -> E203
 
-                // 连接状态/失败 (21x)
+                // Connection status/failure (21x)
                 "211" -> E211
                 "212" -> E212
                 "213" -> E213
                 "214" -> E214
                 "221" -> E221
 
-                // 本地模式连接失败 (23x)
+                // Local mode connection failure (23x)
                 "231" -> E231
                 "232" -> E232
 
-                // 局域网模式连接失败 (24x)
+                // LAN mode connection failure (24x)
                 "241" -> E241
                 "242" -> E242
                 "251" -> E251
 
-                // USB模式连接失败 (25x)
+                // USB mode connection failure (25x)
                 "252" -> E252
                 "253" -> E253
                 "254" -> E254
                 "255" -> E255
 
-                // 交易处理错误 (30x)
+                // Transaction processing errors (30x)
                 "301" -> E301
                 "302" -> E302
                 "303" -> E303
@@ -208,20 +208,20 @@ sealed class InnerErrorCode(
                 "311" -> E311
                 "312" -> E312
 
-                // 未知错误码
+                // Unknown error code
                 else -> Unknown(code, customDescription = errorMsg)
             }
         }
 
         /**
-         * 获取所有预定义的错误码列表
+         * Get all predefined error code list
          *
-         * @return 所有预定义的错误码列表
+         * @return All predefined error code list
          */
         fun getAllErrorCodes(): List<InnerErrorCode> {
             return listOf(
                 Success,
-                // 新错误码 (根据集成指南(New))
+                // New error codes (according to integration guide (New))
                 E201, E202, E203,
                 E211, E212, E213, E214, E221,
                 E231, E232,
@@ -232,74 +232,74 @@ sealed class InnerErrorCode(
         }
 
         /**
-         * 判断错误码是否为初始化错误 (20x)
+         * Determine if error code is initialization error (20x)
          */
         fun isInitializationError(code: String?): Boolean {
             return code in listOf("201", "202", "203")
         }
 
         /**
-         * 判断错误码是否为连接状态/失败错误 (21x)
+         * Determine if error code is connection status/failure error (21x)
          */
         fun isConnectionStateError(code: String?): Boolean {
             return code in listOf("211", "212", "213", "214", "221")
         }
 
         /**
-         * 判断错误码是否为本地模式连接失败 (23x)
+         * Determine if error code is local mode connection failure (23x)
          */
         fun isLocalModeConnectionError(code: String?): Boolean {
             return code in listOf("231", "232")
         }
 
         /**
-         * 判断错误码是否为局域网模式连接失败 (24x)
+         * Determine if error code is LAN mode connection failure (24x)
          */
         fun isLanModeConnectionError(code: String?): Boolean {
             return code in listOf("241", "242")
         }
 
         /**
-         * 判断错误码是否为USB模式连接失败 (25x)
+         * Determine if error code is USB mode connection failure (25x)
          */
         fun isUsbModeConnectionError(code: String?): Boolean {
             return code in listOf("251", "252", "253", "254", "255")
         }
 
         /**
-         * 判断错误码是否为交易处理错误 (30x)
+         * Determine if error code is transaction processing error (30x)
          */
         fun isTransactionProcessingError(code: String?): Boolean {
             return code in listOf("301", "302", "303", "304", "305", "306", "307", "308", "309", "310", "311", "312")
         }
 
         /**
-         * 判断是否需要先查询交易状态再重试
-         * 错误码 306, 308 需要先查询
+         * Determine if need to query transaction status before retry
+         * Error codes 306, 308 need to query first
          */
         fun needsQueryBeforeRetry(code: String?): Boolean {
             return code in listOf("306", "308")
         }
 
         /**
-         * 判断是否必须使用新的 transactionRequestId 重试
-         * 错误码 307, 310, 311 必须使用新ID
+         * Determine if must use new transactionRequestId for retry
+         * Error codes 307, 310, 311 must use new ID
          */
         fun mustUseNewTransactionId(code: String?): Boolean {
             return code in listOf("307", "310", "311")
         }
 
         /**
-         * 判断是否可以使用相同的 transactionRequestId 重试
-         * 错误码 301-305 可以使用相同ID
+         * Determine if can retry with the same transactionRequestId
+         * Error codes 301-305 can use the same ID
          */
         fun canRetryWithSameId(code: String?): Boolean {
             return code in listOf("301", "302", "303", "304", "305")
         }
 
         /**
-         * 判断是否不应该重试
-         * 错误码 309 表示交易已终止，不应该重试
+         * Determine if should not retry
+         * Error code 309 indicates transaction terminated, should not retry
          */
         fun shouldNotRetry(code: String?): Boolean {
             return code == "309"

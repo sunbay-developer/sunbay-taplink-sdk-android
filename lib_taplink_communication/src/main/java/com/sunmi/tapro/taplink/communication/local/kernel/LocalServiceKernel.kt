@@ -12,62 +12,69 @@ import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.local.ITransaction
 import com.sunmi.tapro.taplink.communication.local.ITransactionCallback
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 
 /**
- * 本地服务内核类
+ * Local service kernel class
  *
- * 提供本地通信的功能，实现IServiceKernel接口
- * 支持通过action和packageName启动和绑定服务
+ * Provides local communication functionality, implements IServiceKernel interface
+ * Supports starting and binding services via action and packageName
+ *
+ * @param appId Application ID
+ * @param appSecretKey Application secret key
+ * @param taproAppWidthRatio Width ratio for TaPro application (0.0 to 1.0, optional)
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class LocalServiceKernel constructor(
     appId: String,
-    appSecretKey: String
+    appSecretKey: String,
+    private val taproAppWidthRatio: Float? = null
 ) : AsyncServiceKernel(appId, appSecretKey) {
 
     companion object {
         private const val TAG = "LocalServiceKernel"
+        
+        // Intent extra keys
+        private const val EXTRA_APP_ID = "app_id"
+        private const val EXTRA_SECRET_KEY = "secret_key"
+        private const val EXTRA_TAPRO_APP_WIDTH_RATIO = "tapro_app_width_ratio"
     }
 
     override fun getTag(): String = TAG
 
-    /**
-     * Gson实例，用于JSON解析
-     */
-    private val gson = Gson()
+    private val mapper = ObjectMapper()
 
     /**
-     * 当前连接的服务Intent
+     * Currently connected service Intent
      */
     private var currentIntent: Intent? = null
 
     /**
-     * 服务连接对象
+     * Service connection object
      */
     private var serviceConnection: ServiceConnection? = null
 
     /**
-     * 服务绑定状态
+     * Service binding status
      */
     private var isServiceBound: Boolean = false
 
     /**
-     * 服务是否被启动（用于 Android 14+ 兼容性）
+     * Whether service was started (for Android 14+ compatibility)
      */
     private var isServiceStarted: Boolean = false
 
     /**
-     * ITransaction接口实例
+     * ITransaction interface instance
      */
     private var iTransaction: ITransaction? = null
 
-    // ==================== AsyncServiceKernel 抽象方法实现 ====================
+    // ==================== AsyncServiceKernel Abstract Method Implementation ====================
 
     override fun getServiceType(): String = "Local Service"
 
@@ -78,7 +85,7 @@ class LocalServiceKernel constructor(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
-        // 取消旧连接任务，避免并发连接
+        // Cancel old connection task to avoid concurrent connections
         connectJob?.cancel()
         connectJob = launchInScope {
             val localProtocol = parseResult as ProtocolParseResult.LocalProtocol
@@ -94,14 +101,19 @@ class LocalServiceKernel constructor(
                 return@launchInScope
             }
 
-            // 创建Intent
+            // Create Intent
             val intent = Intent(action)
             intent.setPackage(packageName)
-            intent.putExtra("app_id", appId)
-            intent.putExtra("secret_key", appSecretKey)
+            intent.putExtra(EXTRA_APP_ID, appId)
+            intent.putExtra(EXTRA_SECRET_KEY, appSecretKey)
+            
+            // Add taproAppWidthRatio if provided (0.0 to 1.0)
+            taproAppWidthRatio?.let {
+                intent.putExtra(EXTRA_TAPRO_APP_WIDTH_RATIO, it)
+            }
 
 
-            // 检查目标应用是否安装
+            // Check if target application is installed
             try {
                 context.packageManager.getPackageInfo(packageName, 0)
             } catch (e: Exception) {
@@ -110,7 +122,7 @@ class LocalServiceKernel constructor(
                 return@launchInScope
             }
 
-            // 检查服务是否存在
+            // Check if service exists
             val resolveInfoList = context.packageManager.queryIntentServices(intent, 0)
 
             val matchService = resolveInfoList.find {
@@ -127,13 +139,13 @@ class LocalServiceKernel constructor(
             }
 
 
-            // 保存当前Intent
+            // Save current Intent
             currentIntent = intent
 
-            // 创建服务连接
+            // Create service connection
             serviceConnection = createServiceConnection(connectionCallback)
 
-            // Android 14+ 兼容性：先启动服务，再绑定
+            // Android 14+ compatibility: start service first, then bind
             try {
                 val bindFlags = Context.BIND_AUTO_CREATE or
                         Context.BIND_IMPORTANT or
@@ -158,47 +170,49 @@ class LocalServiceKernel constructor(
             return
         }
 
-        // 将ByteArray转换为String（假设是UTF-8编码）
+        // Convert ByteArray to String (assume UTF-8 encoding)
         val requestData = String(data, Charsets.UTF_8)
 
-        // 创建回调对象
-        // 注意：不直接调用传入的 callback，而是通过 dataReceiver 传递响应
-        // 这样可以在 TaplinkApiImpl 中统一管理回调的调用和移除
+        // Create callback object
+        // Note: Don't directly call the passed callback, instead pass response through dataReceiver
+        // This allows unified callback invocation and removal management in TaplinkApiImpl
         val transactionCallback = object : ITransactionCallback.Stub() {
             override fun callback(responseData: String?) {
                 val response = responseData ?: "SUCCESS"
                 LogUtil.d(TAG, "==========LocalSrviceKernel:$response")
 
 //                callback?.onResponse(response)
-//                // 通过 dataReceiver 传递响应（供 TaplinkApiImpl 使用）
-//                // 这样可以通过 processReceivedResponse 统一管理回调的调用和移除
+//                // Pass response through dataReceiver (for TaplinkApiImpl use)
+//                // This allows unified callback invocation and removal management through processReceivedResponse
                 dataReceiver?.invoke(response.toByteArray(Charsets.UTF_8))
             }
 
             override fun onError(code: String?, msg: String?) {
-                // 构建包含 traceId 的错误响应 JSON，以便 TaplinkApiImpl 能够匹配回调
+                // Build error response JSON containing traceId so TaplinkApiImpl can match callback
                 val errorCode = code ?: "UNKNOWN_ERROR"
                 val errorMsg = msg ?: "Unknown error"
                 val errorResponse = try {
-                    """{"traceId":"$traceId","eventCode":"ERROR","errorCode":"$errorCode","eventMsg":"$errorMsg"}"""
+                    // Use Jackson to properly escape errorMsg — it may itself be a JSON string
+                    val escapedMsg = mapper.writeValueAsString(errorMsg)
+                    """{"traceId":"$traceId","eventCode":"ERROR","errorCode":"$errorCode","eventMsg":$escapedMsg}"""
                 } catch (e: Exception) {
                     "ERROR: $errorCode - $errorMsg"
                 }
 
 //                callback?.onError(errorCode, errorResponse)
 
-                // 错误信息也通过 dataReceiver 传递
+                // Error information also passed through dataReceiver
                 dataReceiver?.invoke(errorResponse.toByteArray(Charsets.UTF_8))
             }
         }
 
-        // 调用ITransaction的onTransaction方法（异步）
+        // Call ITransaction's onTransaction method (asynchronous)
         iTransaction?.onTransaction(requestData, transactionCallback)
     }
 
     override fun performDisconnect() {
         val context = TaplinkServiceKernel.getInstance()?.getContext()
-        // 解绑服务
+        // Unbind service
         if (isServiceBound && serviceConnection != null && context != null) {
             try {
                 context.unbindService(serviceConnection!!)
@@ -208,7 +222,7 @@ class LocalServiceKernel constructor(
             isServiceBound = false
         }
 
-        // 如果服务是通过 startService 启动的，需要停止服务
+        // If service was started via startService, need to stop service
         if (isServiceStarted && currentIntent != null && context != null) {
             try {
                 context.stopService(currentIntent)
@@ -218,17 +232,17 @@ class LocalServiceKernel constructor(
             isServiceStarted = false
         }
 
-        // 清理资源
+        // Clean up resources
         serviceConnection = null
         currentIntent = null
         iTransaction = null
     }
 
     /**
-     * 创建服务连接对象
+     * Create service connection object
      *
-     * @param connectionCallback 连接回调
-     * @return ServiceConnection 服务连接对象
+     * @param connectionCallback Connection callback
+     * @return ServiceConnection Service connection object
      */
     private fun createServiceConnection(connectionCallback: ConnectionCallback): ServiceConnection {
         return object : ServiceConnection {

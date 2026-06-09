@@ -6,20 +6,20 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 心跳管理器
+ * Heartbeat manager
  *
- * 职责：
- * - 心跳机制管理
- * - 心跳配置动态调整
- * - 心跳状态监控
+ * Responsibilities:
+ * - Heartbeat mechanism management
+ * - Dynamic heartbeat configuration adjustment
+ * - Heartbeat status monitoring
  *
- * 修复版本：
- * - 使用独立心跳线程，避免被其他协程阻塞
- * - 优化超时检测机制
- * - 增强错误处理和恢复能力
+ * Fixed version:
+ * - Use independent heartbeat thread to avoid being blocked by other coroutines
+ * - Optimize timeout detection mechanism
+ * - Enhance error handling and recovery capabilities
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 class HeartbeatManager {
 
@@ -27,11 +27,11 @@ class HeartbeatManager {
         private const val TAG = "HeartbeatManager"
     }
 
-    // 使用专用的心跳调度器，确保心跳不被其他操作影响
+    // Use dedicated heartbeat dispatcher to ensure heartbeat is not affected by other operations
     private val heartbeatDispatcher = Executors.newSingleThreadExecutor { r ->
         Thread(r, "HeartbeatThread").apply {
             isDaemon = true
-            priority = Thread.MAX_PRIORITY // 高优先级确保心跳及时执行
+            priority = Thread.MAX_PRIORITY // High priority ensures heartbeat executes timely
         }
     }.asCoroutineDispatcher()
 
@@ -47,9 +47,9 @@ class HeartbeatManager {
     private var timeoutCheckJob: Job? = null
 
     /**
-     * 开始心跳
+     * Start heartbeat
      *
-     * @param config 心跳配置
+     * @param config Heartbeat configuration
      */
     fun startHeartbeat(config: HeartbeatConfig, sender: HeartbeatSender) {
         if (isRunning.get()) {
@@ -93,7 +93,7 @@ class HeartbeatManager {
     }
 
     /**
-     * 停止心跳
+     * Stop heartbeat
      */
     fun stopHeartbeat() {
         if (!isRunning.get()) return
@@ -101,19 +101,19 @@ class HeartbeatManager {
         LogUtil.d(TAG, "Stopping heartbeat")
         isRunning.set(false)
         
-        // 取消心跳任务
+        // Cancel heartbeat task
         heartbeatJob?.cancel()
         heartbeatJob = null
         
-        // 取消超时检测任务
+        // Cancel timeout check task
         timeoutCheckJob?.cancel()
         timeoutCheckJob = null
     }
 
     /**
-     * 更新心跳配置
+     * Update heartbeat configuration
      *
-     * @param config 新的心跳配置
+     * @param config New heartbeat configuration
      */
     fun updateConfig(config: HeartbeatConfig) {
         val oldConfig = this.config
@@ -122,7 +122,7 @@ class HeartbeatManager {
         LogUtil.d(TAG, "Heartbeat config updated: ${oldConfig.intervalMs}ms -> ${config.intervalMs}ms")
         listener?.onConfigUpdated(oldConfig, config)
 
-        // 如果正在运行，重启以应用新配置
+        // If running, restart to apply new configuration
         if (isRunning.get() && sender != null) {
             LogUtil.d(TAG, "Restarting heartbeat with new config")
             val currentSender = sender!!
@@ -132,23 +132,23 @@ class HeartbeatManager {
     }
 
     /**
-     * 检查心跳是否正在运行
+     * Check if heartbeat is running
      *
      * @return true if running, false otherwise
      */
     fun isRunning(): Boolean = isRunning.get()
 
     /**
-     * 获取当前心跳配置
+     * Get current heartbeat configuration
      *
-     * @return 当前心跳配置
+     * @return Current heartbeat configuration
      */
     fun getCurrentConfig(): HeartbeatConfig = config
 
     /**
-     * 设置心跳监听器
+     * Set heartbeat listener
      *
-     * @param listener 心跳监听器
+     * @param listener Heartbeat listener
      */
     fun setHeartbeatListener(listener: HeartbeatListener?) {
         this.listener = listener
@@ -156,18 +156,18 @@ class HeartbeatManager {
     }
 
     /**
-     * 检查是否是心跳响应
+     * Check if it's a heartbeat response
      *
-     * @param message 接收到的消息
-     * @return true 如果是心跳响应，false 否则
+     * @param message Received message
+     * @return true if it's a heartbeat response, false otherwise
      */
     fun isHeartbeatResponse(message: String): Boolean {
-        // 更严格的心跳响应检测
+        // Stricter heartbeat response detection
         return try {
-            // 检查是否是JSON格式的pong响应
+            // Check if it's a JSON format pong response
             message.contains("\"type\":\"pong\"") ||
             message.contains("pong") ||
-            // 或者是简单的pong响应
+            // Or a simple pong response
             message.trim().equals("pong", ignoreCase = true)
         } catch (e: Exception) {
             false
@@ -175,17 +175,17 @@ class HeartbeatManager {
     }
 
     /**
-     * 处理心跳响应
+     * Handle heartbeat response
      *
-     * @param responseTime 响应时间戳
+     * @param responseTime Response timestamp
      */
     fun handleHeartbeatResponse(responseTime: Long = System.currentTimeMillis()) {
         val roundTripTime = responseTime - lastSentTime
 
-        // 重置失败计数
+        // Reset failure count
         consecutiveFailures = 0
 
-        // 更新统计
+        // Update statistics
         stats = stats.copy(
             totalReceived = stats.totalReceived + 1,
             lastReceivedTime = responseTime,
@@ -202,20 +202,20 @@ class HeartbeatManager {
     }
 
     /**
-     * 获取心跳统计信息
+     * Get heartbeat statistics
      *
-     * @return 心跳统计信息
+     * @return Heartbeat statistics
      */
     fun getHeartbeatStats(): HeartbeatStats = stats
 
     /**
-     * 发送心跳消息
+     * Send heartbeat message
      */
     private fun sendHeartbeat() {
         val currentTime = System.currentTimeMillis()
         lastSentTime = currentTime
 
-        // 使用专用调度器发送心跳，并设置发送超时
+        // Use dedicated dispatcher to send heartbeat and set send timeout
         CoroutineScope(heartbeatDispatcher).launch {
             try {
                 val success = withTimeout(config.sendTimeoutMs) {
@@ -223,7 +223,7 @@ class HeartbeatManager {
                 }
 
                 if (success) {
-                    // 更新统计
+                    // Update statistics
                     stats = stats.copy(
                         totalSent = stats.totalSent + 1,
                         lastSentTime = currentTime
@@ -232,7 +232,7 @@ class HeartbeatManager {
                     LogUtil.d(TAG, "Heartbeat sent successfully at $currentTime")
                     listener?.onHeartbeatSent(currentTime)
 
-                    // 启动增强的超时检测
+                    // Start enhanced timeout check
                     startEnhancedTimeoutCheck()
                 } else {
                     handleHeartbeatError("Failed to send heartbeat")
@@ -248,19 +248,19 @@ class HeartbeatManager {
     }
 
     /**
-     * 启动心跳超时检测（简化版）
+     * Start heartbeat timeout check (simplified version)
      */
     private fun startEnhancedTimeoutCheck() {
-        // 取消之前的超时检测
+        // Cancel previous timeout check
         timeoutCheckJob?.cancel()
         
         timeoutCheckJob = CoroutineScope(heartbeatDispatcher).launch {
             val sentTime = lastSentTime
             
-            // 等待超时时间
+            // Wait for timeout duration
             delay(config.timeoutMs)
             
-            // 检查是否在超时时间内收到了响应
+            // Check if response was received within timeout period
             if (!hasReceivedResponseSince(sentTime)) {
                 LogUtil.w(TAG, "Heartbeat timeout detected: ${config.timeoutMs}ms")
                 handleHeartbeatTimeout()
@@ -269,19 +269,19 @@ class HeartbeatManager {
     }
 
     /**
-     * 检查是否在指定时间后收到了响应
+     * Check if response was received after specified time
      */
     private fun hasReceivedResponseSince(sentTime: Long): Boolean {
         return stats.lastReceivedTime > sentTime
     }
 
     /**
-     * 处理心跳超时
+     * Handle heartbeat timeout
      */
     private fun handleHeartbeatTimeout() {
         consecutiveFailures++
 
-        // 更新统计
+        // Update statistics
         stats = stats.copy(consecutiveFailures = consecutiveFailures)
 
         LogUtil.w(TAG, "Heartbeat timeout ($consecutiveFailures/${config.maxRetryCount})")
@@ -294,12 +294,12 @@ class HeartbeatManager {
     }
 
     /**
-     * 处理心跳错误
+     * Handle heartbeat error
      */
     private fun handleHeartbeatError(error: String) {
         consecutiveFailures++
 
-        // 更新统计
+        // Update statistics
         stats = stats.copy(consecutiveFailures = consecutiveFailures)
 
         LogUtil.w(TAG, "Heartbeat error ($consecutiveFailures/${config.maxRetryCount}): $error")
@@ -312,17 +312,17 @@ class HeartbeatManager {
     }
 
     /**
-     * 心跳配置
+     * Heartbeat configuration
      */
     data class HeartbeatConfig(
-        val intervalMs: Long = 5_000L,      // 5秒间隔
-        val timeoutMs: Long = 5_000L,      // 每次检测5秒超时
-        val maxRetryCount: Int = 3,         // 连续3次失败，总共15秒（3次 × 5秒）
-        val sendTimeoutMs: Long = 3_000L,   // 发送超时时间
+        val intervalMs: Long = 5_000L,      // 5 second interval
+        val timeoutMs: Long = 5_000L,      // 5 second timeout per check
+        val maxRetryCount: Int = 3,         // 3 consecutive failures, total 15 seconds (3 × 5 seconds)
+        val sendTimeoutMs: Long = 3_000L,   // Send timeout duration
         val message: String = "{\"type\":\"ping\",\"timestamp\":${System.currentTimeMillis()}}"
     ) {
         /**
-         * 验证配置是否有效
+         * Validate if configuration is valid
          *
          * @return true if valid, false otherwise
          */
@@ -337,7 +337,7 @@ class HeartbeatManager {
     }
 
     /**
-     * 心跳统计信息
+     * Heartbeat statistics
      */
     data class HeartbeatStats(
         val totalSent: Long = 0,
@@ -348,18 +348,18 @@ class HeartbeatManager {
         val averageResponseTime: Long = 0
     ) {
         /**
-         * 获取成功率
+         * Get success rate
          *
-         * @return 成功率（0.0 - 1.0）
+         * @return Success rate (0.0 - 1.0)
          */
         fun getSuccessRate(): Double {
             return if (totalSent > 0) totalReceived.toDouble() / totalSent.toDouble() else 0.0
         }
 
         /**
-         * 检查心跳是否健康
+         * Check if heartbeat is healthy
          *
-         * @param maxConsecutiveFailures 最大连续失败次数
+         * @param maxConsecutiveFailures Maximum consecutive failures
          * @return true if healthy, false otherwise
          */
         fun isHealthy(maxConsecutiveFailures: Int = 3): Boolean {
@@ -368,65 +368,65 @@ class HeartbeatManager {
     }
 
     /**
-     * 心跳监听器
+     * Heartbeat listener
      */
     interface HeartbeatListener {
         /**
-         * 心跳发送成功
+         * Heartbeat sent successfully
          *
-         * @param sentTime 发送时间
+         * @param sentTime Send time
          */
         fun onHeartbeatSent(sentTime: Long)
 
         /**
-         * 心跳响应接收
+         * Heartbeat response received
          *
-         * @param responseTime 响应时间
-         * @param roundTripTime 往返时间
+         * @param responseTime Response time
+         * @param roundTripTime Round trip time
          */
         fun onHeartbeatResponse(responseTime: Long, roundTripTime: Long)
 
         /**
-         * 心跳响应延迟警告
+         * Heartbeat response delay warning
          *
-         * @param timeoutMs 超时时间
-         * @param ratio 延迟比例（0.0-1.0）
+         * @param timeoutMs Timeout duration
+         * @param ratio Delay ratio (0.0-1.0)
          */
         fun onHeartbeatDelayed(timeoutMs: Long, ratio: Double) {}
 
         /**
-         * 心跳超时
+         * Heartbeat timeout
          *
-         * @param timeoutMs 超时时间
-         * @param consecutiveFailures 连续失败次数
+         * @param timeoutMs Timeout duration
+         * @param consecutiveFailures Consecutive failure count
          */
         fun onHeartbeatTimeout(timeoutMs: Long, consecutiveFailures: Int)
 
         /**
-         * 心跳失败
+         * Heartbeat failed
          *
-         * @param error 错误信息
-         * @param consecutiveFailures 连续失败次数
+         * @param error Error message
+         * @param consecutiveFailures Consecutive failure count
          */
         fun onHeartbeatFailed(error: String, consecutiveFailures: Int)
 
         /**
-         * 心跳配置更新
+         * Heartbeat configuration updated
          *
-         * @param oldConfig 旧配置
-         * @param newConfig 新配置
+         * @param oldConfig Old configuration
+         * @param newConfig New configuration
          */
         fun onConfigUpdated(oldConfig: HeartbeatConfig, newConfig: HeartbeatConfig)
     }
 
     /**
-     * 心跳发送器
+     * Heartbeat sender
      */
     interface HeartbeatSender {
         /**
-         * 发送心跳消息
+         * Send heartbeat message
          *
-         * @param message 心跳消息
+         * @param message Heartbeat message
          * @return true if sent successfully, false otherwise
          */
         suspend fun sendHeartbeat(message: String): Boolean

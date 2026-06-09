@@ -2,29 +2,29 @@ package com.sunmi.tapro.taplink.communication.protocol
 
 
 /**
- * USB AOA (Android Open Accessory) 协议常量
+ * USB AOA (Android Open Accessory) protocol constants
  *
- * 定义AOA协议的命令、常量等
+ * Defines AOA protocol commands, constants, etc.
  *
  * @author TaPro Team
- * @since 2025-01-XX
+ * @since 2025-01-01
  */
 object UsbStandardProtocol {
     /**
-     * AOA协议版本
+     * AOA protocol version
      */
     const val AOA_VERSION_1_0 = 1
     const val AOA_VERSION_2_0 = 2
 
     /**
-     * AOA协议命令
+     * AOA protocol commands
      */
     const val AOA_GET_PROTOCOL = 51
     const val AOA_SEND_STRING = 52
     const val AOA_START = 53
 
     /**
-     * AOA字符串索引
+     * AOA string indices
      */
     const val AOA_STRING_MANUFACTURER = 0
     const val AOA_STRING_MODEL = 1
@@ -49,7 +49,7 @@ object UsbStandardProtocol {
     const val AOA_PRODUCT_ID_ACCESSORY_AUDIO_ADB = 0x2D05
 
     /**
-     * USB控制传输请求类型
+     * USB control transfer request types
      */
     const val USB_DIR_OUT = 0x00
     const val USB_DIR_IN = 0x80
@@ -57,13 +57,13 @@ object UsbStandardProtocol {
     const val USB_RECIPIENT_DEVICE = 0x00
 
     /**
-     * USB控制传输请求类型组合
+     * USB control transfer request type combinations
      */
     const val USB_REQUEST_TYPE_OUT = USB_DIR_OUT or USB_TYPE_VENDOR or USB_RECIPIENT_DEVICE
     const val USB_REQUEST_TYPE_IN = USB_DIR_IN or USB_TYPE_VENDOR or USB_RECIPIENT_DEVICE
 
     /**
-     * 默认AOA字符串信息
+     * Default AOA string information
      */
     data class UsbStandardInfo(
         val manufacturer: String = "SUNMI",
@@ -75,11 +75,11 @@ object UsbStandardProtocol {
     )
 
     /**
-     * 构建AOA SEND_STRING命令数据
+     * Build AOA SEND_STRING command data
      */
     fun buildSendStringCommand(index: Int, string: String): ByteArray {
-        // AOA协议中，SEND_STRING命令的数据就是字符串本身（以null结尾）
-        // 索引通过控制传输的wIndex参数传递，不包含在数据中
+        // In AOA protocol, SEND_STRING command data is the string itself (null-terminated)
+        // Index is passed through control transfer's wIndex parameter, not included in data
         val stringBytes = string.toByteArray(Charsets.UTF_8)
         val data = ByteArray(stringBytes.size + 1) // +1 for null terminator
         System.arraycopy(stringBytes, 0, data, 0, stringBytes.size)
@@ -88,7 +88,7 @@ object UsbStandardProtocol {
     }
 
     /**
-     * 检查设备是否支持AOA协议
+     * Check if device supports AOA protocol
      */
     fun isAoaCompatible(vendorId: Int, productId: Int): Boolean {
         return vendorId == GOOGLE_VENDOR_ID &&
@@ -96,24 +96,24 @@ object UsbStandardProtocol {
     }
 
     /**
-     * 创建默认的AOA设备信息
+     * Create default AOA device information
      */
     fun createDefaultAoaDeviceInfo(): UsbStandardInfo {
         return UsbStandardInfo()
     }
 
     /**
-     * 发送完整的AOA协议序列
+     * Send complete AOA protocol sequence
      */
     fun sendAoaProtocolSequence(connection: android.hardware.usb.UsbDeviceConnection, deviceInfo: UsbStandardInfo): Boolean {
         return try {
-            // 1. 发送GET_PROTOCOL命令
+            // 1. Send GET_PROTOCOL command
             val protocolVersion = sendGetProtocol(connection)
             if (protocolVersion <= 0) {
                 return false
             }
 
-            // 2. 发送SEND_STRING命令序列
+            // 2. Send SEND_STRING command sequence
             val strings = listOf(
                 Pair(AOA_STRING_MANUFACTURER, deviceInfo.manufacturer),
                 Pair(AOA_STRING_MODEL, deviceInfo.model),
@@ -130,7 +130,7 @@ object UsbStandardProtocol {
                 Thread.sleep(10)
             }
 
-            // 3. 发送START命令
+            // 3. Send START command
             sendStart(connection)
         } catch (e: Exception) {
             false
@@ -138,7 +138,7 @@ object UsbStandardProtocol {
     }
 
     /**
-     * 发送GET_PROTOCOL命令
+     * Send GET_PROTOCOL command
      */
     private fun sendGetProtocol(connection: android.hardware.usb.UsbDeviceConnection): Int {
         return try {
@@ -164,7 +164,7 @@ object UsbStandardProtocol {
     }
 
     /**
-     * 发送SEND_STRING命令
+     * Send SEND_STRING command
      */
     private fun sendString(connection: android.hardware.usb.UsbDeviceConnection, index: Int, string: String): Boolean {
         return try {
@@ -185,7 +185,7 @@ object UsbStandardProtocol {
     }
 
     /**
-     * 发送START命令
+     * Send START command
      */
     private fun sendStart(connection: android.hardware.usb.UsbDeviceConnection): Boolean {
         return try {

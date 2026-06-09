@@ -1,12 +1,13 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
+import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 import java.math.BigDecimal
 
 /**
- * 交易请求验证器
+ * Transaction Request Validator
  *
- * 提供通用的验证方法，用于验证交易请求的各个字段
+ * Provides common validation methods for validating various fields of transaction requests
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -14,10 +15,10 @@ import java.math.BigDecimal
 object TransactionRequestValidator {
 
     /**
-     * 验证交易请求ID
+     * Validate transaction request ID
      *
-     * @param transactionRequestId 交易请求ID
-     * @return ValidationResult 验证结果
+     * @param transactionRequestId Transaction request ID
+     * @return ValidationResult validation result
      */
     fun validateTransactionRequestId(transactionRequestId: String?): ValidationResult {
         return if (transactionRequestId.isNullOrBlank()) {
@@ -28,10 +29,10 @@ object TransactionRequestValidator {
     }
 
     /**
-     * 验证参考订单号
+     * Validate reference order ID
      *
-     * @param referenceOrderId 参考订单号
-     * @return ValidationResult 验证结果
+     * @param referenceOrderId Reference order ID
+     * @return ValidationResult validation result
      */
     fun validateReferenceOrderId(referenceOrderId: String?): ValidationResult {
         return if (referenceOrderId.isNullOrBlank()) {
@@ -46,10 +47,10 @@ object TransactionRequestValidator {
     }
 
     /**
-     * 验证金额信息
+     * Validate amount information
      *
-     * @param amount 金额信息
-     * @return ValidationResult 验证结果
+     * @param amount Amount information
+     * @return ValidationResult validation result
      */
     fun validateAmount(amount: AmountInfo?): ValidationResult {
         return if (amount == null) {
@@ -62,10 +63,10 @@ object TransactionRequestValidator {
     }
 
     /**
-     * 验证描述信息
+     * Validate description information
      *
-     * @param description 描述信息
-     * @return ValidationResult 验证结果
+     * @param description Description information
+     * @return ValidationResult validation result
      */
     fun validateDescription(description: String?): ValidationResult {
         return if (description.isNullOrBlank()) {
@@ -78,11 +79,11 @@ object TransactionRequestValidator {
     }
 
     /**
-     * 验证原始交易引用
+     * Validate original transaction reference
      *
-     * @param originalTransactionId 原始交易ID
-     * @param originalTransactionRequestId 原始交易请求ID
-     * @return ValidationResult 验证结果
+     * @param originalTransactionId Original transaction ID
+     * @param originalTransactionRequestId Original transaction request ID
+     * @return ValidationResult validation result
      */
     fun validateOriginalTransactionReference(
         originalTransactionId: String?,
@@ -96,10 +97,10 @@ object TransactionRequestValidator {
     }
 
     /**
-     * 验证原始交易引用
+     * Validate original transaction reference
      *
-     * @param originalTransactionRequestId 原始交易请求ID
-     * @return ValidationResult 验证结果
+     * @param originalTransactionRequestId Original transaction request ID
+     * @return ValidationResult validation result
      */
     fun validateOriginalTransactionReference(
         originalTransactionRequestId: String?
@@ -112,24 +113,43 @@ object TransactionRequestValidator {
     }
 
     /**
-     * 验证小费金额
+     * Validate tip configuration and tip amount.
+     * - tipAmount must be non-negative when present
+     * - tipConfig is only valid when tipAmount is null
      *
-     * @param tipAmount 小费金额
-     * @return ValidationResult 验证结果
+     * @param tipAmount Tip amount from AmountInfo
+        * @param tipConfig Tip configuration from the transaction request
+     * @return ValidationResult validation result
      */
-    fun validateTipAmount(tipAmount: Long): ValidationResult {
-        return if (tipAmount < 0) {
-            ValidationResult.failure(ValidationError.InvalidTipAmount)
-        } else {
-            ValidationResult.success()
+    fun validateTipConfig(tipAmount: BigDecimal?, tipConfig: TipConfig?): ValidationResult {
+        // Validate tipAmount is non-negative when present
+        if (tipAmount != null && tipAmount < BigDecimal.ZERO) {
+            return ValidationResult.failure(ValidationError.InvalidTipAmount)
         }
+        if (tipConfig == null) {
+            return ValidationResult.success()
+        }
+        // tipConfig and tipAmount are mutually exclusive
+        if (tipAmount != null) {
+            return ValidationResult.failure(ValidationError.TipConfigConflict)
+        }
+        val suggestions = tipConfig.suggestions
+        if (suggestions != null) {
+            if (suggestions.values.isEmpty()) {
+                return ValidationResult.failure(ValidationError.TipConfigEmptySuggestionValues)
+            }
+            if (suggestions.values.any { it < 0 }) {
+                return ValidationResult.failure(ValidationError.TipConfigNegativeSuggestionValues)
+            }
+        }
+        return ValidationResult.success()
     }
 
     /**
-     * 合并多个验证结果
+     * Combine multiple validation results
      *
-     * @param results 验证结果列表
-     * @return ValidationResult 合并后的验证结果
+     * @param results Validation result list
+     * @return ValidationResult combined validation result
      */
     fun combineResults(vararg results: ValidationResult): ValidationResult {
         val allErrors = results.flatMap { it.errors }

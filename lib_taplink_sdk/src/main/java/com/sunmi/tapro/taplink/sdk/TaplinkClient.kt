@@ -12,23 +12,23 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.settlement.BatchClo
 import java.math.BigDecimal
 
 /**
- * Taplink 交易客户端类
+ * Taplink Transaction Client Class
  *
- * 专注于交易操作的客户端，通过 TaplinkSDK.getClient() 获取实例
- * 连接管理由 TaplinkSDK 负责，此类只提供交易功能
+ * Client focused on transaction operations, obtained via TaplinkSDK.getClient()
+ * Connection management is handled by TaplinkSDK, this class only provides transaction functionality
  *
- * 主要职责：
- * - 交易操作（sale、refund、void、auth等）
- * - 查询功能（交易查询、状态查询）
- * - 便捷交易方法
+ * Main responsibilities:
+ * - Transaction operations (sale, refund, void, auth, etc.)
+ * - Query functionality (transaction query, status query)
+ * - Convenient transaction methods
  *
- * 使用方式：
+ * Usage:
  * ```kotlin
- * // 1. 初始化SDK并建立连接
+ * // 1. Initialize SDK and establish connection
  * TaplinkSDK.init(context, config)
  * TaplinkSDK.connect(connectionConfig) { connected ->
  *     if (connected) {
- *         // 2. 获取客户端并执行交易
+ *         // 2. Get client and execute transaction
  *         val client = TaplinkSDK.getClient()
  *         client.quickSale(
  *             totalAmount = BigDecimal("10.00"),
@@ -39,34 +39,34 @@ import java.math.BigDecimal
  * }
  * ```
  *
- * 支持的交易类型：
- * - sale: 销售交易
- * - refund: 退款交易
- * - void: 撤销交易
- * - auth: 预授权
- * - postAuth: 预授权完成
- * - incrementalAuth: 预授权追加
- * - tipAdjust: 小费调整
- * - batchClose: 批次结算
- * - query: 查询交易
+ * Supported transaction types:
+ * - sale: Sales transaction
+ * - refund: Refund transaction
+ * - void: Void transaction
+ * - auth: Pre-authorization
+ * - postAuth: Pre-authorization completion
+ * - incrementalAuth: Incremental pre-authorization
+ * - tipAdjust: Tip adjustment
+ * - batchClose: Batch settlement
+ * - query: Transaction query
  *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 class TaplinkClient internal constructor(
     /**
-     * 内部使用的 API 实现
+     * Internal API implementation
      */
     private val apiImpl: TaplinkApiImpl
 ) {
 
-    // ==================== 新的类型安全交易方法 ====================
+    // ==================== New type-safe transaction methods ====================
 
     /**
-     * 销售交易（使用SaleRequest）
+     * Sales transaction (using SaleRequest)
      *
-     * @param request 销售请求对象
-     * @param callback 交易回调
+     * @param request Sales request object
+     * @param callback Transaction callback
      */
     fun sale(request: SaleRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertSaleRequest(request)
@@ -74,10 +74,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 预授权交易（使用AuthRequest）
+     * Pre-authorization transaction (using AuthRequest)
      *
-     * @param request 预授权请求对象
-     * @param callback 交易回调
+     * @param request Pre-authorization request object
+     * @param callback Transaction callback
      */
     fun auth(request: AuthRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertAuthRequest(request)
@@ -85,10 +85,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 强制预授权交易（使用ForcedAuthRequest）
+     * Forced pre-authorization transaction (using ForcedAuthRequest)
      *
-     * @param request 强制预授权请求对象
-     * @param callback 交易回调
+     * @param request Forced pre-authorization request object
+     * @param callback Transaction callback
      */
     fun forcedAuth(request: ForcedAuthRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertForcedAuthRequest(request)
@@ -96,10 +96,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 退款交易（使用RefundRequest）
+     * Refund transaction (using RefundRequest)
      *
-     * @param request 退款请求对象
-     * @param callback 交易回调
+     * @param request Refund request object
+     * @param callback Transaction callback
      */
     fun refund(request: RefundRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertRefundRequest(request)
@@ -107,10 +107,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 撤销交易（使用VoidRequest）
+     * Void transaction (using VoidRequest)
      *
-     * @param request 撤销请求对象
-     * @param callback 交易回调
+     * @param request Void request object
+     * @param callback Transaction callback
      */
     fun void(request: VoidRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertVoidRequest(request)
@@ -118,10 +118,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 预授权完成交易（使用PostAuthRequest）
+     * Pre-authorization completion transaction (using PostAuthRequest)
      *
-     * @param request 预授权完成请求对象
-     * @param callback 交易回调
+     * @param request Pre-authorization completion request object
+     * @param callback Transaction callback
      */
     fun postAuth(request: PostAuthRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertPostAuthRequest(request)
@@ -129,10 +129,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 增量预授权交易（使用IncrementalAuthRequest）
+     * Incremental pre-authorization transaction (using IncrementalAuthRequest)
      *
-     * @param request 增量预授权请求对象
-     * @param callback 交易回调
+     * @param request Incremental pre-authorization request object
+     * @param callback Transaction callback
      */
     fun incrementalAuth(request: IncrementalAuthRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertIncrementalAuthRequest(request)
@@ -140,10 +140,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 中止交易（使用AbortRequest）
+     * Abort transaction (using AbortRequest)
      *
-     * @param request 中止请求对象
-     * @param callback 交易回调
+     * @param request Abort request object
+     * @param callback Transaction callback
      */
     fun abort(request: AbortRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertAbortRequest(request)
@@ -151,10 +151,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 小费调整交易（使用TipAdjustRequest）
+     * Tip adjustment transaction (using TipAdjustRequest)
      *
-     * @param request 小费调整请求对象
-     * @param callback 交易回调
+     * @param request Tip adjustment request object
+     * @param callback Transaction callback
      */
     fun tipAdjust(request: TipAdjustRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertTipAdjustRequest(request)
@@ -162,10 +162,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 查询交易
+     * Transaction query
      *
-     * @param queryRequest 查询请求
-     * @param callback 查询回调
+     * @param queryRequest Query request
+     * @param callback Query callback
      */
     fun query(
         queryRequest: QueryRequest,
@@ -175,10 +175,10 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * 批次关闭（使用BatchCloseRequest）
+     * Batch close (using BatchCloseRequest)
      *
-     * @param request 批次关闭请求对象
-     * @param callback 交易回调
+     * @param request Batch close request object
+     * @param callback Transaction callback
      */
     fun batchClose(request: BatchCloseRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertBatchCloseRequest(request)
