@@ -75,6 +75,21 @@ sealed class PaymentEvent(
     object WaitingOnlineResponse : PaymentEvent("WAITING_RESPONSE", "Waiting for online response", 70)
 
     /**
+     * QR code displayed, waiting for customer to scan (MPM mode).
+     */
+    object WaitingQrScan : PaymentEvent("WAITING_QR_SCAN", "Waiting for customer to scan", 25)
+
+    /**
+     * Scanning customer QR code (CPM mode).
+     */
+    object ScanningCustomerQr : PaymentEvent("SCANNING_CUSTOMER_QR", "Scanning customer QR code", 25)
+
+    /**
+     * Customer QR code scanned, processing payment (CPM mode).
+     */
+    object QrPaymentProcessing : PaymentEvent("QR_PAYMENT_PROCESSING", "QR payment processing", 60)
+
+    /**
      * Printing event.
      */
     object Printing : PaymentEvent("PRINTING", "Printing receipt", 80)
@@ -117,6 +132,9 @@ sealed class PaymentEvent(
                 "WAITING_SIGNATURE" -> WaitingSignature
                 "PROCESSING" -> Processing
                 "WAITING_RESPONSE" -> WaitingOnlineResponse
+                "WAITING_QR_SCAN" -> WaitingQrScan
+                "SCANNING_CUSTOMER_QR" -> ScanningCustomerQr
+                "QR_PAYMENT_PROCESSING" -> QrPaymentProcessing
                 "PRINTING" -> Printing
                 "COMPLETED", "4003" -> Completed  // 4003 is the numeric code for completed event
                 "CANCEL" -> Cancel

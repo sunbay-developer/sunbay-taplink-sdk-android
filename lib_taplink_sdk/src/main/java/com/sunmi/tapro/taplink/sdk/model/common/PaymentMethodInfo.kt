@@ -1,5 +1,6 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonProperty
 
 /**
@@ -16,7 +17,7 @@ data class PaymentMethodInfo(
      * Values: CARD, EBT, QR-MPM, QR-CPM
      */
     @JsonProperty("category")
-    private val _category: String? = null,
+    val _category: String? = null,
 
     /**
      * Specific payment method ID (optional).
@@ -24,7 +25,7 @@ data class PaymentMethodInfo(
      * Values: VISA, MASTERCARD, EBT, DISCOVER, AMEX, JCB, UNIONPAY, DANA, DINERSCLUB, WECHAT_PAY, ALIPAY
      */
     @JsonProperty("id")
-    private val _id: String? = null,
+    val _id: String? = null,
 
     /**
      * Payment method sub-ID (optional).
@@ -32,11 +33,12 @@ data class PaymentMethodInfo(
      * Can only be specified when category = EBT and id = EBT; in that case valid values are SNAP, VOUCHER, BENEFIT.
      */
     @JsonProperty("subId")
-    private val _subId: String? = null
+    val _subId: String? = null
 ) {
     /**
      * Payment method category (enum type).
      */
+    @get:JsonIgnore
     @delegate:Transient
     val category: PaymentCategory? by lazy {
         PaymentCategory.fromString(_category)
@@ -46,6 +48,7 @@ data class PaymentMethodInfo(
      * Payment method ID (enum type).
      * Must not be specified when category = CARD; the system will automatically identify the payment method.
      */
+    @get:JsonIgnore
     @delegate:Transient
     val id: PaymentMethodId? by lazy {
         PaymentMethodId.fromString(_id)
@@ -56,6 +59,7 @@ data class PaymentMethodInfo(
      * Must not be specified when category = CARD.
      * Can only be specified when category = EBT and id = EBT; valid values are SNAP, VOUCHER, BENEFIT.
      */
+    @get:JsonIgnore
     @delegate:Transient
     val subId: PaymentMethodSubId? by lazy {
         PaymentMethodSubId.fromString(_subId)
@@ -131,15 +135,18 @@ data class PaymentMethodInfo(
     /**
      * Gets the category string for API transmission.
      */
+    @JsonIgnore
     fun getCategoryString(): String? = _category
 
     /**
      * Gets the ID string for API transmission.
      */
+    @JsonIgnore
     fun getIdString(): String? = _id
 
     /**
      * Gets the sub-ID string for API transmission.
      */
+    @JsonIgnore
     fun getSubIdString(): String? = _subId
 }

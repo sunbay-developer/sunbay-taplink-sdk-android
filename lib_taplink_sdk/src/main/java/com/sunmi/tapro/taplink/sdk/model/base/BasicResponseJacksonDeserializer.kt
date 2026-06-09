@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.JsonDeserializer
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 
 /**
@@ -13,9 +12,9 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
  * Handles mapping of flat eventCode / eventMsg JSON fields → [PaymentEvent] sealed class.
  * bizData is kept as a raw JSON string so downstream code can use its own mapper.
  *
- * Replaces the previous Gson-based BasicResponseTypeAdapter.
+ * Supports both integer (e.g., 4003) and string (e.g., "COMPLETED") eventCode values.
  */
-class BasicResponseTypeAdapter : JsonDeserializer<BasicResponse>() {
+class BasicResponseJacksonDeserializer : JsonDeserializer<BasicResponse>() {
 
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): BasicResponse {
         val node: JsonNode = p.codec.readTree(p)

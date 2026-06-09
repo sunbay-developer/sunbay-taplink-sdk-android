@@ -8,7 +8,7 @@ plugins {
 object SdkVersion {
     const val CODE = 14
 
-    const val NAME = "1.0.7.1"
+    const val NAME = "1.0.7.8"
 }
 
 object BuildConfig {
@@ -126,3 +126,6 @@ afterEvaluate {
         }
     }
 }
+
+// Apply publish script for Maven Central deployment
+apply(from = "sdk_publish.gradle")

@@ -10,7 +10,7 @@ import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.model.base.BasicResponse
-import com.sunmi.tapro.taplink.sdk.model.base.BasicResponseTypeAdapter
+import com.sunmi.tapro.taplink.sdk.model.base.BasicResponseJacksonDeserializer
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
@@ -40,7 +40,7 @@ class ResponseProcessor {
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .also { om ->
             val module = com.fasterxml.jackson.databind.module.SimpleModule()
-            module.addDeserializer(BasicResponse::class.java, BasicResponseTypeAdapter())
+            module.addDeserializer(BasicResponse::class.java, BasicResponseJacksonDeserializer())
             om.registerModule(module)
         }
 
