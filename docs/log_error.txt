@@ -1,0 +1,455 @@
+---------------------------- PROCESS ENDED (14156) for package com.sunmi.tapro.taplink.demo ----------------------------
+---------------------------- PROCESS STARTED (14436) for package com.sunmi.tapro.taplink.demo ----------------------------
+2026-01-11 23:10:15.236 14436 ziparchive      com...apro.taplink.demo  W  Unable to open '/data/data/com.sunmi.tapro.taplink.demo/code_cache/.overlay/base.apk/classes.dm': No such file or directory
+2026-01-11 23:10:15.399 14436 ziparchive      com...apro.taplink.demo  W  Unable to open '/data/app/~~8-DMIDJbttrwsOu63RVomQ==/com.sunmi.tapro.taplink.demo-4ixRpBLwh1eUYfAGX8FqmA==/base.dm': No such file or directory
+2026-01-11 23:10:15.399 14436 ziparchive      com...apro.taplink.demo  W  Unable to open '/data/app/~~8-DMIDJbttrwsOu63RVomQ==/com.sunmi.tapro.taplink.demo-4ixRpBLwh1eUYfAGX8FqmA==/base.dm': No such file or directory
+2026-01-11 23:10:15.799 14436 nativeloader    com...apro.taplink.demo  D  Configuring clns-6 for other apk /data/app/~~8-DMIDJbttrwsOu63RVomQ==/com.sunmi.tapro.taplink.demo-4ixRpBLwh1eUYfAGX8FqmA==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~8-DMIDJbttrwsOu63RVomQ==/com.sunmi.tapro.taplink.demo-4ixRpBLwh1eUYfAGX8FqmA==/lib/arm64, permitted_path=/data:/mnt/expand:/data/user/0/com.sunmi.tapro.taplink.demo
+2026-01-11 23:10:15.846 14436 Graphi...onment com...apro.taplink.demo  V  Currently set values for:
+2026-01-11 23:10:15.847 14436 Graphi...onment com...apro.taplink.demo  V    angle_gl_driver_selection_pkgs=[]
+2026-01-11 23:10:15.847 14436 Graphi...onment com...apro.taplink.demo  V    angle_gl_driver_selection_values=[]
+2026-01-11 23:10:15.849 14436 Graphi...onment com...apro.taplink.demo  V  ANGLE GameManagerService for com.sunmi.tapro.taplink.demo: false
+2026-01-11 23:10:15.850 14436 Graphi...onment com...apro.taplink.demo  V  com.sunmi.tapro.taplink.demo is not listed in per-application setting
+2026-01-11 23:10:15.850 14436 Graphi...onment com...apro.taplink.demo  V  Neither updatable production driver nor prerelease driver is supported.
+2026-01-11 23:10:15.871 14436 LoadedApk       com...apro.taplink.demo  I  No resource references to update in package com.sunmi
+2026-01-11 23:10:15.904 14436 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 183155436; UID 10158; state: ENABLED
+2026-01-11 23:10:15.990 14436 Mbrain...erImpl com...apro.taplink.demo  D  getService failed
+2026-01-11 23:10:16.013 14436 TaplinkDemoApp  com...apro.taplink.demo  D  === Application Started ===
+2026-01-11 23:10:16.013 14436 TaplinkDemoApp  com...apro.taplink.demo  D  === Taplink SDK Initialization Started ===
+2026-01-11 23:10:16.014 14436 TaplinkDemoApp  com...apro.taplink.demo  D  === SDK Init Request Parameters ===
+2026-01-11 23:10:16.015 14436 TaplinkDemoApp  com...apro.taplink.demo  D  App ID: sm6par3xf4d3tkum
+2026-01-11 23:10:16.015 14436 TaplinkDemoApp  com...apro.taplink.demo  D  Merchant ID: M1254947005
+2026-01-11 23:10:16.052 14436 TaplinkDemoApp  com...apro.taplink.demo  D  Secret Key: your****_key
+2026-01-11 23:10:16.055 14436 TaplinkDemoApp  com...apro.taplink.demo  D  === Calling TaplinkSDK.init() ===
+2026-01-11 23:10:16.062 14436 TaplinkApiImpl  com...apro.taplink.demo  D  [ (TaplinkApiImpl.kt:56)#<init> ] TaplinkApiImpl initialized
+2026-01-11 23:10:16.066 14436 TaplinkApiImpl  com...apro.taplink.demo  D  [ (TaplinkApiImpl.kt:62)#Init ] Initializing SDK with appId: sm6par3xf4d3tkum
+2026-01-11 23:10:16.192 14436 Respon...cessor com...apro.taplink.demo  D  [ (ResponseProcessor.kt:41)#<init> ] ResponseProcessor initialized
+2026-01-11 23:10:16.193 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:145)#<init> ] ConnectionManager initialized
+2026-01-11 23:10:16.201 14436 Respon...cessor com...apro.taplink.demo  D  [ (ResponseProcessor.kt:41)#<init> ] ResponseProcessor initialized
+2026-01-11 23:10:16.209 14436 PaymentManager  com...apro.taplink.demo  D  [ (PaymentManager.kt:72)#<init> ] PaymentManager initialized
+2026-01-11 23:10:16.218 14436 Taplin...Kernel com...apro.taplink.demo  D  [ (TaplinkServiceKernel.kt:43)#<init> ] TaplinkServiceKernel initialized
+2026-01-11 23:10:16.219 14436 TaplinkDemoApp  com...apro.taplink.demo  D  === Taplink SDK Initialization Response ===
+2026-01-11 23:10:16.219 14436 TaplinkDemoApp  com...apro.taplink.demo  D  Status: SUCCESS
+2026-01-11 23:10:16.219 14436 TaplinkDemoApp  com...apro.taplink.demo  D  SDK Version: 1.0.7.10
+2026-01-11 23:10:16.234 14436 M-ProMotion     com...apro.taplink.demo  I  M-ProMotion is disabled
+2026-01-11 23:10:16.390 14436 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 171228096; UID 10158; state: ENABLED
+2026-01-11 23:10:16.419 14436 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 210923482; UID 10158; state: ENABLED
+2026-01-11 23:10:16.718 14436 Taplin...ervice com...apro.taplink.demo  D  Current mode set to: LAN
+2026-01-11 23:10:16.727 14436 Taplin...ervice com...apro.taplink.demo  D  Attempting auto-connect with mode: LAN
+2026-01-11 23:10:16.729 14436 Taplin...ervice com...apro.taplink.demo  D  === connect() called ===
+2026-01-11 23:10:16.729 14436 Taplin...ervice com...apro.taplink.demo  D  ConnectionListener set: true
+2026-01-11 23:10:16.730 14436 Taplin...ervice com...apro.taplink.demo  D  Connecting with provided ConnectionConfig: ConnectionConfig(connectionMode=LAN, cableProtocol=null, host=192.168.1.97, port=8444, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-11 23:10:16.731 14436 Taplin...ervice com...apro.taplink.demo  D  Calling TaplinkSDK.connect() with provided config: ConnectionConfig(connectionMode=LAN, cableProtocol=null, host=192.168.1.97, port=8444, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-11 23:10:16.756 14436 Connec...stence com...apro.taplink.demo  D  [ (ConnectionPersistence.kt:135)#GetLastConnectionConfig ] Retrieved last connection config: {"autoReconnect":false,"connectionMode":"LAN","connectionTimeout":60,"host":"192.168.1.97","maxRetryCount":3,"port":8444,"retryDelayMs":2000}
+2026-01-11 23:10:16.757 14436 Reconn...anager com...apro.taplink.demo  D  [ (ReconnectManager.kt:351)#GetLastConnectionConfig ] Using persistent connection config
+2026-01-11 23:10:16.758 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:162)#Connect ] ========actualConfig:ConnectionConfig(connectionMode=LAN, cableProtocol=null, host=192.168.1.97, port=8444, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms),oldConfig:ConnectionConfig(connectionMode=LAN, cableProtocol=null, host=192.168.1.97, port=8444, connectionTimeout=60s, autoReconnect=false, maxRetryCount=3, retryDelayMs=2000ms)
+2026-01-11 23:10:16.759 14436 Reconn...anager com...apro.taplink.demo  D  [ (ReconnectManager.kt:83)#PrepareConnect ] Preparing connection, resetting reconnect state
+2026-01-11 23:10:16.760 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:841)#UpdateConnectionStatus ] Connection status changed: DISCONNECTED -> CONNECTING
+2026-01-11 23:10:16.762 14436 Connec...anager com...apro.taplink.demo  I  [ (ConnectionManager.kt:877)#UpdateConnectionStatus ] do not need callback
+2026-01-11 23:10:16.775 14436 Taplin...Kernel com...apro.taplink.demo  D  [ (TaplinkServiceKernel.kt:183)#CreateServiceKernel ] Creating LAN service
+2026-01-11 23:10:16.831 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:319)#SetConnectionListener ] Connection listener set
+2026-01-11 23:10:16.832 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:314)#SetMessageListener ] Message listener set
+2026-01-11 23:10:16.833 14436 tag             com...apro.taplink.demo  I  [ (AsyncServiceKernel.kt:48)#Connect ] =======AsyncServiceKernel:::connect:protocol:ws://192.168.1.97:8444
+2026-01-11 23:10:16.834 14436 LanClientKernel com...apro.taplink.demo  D  [ (AsyncServiceKernel.kt:59)#Connect ] Starting connection with protocol: ws://192.168.1.97:8444
+2026-01-11 23:10:16.835 14436 LanClientKernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: DISCONNECTED -> CONNECTING
+2026-01-11 23:10:16.836 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1278)#SetupKernelStatusListener ] Kernel status listener setup successfully
+2026-01-11 23:10:16.837 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:841)#UpdateConnectionStatus ] Connection status changed: CONNECTING -> WAIT_CONNECTING
+2026-01-11 23:10:16.837 14436 Connec...anager com...apro.taplink.demo  I  [ (ConnectionManager.kt:877)#UpdateConnectionStatus ] do not need callback
+2026-01-11 23:10:16.864 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:624)#SetConnectionListener ] Setting connection listener
+2026-01-11 23:10:16.864 14436 MainActivity    com...apro.taplink.demo  D  MainActivity initialization completed
+2026-01-11 23:10:16.868 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:167)#AddCallback ] Added callback for operation: CONNECT (1768144216867_1)
+2026-01-11 23:10:16.870 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:291)#ExecuteConnectionOperation ] Starting CONNECT operation: 1768144216867_1
+2026-01-11 23:10:16.871 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:387)#InvokeSuspend ] Performing LAN connection to: 192.168.1.97:8444 (1768144216867_1)
+2026-01-11 23:10:16.888 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:85)#InvokeSuspend ] Attempting to connect to: ws://192.168.1.97:8444
+2026-01-11 23:10:16.902 14436 SurfaceFactory  com...apro.taplink.demo  I  [static] sSurfaceFactory = com.mediatek.view.impl.SurfaceFactoryImpl@e21abae
+2026-01-11 23:10:16.906 14436 PowerHalWrapper com...apro.taplink.demo  I  PowerHalWrapper.getInstance 
+2026-01-11 23:10:16.910 14436 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 237531167; UID 10158; state: DISABLED
+2026-01-11 23:10:16.920 14436 OpenGLRenderer  com...apro.taplink.demo  W  Unknown dataspace 0
+2026-01-11 23:10:16.927 14436 VRI[Ma...ivity] com...apro.taplink.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-11 23:10:16.936 14436 System.err      com...apro.taplink.demo  W  SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+2026-01-11 23:10:16.937 14436 System.err      com...apro.taplink.demo  W  SLF4J: Defaulting to no-operation (NOP) logger implementation
+2026-01-11 23:10:16.937 14436 System.err      com...apro.taplink.demo  W  SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+2026-01-11 23:10:16.944 14436 InputTransport  com...apro.taplink.demo  D  Create ARC handle: 0xb4000077452ca030
+2026-01-11 23:10:16.944 14436 InputE...ceiver com...apro.taplink.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-11 23:10:16.944 14436 InputTransport  com...apro.taplink.demo  D  Input log is disabled in InputChannel.
+2026-01-11 23:10:16.949 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:125)#InvokeSuspend ] Using connection timeout: 15000ms for ws://192.168.1.97:8444
+2026-01-11 23:10:16.950 14436 TrafficStats    com...apro.taplink.demo  D  tagSocket(93) with statsTag=0xffffffff, statsUid=-1
+2026-01-11 23:10:16.952 14436 Choreographer   com...apro.taplink.demo  I  Skipped 53 frames!  The application may be doing too much work on its main thread.
+2026-01-11 23:10:17.108 14436 Connec...anager com...apro.taplink.demo  E  [ (ConnectionManager.kt:366)#OnError ] WebSocket error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.112 14436 LanClientKernel com...apro.taplink.demo  E  [ (LanClientKernel.kt:898)#InvokeSuspend ] LAN connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.112 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:348)#OnClose ] WebSocket connection closed: code=-1, reason=failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused), remote=false
+2026-01-11 23:10:17.113 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:337)#UpdateStatusSafely ] Status update: CONNECTING -> ERROR
+2026-01-11 23:10:17.114 14436 LanClientKernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: CONNECTING -> ERROR
+2026-01-11 23:10:17.115 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1267)#SetupKernelStatusListener$lambda$10 ] Kernel status changed: ERROR -> syncing to ConnectionManager: ERROR (was: WAIT_CONNECTING)
+2026-01-11 23:10:17.116 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:847)#InvokeSuspend ] LAN connection closed: code=-1, reason=failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused), remote=false, isManual=false
+2026-01-11 23:10:17.116 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1139)#StopHeartbeat ] Heartbeat stopped
+2026-01-11 23:10:17.130 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:197)#NotifyError ] Notifying 1 callbacks of connection error
+2026-01-11 23:10:17.132 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:337)#UpdateStatusSafely ] Status update: ERROR -> DISCONNECTED
+2026-01-11 23:10:17.133 14436 LanClientKernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: ERROR -> DISCONNECTED
+2026-01-11 23:10:17.134 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1267)#SetupKernelStatusListener$lambda$10 ] Kernel status changed: DISCONNECTED -> syncing to ConnectionManager: DISCONNECTED (was: ERROR)
+2026-01-11 23:10:17.174 14436 Connec...anager com...apro.taplink.demo  E  [ (ConnectionManager.kt:152)#InvokeSuspend ] Failed to connect to ws://192.168.1.97:8444: Connection closed during handshake
+2026-01-11 23:10:17.175 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:333)#Cleanup ] Resources cleaned up
+2026-01-11 23:10:17.177 14436 LanClientKernel com...apro.taplink.demo  W  [ (LanClientKernel.kt:433)#InvokeSuspend ] Direct connection failed: Connection failed: Connection closed during handshake (1768144216867_1)
+2026-01-11 23:10:17.178 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:482)#TryServiceDiscoveryForOperation ] Starting service discovery for operation: 1768144216867_1
+2026-01-11 23:10:17.180 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:55)#InvokeSuspend ] Starting service discovery for: _taplink._tcp
+2026-01-11 23:10:17.190 14436 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 270306772; UID 10158; state: ENABLED
+2026-01-11 23:10:17.194 14436 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 235355681; UID 10158; state: ENABLED
+2026-01-11 23:10:17.207 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:155)#OnDiscoveryStarted ] Discovery started: _taplink._tcp
+2026-01-11 23:10:17.227 14436 PaymentManager  com...apro.taplink.demo  W  [ (PaymentManager.kt:453)#FailAllPendingTransactions ] Failing all pending transactions: T04 - Connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.231 14436 Buffer...nsumer com...apro.taplink.demo  D  [](id:386400000000,api:0,p:-1,c:14436) connect: controlledByApp=false
+2026-01-11 23:10:17.238 14436 FBI             com...apro.taplink.demo  E  Can't load library: dlopen failed: library "libmagtsync.so" not found
+2026-01-11 23:10:17.244 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:841)#UpdateConnectionStatus ] Connection status changed: DISCONNECTED -> ERROR
+2026-01-11 23:10:17.244 14436 Taplin...ervice com...apro.taplink.demo  E  Connection error - Code: T04, Message: Connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.244 14436 Taplin...ervice com...apro.taplink.demo  E  Connection error - Code: T04, Message: Connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.245 14436 com.sunmi.cb    com...apro.taplink.demo  E  ===========onError======T04,Connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.246 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1358)#SyncStatusFromKernel ] Syncing status from kernel: DISCONNECTED -> DISCONNECTED (was: ERROR)
+2026-01-11 23:10:17.247 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:202)#NotifyError ] Notified CONNECT callback of error
+2026-01-11 23:10:17.248 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:197)#NotifyError ] Notifying 0 callbacks of connection error
+2026-01-11 23:10:17.250 14436 PaymentManager  com...apro.taplink.demo  W  [ (PaymentManager.kt:453)#FailAllPendingTransactions ] Failing all pending transactions: T06 - Connection disconnected:Passive disconnect, failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)(-1)
+2026-01-11 23:10:17.251 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:841)#UpdateConnectionStatus ] Connection status changed: DISCONNECTED -> ERROR
+2026-01-11 23:10:17.251 14436 Taplin...ervice com...apro.taplink.demo  E  Connection error - Code: T06, Message: Connection disconnected:Passive disconnect, failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)(-1)
+2026-01-11 23:10:17.251 14436 Taplin...ervice com...apro.taplink.demo  E  Connection error - Code: T06, Message: Connection disconnected:Passive disconnect, failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)(-1)
+2026-01-11 23:10:17.252 14436 com.sunmi.cb    com...apro.taplink.demo  E  ===========onError======T06,Connection disconnected:Passive disconnect, failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)(-1)
+2026-01-11 23:10:17.253 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1358)#SyncStatusFromKernel ] Syncing status from kernel: DISCONNECTED -> DISCONNECTED (was: ERROR)
+2026-01-11 23:10:17.256 14436 LanClientKernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: DISCONNECTED -> ERROR
+2026-01-11 23:10:17.257 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1267)#SetupKernelStatusListener$lambda$10 ] Kernel status changed: ERROR -> syncing to ConnectionManager: ERROR (was: DISCONNECTED)
+2026-01-11 23:10:17.259 14436 PaymentManager  com...apro.taplink.demo  W  [ (PaymentManager.kt:453)#FailAllPendingTransactions ] Failing all pending transactions: T04 - WebSocket connection failed (LAN mode):Connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.259 14436 Taplin...ervice com...apro.taplink.demo  E  Connection error - Code: T04, Message: WebSocket connection failed (LAN mode):Connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.260 14436 Taplin...ervice com...apro.taplink.demo  E  Connection error - Code: T04, Message: WebSocket connection failed (LAN mode):Connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.260 14436 com.sunmi.cb    com...apro.taplink.demo  E  ===========onError======T04,WebSocket connection failed (LAN mode):Connection error: failed to connect to /192.168.1.97 (port 8444) from /:: (port 56436): connect failed: ECONNREFUSED (Connection refused)
+2026-01-11 23:10:17.281 14436 OpenGLRenderer  com...apro.taplink.demo  E  Unable to match the desired swap behavior.
+2026-01-11 23:10:17.292 14436 ion             com...apro.taplink.demo  E  ioctl c0044901 failed with code -1: Invalid argument
+2026-01-11 23:10:17.475 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:165)#OnServiceFound ] Service found: Taplink-Server-P303D3BM10048, host=null, port=0
+2026-01-11 23:10:17.477 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:182)#OnServiceFound ] Starting to resolve service: Taplink-Server-P303D3BM10048
+2026-01-11 23:10:17.489 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:269)#OnServiceResolved ] Service resolved: Taplink-Server-P303D3BM10048
+2026-01-11 23:10:17.498 14436 Servic...anager com...apro.taplink.demo  I  [ (ServiceDiscoveryManager.kt:225)#InvokeSuspend ] New service discovered: Taplink-Server-P303D3BM10048 at 192.168.1.97:8443
+2026-01-11 23:10:17.528 14436 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[MainActivity]#0](f:0,a:1) acquireNextBufferLocked size=720x1600 mFrameNumber=1 applyTransaction=true mTimestamp=52155628294029(auto) mPendingTransactions.size=0 graphicBufferId=62002147885060 transform=0
+2026-01-11 23:10:17.537 14436 Choreographer   com...apro.taplink.demo  I  Skipped 33 frames!  The application may be doing too much work on its main thread.
+2026-01-11 23:10:17.548 14436 OpenGLRenderer  com...apro.taplink.demo  I  Davey! duration=1516ms; Flags=1, FrameTimelineVsyncId=224076, IntendedVsync=52154112047556, Vsync=52155052049249, InputEventId=0, HandleInputStart=52155055391798, AnimationStart=52155055485106, PerformTraversalsStart=52155056528183, DrawStart=52155531574952, FrameDeadline=52154132047556, FrameInterval=52155053114567, FrameStartTime=17735881, SyncQueued=52155572930644, SyncStart=52155577274952, IssueDrawCommandsStart=52155579183798, SwapBuffers=52155623958567, FrameCompleted=52155632852798, DequeueBufferDuration=0, QueueBufferDuration=1192616, GpuCompleted=52155632852798, SwapBuffersCompleted=52155630414952, DisplayPresentTime=0, CommandSubmissionCompleted=52155623958567, 
+2026-01-11 23:10:17.731 14436 VRI[Ma...ivity] com...apro.taplink.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-11 23:10:17.750 14436 InputTransport  com...apro.taplink.demo  D  Create ARC handle: 0xb4000077452d7410
+2026-01-11 23:10:17.751 14436 InputE...ceiver com...apro.taplink.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-11 23:10:17.751 14436 InputTransport  com...apro.taplink.demo  D  Input log is disabled in InputChannel.
+2026-01-11 23:10:17.763 14436 View            com...apro.taplink.demo  D  [Warning] assignParent to null: this = DecorView@6c5e97d[MainActivity]
+2026-01-11 23:10:17.781 14436 InputTransport  com...apro.taplink.demo  D  Destroy ARC handle: 0xb4000077452d7410
+2026-01-11 23:10:17.877 14436 VRI[Ma...ivity] com...apro.taplink.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-11 23:10:17.894 14436 InputTransport  com...apro.taplink.demo  D  Create ARC handle: 0xb4000077452e1fd0
+2026-01-11 23:10:17.894 14436 InputE...ceiver com...apro.taplink.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-11 23:10:17.894 14436 InputTransport  com...apro.taplink.demo  D  Input log is disabled in InputChannel.
+2026-01-11 23:10:17.900 14436 View            com...apro.taplink.demo  D  [Warning] assignParent to null: this = DecorView@d3ce5b1[MainActivity]
+2026-01-11 23:10:17.911 14436 InputTransport  com...apro.taplink.demo  D  Destroy ARC handle: 0xb4000077452e1fd0
+2026-01-11 23:10:17.993 14436 VRI[Ma...ivity] com...apro.taplink.demo  D  hardware acceleration = true, forceHwAccelerated = false
+2026-01-11 23:10:18.011 14436 InputTransport  com...apro.taplink.demo  D  Create ARC handle: 0xb4000077452d7320
+2026-01-11 23:10:18.011 14436 InputE...ceiver com...apro.taplink.demo  D  Input log is disabled in InputEventReceiver.
+2026-01-11 23:10:18.011 14436 InputTransport  com...apro.taplink.demo  D  Input log is disabled in InputChannel.
+2026-01-11 23:10:18.125 14436 Buffer...nsumer com...apro.taplink.demo  D  [](id:386400000001,api:0,p:-1,c:14436) connect: controlledByApp=false
+2026-01-11 23:10:18.133 14436 OpenGLRenderer  com...apro.taplink.demo  E  Unable to match the desired swap behavior.
+2026-01-11 23:10:18.183 14436 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[MainActivity]#1](f:0,a:1) acquireNextBufferLocked size=792x522 mFrameNumber=1 applyTransaction=true mTimestamp=52156284138952(auto) mPendingTransactions.size=0 graphicBufferId=62002147885067 transform=0
+2026-01-11 23:10:18.300 14436 ro.taplink.demo com...apro.taplink.demo  I  Compiler allocated 4271KB to compile void android.widget.TextView.<init>(android.content.Context, android.util.AttributeSet, int, int)
+2026-01-11 23:10:19.576 14436 ro.taplink.demo com...apro.taplink.demo  I  Compiler allocated 6480KB to compile void android.view.ViewRootImpl.performTraversals()
+2026-01-11 23:10:22.788 14436 Profil...taller com...apro.taplink.demo  D  Installing profile for com.sunmi.tapro.taplink.demo
+2026-01-11 23:10:47.204 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:76)#InvokeSuspend ] Discovery completed, found 1 services
+2026-01-11 23:10:47.206 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:489)#TryServiceDiscoveryForOperation ] Found 1 services for operation: 1768144216867_1 (attempt 1)
+2026-01-11 23:10:47.209 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:160)#OnDiscoveryStopped ] Discovery stopped: _taplink._tcp
+2026-01-11 23:10:47.210 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:634)#TryConnectToDiscoveredServices ] Trying direct connection to 192.168.1.97:8443 (1768144216867_1)
+2026-01-11 23:10:47.213 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:85)#InvokeSuspend ] Attempting to connect to: ws://192.168.1.97:8443
+2026-01-11 23:10:47.220 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:125)#InvokeSuspend ] Using connection timeout: 15000ms for ws://192.168.1.97:8443
+2026-01-11 23:10:47.220 14436 TrafficStats    com...apro.taplink.demo  D  tagSocket(5) with statsTag=0xffffffff, statsUid=-1
+2026-01-11 23:10:47.426 14436 Compat...porter com...apro.taplink.demo  D  Compat change id reported: 247079863; UID 10158; state: ENABLED
+2026-01-11 23:10:47.443 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:342)#OnOpen ] WebSocket connection opened: ws://192.168.1.97:8443
+2026-01-11 23:10:47.449 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:805)#InvokeSuspend ] LAN connection established
+2026-01-11 23:10:47.451 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:337)#UpdateStatusSafely ] Status update: ERROR -> CONNECTED
+2026-01-11 23:10:47.452 14436 LanClientKernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:71)#LogStatusChange ] Status changed: ERROR -> CONNECTED
+2026-01-11 23:10:47.453 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1267)#SetupKernelStatusListener$lambda$10 ] Kernel status changed: CONNECTED -> syncing to ConnectionManager: CONNECTED (was: ERROR)
+2026-01-11 23:10:47.455 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:823)#InvokeSuspend ] Created ServiceInfo for direct connection: 192.168.1.97:8444
+2026-01-11 23:10:47.457 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:157)#SetHeartbeatListener ] Heartbeat listener set
+2026-01-11 23:10:47.458 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:67)#StartHeartbeat ] Starting heartbeat with interval: 5000ms, timeout: 5000ms
+2026-01-11 23:10:47.462 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1127)#StartHeartbeat ] Heartbeat started
+2026-01-11 23:10:47.463 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:961)#StartServiceMonitoring ] Starting service monitoring
+2026-01-11 23:10:47.465 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:94)#StartServiceMonitoring ] Starting service monitoring for: _taplink._tcp
+2026-01-11 23:10:47.468 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1044)#OnDiscoveryStarted ] Service monitoring started for: _taplink._tcp
+2026-01-11 23:10:47.471 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:182)#NotifyConnected ] Notifying 0 callbacks of connection success
+2026-01-11 23:10:47.472 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:1278)#SetupKernelStatusListener ] Kernel status listener setup successfully
+2026-01-11 23:10:47.474 14436 LanClientKernel com...apro.taplink.demo  D  [ (BaseServiceKernel.kt:139)#RegisterDataReceiver ] Data receiver registered
+2026-01-11 23:10:47.475 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:676)#SendInitCommand ] Sending INIT command to initialize tapro application
+2026-01-11 23:10:47.477 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:155)#OnDiscoveryStarted ] Discovery started: _taplink._tcp
+2026-01-11 23:10:47.535 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:143)#InvokeSuspend ] Successfully connected to ws://192.168.1.97:8443
+2026-01-11 23:10:47.537 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:640)#TryConnectToDiscoveredServices ] Connection successful to 192.168.1.97:8443 (1768144216867_1)
+2026-01-11 23:10:47.539 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:313)#ExecuteConnectionOperation ] Completed CONNECT operation: 1768144216867_1
+2026-01-11 23:10:47.565 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:165)#OnServiceFound ] Service found: Taplink-Server-P303D3BM10048, host=null, port=0
+2026-01-11 23:10:47.566 14436 Servic...anager com...apro.taplink.demo  I  [ (ServiceDiscoveryManager.kt:172)#OnServiceFound ] Service Taplink-Server-P303D3BM10048 already exists, but received onServiceFound again - may be re-registered, allowing re-resolution to detect address changes
+2026-01-11 23:10:47.567 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:182)#OnServiceFound ] Starting to resolve service: Taplink-Server-P303D3BM10048
+2026-01-11 23:10:47.574 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:269)#OnServiceResolved ] Service resolved: Taplink-Server-P303D3BM10048
+2026-01-11 23:10:47.578 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:243)#InvokeSuspend ] Service found again with same info: Taplink-Server-P303D3BM10048 at 192.168.1.97:8443
+2026-01-11 23:10:47.611 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:693)#SendInitCommand ] INIT command prepared: traceId=33faa17a11694f1ca4fe232f1b63b09e
+2026-01-11 23:10:47.614 14436 Connec...anager com...apro.taplink.demo  D  [ (LocalCallbackManager.kt:93)#AddCallbackByTraceId ] Callback added by traceId: 33faa17a11694f1ca4fe232f1b63b09e, timeout: 180000ms
+2026-01-11 23:10:47.616 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:775)#SendInitCommand ] INIT callback registered with traceId: 33faa17a11694f1ca4fe232f1b63b09e
+2026-01-11 23:10:47.619 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:792)#SendInitCommand ] INIT command sent successfully
+2026-01-11 23:10:47.621 14436 LanClientKernel com...apro.taplink.demo  D  [ (AsyncServiceKernel.kt:113)#InvokeSuspend ] Sending data via LAN: traceId=33faa17a11694f1ca4fe232f1b63b09e, dataSize=247 bytes
+2026-01-11 23:10:47.622 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:708)#PerformSendData ] Sending data via LAN: traceId=33faa17a11694f1ca4fe232f1b63b09e, size=247 bytes
+2026-01-11 23:10:47.630 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:192)#Send ] Binary data sent: 247 bytes
+2026-01-11 23:10:47.631 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:712)#PerformSendData ] Data sent successfully: traceId=33faa17a11694f1ca4fe232f1b63b09e
+2026-01-11 23:10:52.476 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:10:52.478 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144252465
+2026-01-11 23:10:52.479 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144252465
+2026-01-11 23:10:52.646 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:10:52.647 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:10:52.648 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 182ms
+2026-01-11 23:10:52.649 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 182ms
+2026-01-11 23:10:52.649 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:10:57.480 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:10:57.482 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144257472
+2026-01-11 23:10:57.483 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144257472
+2026-01-11 23:10:57.628 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:10:57.630 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:10:57.631 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 158ms
+2026-01-11 23:10:57.632 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 158ms
+2026-01-11 23:10:57.633 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:02.485 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:02.487 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144262477
+2026-01-11 23:11:02.488 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144262477
+2026-01-11 23:11:02.652 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:02.653 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:02.655 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 176ms
+2026-01-11 23:11:02.656 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 176ms
+2026-01-11 23:11:02.657 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:07.490 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:07.492 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144267482
+2026-01-11 23:11:07.494 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144267482
+2026-01-11 23:11:07.665 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:07.667 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:07.668 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 185ms
+2026-01-11 23:11:07.669 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 185ms
+2026-01-11 23:11:07.670 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:12.495 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:12.498 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144272487
+2026-01-11 23:11:12.499 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144272487
+2026-01-11 23:11:12.574 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:12.575 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:12.577 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 89ms
+2026-01-11 23:11:12.578 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 89ms
+2026-01-11 23:11:12.578 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:17.501 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:17.503 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144277492
+2026-01-11 23:11:17.504 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144277492
+2026-01-11 23:11:17.600 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:17.601 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:17.602 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 109ms
+2026-01-11 23:11:17.603 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 109ms
+2026-01-11 23:11:17.604 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:22.506 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:22.508 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144282497
+2026-01-11 23:11:22.509 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144282497
+2026-01-11 23:11:22.628 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:22.629 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:22.630 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 132ms
+2026-01-11 23:11:22.631 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 132ms
+2026-01-11 23:11:22.632 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:27.511 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:27.513 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144287503
+2026-01-11 23:11:27.514 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144287503
+2026-01-11 23:11:27.571 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:27.572 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:27.573 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 69ms
+2026-01-11 23:11:27.574 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 69ms
+2026-01-11 23:11:27.575 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:32.516 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:32.518 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144292508
+2026-01-11 23:11:32.519 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144292508
+2026-01-11 23:11:32.626 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:32.627 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:32.629 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 120ms
+2026-01-11 23:11:32.630 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 120ms
+2026-01-11 23:11:32.631 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:37.521 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:37.524 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144297513
+2026-01-11 23:11:37.525 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144297513
+2026-01-11 23:11:37.666 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:37.667 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:37.668 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 154ms
+2026-01-11 23:11:37.668 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 154ms
+2026-01-11 23:11:37.669 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:37.856 14436 Window...atcher com...apro.taplink.demo  W  sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda19@156cb7a
+2026-01-11 23:11:37.885 14436 OpenGLRenderer  com...apro.taplink.demo  D  endAllActiveAnimators on 0xb4000076a52d97c0 (RippleDrawable) with handle 0xb4000077452cc4f0
+2026-01-11 23:11:37.888 14436 View            com...apro.taplink.demo  D  [Warning] assignParent to null: this = DecorView@d246f0b[MainActivity]
+2026-01-11 23:11:37.902 14436 BLASTB...rQueue com...apro.taplink.demo  D  [VRI[MainActivity]#1](f:0,a:1) destructor()
+2026-01-11 23:11:37.902 14436 Buffer...nsumer com...apro.taplink.demo  D  [VRI[MainActivity]#1(BLAST Consumer)1](id:386400000001,api:0,p:-1,c:14436) disconnect
+2026-01-11 23:11:37.908 14436 InputTransport  com...apro.taplink.demo  D  Destroy ARC handle: 0xb4000077452d7320
+2026-01-11 23:11:42.526 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:42.529 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144302518
+2026-01-11 23:11:42.530 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144302518
+2026-01-11 23:11:42.690 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:42.691 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:42.692 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 173ms
+2026-01-11 23:11:42.693 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 173ms
+2026-01-11 23:11:42.694 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:47.532 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:47.534 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144307523
+2026-01-11 23:11:47.535 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144307523
+2026-01-11 23:11:47.641 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:47.643 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:47.644 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 120ms
+2026-01-11 23:11:47.645 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 120ms
+2026-01-11 23:11:47.646 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:52.536 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:52.538 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144312528
+2026-01-11 23:11:52.539 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144312528
+2026-01-11 23:11:52.719 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:52.720 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:52.722 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 193ms
+2026-01-11 23:11:52.723 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 193ms
+2026-01-11 23:11:52.723 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:11:57.541 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:11:57.544 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144317533
+2026-01-11 23:11:57.545 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144317533
+2026-01-11 23:11:57.632 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:57.633 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:11:57.635 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 101ms
+2026-01-11 23:11:57.636 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 101ms
+2026-01-11 23:11:57.637 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:02.547 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:02.549 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144322538
+2026-01-11 23:12:02.550 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144322538
+2026-01-11 23:12:02.650 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:02.651 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:02.652 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 113ms
+2026-01-11 23:12:02.653 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 113ms
+2026-01-11 23:12:02.654 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:07.551 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:07.554 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144327543
+2026-01-11 23:12:07.555 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144327543
+2026-01-11 23:12:07.667 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:07.668 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:07.670 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 126ms
+2026-01-11 23:12:07.671 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 126ms
+2026-01-11 23:12:07.671 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:12.556 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:12.559 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144332548
+2026-01-11 23:12:12.560 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144332548
+2026-01-11 23:12:12.688 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:12.689 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:12.690 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 141ms
+2026-01-11 23:12:12.691 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 141ms
+2026-01-11 23:12:12.692 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:17.561 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:17.563 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144337553
+2026-01-11 23:12:17.564 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144337553
+2026-01-11 23:12:17.703 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:17.704 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:17.705 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 151ms
+2026-01-11 23:12:17.706 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 151ms
+2026-01-11 23:12:17.707 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:22.566 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:22.568 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144342558
+2026-01-11 23:12:22.569 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144342558
+2026-01-11 23:12:22.721 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:22.722 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:22.723 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 164ms
+2026-01-11 23:12:22.724 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 164ms
+2026-01-11 23:12:22.725 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:27.571 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:27.573 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144347563
+2026-01-11 23:12:27.574 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144347563
+2026-01-11 23:12:27.638 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:27.639 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:27.640 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 76ms
+2026-01-11 23:12:27.641 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 76ms
+2026-01-11 23:12:27.642 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:32.575 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:32.577 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144352568
+2026-01-11 23:12:32.578 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144352568
+2026-01-11 23:12:32.658 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:32.659 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:32.660 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 91ms
+2026-01-11 23:12:32.661 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 91ms
+2026-01-11 23:12:32.661 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:37.580 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:37.582 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144357572
+2026-01-11 23:12:37.583 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144357572
+2026-01-11 23:12:37.685 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:37.686 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:37.688 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 115ms
+2026-01-11 23:12:37.688 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 115ms
+2026-01-11 23:12:37.689 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:42.585 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:42.587 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144362577
+2026-01-11 23:12:42.588 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144362577
+2026-01-11 23:12:42.696 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:42.697 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:42.698 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 120ms
+2026-01-11 23:12:42.699 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 120ms
+2026-01-11 23:12:42.700 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:47.590 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:47.593 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144367582
+2026-01-11 23:12:47.594 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144367582
+2026-01-11 23:12:47.730 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:47.731 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:47.732 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 150ms
+2026-01-11 23:12:47.733 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 150ms
+2026-01-11 23:12:47.734 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:49.588 14436 Servic...anager com...apro.taplink.demo  D  [ (ServiceDiscoveryManager.kt:195)#OnServiceLost ] Service lost: Taplink-Server-P303D3BM10048
+2026-01-11 23:12:49.590 14436 LanClientKernel com...apro.taplink.demo  W  [ (LanClientKernel.kt:995)#OnServiceLost ] Service lost: Taplink-Server-P303D3BM10048 at 192.168.1.97:8443
+2026-01-11 23:12:49.591 14436 LanClientKernel com...apro.taplink.demo  W  [ (LanClientKernel.kt:999)#OnServiceLost ] Current connected service is lost, heartbeat failure will handle reconnection
+2026-01-11 23:12:52.595 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:52.597 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144372587
+2026-01-11 23:12:52.598 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144372587
+2026-01-11 23:12:52.731 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:52.732 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:52.733 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 145ms
+2026-01-11 23:12:52.734 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 145ms
+2026-01-11 23:12:52.735 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:12:57.599 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:12:57.602 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144377592
+2026-01-11 23:12:57.603 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144377592
+2026-01-11 23:12:57.747 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:57.748 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:12:57.749 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 156ms
+2026-01-11 23:12:57.750 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 156ms
+2026-01-11 23:12:57.750 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:13:02.604 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:13:02.606 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144382596
+2026-01-11 23:13:02.607 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144382596
+2026-01-11 23:13:02.759 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:02.760 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:02.761 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 164ms
+2026-01-11 23:13:02.762 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 164ms
+2026-01-11 23:13:02.763 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:13:07.609 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:13:07.611 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144387601
+2026-01-11 23:13:07.612 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144387601
+2026-01-11 23:13:07.777 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:07.778 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:07.779 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 177ms
+2026-01-11 23:13:07.780 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 177ms
+2026-01-11 23:13:07.781 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:13:12.614 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:13:12.616 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144392606
+2026-01-11 23:13:12.617 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144392606
+2026-01-11 23:13:12.803 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:12.804 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:12.805 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 198ms
+2026-01-11 23:13:12.806 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 198ms
+2026-01-11 23:13:12.807 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:13:17.618 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:13:17.620 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144397611
+2026-01-11 23:13:17.621 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144397611
+2026-01-11 23:13:17.711 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:17.712 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:17.713 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 101ms
+2026-01-11 23:13:17.714 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 101ms
+2026-01-11 23:13:17.715 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:13:22.623 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:13:22.625 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144402615
+2026-01-11 23:13:22.626 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144402615
+2026-01-11 23:13:22.658 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:22.659 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:22.660 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 44ms
+2026-01-11 23:13:22.661 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 44ms
+2026-01-11 23:13:22.662 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed
+2026-01-11 23:13:27.627 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:248)#SendHeartbeat ] Heartbeat sent: {"type":"ping","timestamp":1768144247455}
+2026-01-11 23:13:27.629 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:235)#InvokeSuspend ] Heartbeat sent successfully at 1768144407620
+2026-01-11 23:13:27.630 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1085)#OnHeartbeatSent ] Heartbeat sent at: 1768144407620
+2026-01-11 23:13:27.753 14436 Connec...anager com...apro.taplink.demo  D  [ (ConnectionManager.kt:354)#OnMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:27.755 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:918)#OnTextMessage ] Text message received: {"type":"pong"}
+2026-01-11 23:13:27.756 14436 Heartb...anager com...apro.taplink.demo  D  [ (HeartbeatManager.kt:203)#HandleHeartbeatResponse ] Heartbeat response received, RTT: 135ms
+2026-01-11 23:13:27.757 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1089)#OnHeartbeatResponse ] Heartbeat response received, RTT: 135ms
+2026-01-11 23:13:27.757 14436 LanClientKernel com...apro.taplink.demo  D  [ (LanClientKernel.kt:1150)#HandleHeartbeatResponse ] Heartbeat response processed

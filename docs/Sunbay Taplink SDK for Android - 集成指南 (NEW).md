@@ -1,0 +1,2786 @@
+# Sunbay Taplink SDK for Android - 集成指南
+
+---
+
+## 概述
+
+本文档主要介绍线下支付场景中的半集成解决方案，利用SUNBAY产品线中的Tapro支付应用及Nexus的支付网关的开放接口，为第三方ISV的POS应用提供支付能力。
+
+**方案特色：**
+
+*   **快速集成**：通过Taplink SDK（设备端集成），或者Nexus SDK（云端集成）简化接入流程
+    
+*   **灵活部署**：POS应用只需要集成一套SDK，可同时满足同设备和跨设备的调用场景
+    
+*   **结构统一**：本地模式与云端模式保持数据结构一致
+    
+
+### SUNBAY 半集成方案总图
+
+![image](https://alidocs.oss-cn-zhangjiakou.aliyuncs.com/res/4maOgXbzvvw2KlWN/img/c9034d1c-38f5-4230-bace-5bb3eb6cb364.png)
+
+---
+
+注：本文内容只涵盖Taplink的本地半集成方案，Nexus的云端半集成方案会提供单独文档
+
+## 核心概念
+
+在开始集成之前，请先理解以下核心概念，这将帮助你更好地使用 SDK。
+
+### 2.1 集成类型
+
+Taplink SDK 支持两种集成类型：
+
+| **集成类型** | **连接模式** | **适用场景** | **延迟** |
+| --- | --- | --- | --- |
+| **同设备集成** | 应用间（App-to-App）模式 | POS 应用和 Tapro 在同一 Android 设备 | 毫秒级 |
+| **跨设备集成** | **线缆模式**<br>通过 USB/串口线缆连接（点对点） | 传统 POS + 独立支付终端 | < 1秒 |
+|  | **局域网模式**<br>通过有线/无线局域网连接 | POS 设备 + 独立支付终端 | 1-3秒 |
+
+**选择建议：**
+
+*   Android 一体机/平板 → 应用间模式
+    
+*   传统 POS + 支付终端 → 线缆模式或局域网模式
+    
+
+---
+
+### 2.2 订单与交易关系
+
+**一句话说明：**
+
+*   **referenceOrderId**: 商户订单号（1个订单可包含多笔交易）
+    
+*   **transactionRequestId**: 交易请求ID（每笔交易唯一）
+    
+
+**关系图：**
+
+```mermaid
+graph TD
+    Order["📦 referenceOrderId: ORDER001<br/>（商户订单 - 业务层面）"]
+    
+    Sale["💰 TXN001_SALE<br/>（原始消费）<br/>$200.00<br/>COMPLETED<br/>transactionRequestId = T_12345"]
+    
+    Refund1["↩️ TXN001_REFUND1<br/>（第一次退款）<br/>$50.00<br/>transactionRequestId = T_12346<br/>originalTransactionRequestId → T_12345"]
+    
+    Refund2["↩️ TXN001_REFUND2<br/>（第二次退款）<br/>$30.00<br/>transactionRequestId = T_12347<br/>originalTransactionRequestId → T_12345"]
+    
+    Order --> Sale
+    Order --> Refund1
+    Order --> Refund2
+    
+    Refund1 -.引用.-> Sale
+    Refund2 -.引用.-> Sale
+    
+    style Order fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    style Sale fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style Refund1 fill:#fff9c4,stroke:#f57c00,stroke-width:2px
+    style Refund2 fill:#fff9c4,stroke:#f57c00,stroke-width:2px
+
+```
+
+**对比表：**
+
+|  | **referenceOrderId** | **transactionRequestId** |
+| --- | --- | --- |
+| **含义** | 商户订单号 | 交易请求ID |
+| **唯一性** | 商户系统内唯一 | 全局唯一 |
+| **数量关系** | 1个订单 | 可包含多个交易 |
+| **用途** | 业务对账、订单追踪 | 交易去重 |
+| **后续交易** | 保持不变 | 必须使用新ID |
+| **重试场景** | 保持不变 | 临时性错误可用相同ID |
+
+**代码示例：**
+
+```kotlin
+// 正确：一个订单，多笔交易
+val orderId = "ORDER001"
+
+// 消费交易
+val saleRequest = PaymentRequest()
+    .setReferenceOrderId(orderId)           // 相同
+    .setTransactionRequestId("TXN001_SALE") // 不同
+    .setAction("SALE")
+    // ...
+
+// 退款交易（同一订单）
+val refundRequest = PaymentRequest()
+    .setReferenceOrderId(orderId)              // 相同
+    .setTransactionRequestId("TXN001_REFUND")  // 不同
+    .setAction("REFUND")
+    .setOriginalTransactionId(originalTxnId)   // 引用原交易
+    // ...
+
+
+```
+
+**重要提示：**
+
+*   不要将 referenceOrderId 直接用作 transactionRequestId
+    
+*   为每笔交易生成独立的 transactionRequestId
+    
+*   建议格式：`{订单号}_{交易类型}_{时间戳}`
+    
+
+---
+
+### 2.3 错误处理策略
+
+**错误分类：**
+
+| **错误类型** | **错误码示例** | **处理策略** |
+| --- | --- | --- |
+| **通用系统错误** | 201, 202, 203, 204, 209 | 检查配置，修复后重试 |
+| **连接错误** | 211, 212, 213, 214, 215, 231, 232, 251, 271, 281, 283, 286, 291, 294 | 检查连接状态，重试连接 |
+| **认证错误** | 221 | 检查认证参数，重新建立连接 |
+| **参数验证错误（交易处理）** | 311, 312, 313, 314, 315, 316 | 检查参数，修复后重试 |
+| **数据传输错误（交易处理）** | 321, 322, 323 | 检查网络连接，重试数据发送 |
+| **交易处理错误（交易处理）** | 306, 307, 308, 309, 310, 311, 312, 399 | 等待后重试或查询状态（注意：307、308需使用新ID） |
+
+**处理流程：**
+
+```plaintext
+收到错误
+  ├─ 检查错误码
+  ├─ 判断错误类型
+  ├─ 临时性错误 → 查询交易状态 → 重试（相同ID）
+  ├─ 明确失败 → 提示用户 → 重试（新ID）
+  └─ 配置错误 → 检查配置 → 修复后重试
+
+
+```
+---
+
+**代码示例：**
+
+```kotlin
+class PaymentManager {
+    // 保存当前请求用于重试
+    private var currentRequest: PaymentRequest? = null
+    
+    fun processPayment(amount: BigDecimal) {
+        val txnReqId = "TXN_${System.currentTimeMillis()}"
+        
+        currentRequest = PaymentRequest()
+            .setAction("SALE")
+            .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
+            .setTransactionRequestId(txnReqId)  // 保存ID
+            .setAmount(AmountInfo()
+                .setOrderAmount(amount)
+                .setPricingCurrency("USD"))
+            .setDescription("商品购买")
+        
+        TaplinkSDK.execute(currentRequest!!, callback)
+    }
+    
+    fun retryPayment(error: PaymentError) {
+        if (canRetryWithSameId(error.code)) {
+            // 可以使用相同ID：使用相同请求重试
+            TaplinkSDK.execute(currentRequest!!, callback)
+        } else {
+            // 特殊错误码（306、307、308）：必须创建新交易
+            processPayment(100.0)  // 生成新ID
+        }
+    }
+    
+    /**
+     * 判断是否可以使用相同的 transactionRequestId 重试
+     * 
+     * 特殊错误码（306、307、308）必须使用新ID
+     * 其他所有错误码都可以使用相同ID
+     */
+    private fun canRetryWithSameId(code: String): Boolean {
+        // 306、307、308 不能使用相同ID（306需要先查询状态）
+        return code !in listOf("306", "307", "308")
+    }
+}
+
+
+```
+---
+
+### 2.5 连接认证
+
+所有连接模式在建立连接后都需要进行认证，以确保：
+
+*   POS 应用身份合法性
+    
+*   应用具有访问权限
+    
+*   防止未授权访问和中间人攻击
+    
+
+**重要：** 认证由 SDK 自动处理，开发者只需：
+
+1.  在初始化时提供正确的 `appId` 和 `secretKey`
+    
+2.  调用 `connect()` 方法
+    
+3.  通过 `ConnectionListener` 监听认证结果
+    
+
+**认证流程（SDK自动处理）：**
+
+```plaintext
+1. 应用调用 connect()
+2. SDK 建立物理连接
+3. SDK 生成认证签名
+4. SDK 向 Tapro 发送认证请求
+5. Tapro 与 Nexus 平台验证
+6. SDK 接收认证结果
+7. 通过 ConnectionListener 通知应用
+
+
+```
+
+**常见认证错误：**
+
+| **错误码** | **说明** | **解决方案** |
+| --- | --- | --- |
+| 201 | SDK未初始化 | 调用TaplinkSDK.init()初始化SDK |
+| 231 | Tapro应用未安装 | 安装Tapro应用到设备 |
+| 221 | 连接认证失败 | 检查认证参数（appId、secretKey等），重新建立连接 |
+| 212 | 未建立连接 | 先调用connect()建立连接 |
+
+---
+
+### 2.6 金额单位规范
+
+#### 核心概念
+
+SDK 中的所有金额字段都必须使用**最小货币单位**（smallest currency unit）表示，这是国际支付系统的标准做法，确保精确性和一致性。
+
+**基本货币单位 vs 最小货币单位：**
+
+| **货币** | **基本货币单位** | **最小货币单位** | **换算关系** |
+| --- | --- | --- | --- |
+| **USD（美元）** | Dollar | Cent（分） | 1 Dollar = 100 Cents |
+| **EUR（欧元）** | Euro | Cent（分） | 1 Euro = 100 Cents |
+| **JPY（日元）** | Yen | Yen（日元） | 1 Yen = 1 Yen |
+| **CNY（人民币）** | Yuan | Fen（分） | 1 Yuan = 100 Fen |
+
+**为什么使用最小货币单位？**
+
+1.  **避免浮点数精度问题**：整数运算比浮点数更精确
+    
+2.  **国际标准兼容**：符合 ISO-4217 标准
+    
+3.  **系统一致性**：所有支付系统都使用相同的表示方法
+    
+4.  **防止舍入误差**：避免金额计算中的精度丢失
+    
+
+#### 示例：
+
+```kotlin
+正确：
+// $12.34 表示为 1234 分
+val amount = AmountInfo()
+    .setOrderAmount(BigDecimal("1234"))  // 1234 分 = $12.34
+    .setPricingCurrency("USD")
+
+// 错误：使用基本货币单位
+val wrongAmount = AmountInfo()
+    .setOrderAmount(BigDecimal("12.34"))  // 错误！这会被理解为 $0.1234
+    .setPricingCurrency("USD")
+
+```
+
+#### 常见货币换算表
+
+| **金额显示** | **最小货币单位** | **SDK中的值** |
+| --- | --- | --- |
+| $1.00 | 100 cents | 100 |
+
+**参考标准：** 各货币的小数位数详情请参考 [ISO-4217](https://www.iso.org/iso-4217-currency-codes.html) 国际标准。
+
+---
+
+## 快速开始
+
+### 开始之前
+
+**平台要求：** Android 7.1 (API 25) 及以上   **SDK 类型：** Android 原生 SDK (Kotlin/Java)
+
+**POS 应用定义：** POS 应用是指第三方 ISV 或商户自己开发的收银和业务管理应用，负责订单、库存、会员、报表等业务逻辑，通过调用 Taplink SDK 集成支付能力。
+
+**适用场景：**
+
+*   需要支付集成的 Android POS 应用
+    
+*   Android 一体机、平板和手持终端
+    
+*   支持同设备集成和跨设备集成
+    
+*   支持多种连接模式（应用间、线缆、局域网）
+    
+*   仅限本地模式集成
+    
+
+**其他平台：**
+
+*   本 SDK 专为 Android 平台设计
+    
+*   其他平台（Windows、iOS、Linux）请联系 SUNBAY 获取可用性信息
+    
+*   服务端云端模式集成请使用 Nexus SDK（SUNBAY支付网关SDK）
+    
+
+---
+
+### 3.1 最小化示例
+
+这是最简单的集成示例，帮助你快速验证 SDK 功能。
+
+#### 步骤1：添加依赖
+
+**1.1 配置 Maven 仓库**
+
+在项目的 `settings.gradle.kts` 中添加：
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven("https://repo1.maven.org/maven2/")
+    }
+}
+
+
+```
+
+**1.2 配置模块**
+
+在模块的 `build.gradle.kts` 中：
+
+```kotlin
+android {
+    compileSdk = 34
+    
+    defaultConfig {
+        minSdk = 25  // 最低支持 Android 7.1
+        targetSdk = 34
+    }
+    
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+    
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+
+dependencies {
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.1")
+    implementation("com.google.code.gson:gson:2.13.1")
+    implementation("org.java-websocket:Java-WebSocket:1.5.3")
+}
+
+
+```
+
+#### 步骤2：初始化SDK
+
+```kotlin
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        
+        TaplinkSDK.init(this, TaplinkConfig()
+            .setAppId("your_app_id")
+            .setMerchantId("your_merchant_id")
+            .setSecretKey("your_secret_key")
+    }
+}
+
+
+```
+
+#### 步骤3：发起支付
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // 连接到 Tapro
+        val connectionConfig = ConnectionConfig().setConnectionMode(ConnectionMode.APP_TO_APP)
+        TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
+            override fun onConnected(deviceId: String, taproVersion: String) {
+                // 连接成功，发起支付
+                processPayment()
+            }
+            
+            override fun onDisconnected(reason: String) {
+                Toast.makeText(this@MainActivity, "连接失败", Toast.LENGTH_SHORT).show()
+            }
+            
+            override fun onError(error: ConnectionError) {
+                Toast.makeText(this@MainActivity, error.message, Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+    
+    private fun processPayment() {
+        val request = PaymentRequest()
+            .setAction("SALE")
+            .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
+            .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+            .setAmount(AmountInfo()
+                .setOrderAmount(100.00)
+                .setPricingCurrency("USD"))
+            .setDescription("Test Payment")
+        
+        TaplinkSDK.execute(request, object : PaymentCallback {
+            override fun onSuccess(result: PaymentResponse) {
+                // 支付成功
+                Toast.makeText(this@MainActivity, 
+                    "支付成功: ${result.transactionId}", 
+                    Toast.LENGTH_SHORT).show()
+            }
+            
+            override fun onFailure(error: PaymentError) {
+                Toast.makeText(this@MainActivity, 
+                    "错误: ${error.message}", 
+                    Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+}
+
+
+```
+
+**完成！** 3步完成基础集成。
+
+**提示：** 这是最简示例，生产环境请参考[最佳实践](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mkcej2yabx043533v5l)添加完整的错误处理。
+
+---
+
+### 3.2 同设备集成
+
+**适用场景：** Android 一体机、Android 平板、Android 手持终端（POS 应用和 Tapro 在同一设备）
+
+**配置要点：**
+
+*   连接模式：`ConnectionMode.APP_TO_APP`
+    
+*   连接参数：传 `null`（自动使用初始化配置）
+    
+*   特殊处理：检查 Tapro 应用是否已安装（错误码 231）
+    
+
+详细说明请参考 [4.1 应用间模式](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mkcej2uoomuceh7mec)
+
+**快速示例：**
+
+```kotlin
+// 1. 初始化（Application中）
+TaplinkSDK.init(this, TaplinkConfig()
+    .setAppId("your_app_id")
+            .setMerchantId("your_merchant_id")
+            .setSecretKey("your_secret_key")
+    // ... 其他配置
+)
+
+// 2. 连接（Activity中）
+val connectionConfig = ConnectionConfig().setConnectionMode(ConnectionMode.APP_TO_APP)
+TaplinkSDK.connect(connectionConfig, connectionListener)
+
+// 3. 发起支付
+val request = PaymentRequest()
+    .setAction("SALE")
+    .setAmount(AmountInfo().setOrderAmount(100.00).setPricingCurrency("USD"))
+    // ... 其他参数
+TaplinkSDK.execute(request, paymentCallback)
+
+
+```
+
+**提示：** 完整的连接和错误处理代码请参考 [4.1 应用间模式](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mkcej2uoomuceh7mec)
+
+---
+
+### 3.3 跨设备集成
+
+**适用场景：** 传统 POS + 独立支付终端，云端系统 + 支付终端（POS 应用和 Tapro 在不同设备）
+
+#### 线缆模式
+
+**配置要点：**
+
+*   连接模式：`ConnectionMode.CABLE`
+    
+*   连接参数：传 `null`（自动检测线缆类型）
+    
+*   特殊处理：检查线缆物理连接（错误码 212）
+    
+
+详细说明请参考 [4.2 线缆模式](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mkcej2uupgh94z45z8)
+
+**快速示例：**
+
+```kotlin
+// 初始化
+TaplinkSDK.init(this, TaplinkConfig()
+    .setAppId("your_app_id")
+    .setMerchantId("your_merchant_id")
+    .setSecretKey("your_secret_key")
+
+// 连接（自动检测USB/串口）
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.CABLE)
+            .setCableProtocol(CableProtocol.AUTO)
+TaplinkSDK.connect(connectionConfig, connectionListener)
+
+
+```
+
+#### 局域网模式
+
+**配置要点：**
+
+*   连接模式：`ConnectionMode.LAN`
+    
+*   首次连接：需提供 IP 和端口
+    
+*   后续连接：传 `null`（使用缓存信息）
+    
+
+详细说明请参考 [4.3 局域网模式](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mkcej2v0qw6xb8i2jq)
+
+**快速示例：**
+
+```kotlin
+// 初始化
+TaplinkSDK.init(this, TaplinkConfig()
+    .setAppId("your_app_id")
+    .setMerchantId("your_merchant_id")
+    .setSecretKey("your_secret_key")
+
+// 首次连接
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.LAN)
+            .setHost(ip)
+            .setPort(port)
+TaplinkSDK.connect(config, connectionListener)
+
+// 后续连接
+TaplinkSDK.connect(null, connectionListener)
+
+
+```
+
+**提示：** 连接成功后，发起支付的代码与同设备集成完全相同。
+
+---
+
+## 集成类型详解
+
+### 4.1 应用间模式
+
+**当前位置：** 首页 > 集成类型详解 > 应用间模式
+
+**定义：** POS 应用和 Tapro 运行在同一 Android 设备上，通过 Android IPC 机制通信。
+
+**适用场景：** Android 一体机、Android 平板、Android 手持终端
+
+**技术方案：**
+
+*   通过 Android Intent 机制启动 Tapro 应用
+    
+*   使用 Taplink SDK 封装调用逻辑
+    
+*   进程间通信（IPC），毫秒级延迟
+    
+
+**特点：**
+
+*   最低延迟（毫秒级）
+    
+*   自动检测，无需配置
+    
+*   用户可见 Tapro 支付界面
+    
+*   支持自动重连
+    
+
+**连接过程：**
+
+```plaintext
+1. POS 应用 → Taplink SDK：初始化 SDK
+2. POS 应用 → Taplink SDK：调用 connect()
+3. Taplink SDK：连接到 Tapro IPC 服务
+4. Taplink SDK：与 Tapro 进行认证
+5. Taplink SDK → POS 应用：连接就绪（onConnected 回调）
+
+
+```
+
+**同设备调用流程图：**
+
+```mermaid
+sequenceDiagram
+    participant SaaS as 💼 POS 应用
+    participant SDK as 📦 Taplink SDK
+    participant Tapro as 💳 Tapro 应用<br/>(支付应用)
+    participant UI as 📺 支付界面
+    participant User as 👤 用户操作
+    
+    Note over SaaS,Tapro: 同一 Android 设备 - 通过 IPC 通信
+    
+    SaaS->>SDK: 1️⃣ 初始化 SDK<br/>TaplinkSDK.init(config)
+    activate SDK
+    
+    SaaS->>SDK: 2️⃣ 建立连接<br/>connect(null, listener)
+    SDK->>Tapro: 🔗 通过 Android IPC (Intent/AIDL)
+    activate Tapro
+    
+    Tapro-->>SDK: 3️⃣ Service Connected
+    
+    SDK->>Tapro: 4️⃣ 认证请求<br/>(appId + signature)
+    Tapro-->>SDK: 5️⃣ 认证响应 (成功)
+    SDK-->>SaaS: ✅ onConnected(deviceId, taproVersion)
+    
+    Note over SaaS,Tapro: 连接建立完成，开始支付流程
+    
+    SaaS->>SDK: 6️⃣ 发起支付请求<br/>execute(request, callback)
+    SDK->>Tapro: 💰 PaymentRequest
+    
+    Tapro->>UI: 显示支付界面
+    activate UI
+    Tapro-->>SDK: 7️⃣ onProgress(WAITING_CARD)
+    SDK-->>SaaS: 📊 等待刷卡
+    
+    User->>UI: 💳 刷卡
+    Tapro-->>SDK: 8️⃣ onProgress(WAITING_PIN)
+    SDK-->>SaaS: 📊 等待PIN
+    
+    User->>UI: 🔢 输入PIN
+    Tapro->>Tapro: 🌐 联机授权
+    Tapro-->>SDK: 9️⃣ onProgress(WAITING_RESPONSE)
+    SDK-->>SaaS: 📊 等待联机响应
+    
+    Tapro-->>SDK: 🔟 支付结果
+    deactivate UI
+    SDK-->>SaaS: ✅ onSuccess(PaymentResponse)
+    deactivate Tapro
+    deactivate SDK
+    
+    SaaS->>SaaS: 📝 更新订单状态
+    SaaS->>SaaS: 🖨️ 打印小票
+
+```
+
+**配置示例：**
+
+```kotlin
+val connectionConfig = ConnectionConfig()
+  .setConnectionMode(ConnectionMode.APP_TO_APP)
+
+
+```
+
+**建立连接：**
+
+```kotlin
+// 使用初始化时的 APP_TO_APP 模式
+
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        Log.d(TAG, "已连接到 Tapro $taproVersion")
+        enablePaymentButtons(true)
+    }
+    
+    override fun onDisconnected(reason: String) {
+        Log.e(TAG, "连接断开：$reason")
+        enablePaymentButtons(false)
+    }
+    
+    override fun onError(error: ConnectionError) {
+        when (error.code) {
+            "231" -> showInstallTaproDialog()
+            "201" -> Log.e(TAG, "SDK not initialized")
+            else -> Log.e(TAG, "Connection error: ${error.message}")
+        }
+    }
+})
+
+
+```
+
+**注意：** 虽然在同一设备上，但仍需要调用 connect() 建立IPC连接。
+
+---
+
+### 4.2 线缆模式
+
+**定义：** 通过 USB 或串口线缆在两个设备之间点对点直连。
+
+**适用场景：** POS 设备通过 USB 或串口线缆连接到独立支付终端
+
+**支持的连接类型：**
+
+| **连接类型** | **协议** | **适用场景** | **技术特点** |
+| --- | --- | --- | --- |
+| USB AOA | Android Open Accessory 2.0 | Android ↔ Android | 即插即用，系统级支持 |
+| USB-VSP | USB Virtual Serial Port | Windows/Linux ↔ Android | 模拟串口，波特率 115200 |
+| RS232 | 标准 RS232 串行通信 | 传统 POS ↔ 支付终端 | 硬件串口，可配置波特率 |
+
+**重要说明：** 线缆模式指通过 USB 或串口线缆点对点直连，**不包括以太网线**连接。
+
+**特点：**
+
+*   即插即用
+    
+*   高安全性（物理连接）
+    
+*   自动检测协议类型
+    
+*   设备记忆功能
+    
+
+**连接过程：**
+
+```plaintext
+1. 物理线缆连接
+2. POS 应用 → SDK：调用 connect()
+3. SDK：检测 USB/串口
+4. SDK：识别协议类型
+5. SDK：与 Tapro 发起握手
+6. SDK：与 Tapro 进行认证
+7. SDK → POS 应用：连接建立
+8. SDK：本地缓存设备标识符
+
+
+```
+
+**配置示例：**
+
+```kotlin
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.CABLE)
+            .setCableProtocol(CableProtocol.AUTO)
+
+```
+
+**建立连接：**
+
+**方法1：自动检测协议（推荐）**
+
+```kotlin
+// 使用初始化时的 CABLE 模式，自动检测线缆类型
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        Log.d(TAG, "通过线缆连接：$deviceId")
+        enablePaymentButtons(true)
+    }
+    
+    override fun onDisconnected(reason: String) {
+        Log.e(TAG, "连接断开：$reason")
+    }
+    
+    override fun onError(error: ConnectionError) {
+        when (error.code) {
+            "281" -> showDialog("线缆未连接", "请连接 USB 或串口线缆")
+            "291" -> showDialog("无法识别线缆协议", "请手动指定协议类型")
+            else -> Log.e(TAG, "Connection error: ${error.message}")
+        }
+    }
+})
+
+
+```
+
+**方法2：显式指定协议**
+
+```kotlin
+// 指定 USB AOA 协议
+val config = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.CABLE)
+            .setCableProtocol(CableProtocol.USB_AOA)
+
+TaplinkSDK.connect(config, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        Log.d(TAG, "通过 USB AOA 连接到 Tapro $taproVersion")
+    }
+    
+    override fun onDisconnected(reason: String) {
+        Log.e(TAG, "USB AOA 连接失败：$reason")
+    }
+    
+    override fun onError(error: ConnectionError) {
+        // 处理错误
+    }
+})
+
+
+```
+
+**线缆协议枚举：**
+
+```kotlin
+enum class CableProtocol {
+    AUTO,       // 自动检测（默认）
+    USB_AOA,    // USB Android Open Accessory 2.0
+    USB_VSP,    // USB Virtual Serial Port (CDC-ACM)
+    RS232       // 标准 RS232 串行通信
+}
+
+
+```
+---
+
+### 4.3 局域网模式
+
+**定义：** POS 设备通过局域网连接到独立支付终端。
+
+**适用场景：** POS 设备通过局域网连接到独立支付终端
+
+**协议：** WebSocket over TLS (WSS)
+
+**网络类型：**
+
+*   **有线局域网**：通过以太网线经网络设备（路由器/交换机）连接
+    
+*   **无线局域网（WiFi）**：通过 WiFi 经网络设备连接
+    
+
+**特点：**
+
+*   支持有线和无线网络
+    
+*   TLS 加密传输
+    
+*   mDNS 自动发现
+    
+*   自动处理 IP 变化
+    
+
+**配置示例：**
+
+```kotlin
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.LAN)
+            .setHost(ip)
+            .setPort(port)
+
+
+```
+
+**安全机制：**
+
+| **安全层** | **实现** | **目的** |
+| --- | --- | --- |
+| 传输加密 | TLS 1.2+ | 防止局域网嗅探 |
+| 设备证书 | 自签名证书 | 设备认证 |
+| 端口安全 | 随机端口（8443-8453） | 减少攻击面 |
+| 消息完整性 | HMAC-SHA256 签名 | 防止篡改 |
+| 会话管理 | 24 小时有效期 | 限制暴露窗口 |
+
+**首次连接：**
+
+```kotlin
+// 在支付终端的 Tapro 应用界面查看 IP 和端口
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.LAN)
+            .setHost(ip)
+            .setPort(port)
+
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        // 连接成功，设备信息自动缓存
+        Toast.makeText(context, "已连接到设备：$deviceId", Toast.LENGTH_SHORT).show()
+    }
+    
+    override fun onDisconnected(reason: String) {
+        Toast.makeText(context, "连接失败：$reason", Toast.LENGTH_LONG).show()
+    }
+    
+    override fun onError(error: ConnectionError) {
+        // 处理错误
+    }
+})
+
+
+```
+
+**后续自动连接：**
+
+```kotlin
+// 使用缓存的设备信息，即使 IP 地址变化也能自动更新
+val connectionConfig = ConnectionConfig()
+            .setConnectionMode(ConnectionMode.LAN)
+            
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        Log.d(TAG, "已连接到缓存的设备：$deviceId")
+    }
+    
+    override fun onDisconnected(reason: String) {
+        // 自动连接失败，提示用户重新输入 IP
+        showIpInputDialog()
+    }
+    
+    override fun onError(error: ConnectionError) {
+        // 处理错误
+    }
+})
+
+
+```
+
+**连接状态：**
+
+*   **在线**：正常通信
+    
+*   **离线**：返回错误 213
+    
+*   **重连中**：SDK自动处理
+    
+*   **IP 已更新**：通过 mDNS 自动更新
+    
+
+---
+
+## 核心功能
+
+### 5.1 销售交易（SALE）
+
+最常用的支付交易类型。
+
+**基本用法：**
+
+```kotlin
+private fun processSale() {
+    val amount = AmountInfo()
+        .setOrderAmount(100.00)
+        .setPricingCurrency("USD")
+    
+    val orderId = "ORDER_${System.currentTimeMillis()}"
+    
+    val request = PaymentRequest()
+        .setAction("SALE")
+        .setReferenceOrderId(orderId)
+        .setTransactionRequestId("TXN_${System.currentTimeMillis()}")  // 必须唯一
+        .setAmount(amount)
+        .setDescription("商品购买")
+    
+    TaplinkSDK.execute(request, object : PaymentCallback {
+        override fun onSuccess(result: PaymentResponse) {
+            i// 支付成功
+            val transactionId = result.transactionId
+            val authCode = result.authCode
+            
+            saveTransaction(transactionId, authCode)
+            printReceipt(result)
+        }
+        
+        override fun onFailure(error: PaymentError) {
+            if(error.code == "306" || error.code == "308"){
+              handleQuery()
+            }else{
+              handlePaymentError(error)
+            }
+        }
+        
+        override fun onProgress(event: PaymentEvent) {
+            updateProgressUI(event)
+        }
+    })
+}
+
+
+```
+---
+
+### 5.2 退款交易（REFUND）
+
+支持全额退款和部分退款。
+
+**退款类型对比：**
+
+| **类型** | **是否需要刷卡** | **必需参数** | **适用场景** |
+| --- | --- | --- | --- |
+| 有参考号退款 | 否 | `originalTransactionId` | 已知原交易ID |
+| 无参考号退款 | 是 | 无 | 未知原交易ID |
+
+**代码示例：**
+
+```kotlin
+// 有参考号退款（推荐）
+val request = PaymentRequest()
+    .setAction("REFUND")
+    .setOriginalTransactionId("TXN20231119001")  // 关键：原交易ID
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo()
+        .setOrderAmount(100.00)  // 可部分退款
+        .setPricingCurrency("USD"))
+    .setDescription("商品退货")
+    .setReason("客户要求")
+
+// 无参考号退款（需刷卡）
+val request = PaymentRequest()
+    .setAction("REFUND")
+    .setReferenceOrderId("REFUND_${System.currentTimeMillis()}")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo()
+        .setOrderAmount(50.00)
+        .setPricingCurrency("USD"))
+    .setDescription("线下退款")
+    // 注意：不设置 originalTransactionId
+
+TaplinkSDK.execute(request, paymentCallback)
+
+
+```
+---
+
+### 5.3 撤销交易（VOID）
+
+撤销当日交易（比退款更快，无需联机）。
+
+**限制条件：**
+
+*   只能撤销**当日**交易
+    
+*   跨日交易必须使用 REFUND
+    
+
+**代码示例：**
+
+```kotlin
+val request = PaymentRequest()
+    .setAction("VOID")
+    .setOriginalTransactionId("TXN20231119001")  // 必需：原交易ID
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setDescription("撤销交易")
+    .setReason("重复交易")
+
+TaplinkSDK.execute(request, paymentCallback)
+
+
+```
+
+**常见错误：**
+
+*   `333：交易失败（具体原因，需要查看错误的信息）`
+    
+
+---
+
+### 5.4 交易查询（QUERY）
+
+查询交易状态，特别适用于超时场景。
+
+**查询方式：**
+
+| **查询方式** | **参数** | **适用场景** |
+| --- | --- | --- |
+| 按交易ID | `transactionId` | 已知交易ID |
+| 按请求ID | `transactionRequestId` | 超时场景（推荐） |
+
+**注意：** 不支持通过 `referenceOrderId` 查询。
+
+**代码示例：**
+
+```kotlin
+// 按交易请求ID查询（推荐）
+val query = QueryRequest()
+    .setTransactionRequestId("TXN20231119001")
+
+TaplinkSDK.query(query, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResponse) {
+       handleSuccess()
+    }
+    
+    override fun onFailure(error: PaymentError) {
+        if(error.code == "306" || error.code == "308"){
+          continuePolling()//继续轮询
+        }else{
+          handleError(error)
+        }
+    }
+})
+
+
+```
+
+**轮询查询示例：** 详见 [10.6 超时处理](#106-%E8%B6%85%E6%97%B6%E5%A4%84%E7%90%86)
+
+---
+
+### 5.5 预授权（AUTH）
+
+冻结资金而不实际扣款，常用于酒店、租车等场景。
+
+```kotlin
+val request = PaymentRequest()
+    .setAction("AUTH")
+    .setReferenceOrderId("AUTH_${System.currentTimeMillis()}")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo()
+        .setOrderAmount(500.00)
+        .setPricingCurrency("USD"))
+    .setDescription("酒店预订")
+
+TaplinkSDK.execute(request, paymentCallback)
+
+
+```
+---
+
+### 5.6 预授权完成（POST\_AUTH）
+
+完成授权并实际扣款。
+
+```kotlin
+val request = PaymentRequest()
+    .setAction("POST_AUTH")
+    .setOriginalTransactionId("TXN20231119002")  // 必需：原授权交易ID
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo()
+        .setOrderAmount(450.00)  // 可以 ≤ 授权金额
+        .setPricingCurrency("USD"))
+    .setDescription("完成酒店付款")
+
+TaplinkSDK.execute(request, paymentCallback)
+
+
+```
+---
+
+### 5.7 小费调整（TIP\_ADJUST）
+
+交易完成后调整小费金额。
+
+```kotlin
+val request = PaymentRequest()
+    .setAction("TIP_ADJUST")
+    .setOriginalTransactionId("TXN20231119001")  // 必需：原交易ID
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setTipAmount(15.00)  // 小费金额
+    .setDescription("小费调整")
+
+TaplinkSDK.execute(request, paymentCallback)
+
+
+```
+---
+
+### 5.8 批次关闭（BATCH\_CLOSE）
+
+日终结算，关闭当前批次。
+
+```kotlin
+val request = PaymentRequest()
+    .setAction("BATCH_CLOSE")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setDescription("批次关闭")
+
+TaplinkSDK.execute(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResponse) {
+        if (result.isSuccess()) {
+            val batchCloseInfo = result.batchCloseInfo
+            // 显示批次汇总信息
+            showBatchSummary(
+                batchNo = result.batchNo,
+                totalCount = batchCloseInfo?.totalCount ?: 0,
+                totalAmount = batchCloseInfo?.totalAmount ?: 0.0
+            )
+        }
+    }
+    
+    override fun onProgress(event: PaymentEvent) {
+        updateProgressMessage(event.message)
+    }
+})
+
+
+
+```
+---
+
+## API 参考
+
+### 6.1 TaplinkSDK
+
+主 SDK 类，提供所有核心功能。
+
+#### 初始化
+
+```kotlin
+/**
+ * 初始化 SDK
+ * 
+ * @param context Application 或 Activity 上下文
+ * @param config SDK 配置对象
+ */
+TaplinkSDK.init(context: Context, config: TaplinkConfig)
+
+
+```
+
+**示例：**
+
+```kotlin
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        TaplinkSDK.init(this, config)
+    }
+}
+
+
+```
+---
+
+#### 连接管理
+
+```kotlin
+/**
+ * 建立连接（统一连接方法）
+ * 
+ * 支持所有连接模式：
+ * - 应用间模式：传 null 使用初始化时的 APP_TO_APP 模式
+ * - 线缆模式：传 null 使用初始化时的 CABLE 模式，自动检测线缆类型
+ * - 局域网模式：首次连接指定 IP 和端口；后续连接传 null 使用缓存的设备信息
+ * 
+ * @param config 连接配置对象（可为 null）
+ * @param listener 连接监听器
+ */
+TaplinkSDK.connect(config: ConnectionConfig?, listener: ConnectionListener)
+
+// 断开连接
+TaplinkSDK.disconnect()
+
+// 检查连接状态
+TaplinkSDK.isConnected(): Boolean
+
+// 获取已连接设备ID
+TaplinkSDK.getConnectedDeviceId(): String?
+
+// 获取连接模式
+TaplinkSDK.getConnectionMode(): ConnectionMode?
+
+// 获取Tapro版本号
+TaplinkSDK.getTaproVersion(): String?
+
+
+```
+---
+
+#### 交易执行
+
+```kotlin
+/**
+ * 执行支付交易
+ * 
+ * @param request 支付请求对象
+ * @param callback 支付回调
+ */
+TaplinkSDK.execute(request: PaymentRequest, callback: PaymentCallback)
+
+
+```
+---
+
+#### 交易查询
+
+```kotlin
+/**
+ * 查询交易状态
+ * 
+ * @param request 查询请求对象
+ * @param callback 支付回调
+ */
+TaplinkSDK.query(request: QueryRequest, callback: PaymentCallback)
+
+
+```
+---
+
+#### 监听器
+
+```kotlin
+// 设置连接状态监听器
+TaplinkSDK.setConnectionListener(listener: ConnectionListener)
+
+// 移除连接状态监听器
+TaplinkSDK.removeConnectionListener()
+
+
+```
+---
+
+#### 实用方法
+
+```kotlin
+// 获取 SDK 版本
+TaplinkSDK.getVersion(): String
+
+// 清除缓存的设备信息
+TaplinkSDK.clearDeviceCache()
+
+
+```
+---
+
+### 6.2 TaplinkConfig
+
+SDK 配置类，支持默认值以简化请求参数。
+
+```kotlin
+class TaplinkConfig {
+    // ========== 必需配置 ==========
+    
+    // 设置 AppId（必需）
+    fun setAppId(appId: String): TaplinkConfig
+    
+    // 设置商户 ID（必需）
+    fun setMerchantId(merchantId: String): TaplinkConfig
+    
+    // 设置签名密钥（必需）
+    fun setSecretKey(secretKey: String): TaplinkConfig
+
+    // 设置是否启用日志
+    fun setLogEnabled(enabled: Boolean): TaplinkConfig
+    // 设置日志级别
+    fun setLogLevel(level: LogLevel): TaplinkConfig
+    // ========== 默认值配置 ==========
+    // 设置默认员工信息（可选）
+    fun setDefaultStaffInfo(staffInfo: StaffInfo): TaplinkConfig
+}
+
+
+```
+
+**使用示例：**
+
+```kotlin
+val defaultStaffInfo = StaffInfo()
+    .setOperatorId("OP001")
+
+val config = TaplinkConfig()
+    .setAppId("your_app_id")
+    .setMerchantId("your_merchant_id")
+    .setSecretKey("your_secret_key")
+    .setDefaultStaffInfo(defaultStaffInfo)
+
+TaplinkSDK.init(this, config)
+
+
+```
+---
+
+### 6.3 ConnectionConfig
+
+SDK 连接配置类
+
+```kotlin
+class ConnectionConfig {
+    // ========== 必需配置 ==========
+    
+    // 设置连接模式（必需）
+    fun setConnectionMode(mode: ConnectionMode): ConnectionConfig
+    
+    // 设置主机地址（LAN模式首次必需）
+    fun setHost(host: String): ConnectionConfig
+    
+    // 设置端口号（LAN模式首次必需）
+    fun setPort(port: Int): ConnectionConfig
+
+    // 设置线缆协议
+    fun setCableProtocol(protocol: CableProtocol): ConnectionConfig
+
+    // 设置连接超时时间
+    fun setConnectionTimeout(seconds: Int): ConnectionConfig
+  
+    // 设置是否启用自动重连
+    fun setAutoReconnect(enabled: Boolean): ConnectionConfig
+
+    //设置重试策略(maxRetries - 最大重试次数,delayMs - 重试延迟时间（毫秒）)
+    fun setRetryPolicy(maxRetries: Int, delayMs: Long): ConnectionConfig
+}
+
+
+```
+
+**使用示例：**
+
+```kotlin
+val defaultStaffInfo = StaffInfo()
+    .setOperatorId("OP001")
+
+val config = ConnectionConfig()
+    .setConnectionMode(ConnectionMode.CABLE)
+    .setCableProtocol(CableProtocol.AUTO)
+    .setConnectionTimeout(60)
+    .setAutoReconnect(true)
+
+TaplinkSDK.connect(config,connectCallback)
+
+
+```
+---
+
+### 6.3 PaymentRequest
+
+支付请求类，具有全面的字段支持。
+
+#### 基本字段
+
+```kotlin
+class PaymentRequest {
+    // 设置交易类型（必需）
+    // 值：SALE, REFUND, VOID, AUTH, POST_AUTH, INCREMENT_AUTH, 
+    //     FORCED_AUTH, TIP_ADJUST, BATCH_CLOSE
+    fun setAction(action: String): PaymentRequest
+    
+    // 设置商户订单号（必需，6-32 个字符）
+    fun setReferenceOrderId(referenceOrderId: String): PaymentRequest
+    
+    // 设置交易请求 ID（必需）
+    fun setTransactionRequestId(transactionRequestId: String): PaymentRequest
+    
+    // 设置描述（必需）
+    fun setDescription(description: String): PaymentRequest
+    
+    // 设置金额信息（必需）
+    fun setAmount(amount: AmountInfo): PaymentRequest
+    
+    // 设置支付方式信息（可选）
+    fun setPaymentMethod(paymentMethod: PaymentMethodInfo): PaymentRequest
+    
+    // 设置原始交易 ID（退款/撤销/授权完成时必需）
+    fun setOriginalTransactionId(originalTransactionId: String): PaymentRequest
+    
+    // 设置原始交易请求 ID（originalTransactionId 的替代）
+    fun setOriginalTransactionRequestId(originalTransactionRequestId: String): PaymentRequest
+    
+    // 设置小费金额（小费调整时必需）
+    fun setTipAmount(tipAmount: BigDecimal): PaymentRequest
+    
+    // 设置强制授权码（强制授权时必需）
+    fun setForcedAuthCode(forcedAuthCode: String): PaymentRequest
+    
+    // 设置退款原因（可选）
+    fun setReason(reason: String): PaymentRequest
+    
+    // 设置附加数据（可选）
+    fun setAttach(attach: String): PaymentRequest
+    
+    // 设置通知URL（可选）
+    fun setNotifyUrl(notifyUrl: String): PaymentRequest
+    
+    // 设置过期时间（可选）
+    fun setTimeExpire(timeExpire: String): PaymentRequest
+}
+
+
+```
+
+#### 支持类
+
+**AmountInfo - 金额信息：**
+
+```kotlin
+class AmountInfo {
+    fun setOrderAmount(orderAmount: BigDecimal): AmountInfo
+    fun setTipAmount(tipAmount: BigDecimal): AmountInfo
+    fun setTaxAmount(taxAmount: BigDecimal): AmountInfo
+    fun setSurchargeAmount(surchargeAmount: BigDecimal): AmountInfo
+    fun setCashbackAmount(cashbackAmount: BigDecimal): AmountInfo
+    fun setPricingCurrency(pricingCurrency: String): AmountInfo
+}
+
+
+```
+
+**注意：** 所有金额字段都以**最小货币单位**返回。例如，USD以分为单位，JPY以日元为单位。
+
+**PaymentMethodInfo - 支付方式信息：**
+
+```kotlin
+class PaymentMethodInfo {
+    // 支付方式类别
+    // 值：CARD, CARD-CREDIT, CARD-DEBIT, QR-MPM, QR-CPM, CASH
+    fun setCategory(category: String): PaymentMethodInfo
+    
+    // 具体支付方式 ID
+    // 二维码支付：WECHAT, ALIPAY
+    fun setId(id: String): PaymentMethodInfo
+}
+
+
+```
+---
+
+### 6.4 QueryRequest
+
+查询请求类。
+
+```kotlin
+class QueryRequest {
+    // 设置交易 ID（与 transactionRequestId 二选一）
+    fun setTransactionId(transactionId: String): QueryRequest
+    
+    // 设置交易请求 ID（与 transactionId 二选一）
+    fun setTransactionRequestId(transactionRequestId: String): QueryRequest
+}
+
+
+```
+
+**注意：** 不支持通过 `referenceOrderId` 查询。
+
+---
+
+### 6.5 PaymentResponse
+
+支付响应类，包含成功交易的完整信息。
+
+```kotlin
+class PaymentResponse {
+    // ========== 基本响应字段 ==========
+    val code: String                    // 响应码，"100" 表示成功
+    val message: String                 // 响应描述
+    val traceId: String                 // 追踪 ID
+    
+    // ========== 交易标识符 ==========
+    val transactionId: String           // 交易 ID
+    val referenceOrderId: String        // 商户订单号
+    val transactionRequestId: String    // 交易请求 ID
+    
+    // ========== 交易状态 ==========
+    val transactionStatus: String       // SUCCESS, PROCESSING, FAILED
+    val transactionType: String         // SALE, AUTH, REFUND, VOID 等
+    
+    // ========== 金额信息 ==========
+    val amount: TransactionAmount       // 交易金额详情
+    
+    // ========== 时间字段 ==========
+    val createTime: String              // 交易创建时间
+    val completeTime: String            // 交易完成时间
+    
+    // ========== 卡信息 ==========
+    val cardInfo: CardInfo?             // 卡片信息
+    
+    // ========== 交易凭证 ==========
+    val batchNo: Int                    // 批次号
+    val voucherNo: String               // 凭证号
+    val stan: String                    // 系统跟踪审计号
+    val rrn: String                     // 检索参考号
+    val authCode: String                // 授权码
+    
+    // ========== 交易结果 ==========
+    val transactionResultCode: String   // 通道交易结果码
+    val transactionResultMsg: String    // 通道交易结果消息
+    
+    // ========== 其他信息 ==========
+    val description: String             // 商品描述
+    val attach: String?                 // 附加数据
+    
+    // ========== 批次关闭特定 ==========
+    val batchCloseInfo: BatchCloseInfo? // 批次关闭信息
+}
+
+
+```
+
+**TransactionAmount - 交易金额：**
+
+```kotlin
+class TransactionAmount {
+    val priceCurrency: String           // 定价货币
+    val transAmount: BigDecimal             // 交易金额
+    val orderAmount: BigDecimal             // 订单金额
+    val taxAmount: BigDecimal               // 税额
+    val serviceFee: BigDecimal              // 服务费
+    val surchargeAmount: BigDecimal         // 附加费
+    val tipAmount: BigDecimal               // 小费
+    val cashbackAmount: BigDecimal          // 现金返还
+}
+
+
+```
+
+**注意：** 所有金额字段都以**最小货币单位**返回。例如，USD以分为单位，JPY以日元为单位。
+
+**BatchCloseInfo - 批次关闭信息：**
+
+```kotlin
+class BatchCloseInfo {
+    val totalCount: Int                 // 交易数量
+    val totalAmount: BigDecimal             // 批次总金额
+    val totalTip: BigDecimal                // 总小费
+    val totalTax: BigDecimal                // 总税金额
+    val totalSurchargeAmount: BigDecimal    // 总附加费
+    val totalServiceFee: BigDecimal         // 总服务费
+    val cashDiscount: BigDecimal            // 总现金优惠
+    val closeTime: String               // 批次关闭时间
+}
+
+
+```
+
+**注意：**所有金额字段都以最小货币单位返回。例如，USD以分为单位，JPY以日元为单位。
+
+---
+
+### 6.6 PaymentError
+
+支付错误类，包含结构化的错误信息和处理建议。
+
+#### ErrorDetail - 错误详情类
+
+```kotlin
+/**
+ * 错误详情类
+ * 包含错误的完整信息和处理建议
+ */
+data class ErrorDetail(
+    val code: String,              // 错误码（如 "306", "307"）
+    val message: String,           // 错误描述（如 "响应超时"）
+    val suggestion: String,        // 处理建议（如 "先查询交易状态，确认后再重试"）
+    val category: ErrorCategory,   // 错误分类
+    val canRetryWithSameId: Boolean // 是否可以使用相同的transactionRequestId重试
+)
+
+```
+
+**ErrorDetail 字段说明：**
+
+| **字段** | **类型** | **说明** | **示例** |
+| --- | --- | --- | --- |
+| `code` | String | 错误码 | "306", "307", "201" |
+| `message` | String | 错误描述 | "响应超时", "交易被拒绝" |
+| `suggestion` | String | 处理建议 | "先查询交易状态，确认后再重试" |
+| `category` | ErrorCategory | 错误分类 | TRANSACTION, CONNECTION |
+| `canRetryWithSameId` | Boolean | 是否可用相同ID重试 | true, false |
+
+---
+
+#### ErrorCategory - 错误分类枚举
+
+```kotlin
+/**
+ * 错误分类枚举
+ */
+enum class ErrorCategory {
+    INITIALIZATION,    // 初始化错误（20x）
+    CONNECTION,        // 连接错误（21x, 23x, 24x, 25x）
+    AUTHENTICATION,    // 认证错误（221）
+    TRANSACTION        // 交易处理错误（30x, 399）
+}
+
+```
+
+**ErrorCategory 分类说明：**
+
+| **分类** | **错误码范围** | **说明** |
+| --- | --- | --- |
+| `INITIALIZATION` | 20x | SDK初始化相关错误 |
+| `CONNECTION` | 21x, 23x, 24x, 25x | 连接状态和连接失败错误 |
+| `AUTHENTICATION` | 221 | 认证失败错误 |
+| `TRANSACTION` | 30x, 399 | 交易处理相关错误 |
+
+---
+
+#### PaymentError - 支付错误类
+
+```kotlin
+/**
+ * 支付错误类
+ */
+class PaymentError(
+    val detail: ErrorDetail,                // 错误详情
+    val traceId: String? = null,           // 追踪 ID
+    val referenceOrderId: String? = null,  // 商户订单号
+    val transactionId: String? = null,     // 交易 ID
+    val transactionRequestId: String? = null // 交易请求 ID
+) {
+    // 向后兼容的便捷属性
+    val code: String get() = detail.code
+    val message: String get() = detail.message
+    val suggestion: String get() = detail.suggestion
+    val canRetryWithSameId: Boolean get() = detail.canRetryWithSameId
+}
+
+```
+
+**PaymentError 字段说明：**
+
+| **字段** | **类型** | **说明** |
+| --- | --- | --- |
+| `detail` | ErrorDetail | 错误详情对象，包含错误码、描述、建议等 |
+| `traceId` | String? | 追踪 ID，用于问题排查 |
+| `referenceOrderId` | String? | 商户订单号 |
+| `transactionId` | String? | 交易 ID |
+| `transactionRequestId` | String? | 交易请求 ID |
+
+**便捷属性（向后兼容）：**
+
+| **属性** | **类型** | **说明** |
+| --- | --- | --- |
+| `code` | String | 等同于 `detail.code` |
+| `message` | String | 等同于 `detail.message` |
+| `suggestion` | String | 等同于 `detail.suggestion` |
+| `canRetryWithSameId` | Boolean | 等同于 `detail.canRetryWithSameId` |
+
+---
+
+#### 使用示例
+
+**方式1：直接使用便捷属性（向后兼容）**
+
+```kotlin
+TaplinkSDK.execute(request, object : PaymentCallback {
+    override fun onFailure(error: PaymentError) {
+        // 直接访问便捷属性
+        Log.e(TAG, "错误码: ${error.code}")
+        Log.e(TAG, "错误描述: ${error.message}")
+        Log.e(TAG, "处理建议: ${error.suggestion}")
+        
+        // 显示错误信息
+        showErrorDialog(
+            title = "支付失败",
+            message = error.message,
+            suggestion = error.suggestion
+        )
+    }
+})
+
+```
+
+**方式2：根据错误分类处理**
+
+```kotlin
+TaplinkSDK.execute(request, object : PaymentCallback {
+    override fun onFailure(error: PaymentError) {
+        when (error.detail.category) {
+            ErrorCategory.INITIALIZATION -> {
+                // 初始化错误：需要重新初始化SDK
+                showDialog(
+                    title = "初始化错误",
+                    message = error.message,
+                    suggestion = error.suggestion,
+                    action = "重新初始化"
+                ) {
+                    reinitializeSDK()
+                }
+            }
+            
+            ErrorCategory.CONNECTION -> {
+                // 连接错误：需要重新建立连接
+                showDialog(
+                    title = "连接错误",
+                    message = error.message,
+                    suggestion = error.suggestion,
+                    action = "重新连接"
+                ) {
+                    reconnect()
+                }
+            }
+            
+            ErrorCategory.AUTHENTICATION -> {
+                // 认证错误：需要检查认证参数
+                showDialog(
+                    title = "认证失败",
+                    message = error.message,
+                    suggestion = error.suggestion,
+                    action = "检查配置"
+                ) {
+                    openSettings()
+                }
+            }
+            
+            ErrorCategory.TRANSACTION -> {
+                // 交易错误：根据重试规则处理
+                if (error.canRetryWithSameId) {
+                    // 可以使用相同ID重试
+                    showDialog(
+                        title = "交易失败",
+                        message = error.message,
+                        suggestion = error.suggestion,
+                        action = "重试"
+                    ) {
+                        retryWithSameRequest()
+                    }
+                } else {
+                    // 必须使用新ID
+                    showDialog(
+                        title = "交易失败",
+                        message = error.message,
+                        suggestion = error.suggestion,
+                        action = "重新发起"
+                    ) {
+                        createNewTransaction()
+                    }
+                }
+            }
+        }
+    }
+})
+
+```
+
+**方式3：根据错误码精确处理**
+
+```kotlin
+TaplinkSDK.execute(request, object : PaymentCallback {
+    override fun onFailure(error: PaymentError) {
+        when (error.code) {
+            "306" -> {
+                // 响应超时：先查询状态
+                showDialog(
+                    title = "响应超时",
+                    message = error.message,
+                    suggestion = error.suggestion,
+                    primaryAction = "查询状态",
+                    secondaryAction = "取消"
+                ) {
+                    queryTransactionStatus(error.transactionRequestId)
+                }
+            }
+            
+            "307" -> {
+                // 交易被拒绝：必须使用新ID
+                showDialog(
+                    title = "交易被拒绝",
+                    message = error.message,
+                    suggestion = error.suggestion,
+                    action = "重新发起"
+                ) {
+                    createNewTransaction()
+                }
+            }
+            
+            "308" -> {
+                // 交易处理中：查询状态或使用新ID
+                showDialog(
+                    title = "交易处理中",
+                    message = error.message,
+                    suggestion = error.suggestion,
+                    primaryAction = "查询状态",
+                    secondaryAction = "重新发起"
+                ) {
+                    queryTransactionStatus(error.transactionRequestId)
+                }
+            }
+            
+            "201" -> {
+                // SDK未初始化
+                showDialog(
+                    title = "SDK未初始化",
+                    message = error.message,
+                    suggestion = error.suggestion,
+                    action = "初始化"
+                ) {
+                    initializeSDK()
+                }
+            }
+            
+            "231" -> {
+                // Tapro应用未安装
+                showDialog(
+                    title = "Tapro应用未安装",
+                    message = error.message,
+                    suggestion = error.suggestion,
+                    action = "安装"
+                ) {
+                    installTapro()
+                }
+            }
+            
+            else -> {
+                // 其他错误：根据重试规则处理
+                if (error.canRetryWithSameId) {
+                    showRetryDialog(error)
+                } else {
+                    showErrorDialog(error)
+                }
+            }
+        }
+    }
+})
+
+```
+---
+
+#### 设计优势
+
+1.  **开发者友好**：不需要查文档就知道如何处理错误
+    
+    *   `message`：清晰的错误描述
+        
+    *   `suggestion`：具体的处理建议
+        
+    *   `canRetryWithSameId`：明确的重试规则
+        
+2.  **类型安全**：枚举提供类型安全的错误分类
+    
+    *   编译时检查，避免拼写错误
+        
+    *   IDE 自动补全，提高开发效率
+        
+3.  **向后兼容**：通过便捷属性保持兼容性
+    
+    *   现有代码无需修改
+        
+    *   可以逐步迁移到新API
+        
+4.  **易于扩展**：未来可添加更多字段
+    
+    *   `severity`：错误严重程度（INFO, WARNING, ERROR, CRITICAL）
+        
+    *   `retryAfter`：建议的重试延迟时间
+        
+    *   `helpUrl`：帮助文档链接
+        
+5.  **支持国际化**：可根据语言返回不同的 message 和 suggestion
+    
+    *   SDK 内部根据系统语言返回对应文本
+        
+    *   开发者无需手动处理多语言
+        
+
+---
+
+### 6.7 PaymentEvent
+
+支付进度事件类。
+
+```kotlin
+class PaymentEvent {
+    val status: String                  // 状态码
+    val message: String                 // 状态描述
+    val progress: Int                   // 进度（0-100）
+    val timestamp: Long                 // 时间戳
+}
+
+
+```
+
+**可用的事件状态码：**
+
+| **状态码** | **描述** |
+| --- | --- |
+| PROCESSING | 处理中 |
+| WAITING\_CARD | 等待刷卡/插卡/挥卡 |
+| CARD\_DETECTED | 检测到卡 |
+| READING\_CARD | 读取卡信息 |
+| WAITING\_PIN | 等待输入 PIN |
+| WAITING\_SIGNATURE | 等待签名 |
+| WAITING\_RESPONSE | 等待联机请求结果 |
+| PRINTING | 打印小票 |
+| COMPLETED | 交易完成 |
+| CANCEL | 交易取消 |
+
+---
+
+### 6.8 CardInfo
+
+卡信息类。
+
+```kotlin
+class CardInfo {
+    val maskedPan: String               // 掩码卡号（411111******1111）
+    val cardNetworkType: String         // 卡网络类型（CREDIT, DEBIT, EGC, UNKNOWN）
+    val paymentMethodId: String         // 支付方式 ID（VISA, MASTERCARD 等）
+    val subPaymentMethodId: String?     // 子支付方式 ID
+    val entryMode: String               // 输入模式
+    val authenticationMethod: String    // 认证方式
+    val cardholderName: String?         // 持卡人姓名
+    val expiryDate: String?             // 到期日期（MM/YY）
+    val issuerBank: String?             // 发卡行
+    val cardBrand: String?              // 卡品牌
+}
+
+
+```
+---
+
+### 6.9 回调接口
+
+#### PaymentCallback
+
+```kotlin
+interface PaymentCallback {
+    // 成功回调
+    fun onSuccess(result: PaymentResponse)
+    
+    // 失败回调
+    fun onFailure(error: PaymentError)
+    
+    // 进度回调（可选实现）
+    fun onProgress(event: PaymentEvent) {}
+}
+
+
+```
+
+**重要说明：**
+
+*   `onSuccess()`：表示 交易成功
+    
+*   `onFailure()`：表示 SDK 级别的错误或网络错误或者交易失败
+    
+
+**使用示例：**
+
+```kotlin
+TaplinkSDK.execute(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResponse) {
+        if (result.isSuccess()) {
+            // 交易成功
+            handleSuccess(result.transactionId)
+        } else {
+            // 交易失败
+            handleFailure(result.message)
+        }
+    }
+    
+    override fun onFailure(error: PaymentError) {
+      if(error.code=="332" || error.code == "333"){
+        //需要查询
+        handleQuery()
+      }else{
+        // SDK 错误或网络错误或交易失败
+        handleError(error)
+      }
+    }
+    
+    override fun onProgress(event: PaymentEvent) {
+        // 更新进度
+        updateProgress(event.message)
+    }
+})
+
+
+```
+
+#### ConnectionListener
+
+```kotlin
+interface ConnectionListener {
+    // 连接成功
+    fun onConnected(deviceId: String, taproVersion: String)
+    
+    // 连接断开
+    fun onDisconnected(reason: String)
+    
+    // 连接错误
+    fun onError(error: ConnectionError)
+}
+
+
+```
+---
+
+### 6.10 枚举类型
+
+#### ConnectionMode
+
+```kotlin
+enum class ConnectionMode {
+    APP_TO_APP,     // 应用间模式
+    CABLE,          // 线缆模式
+    LAN             // 局域网模式
+}
+
+
+```
+
+#### CableProtocol
+
+```kotlin
+enum class CableProtocol {
+    AUTO,           // 自动检测
+    USB_AOA,        // USB Android Open Accessory 2.0
+    USB_VSP,        // USB Virtual Serial Port
+    RS232           // 标准 RS232 串行通信
+}
+
+
+```
+---
+
+## 错误码参考
+
+### 7.1 错误码范围说明
+
+Taplink SDK 的错误码采用分段设计，每个范围对应不同的错误类型，便于快速定位问题。
+
+**注意：** 错误码 **100** 表示操作成功，是成功响应码而非错误码。其余 **20x-39x** 为错误码。
+
+#### 错误码分段
+
+| 错误码范围 | 错误类型 | 说明 |
+| --- | --- | --- |
+| **100** | 成功响应 | 操作成功（非错误码） |
+| **20x** | 初始化错误 | SDK初始化相关问题 |
+| **21x** | 连接状态/失败 | 连接状态管理和连接失败 |
+| **23x** | 本地模式连接失败 | 同设备APP\_TO\_APP模式连接问题 |
+| **24x** | 局域网模式连接失败 | LAN模式网络连接问题 |
+| **25x** | USB模式连接失败 | CABLE模式线缆连接问题 |
+| **30x + 399** | 交易处理错误 | 交易参数、发送、状态等问题 |
+
+---
+
+### 7.2 完整错误码列表
+
+点击展开查看所有错误码（共32个）
+
+| 错误码 | 错误分类 | 错误说明 | 解决方法 | transactionRequestId重试规则 |
+| --- | --- | --- | --- | --- |
+| **100** | 成功 | 操作成功 | 无需处理 | \- |
+| **201** | 初始化错误 | SDK未初始化 | 调用 `TaplinkSDK.init()` 初始化SDK | \- |
+| **202** | 初始化错误 | SDK服务异常 | 重启应用 | \- |
+| **203** | 初始化错误 | Tapro初始化失败 | 重新连接 | \- |
+| **211** | 连接状态错误 | 连接已存在，无需重复连接 | 无需重复连接 | \- |
+| **212** | 连接状态错误 | 设备未连接 | 先调用 `connect()` 建立连接 | \- |
+| **213** | 连接状态错误 | 连接已断开 | 重新调用 `connect()` | \- |
+| **214** | 连接失败 | 无法建立连接 | 检查网络或设备状态后重试 | \- |
+| **221** | 连接失败 | 认证失败 | 检查appId和secretKey是否正确 | \- |
+| **231** | 本地模式连接失败 | Tapro应用未安装 | 安装Tapro应用 | \- |
+| **232** | 本地模式连接失败 | 无法连接到Tapro | 重启Tapro应用或设备 | \- |
+| **241** | 局域网模式连接失败 | 无法连接到服务端 | 检查网络连接和防火墙设置 | \- |
+| **242** | 局域网模式连接失败 | 无法发现服务端 | 手动输入服务端IP地址 | \- |
+| **251** | USB模式连接失败 | 线缆未连接 | 连接USB线或串口线 | \- |
+| **252** | USB模式连接失败 | USB权限被拒绝 | 授权应用使用USB设备 | \- |
+| **253** | USB模式连接失败 | USB连接超时 | 重新插拔USB线 | \- |
+| **254** | USB模式连接失败 | USB协议不支持 | 使用自动检测模式，或联系技术支持 | \- |
+| **255** | USB模式连接失败 | 串口设备未就绪 | 重新插拔串口线 | \- |
+| **301** | 交易处理错误 | 缺少必填参数 | 检查金额、交易类型等必填参数 | 可以 |
+| **302** | 交易处理错误 | 请求数据格式错误 | 检查参数格式是否符合API文档要求 | 可以 |
+| **303** | 交易处理错误 | 不支持的交易类型 | 检查action参数（SALE/REFUND/VOID等） | 可以 |
+| **304** | 交易处理错误 | 请求发送失败 | 检查网络连接后重试 | 可以 |
+| **305** | 交易处理错误 | 交易正在进行 | 等待当前交易完成 | 可以 |
+| **306** | 交易处理错误 | 响应超时 | **先查询交易状态，确认后再重试** | 先查询 |
+| **307** | 交易处理错误 | 交易被拒绝 | 检查参数后使用新ID重试 | 必须用新ID |
+| **308** | 交易处理错误 | 交易处理中 | **先查询交易状态，确认后再重试** | 先查询 |
+| **309** | 交易处理错误 | 交易已终止 | 不要重试 | 不要重试 |
+| **310** | 交易处理错误 | 余额不足 | 提示用户余额不足，使用新ID重试 | 必须用新ID |
+| **311** | 交易处理错误 | 密码错误 | 提示用户重新输入密码，使用新ID重试 | 必须用新ID |
+| **312** | 交易处理错误 | 查询交易失败 | 检查连接状态后重试查询，或检查交易ID是否有效 | 可以 |
+| **399** | 交易处理错误 | 交易失败 | 查看错误详情，使用新ID重试 | 必须用新ID |
+
+**说明：**
+
+*   **可以** = 可以使用相同的transactionRequestId重试（安全）
+    
+*   **先查询** = 需要先查询交易状态再决定
+    
+*   **必须用新ID** = 必须使用新的transactionRequestId（防止重复扣款）
+    
+*   **不要重试** = 交易已终止，不应该重试
+    
+*   **\-** = 不适用（连接错误或非交易错误，不涉及transactionRequestId）
+    
+
+---
+
+### 7.3 错误码速查表
+
+#### 初始化问题
+
+| 错误码 | 问题 | 快速解决 |
+| --- | --- | --- |
+| 201 | SDK未初始化 | 调用 `TaplinkSDK.init()` |
+| 202 | SDK服务异常 | 重启应用 |
+| 203 | Tapro初始化失败 | 重新连接 |
+
+#### 连接问题
+
+| 错误码 | 问题 | 快速解决 |
+| --- | --- | --- |
+| 211-213 | 连接状态错误 | 检查连接状态，重新调用 `connect()` |
+| 214, 221 | 连接失败 | 检查网络/设备/认证参数 |
+| 231-232 | 本地模式连接失败 | 安装Tapro应用或重启设备 |
+| 241-242 | 局域网模式连接失败 | 检查网络和IP地址 |
+| 251-255 | USB模式连接失败 | 检查线缆连接和USB权限 |
+
+#### 交易问题
+
+| 错误码 | 问题 | 快速解决 | 重试规则 |
+| --- | --- | --- | --- |
+| 301-305 | 参数/发送错误 | 检查参数和网络 | ✅ 可用相同ID |
+| 306 | 响应超时 | **先查询状态** | ⚠️ 先查询再决定 |
+| 312 | 查询交易失败 | 检查连接状态后重试查询 | ✅ 可用相同ID |
+| 307-311, 399 | 交易失败 | 查看详情，重新发起 | ❌ 必须用新ID |
+
+---
+
+## 常见问题
+
+### Q1: 如何检查设备是否已连接？
+
+```kotlin
+val isConnected = TaplinkSDK.isConnected()
+if (isConnected) {
+    // 已连接，可以发起交易
+    processPayment()
+} else {
+    // 未连接，提示用户
+    Toast.makeText(this, "请先连接到支付终端", Toast.LENGTH_SHORT).show()
+    startActivity(Intent(this, ConnectionActivity::class.java))
+}
+
+
+```
+---
+
+### Q2: 如何获取已连接设备的信息？
+
+```kotlin
+val deviceId = TaplinkSDK.getConnectedDeviceId()
+val mode = TaplinkSDK.getConnectionMode()
+val version = TaplinkSDK.getTaproVersion()
+
+
+```
+---
+
+### Q3: 如何处理交易超时？
+
+**简答：** 使用轮询查询机制检查交易状态。
+
+详细实现请参考 [9.6 超时处理](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mkcej2yqaiksz0vk1l)
+
+---
+
+### Q4: 如何避免重复扣款？
+
+**核心原则：**
+
+*   **特殊错误码**（307/308）→ 必须使用**新** `transactionRequestId`，不能使用相同ID
+    
+*   **响应超时**（306）→ 先查询交易状态，确认结果后再使用**相同** `transactionRequestId` 重试
+    
+*   **其他错误码**（除307/308外）→ 可以使用**相同** `transactionRequestId` 重试
+    
+
+---
+
+### Q5: referenceOrderId 和 transactionRequestId 有什么区别？
+
+**快速对比：**
+
+*   **referenceOrderId**: 商户订单号（1个订单可包含多笔交易）
+    
+*   **transactionRequestId**: 交易请求ID（每笔交易唯一）
+    
+
+详细说明请参考 [2.2 订单与交易关系](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mix41n4l9csia0sg8t)
+
+---
+
+### Q6: 如何处理网络断开？
+
+**简答：** SDK 会自动重连，只需监听连接状态变化。
+
+详细实现请参考 [9.1 连接状态监听](https://alidocs.dingtalk.com/i/nodes/YQBnd5ExVEwxlRnqfAPlYjvD8yeZqMmz?utm_scene=team_space&iframeQuery=anchorId%3Duu_mix17s6x5p1a9xev3ie)
+
+---
+
+## 最佳实践
+
+### 必须遵循（Critical）
+
+#### 9.1 连接状态监听
+
+监控设备连接状态变化，确保支付功能可用。
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // 设置全局连接监听器
+        TaplinkSDK.setConnectionListener(object : ConnectionListener {
+            override fun onConnected(deviceId: String, taproVersion: String) {
+                runOnUiThread {
+                    updateConnectionStatus("已连接到 Tapro $taproVersion")
+                    enablePaymentButtons(true)
+                }
+            }
+            
+            override fun onDisconnected(reason: String) {
+                runOnUiThread {
+                    updateConnectionStatus("已断开：$reason")
+                    enablePaymentButtons(false)
+                }
+            }
+            
+            override fun onError(error: ConnectionError) {
+                runOnUiThread {
+                    updateConnectionStatus("连接错误：${error.message}")
+                }
+            }
+        })
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        TaplinkSDK.removeConnectionListener()
+    }
+}
+
+
+```
+---
+
+#### 9.2 错误处理
+
+```kotlin
+TaplinkSDK.execute(request, object : PaymentCallback {
+    override fun onSuccess(result: PaymentResponse) {
+        // 支付成功
+        showSuccess(result.transactionId)
+    }
+    
+    override fun onFailure(error: PaymentError) {
+        // SDK错误或网络错误
+        when (error.code) {
+            // 特殊错误码：308 必须使用新ID
+            "308" -> {
+                // 这些错误码必须使用新的 transactionRequestId
+                showError("${error.message}，请使用新的交易请求ID重试")
+            }
+            // 其他所有错误码都可以使用相同ID重试
+            else -> retryWithSameId()  // 使用相同ID重试
+        }
+    }
+})
+
+
+```
+
+**完整版（生产环境）：**
+
+```kotlin
+class PaymentManager {
+    private var currentRequest: PaymentRequest? = null
+    
+    fun handlePaymentError(error: PaymentError) {
+        val errorCode = error.code
+        val errorMessage = error.message
+        
+        when (errorCode) {
+            // 特殊错误码：306、308
+            "306" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("响应超时")
+                    .setMessage("交易状态未知，必须使用新的交易请求ID重试")
+                    .setPositiveButton("使用新ID重试") { _, _ ->
+                        processPayment()  // 创建新交易
+                    }
+                    .setNegativeButton("查询状态") { _, _ ->
+                        queryTransactionStatus()
+                    }
+                    .show()
+            }
+            
+            "307" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("host交易拒绝")
+                    .setMessage("交易被host拒绝，必须使用新的交易请求ID重试")
+                    .setPositiveButton("使用新ID重试") { _, _ ->
+                        processPayment()  // 创建新交易
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+            }
+            
+            "308" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("交易处理中")
+                    .setMessage("Host正在处理交易，请查询交易状态。如需重试，必须使用新的交易请求ID")
+                    .setPositiveButton("查询状态") { _, _ ->
+                        queryTransactionStatus()
+                    }
+                    .show()
+            }
+            
+            // 其他所有错误码都可以使用相同ID重试
+            else -> {
+                Toast.makeText(context, 
+                    "错误：${errorMessage}，使用相同请求ID重试", 
+                    Toast.LENGTH_SHORT).show()
+                // 3秒后自动重试
+                Handler(Looper.getMainLooper()).postDelayed({
+                    retryWithSameRequestId()
+                }, 3000)
+            }
+            
+            // 初始化错误 - 需要修复
+            "201" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("SDK未初始化")
+                    .setMessage("请先初始化SDK")
+                    .setPositiveButton("确定", null)
+                    .show()
+            }
+            
+            "231" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("Tapro应用未安装")
+                    .setMessage("请安装Tapro应用")
+                    .setPositiveButton("确定", null)
+                    .show()
+            }
+            
+            // 连接错误
+            "212" -> {
+                AlertDialog.Builder(context)
+                    .setTitle("未建立连接")
+                    .setMessage("请先建立连接")
+                    .setPositiveButton("确定", null)
+                    .show()
+            }
+            
+            // 参数错误 - 需要修复
+            "311", "312", "313", "314", "315", "316"  -> {
+                AlertDialog.Builder(context)
+                    .setTitle("参数错误")
+                    .setMessage("请检查请求参数")
+                    .setPositiveButton("确定", null)
+                    .show()
+            }
+            
+            // 其他错误
+            else -> {
+                AlertDialog.Builder(context)
+                    .setTitle("支付失败")
+                    .setMessage("$errorMessage (错误码: $errorCode)")
+                    .setPositiveButton("确定", null)
+                    .show()
+            }
+        }
+    }
+    
+    /**
+     * 使用相同的 transactionRequestId 重试
+     */
+    private fun retryWithSameRequestId() {
+        currentRequest?.let {
+            TaplinkSDK.execute(it, callback)
+        }
+    }
+}
+
+
+```
+---
+
+### 强烈建议（Recommended）
+
+#### 9.4 进度事件处理
+
+提供友好的用户反馈，提升用户体验。
+
+```kotlin
+override fun onProgress(event: PaymentEvent) {
+    val status = event.status
+    val message = event.message
+    val progress = event.progress
+    
+    runOnUiThread {
+        // 更新进度条
+        progressBar.progress = progress
+        
+        // 更新状态文本
+        tvStatus.text = message
+        
+        // 根据状态显示不同的 UI
+        when (status) {
+            "PROCESSING" -> showProcessingAnimation("处理中...")
+            "WAITING_CARD" -> showCardPrompt("请插入、刷卡或挥卡")
+            "CARD_DETECTED" -> showCardPrompt("已检测到卡片")
+            "READING_CARD" -> showProcessingAnimation("正在读取卡片信息")
+            "WAITING_PIN" -> showPinPrompt("请在支付终端上输入 PIN")
+            "WAITING_SIGNATURE" -> showSignaturePrompt("请在支付终端上签名")
+            "WAITING_RESPONSE" -> showProcessingAnimation("等待支付网关响应...")
+            "PRINTING" -> showProcessingAnimation("正在打印小票...")
+            "COMPLETED" -> hideAllPrompts()
+            "CANCEL" -> showCancelMessage("交易已取消")
+        }
+    }
+}
+
+
+```
+---
+
+#### 9.5 订单管理
+
+在本地数据库中保存订单信息，便于对账和查询。
+
+```kotlin
+data class Order(
+    val orderNo: String,
+    val transactionId: String?,
+    val amount: BigDecimal,
+    val currency: String,
+    val status: String,  // PENDING, PAID, FAILED, REFUNDED, VOIDED
+    val createTime: Long,
+    val updateTime: Long
+)
+
+class OrderManager(private val orderDao: OrderDao) {
+    
+    // 创建订单
+    fun createOrder(request: PaymentRequest) {
+        val order = Order(
+            orderNo = request.referenceOrderId,
+            transactionId = null,
+            amount = request.amount.orderAmount,
+            currency = request.amount.pricingCurrency,
+            status = "PENDING",
+            createTime = System.currentTimeMillis(),
+            updateTime = System.currentTimeMillis()
+        )
+        orderDao.insert(order)
+    }
+    
+    // 更新订单状态
+    fun updateOrderStatus(orderNo: String, status: String, transactionId: String?) {
+        val order = orderDao.getByOrderNo(orderNo)
+        order?.let {
+            it.status = status
+            it.transactionId = transactionId
+            it.updateTime = System.currentTimeMillis()
+            orderDao.update(it)
+        }
+    }
+}
+
+
+```
+---
+
+#### 9.6 超时处理
+
+实现查询轮询机制，处理交易超时场景。
+
+```kotlin
+private fun handleTimeout(transactionRequestId: String) {
+    val dialog = ProgressDialog(this)
+    dialog.setMessage("交易超时。正在检查状态...")
+    dialog.setCancelable(false)
+    dialog.show()
+    
+    queryTransactionWithPolling(transactionRequestId) { result ->
+        dialog.dismiss()
+        if (result.isSuccess()) {
+            showSuccessDialog(result)
+        } else {
+            showRetryDialog()
+        }
+    }
+}
+
+private fun queryTransactionWithPolling(
+    transactionRequestId: String,
+    attempt: Int = 1,
+    callback: (PaymentResponse) -> Unit
+) {
+    if (attempt > 12) {
+        // 超过 12 次尝试（60 秒）
+        showDialog("交易状态未知", 
+            "请联系客服，交易请求ID：$transactionRequestId")
+        return
+    }
+    
+    val query = QueryRequest().setTransactionRequestId(transactionRequestId)
+    
+    TaplinkSDK.query(query, object : PaymentCallback {
+        override fun onSuccess(result: PaymentResponse) {
+            if (result.transactionStatus == "PROCESSING") {
+                // 5 秒后继续查询
+                Handler(Looper.getMainLooper()).postDelayed({
+                    queryTransactionWithPolling(transactionRequestId, attempt + 1, callback)
+                }, 5000)
+            } else {
+                callback(result)
+            }
+        }
+        
+        override fun onFailure(error: PaymentError) {
+            showErrorMessage("查询失败：${error.message}")
+        }
+    })
+}
+
+
+```
+---
+
+### 可选优化（Optional）
+
+#### 9.7 用户体验优化
+
+**友好的进度提示：**
+
+```kotlin
+private fun showPaymentProgress(event: PaymentEvent): String {
+    return when (event.status) {
+        "PROCESSING" -> "处理中..."
+        "WAITING_CARD" -> "请出示您的卡"
+        "CARD_DETECTED" -> "已检测到卡片"
+        "READING_CARD" -> "正在读取卡片"
+        "WAITING_PIN" -> "在终端上输入 PIN"
+        "WAITING_SIGNATURE" -> "请在终端上签名"
+        "WAITING_RESPONSE" -> "等待支付网关响应..."
+        "PRINTING" -> "正在打印小票..."
+        "COMPLETED" -> "交易完成"
+        "CANCEL" -> "交易已取消"
+        else -> event.message
+    }
+}
+
+
+```
+---
+
+#### 9.8 安全建议
+
+**保护密钥：**
+
+```kotlin
+// 错误做法：硬编码密钥
+val secretKey = "your_secret_key_here"
+
+// 正确做法：从安全存储读取
+val secretKey = SecureStorage.getSecretKey(context)
+
+// 或从服务器获取
+val secretKey = fetchSecretKeyFromServer()
+
+
+```
+
+**使用 ProGuard 混淆：**
+
+```proguard
+# proguard-rules.pro
+
+
+-keep class com.sunmi.tapro.taplink.sdk.** { *; }
+
+
+
+
+-keepclassmembers class com.sunmi.tapro.taplink.sdk.** { *; }
+
+
+
+
+```
+---
+
+#### 9.9 应用崩溃后处理
+
+应用启动时检查未完成的交易。
+
+```kotlin
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        
+        // 初始化 SDK
+        TaplinkSDK.init(this, config)
+        
+        // 检查未完成的交易
+        checkPendingTransactions()
+    }
+    
+    private fun checkPendingTransactions() {
+        // 从本地数据库获取未完成的交易
+        val pendingTransactionRequestIds = getPendingTransactionRequestIdsFromDB()
+        
+        for (transactionRequestId in pendingTransactionRequestIds) {
+            // 查询每个交易的状态
+            val query = QueryRequest().setTransactionRequestId(transactionRequestId)
+            
+            TaplinkSDK.query(query, object : PaymentCallback {
+                override fun onSuccess(result: PaymentResponse) {
+                    // 更新交易状态
+                    updateTransactionStatusInDB(transactionRequestId, result.transactionStatus)
+                }
+                
+                override fun onFailure(error: PaymentError) {
+                    // 查询失败，保持待处理状态
+                }
+            })
+        }
+    }
+}
+
+
+```
+---
+
+#### 9.10 性能优化
+
+**复用连接：**
+
+```kotlin
+class ConnectionManager {
+    private var isConnected = false
+    
+    fun ensureConnected(callback: () -> Unit) {
+        if (TaplinkSDK.isConnected()) {
+            callback()
+        } else {
+            TaplinkSDK.connect(null, object : ConnectionListener {
+                override fun onConnected(deviceId: String, taproVersion: String) {
+                    isConnected = true
+                    callback()
+                }
+                
+                override fun onDisconnected(reason: String) {
+                    isConnected = false
+                }
+                
+                override fun onError(error: ConnectionError) {
+                    isConnected = false
+                }
+            })
+        }
+    }
+}
+
+
+```
+
+**减少重连：**
+
+```kotlin
+// 监听连接状态，自动重连
+TaplinkSDK.setConnectionListener(object : ConnectionListener {
+    override fun onDisconnected(reason: String) {
+        // SDK 将自动重连
+        showMessage("连接丢失。正在重连...")
+    }
+    
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        showMessage("已重新连接")
+    }
+    
+    override fun onError(error: ConnectionError) {
+        // 处理错误
+    }
+})
+
+
+```
