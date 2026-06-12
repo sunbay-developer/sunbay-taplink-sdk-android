@@ -44,12 +44,19 @@ class ResponseProcessor {
             om.registerModule(module)
         }
 
+    // Track processed terminal events (COMPLETED/CANCEL) by traceId to prevent duplicate processing
+    // Terminal events should only be processed once even if they arrive multiple times
+    private val processedTerminalEvents = mutableSetOf<String>()
+
     init {
         LogUtil.d(TAG, "ResponseProcessor initialized")
     }
 
     /**
      * Route low-level response JSON to the matching callback.
+     * 
+     * Implements deduplication for terminal events (COMPLETED/CANCEL) to prevent
+     * duplicate processing if the same event arrives multiple times from the terminal.
      */
     fun processResponse(responseJson: String, callbackManager: LocalCallbackManager<InnerCallback?>) {
         try {
@@ -64,6 +71,25 @@ class ResponseProcessor {
 
             val isError = eventCode == ERROR_EVENT_CODE
             val shouldRemove = shouldRemoveCallback(responseJson) || isError
+
+            // Deduplicate terminal events (COMPLETED/CANCEL)
+            // If this is a terminal event and we've already processed it, skip to prevent duplicate handling
+            if (shouldRemove) {
+                val isTerminalEventAlreadyProcessed = synchronized(processedTerminalEvents) {
+                    val terminalEventKey = "$traceId:$eventCode"
+                    if (terminalEventKey in processedTerminalEvents) {
+                        LogUtil.d(TAG, "Duplicate terminal event detected: traceId=$traceId, eventCode=$eventCode, skipping")
+                        true
+                    } else {
+                        processedTerminalEvents.add(terminalEventKey)
+                        false
+                    }
+                }
+                
+                if (isTerminalEventAlreadyProcessed) {
+                    return
+                }
+            }
 
             val callback = if (shouldRemove) {
                 callbackManager.getAndRemoveCallbackByTraceId(traceId)
@@ -286,6 +312,17 @@ class ResponseProcessor {
             node.get("eventCode")?.asText()
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Clear processed terminal events tracking.
+     * Should be called when connection is reset or transaction context changes.
+     */
+    fun clearProcessedTerminalEvents() {
+        synchronized(processedTerminalEvents) {
+            processedTerminalEvents.clear()
+            LogUtil.d(TAG, "Cleared processed terminal events tracking")
         }
     }
 }
