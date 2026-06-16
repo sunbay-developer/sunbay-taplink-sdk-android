@@ -21,6 +21,7 @@ import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
@@ -197,11 +198,13 @@ class PaymentManager(
             if (!validateAmount(request, callback)) return
 
             // Convert PaymentRequest to BasicRequest
+            val appToAppMode = resolveAppToAppModeForRequest()
             val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
                 request = request,
                 version = config.version,
                 config.appId,
-                secretKey = config.secretKey
+                secretKey = config.secretKey,
+                appToAppMode = appToAppMode
             )
 
             // Serialise BasicRequest to JSON string for transport
@@ -274,6 +277,25 @@ class PaymentManager(
                 transactionRequestId = request.transactionRequestId
             )
         }
+    }
+
+    /**
+     * Resolves App-to-App mode attached to outgoing bizData.
+     *
+     * The mode is only attached for APP_TO_APP connection.
+     * If caller did not explicitly set it in ConnectionConfig, default to CUSTOM.
+     */
+    private fun resolveAppToAppModeForRequest(): String? {
+        val isAppToApp = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
+        if (!isAppToApp) {
+            return null
+        }
+        val configuredMode = connectionManager.getAppToAppMode()
+        val resolvedMode = configuredMode ?: AppToAppMode.CUSTOM
+        if (configuredMode == null) {
+            LogUtil.d(TAG, "App-to-App mode not configured, using default: ${resolvedMode.name}")
+        }
+        return resolvedMode.name
     }
 
     /**
