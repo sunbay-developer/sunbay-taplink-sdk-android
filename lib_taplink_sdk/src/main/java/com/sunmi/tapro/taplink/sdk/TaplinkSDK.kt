@@ -329,6 +329,20 @@ class TaplinkSDK private constructor() : TaplinkApi {
             getInstance().switchToManualEntry(transactionRequestId, callback)
         }
 
+        /**
+         * Open TaPro USB secondary-screen player application.
+         *
+         * POS applications should call this before showing Android Presentation content
+         * on the secondary display.
+         *
+         * @param callback Callback to receive control result
+         */
+        @JvmStatic
+        @JvmName("openSDKUsbScreenPlayer")
+        fun openUsbScreenPlayer(callback: PaymentCallback) {
+            getInstance().openUsbScreenPlayer(callback)
+        }
+
 
 
 
@@ -435,6 +449,10 @@ class TaplinkSDK private constructor() : TaplinkApi {
 
     override fun switchToManualEntry(transactionRequestId: String?, callback: PaymentCallback) {
         apiImpl.switchToManualEntry(transactionRequestId, callback)
+    }
+
+    override fun openUsbScreenPlayer(callback: PaymentCallback) {
+        apiImpl.openUsbScreenPlayer(callback)
     }
 
 
