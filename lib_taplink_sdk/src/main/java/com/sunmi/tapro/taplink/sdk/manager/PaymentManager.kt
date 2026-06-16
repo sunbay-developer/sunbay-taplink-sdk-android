@@ -103,6 +103,8 @@ class PaymentManager(
             LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
             hasPendingAutoConnectTransaction = false
         }
+        // Clear processed terminal events when connection is lost to allow fresh start on reconnection
+        responseProcessor.clearProcessedTerminalEvents()
     }
 
     /**

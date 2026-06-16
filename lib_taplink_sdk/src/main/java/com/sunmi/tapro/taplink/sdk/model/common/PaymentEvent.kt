@@ -101,9 +101,10 @@ sealed class PaymentEvent(
     object WaitingSignature : PaymentEvent("WAITING_SIGNATURE", "Waiting for signature", 55)
 
     /**
-     * Waiting for online response event.
+     * Online processing event.
+     * Represents the stage when Tapro is contacting the bank for transaction processing.
      */
-    object WaitingOnlineResponse : PaymentEvent("WAITING_RESPONSE", "Waiting for online response", 70)
+    object OnlineProcessing : PaymentEvent("ONLINE_PROCESSING", "Online processing", 70)
 
     /**
      * QR code displayed, waiting for customer to scan (MPM mode).
@@ -276,7 +277,9 @@ sealed class PaymentEvent(
                 normalized == "WAITING_PIN" || snakeCase == "WAITING_PIN" -> WaitingPin
                 normalized == "WAITING_SIGNATURE" || snakeCase == "WAITING_SIGNATURE" -> WaitingSignature
                 normalized == "PROCESSING" -> Processing
-                normalized == "WAITING_RESPONSE" || snakeCase == "WAITING_ONLINE_RESPONSE" -> WaitingOnlineResponse
+                normalized == "ONLINE_PROCESSING" || snakeCase == "ONLINE_PROCESSING" -> OnlineProcessing
+                // Backward compatibility: old event code "WAITING_RESPONSE" maps to OnlineProcessing
+                normalized == "WAITING_RESPONSE" || snakeCase == "WAITING_ONLINE_RESPONSE" -> OnlineProcessing
                 normalized == "PRINTING" -> Printing
                 normalized == "COMPLETED" || normalized == "4003" -> Completed
                 normalized == "CANCEL" -> Cancel
@@ -300,13 +303,9 @@ sealed class PaymentEvent(
                 normalized == "SCANNING_CUSTOMER_QR" || snakeCase == "SCANNING_CUSTOMER_QR" -> ScanningCustomerQr
                 normalized == "QR_PAYMENT_PROCESSING" || snakeCase == "QR_PAYMENT_PROCESSING" -> QrPaymentProcessing
 
-
-                // Special: OnlineProcessing from Tapro engine maps to WaitingOnlineResponse
-                snakeCase == "ONLINE_PROCESSING" -> WaitingOnlineResponse
-
                 else -> {
-                    // Unknown event type, use Processing as default
-                    Processing
+                    // Unknown event type, use HeadlessEvent as fallback for intermediate events
+                    HeadlessEvent(eventCode = eventCode, eventMsg = eventCode)
                 }
             }
         }
