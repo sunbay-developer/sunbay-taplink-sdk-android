@@ -203,4 +203,77 @@ class TaplinkApiImpl : TaplinkApi {
     override fun getConnectionConfig(): ConnectionConfig? {
         return connectionManager?.getAutoConnectConfig()
     }
+
+
+
+    // ==================== Headless Mode APIs ====================
+
+    override fun cancelTransaction(transactionRequestId: String?, callback: PaymentCallback) {
+        LogUtil.d(TAG, "cancelTransaction: transactionRequestId=$transactionRequestId")
+
+        if (!isConnected()) {
+            LogUtil.e(TAG, "cancelTransaction: Not connected")
+            callback.onFailure(
+                PaymentError.create(
+                    code = InnerErrorCode.E303.code,
+                    message = "Not connected to payment terminal",
+                    suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E303.code) ?: ""
+                )
+            )
+            return
+        }
+
+        // 发送 ABORT 请求到 Tapro（复用现有的 ABORT action 机制）
+        val abortRequest = PaymentRequest(
+            action = com.sunmi.tapro.taplink.sdk.enums.TransactionAction.ABORT.name,
+            transactionRequestId = transactionRequestId
+        )
+        paymentManager?.execute(abortRequest, callback)
+    }
+
+    override fun queryTransactionStatus(transactionRequestId: String, callback: PaymentCallback) {
+        LogUtil.d(TAG, "queryTransactionStatus: transactionRequestId=$transactionRequestId")
+
+        if (!isConnected()) {
+            LogUtil.e(TAG, "queryTransactionStatus: Not connected")
+            callback.onFailure(
+                PaymentError.create(
+                    code = InnerErrorCode.E303.code,
+                    message = "Not connected to payment terminal",
+                    suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E303.code) ?: ""
+                )
+            )
+            return
+        }
+
+        // 使用 QUERY action 查询交易状态
+        val queryRequest = QueryRequest.byTransactionRequestId(transactionRequestId)
+        paymentManager?.query(queryRequest, callback)
+    }
+
+    override fun switchToManualEntry(transactionRequestId: String?, callback: PaymentCallback) {
+        LogUtil.d(TAG, "switchToManualEntry: transactionRequestId=$transactionRequestId")
+
+        if (!isConnected()) {
+            LogUtil.e(TAG, "switchToManualEntry: Not connected")
+            callback.onFailure(
+                PaymentError.create(
+                    code = InnerErrorCode.E303.code,
+                    message = "Not connected to payment terminal",
+                    suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E303.code) ?: ""
+                )
+            )
+            return
+        }
+
+        // 发送 SWITCH_TO_MANUAL_ENTRY 控制请求到 Tapro。
+        // 请求会由 Tapro 按当前在途交易状态（必须 WAITING_CARD）做最终门控。
+        val switchRequest = PaymentRequest(
+            action = com.sunmi.tapro.taplink.sdk.enums.TransactionAction.SWITCH_TO_MANUAL_ENTRY.name,
+            originalTransactionRequestId = transactionRequestId
+        )
+        paymentManager?.execute(switchRequest, callback)
+    }
+
+
 }

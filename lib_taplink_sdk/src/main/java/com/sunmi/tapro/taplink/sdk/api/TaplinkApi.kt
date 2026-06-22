@@ -171,5 +171,45 @@ interface TaplinkApi {
      * Get connection information
      */
     fun getConnectionConfig(): ConnectionConfig?
-}
 
+
+    // ==================== Headless Mode APIs ====================
+
+    /**
+     * Cancel the current in-progress transaction.
+     *
+     * Only effective when the transaction is in a cancelable stage
+     * (e.g., WaitingCard, WaitingPin). Once in OnlineProcessing stage,
+     * cancellation is not allowed to avoid one-sided transactions.
+     *
+     * This method sends an ABORT request to Tapro.
+     *
+     * @param transactionRequestId The ID of the transaction to cancel (optional, for validation)
+     * @param callback Callback to receive the cancellation result
+     */
+    fun cancelTransaction(transactionRequestId: String? = null, callback: PaymentCallback)
+
+    /**
+     * Query the current transaction status.
+     *
+     * Used for crash recovery — when the POS app restarts after a crash,
+     * it can query whether a transaction is still in progress and get the current state.
+     *
+     * @param transactionRequestId The transaction request ID to query
+     * @param callback Callback to receive the status query result
+     */
+    fun queryTransactionStatus(transactionRequestId: String, callback: PaymentCallback)
+
+    /**
+     * Switch current Headless transaction to manual card entry.
+     *
+     * This control action is only valid when the in-progress transaction
+     * is currently at WAITING_CARD stage.
+     *
+     * @param transactionRequestId The transaction request ID to switch (optional, for validation)
+     * @param callback Callback to receive switch result
+     */
+    fun switchToManualEntry(transactionRequestId: String? = null, callback: PaymentCallback)
+
+
+}
