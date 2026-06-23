@@ -347,8 +347,10 @@ Once context is loaded, use the following prompts to generate each part of your 
 > Using the Taplink SDK with LAN mode (terminal IP: 192.168.1.100, port 8443),
 > write the complete connection setup for a MainActivity, including:
 > - Persistent connection listener in onCreate
+> - Registering TaplinkSDK.setConnectionListener(listener) before connect
 > - Auto-connect in onResume if not already connected
 > - Cleanup in onDestroy
+> - Handling service host/port changes with automatic reconnect
 > ```
 
 #### 2.3 — Execute a Sale Transaction
@@ -475,25 +477,46 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 For POS devices connected to payment terminals via local network (wired/wireless).
 
 ```kotlin
-// First connection: specify IP and port
-val connectionConfig = ConnectionConfig()
-    .setConnectionMode(ConnectionMode.LAN)
-    .setHost("192.168.1.100")
-    .setPort(8443)
+private val connectionListener = object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) { }
+    override fun onDisconnected(reason: String) { }
+    override fun onError(error: ConnectionError) { }
+}
 
-TaplinkSDK.connect(connectionConfig, connectionListener)
+private fun connectLan(manualHost: String? = null, manualPort: Int? = null) {
+    val config = ConnectionConfig()
+        .setConnectionMode(ConnectionMode.LAN)
 
-// Subsequent connections: use cached device info
-val connectionConfig = ConnectionConfig()
-    .setConnectionMode(ConnectionMode.LAN)
+    // If user entered host/port, use user input first.
+    if (!manualHost.isNullOrBlank()) {
+        config.setHost(manualHost)
+    }
+    if (manualPort != null) {
+        config.setPort(manualPort)
+    }
 
-TaplinkSDK.connect(connectionConfig, connectionListener)
+    // Important: register global listener, then pass the same listener to connect().
+    // This is required for runtime service-address-change auto reconnect.
+    TaplinkSDK.setConnectionListener(connectionListener)
+    TaplinkSDK.connect(config, connectionListener)
+}
+
+// Example A: user manually specifies 8443
+connectLan(manualHost = "192.168.1.100", manualPort = 8443)
+
+// Example B: no manual port, SDK uses cached/discovered LAN address
+connectLan()
 ```
 
 **Features:**
 - TLS encryption
 - mDNS auto-discovery
-- Automatic IP update handling
+- Automatic IP/port update handling
+
+**Behavior Notes:**
+- Manual host/port is applied first when provided by the user.
+- During runtime, when mDNS reports that the same terminal moved to a new host/port (for example 8443 -> 8444), the SDK can reconnect automatically.
+- For address-change auto reconnect, you must both call `TaplinkSDK.setConnectionListener(listener)` and pass a listener in `TaplinkSDK.connect(config, listener)`.
 
 ## Determining Transaction Result
 
