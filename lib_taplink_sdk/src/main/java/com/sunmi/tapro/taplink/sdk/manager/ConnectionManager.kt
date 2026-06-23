@@ -1186,7 +1186,10 @@ class ConnectionManager(
             ConnectionStatus.ERROR
         )
 
-        val isExpectedServiceName = serviceName.contains("Tapro", ignoreCase = true)
+        val normalizedServiceName = serviceName.lowercase()
+        val isExpectedServiceName = normalizedServiceName.contains("tapro") ||
+            normalizedServiceName.contains("taplink") ||
+            normalizedServiceName.startsWith("taplink-server")
 
         val shouldReconnect = isCurrentlyDisconnected && isExpectedServiceName
 
