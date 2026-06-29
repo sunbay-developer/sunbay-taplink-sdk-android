@@ -7,6 +7,7 @@ import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
+import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
 import com.sunmi.tapro.taplink.sdk.persistence.ConnectionPersistence
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolConfigResolver
@@ -50,6 +51,12 @@ class ConnectionManager(
      * Current connection mode
      */
     private var currentConnectionMode: String? = null
+
+    /**
+     * Current App-to-App transaction mode.
+     * Only meaningful when current connection mode is APP_TO_APP.
+     */
+    private var currentAppToAppMode: AppToAppMode? = null
 
     /**
      * Connected device information
@@ -199,6 +206,8 @@ class ConnectionManager(
     private fun connectInternal(config: ConnectionConfig?, listener: ConnectionListener) {
         // Save config for connection state tracking
         val connectionConfig = config
+        // Reset mode cache before this connection attempt computes the effective mode.
+        currentAppToAppMode = null
 
         // Set connection status immediately to prevent concurrent connections
         if (connectionStatus != ConnectionStatus.CONNECTING &&
@@ -235,6 +244,13 @@ class ConnectionManager(
             reconnectManager?.getContext()
         )
         currentConnectionMode = connectionMode
+        currentAppToAppMode = if (connectionMode == ConnectionMode.APP_TO_APP.name) {
+            val resolvedMode = connectionConfig?.appToAppMode ?: AppToAppMode.CUSTOM
+            LogUtil.d(TAG, "Resolved App-to-App mode on connect: $resolvedMode")
+            resolvedMode
+        } else {
+            null
+        }
 
         // If not in LAN mode, clear any existing LAN address listener
         if (connectionMode != ConnectionMode.LAN.name) {
@@ -328,6 +344,7 @@ class ConnectionManager(
                         connectedDeviceId = null
                         connectedTaproVersion = null
                         currentConnectionMode = null
+                        currentAppToAppMode = null
                         currentConnectionConfig = null
                     } else {
                         updateConnectionStatus(
@@ -348,6 +365,7 @@ class ConnectionManager(
                             connectedDeviceId = null
                             connectedTaproVersion = null
                             currentConnectionMode = null
+                            currentAppToAppMode = null
                             currentConnectionConfig = null
                         }
                         // If reconnecting, preserve device info and connection mode
@@ -509,6 +527,7 @@ class ConnectionManager(
                             connectedDeviceId = null
                             connectedTaproVersion = null
                             currentConnectionMode = null
+                            currentAppToAppMode = null
                             currentConnectionConfig = null
                         }
                         syncStatusFromKernel()
@@ -543,6 +562,7 @@ class ConnectionManager(
         connectedDeviceId = null
         connectedTaproVersion = null
         currentConnectionMode = null
+        currentAppToAppMode = null
         currentConnectionConfig = null
 
         // Clear service address change listener (clear when disconnecting)
@@ -652,6 +672,13 @@ class ConnectionManager(
      */
     fun getConnectionMode(): String? {
         return currentConnectionMode
+    }
+
+    /**
+     * Get App-to-App transaction mode for current connection.
+     */
+    fun getAppToAppMode(): AppToAppMode? {
+        return currentAppToAppMode
     }
 
     /**
@@ -1159,7 +1186,10 @@ class ConnectionManager(
             ConnectionStatus.ERROR
         )
 
-        val isExpectedServiceName = serviceName.contains("Tapro", ignoreCase = true)
+        val normalizedServiceName = serviceName.lowercase()
+        val isExpectedServiceName = normalizedServiceName.contains("tapro") ||
+            normalizedServiceName.contains("taplink") ||
+            normalizedServiceName.startsWith("taplink-server")
 
         val shouldReconnect = isCurrentlyDisconnected && isExpectedServiceName
 

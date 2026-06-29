@@ -41,7 +41,8 @@ object ProtocolRequestBuilder {
         request: Any,
         version: String,
         appid: String,
-        secretKey: String
+        secretKey: String,
+        appToAppMode: String? = null
     ): BasicRequest {
         try {
             val action = getActionByRequest(request)
@@ -50,6 +51,10 @@ object ProtocolRequestBuilder {
             @Suppress("UNCHECKED_CAST")
             val bizMap = mapper.convertValue(request, MutableMap::class.java) as MutableMap<String, Any?>
             bizMap["appId"] = appid
+            // App-to-App mode is carried in bizData so Tapro can decide per-connection behavior.
+            if (!appToAppMode.isNullOrBlank()) {
+                bizMap["appToAppMode"] = appToAppMode
+            }
 
             val bizDataStr = mapper.writeValueAsString(bizMap)
 
