@@ -17,6 +17,7 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - Support for various transaction types (Sale, Refund, Void, Auth, etc.)
   - Card network routing: specify CREDIT or DEBIT for card payment routing (auto-detection when not specified)
   - Receipt print control: specify NONE, MERCHANT, CUSTOMER, BOTH, or AUTO (determined by Tapro app when not specified)
+  - Signature routing control (Sale/Auth): ON_SCREEN or ON_RECEIPT
   - Synchronous and asynchronous calling methods
   - Comprehensive transaction query functionality
 
@@ -124,6 +125,7 @@ private fun processPayment() {
         .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setAmount(amount)
         .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
+        .setSignature(Signature.ON_SCREEN)
         .setDescription("Product Purchase")
         .build()
     
@@ -588,6 +590,34 @@ val request = SaleRequest.builder()
     .build()
 
 client.sale(request, paymentCallback)
+```
+
+### Signature Configuration (Sale/Auth only)
+
+Use `signature` to choose signature routing per transaction:
+
+- `Signature.ON_SCREEN`: force on-screen e-sign flow
+- `Signature.ON_RECEIPT`: skip on-screen e-sign and print receipt signature line
+- Not set: fallback to Tapro default logic (`shouldShowESignature`), where e-sign is entered only when CVM result is `SIGNATURE`
+
+```kotlin
+val sale = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_1001")
+    .setTransactionRequestId("TXN_1001")
+    .setAmount(AmountInfo.of(1000L, "USD"))
+    .setSignature(Signature.ON_RECEIPT)
+    .build()
+
+val auth = AuthRequest.builder()
+    .setReferenceOrderId("AUTH_1001")
+    .setTransactionRequestId("TXN_AUTH_1001")
+    .setAmount(
+        AuthAmountInfo()
+            .setAuthAmount(BigDecimal("5000"))
+            .setPricingCurrency("USD")
+    )
+    .setSignature(Signature.ON_SCREEN)
+    .build()
 ```
 
 ### Tip Configuration

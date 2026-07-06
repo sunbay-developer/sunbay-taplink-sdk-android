@@ -167,6 +167,7 @@ data class PostAuthRequest(
             return this
         }
 
+
         /**
          * Build PostAuthRequest instance
          * 

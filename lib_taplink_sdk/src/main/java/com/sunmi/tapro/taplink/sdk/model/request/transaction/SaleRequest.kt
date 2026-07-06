@@ -2,6 +2,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
+import com.sunmi.tapro.taplink.sdk.enums.Signature
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
@@ -23,6 +24,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
  * @param tipConfig Tip configuration (optional, mutually exclusive with amount.tipAmount)
+ * @param signature Signature routing (optional): ON_SCREEN / ON_RECEIPT
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -40,6 +42,7 @@ data class SaleRequest(
     val staffInfo: StaffInfo? = null,
     val tipConfig: TipConfig? = null,
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
+    val signature: Signature? = null,
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -74,6 +77,7 @@ data class SaleRequest(
         private var staffInfo: StaffInfo? = null
         private var tipConfig: TipConfig? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
+        private var signature: Signature? = null
 
         /**
          * Set reference order ID
@@ -172,6 +176,14 @@ data class SaleRequest(
         }
 
         /**
+         * Set signature collection preference.
+         */
+        fun setSignature(signature: Signature): Builder {
+            this.signature = signature
+            return this
+        }
+
+        /**
          * Build SaleRequest instance
          * 
          * @throws TransactionRequestValidationException If validation fails
@@ -190,6 +202,7 @@ data class SaleRequest(
                 staffInfo = staffInfo,
                 tipConfig = tipConfig,
                 printReceipt = printReceipt,
+                signature = signature,
             )
 
             val validationResult = request.validate()

@@ -104,6 +104,7 @@ val amount = AmountInfo.of(1000L, "USD") // $10.00
 | `staffInfo` | StaffInfo | No | Staff information |
 | `tipConfig` | TipConfig | No | Tip configuration, mutually exclusive with `amount.tipAmount` |
 | `printReceipt` | PrintReceipt | No | Receipt print mode, defaults to AUTO |
+| `signature` | Signature | No | Signature routing for Sale: `ON_SCREEN` or `ON_RECEIPT` |
 
 ```kotlin
 val request = SaleRequest.builder()
@@ -130,6 +131,7 @@ val request = SaleRequest.builder()
 | `requestTimeout` | Long | No | Timeout in seconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
+| `signature` | Signature | No | Signature routing for Auth: `ON_SCREEN` or `ON_RECEIPT` |
 
 ---
 
@@ -592,6 +594,13 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `MERCHANT` | Print merchant copy only |
 | `CUSTOMER` | Print customer copy only |
 | `BOTH` | Print both copies |
+
+### Signature
+
+| Value | Meaning |
+|------|---------|
+| `ON_SCREEN` | Collect signature on terminal screen |
+| `ON_RECEIPT` | Skip on-screen signature and print receipt signature line |
 
 ### Transaction status values
 

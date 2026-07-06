@@ -163,6 +163,7 @@ data class RefundRequest(
             return this
         }
 
+
         fun build(): RefundRequest {
             require(originalTransactionId != null || originalTransactionRequestId != null) {
                 "Either originalTransactionId or originalTransactionRequestId must be provided for referenced refund"
@@ -254,6 +255,7 @@ data class RefundRequest(
             this.printReceipt = printReceipt
             return this
         }
+
 
         fun build(): RefundRequest {
             val request = RefundRequest(

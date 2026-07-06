@@ -167,6 +167,7 @@ data class IncrementalAuthRequest(
             return this
         }
 
+
         /**
          * Build IncrementalAuthRequest instance
          *
