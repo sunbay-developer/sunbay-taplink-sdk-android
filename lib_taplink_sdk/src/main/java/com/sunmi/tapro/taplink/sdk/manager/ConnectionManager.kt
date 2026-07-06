@@ -48,6 +48,26 @@ class ConnectionManager(
     private var connectionListener: ConnectionListener? = null
 
     /**
+     * Internal fallback listener for reconnection flows.
+     *
+     * Used when app does not keep a persistent ConnectionListener reference.
+     * This keeps transport reconnection functional without forcing SDK user callbacks.
+     */
+    private val internalReconnectListener = object : ConnectionListener {
+        override fun onConnected(deviceId: String, taproVersion: String) {
+            // no-op
+        }
+
+        override fun onDisconnected(reason: String) {
+            // no-op
+        }
+
+        override fun onError(error: ConnectionError) {
+            // no-op
+        }
+    }
+
+    /**
      * Current connection mode
      */
     private var currentConnectionMode: String? = null
@@ -1332,11 +1352,14 @@ class ConnectionManager(
                 setPort(newPort)
             }
 
-            LogUtil.d(TAG, "Executing reconnection to $newHost:$newPort,$connectionListener")
-            connectionListener?.let {
-                reconnectManager?.onAddressChanged(newConnectionConfig, it)
-            }
-
+            val reconnectListener =
+                connectionListener ?: reconnectManager?.getLastConnectionListener()
+                    ?: internalReconnectListener
+            LogUtil.d(
+                TAG,
+                "Executing reconnection to $newHost:$newPort, listener=$reconnectListener"
+            )
+            reconnectManager?.onAddressChanged(newConnectionConfig, reconnectListener)
             true
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to execute reconnection: ${e.message}")
