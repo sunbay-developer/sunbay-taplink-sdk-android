@@ -211,5 +211,16 @@ interface TaplinkApi {
      */
     fun switchToManualEntry(transactionRequestId: String? = null, callback: PaymentCallback)
 
+    /**
+     * Open TaPro USB secondary-screen player application.
+     *
+     * This control action is used by POS apps before showing Android [android.app.Presentation]
+     * content on a secondary display. TaPro will handle launching:
+     * `sunmi.intent.action.SunmiUsbScreenPlayer`.
+     *
+     * @param callback Callback to receive control result
+     */
+    fun openUsbScreenPlayer(callback: PaymentCallback)
+
 
 }

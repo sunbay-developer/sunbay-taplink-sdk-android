@@ -275,5 +275,28 @@ class TaplinkApiImpl : TaplinkApi {
         paymentManager?.execute(switchRequest, callback)
     }
 
+    override fun openUsbScreenPlayer(callback: PaymentCallback) {
+        LogUtil.d(TAG, "openUsbScreenPlayer requested")
+
+        if (!isConnected()) {
+            LogUtil.e(TAG, "openUsbScreenPlayer: Not connected")
+            callback.onFailure(
+                PaymentError.create(
+                    code = InnerErrorCode.E303.code,
+                    message = "Not connected to payment terminal",
+                    suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E303.code) ?: ""
+                )
+            )
+            return
+        }
+
+        // Send OPEN_USB_SCREEN_PLAYER control request to TaPro.
+        val request = PaymentRequest(
+            action = com.sunmi.tapro.taplink.sdk.enums.TransactionAction.OPEN_USB_SCREEN_PLAYER.name,
+            transactionRequestId = "OPEN_USB_SCREEN_PLAYER_${System.currentTimeMillis()}"
+        )
+        paymentManager?.execute(request, callback)
+    }
+
 
 }

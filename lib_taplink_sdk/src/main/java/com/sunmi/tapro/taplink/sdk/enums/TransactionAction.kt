@@ -85,7 +85,15 @@ enum class TransactionAction(val value: String) {
      * Switch current transaction to manual card entry.
      * Headless-only control action, valid during WAITING_CARD stage.
      */
-    SWITCH_TO_MANUAL_ENTRY("SWITCH_TO_MANUAL_ENTRY");
+    SWITCH_TO_MANUAL_ENTRY("SWITCH_TO_MANUAL_ENTRY"),
+
+    /**
+     * Open TaPro USB secondary-screen player application.
+     *
+     * Control action used by POS demo before showing Android Presentation content
+     * on a secondary display.
+     */
+    OPEN_USB_SCREEN_PLAYER("OPEN_USB_SCREEN_PLAYER");
 
     companion object {
         /**
