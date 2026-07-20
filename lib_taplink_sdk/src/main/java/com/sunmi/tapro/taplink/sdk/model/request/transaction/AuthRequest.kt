@@ -19,7 +19,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param notifyUrl Notification URL (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
- * @param signature Signature routing (optional): ON_SCREEN / ON_RECEIPT
+ * @param signatureEntryLocation Signature routing (optional): ON_SCREEN / ON_RECEIPT
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -35,7 +35,7 @@ data class AuthRequest(
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
-    val signature: Signature? = null
+    val signatureEntryLocation: Signature? = null
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -75,7 +75,7 @@ data class AuthRequest(
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
-        private var signature: Signature? = null
+        private var signatureEntryLocation: Signature? = null
 
         /**
          * Set reference order ID
@@ -160,8 +160,8 @@ data class AuthRequest(
         /**
          * Set signature collection preference.
          */
-        fun setSignature(signature: Signature): Builder {
-            this.signature = signature
+        fun setSignatureEntryLocation(signatureEntryLocation: Signature): Builder {
+            this.signatureEntryLocation = signatureEntryLocation
             return this
         }
 
@@ -182,7 +182,7 @@ data class AuthRequest(
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
                 printReceipt = printReceipt,
-                signature = signature
+                signatureEntryLocation = signatureEntryLocation
             )
 
             val validationResult = request.validate()

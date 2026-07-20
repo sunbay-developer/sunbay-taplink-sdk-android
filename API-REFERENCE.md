@@ -104,7 +104,7 @@ val amount = AmountInfo.of(1000L, "USD") // $10.00
 | `staffInfo` | StaffInfo | No | Staff information |
 | `tipConfig` | TipConfig | No | Tip configuration, mutually exclusive with `amount.tipAmount` |
 | `printReceipt` | PrintReceipt | No | Receipt print mode, defaults to AUTO |
-| `signature` | Signature | No | Signature routing for Sale: `ON_SCREEN` or `ON_RECEIPT` |
+| `signatureEntryLocation` | Signature | No | Signature routing for Sale: `ON_SCREEN` or `ON_RECEIPT` |
 
 ```kotlin
 val request = SaleRequest.builder()
@@ -131,7 +131,7 @@ val request = SaleRequest.builder()
 | `requestTimeout` | Long | No | Timeout in seconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
-| `signature` | Signature | No | Signature routing for Auth: `ON_SCREEN` or `ON_RECEIPT` |
+| `signatureEntryLocation` | Signature | No | Signature routing for Auth: `ON_SCREEN` or `ON_RECEIPT` |
 
 ---
 
@@ -315,6 +315,8 @@ All transaction operations return this object through `onSuccess`.
 | Field | Type | Description |
 |------|------|-------------|
 | `transactionStatus` | String? | `SUCCESS`, `PROCESSING`, or `FAILED` |
+| `transactionBatchStatus` | String? | Transaction batch status: `N` (No need batch), `U` (Unfinished batch), `C` (Completed batch). Only returned in query responses. |
+| `relatedTransactionStatus` | String? | Related transaction status indicating follow-up actions on the original transaction: `VOIDED`, `INCREMENTAL`, `REFUNDED`, `CAPTURE`, `PART_REFUNDED`. Only returned in query responses. |
 | `transactionType` | String? | Transaction type, such as SALE, AUTH, REFUND, VOID, etc. |
 
 #### Amount and time
@@ -609,6 +611,28 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `SUCCESS` | Transaction approved |
 | `PROCESSING` | Transaction still in progress |
 | `FAILED` | Transaction declined, cancelled, or aborted |
+
+### Transaction batch status values
+
+Indicates the settlement batch status of a transaction. Returned in query responses only.
+
+| Value | Meaning |
+|------|---------|
+| `N` | No need batch |
+| `U` | Unfinished batch |
+| `C` | Completed batch |
+
+### Related transaction status values
+
+Indicates the status after follow-up actions on the original transaction. Returned in query responses only.
+
+| Value | Meaning |
+|------|---------|
+| `VOIDED` | Voided |
+| `INCREMENTAL` | Incremental authorization applied |
+| `REFUNDED` | Fully refunded |
+| `CAPTURE` | Captured (post-authorization completed) |
+| `PART_REFUNDED` | Partially refunded |
 
 ---
 

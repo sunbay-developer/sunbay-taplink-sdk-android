@@ -34,7 +34,7 @@ object PaymentRequestAdapter {
             requestTimeout = request.requestTimeout,
             tipConfig = request.tipConfig,
             printReceipt = request.printReceipt,
-            signature = request.signature,
+            signatureEntryLocation = request.signatureEntryLocation,
         )
     }
 
@@ -59,7 +59,7 @@ object PaymentRequestAdapter {
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
             printReceipt = request.printReceipt,
-            signature = request.signature,
+            signatureEntryLocation = request.signatureEntryLocation,
         )
     }
 

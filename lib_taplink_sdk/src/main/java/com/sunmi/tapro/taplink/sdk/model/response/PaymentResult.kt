@@ -59,6 +59,20 @@ data class PaymentResult(
     val transactionStatus: String? = null,
     
     /**
+     * Transaction batch status
+     * Indicates the settlement batch status of a transaction.
+     * Values: N (No need batch), U (Unfinished batch), C (Completed batch)
+     */
+    val transactionBatchStatus: String? = null,
+
+    /**
+     * Related transaction status
+     * Indicates the status after follow-up actions on the original transaction.
+     * Values: VOIDED, INCREMENTAL, REFUNDED, CAPTURE, PART_REFUNDED
+     */
+    val relatedTransactionStatus: String? = null,
+
+    /**
      * Transaction type
      * Values: SALE, AUTH, FORCED_AUTH, INCREMENTAL, POST_AUTH, VOID, REFUND
      */

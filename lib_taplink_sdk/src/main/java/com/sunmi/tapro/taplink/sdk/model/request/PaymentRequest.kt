@@ -225,7 +225,7 @@ data class PaymentRequest(
      *
      * If not set, Tapro uses terminal-side default signature policy.
      */
-    val signature: Signature? = null,
+    val signatureEntryLocation: Signature? = null,
 
     // ========== Tip configuration ==========
 
@@ -373,7 +373,8 @@ data class PaymentRequest(
     /**
      * Chain call: Set signature collection preference.
      */
-    fun setSignature(signature: Signature): PaymentRequest = copy(signature = signature)
+    fun setSignatureEntryLocation(signatureEntryLocation: Signature): PaymentRequest =
+        copy(signatureEntryLocation = signatureEntryLocation)
 
     // ========== Chain call methods for tip configuration ==========
 
@@ -435,7 +436,7 @@ data class PaymentRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
-        private var signature: Signature? = null
+        private var signatureEntryLocation: Signature? = null
         private var tipConfig: TipConfig? = null
 
         /**
@@ -471,7 +472,8 @@ data class PaymentRequest(
         fun setNotifyUrl(notifyUrl: String) = apply { this.notifyUrl = notifyUrl }
         fun setRequestTimeout(requestTimeout: Long) = apply { this.requestTimeout = requestTimeout }
         fun setPrintReceipt(printReceipt: PrintReceipt) = apply { this.printReceipt = printReceipt }
-        fun setSignature(signature: Signature) = apply { this.signature = signature }
+        fun setSignatureEntryLocation(signatureEntryLocation: Signature) =
+            apply { this.signatureEntryLocation = signatureEntryLocation }
         fun setTipConfig(tipConfig: TipConfig) = apply { this.tipConfig = tipConfig }
 
         /**
@@ -513,7 +515,7 @@ data class PaymentRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 printReceipt = printReceipt,
-                signature = signature,
+                signatureEntryLocation = signatureEntryLocation,
                 tipConfig = tipConfig,
             )
         }

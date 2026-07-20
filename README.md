@@ -125,7 +125,7 @@ private fun processPayment() {
         .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setAmount(amount)
         .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
-        .setSignature(Signature.ON_SCREEN)
+        .setSignatureEntryLocation(Signature.ON_SCREEN)
         .setDescription("Product Purchase")
         .build()
     
@@ -594,7 +594,7 @@ client.sale(request, paymentCallback)
 
 ### Signature Configuration (Sale/Auth only)
 
-Use `signature` to choose signature routing per transaction:
+Use `signatureEntryLocation` to choose signature routing per transaction:
 
 - `Signature.ON_SCREEN`: force on-screen e-sign flow
 - `Signature.ON_RECEIPT`: skip on-screen e-sign and print receipt signature line
@@ -605,7 +605,7 @@ val sale = SaleRequest.builder()
     .setReferenceOrderId("ORDER_1001")
     .setTransactionRequestId("TXN_1001")
     .setAmount(AmountInfo.of(1000L, "USD"))
-    .setSignature(Signature.ON_RECEIPT)
+    .setSignatureEntryLocation(Signature.ON_RECEIPT)
     .build()
 
 val auth = AuthRequest.builder()
@@ -616,7 +616,7 @@ val auth = AuthRequest.builder()
             .setAuthAmount(BigDecimal("5000"))
             .setPricingCurrency("USD")
     )
-    .setSignature(Signature.ON_SCREEN)
+    .setSignatureEntryLocation(Signature.ON_SCREEN)
     .build()
 ```
 
