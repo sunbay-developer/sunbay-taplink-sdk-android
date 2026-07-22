@@ -677,10 +677,19 @@ Returned only from `onFailure`, which represents communication or technical erro
 
 ### Signature
 
-| Value | Meaning |
-|------|---------|
-| `ON_SCREEN` | Collect signature on terminal screen |
-| `ON_RECEIPT` | Skip on-screen signature and print receipt signature line |
+Per-transaction signature routing for Sale/Auth (field `signatureEntryLocation`). It controls both the on-screen e-signature page and the receipt signature line (`printSignatureLine` in `receiptJson`), and **overrides** the terminal signature settings for that transaction.
+
+| Value | E-signature page | Receipt signature line |
+|------|------------------|------------------------|
+| `ON_SCREEN` | Always shown | Printed only when a signature was captured |
+| `ON_RECEIPT` | Never shown | Always printed for handwriting |
+
+When `signatureEntryLocation` is **not set**, Tapro falls back to the terminal's signature settings (approved, non-EBT transactions only):
+
+- Terminal capture method `ON_SCREEN`: show the e-signature page when *always require signature* is enabled, otherwise only when the CVM result is `SIGNATURE`.
+- Terminal capture method `ON_RECEIPT`: print the receipt signature line when *always require signature* is enabled, otherwise only when the CVM result is `SIGNATURE`.
+
+> EBT transactions never collect a signature regardless of this setting.
 
 ### Transaction status values
 

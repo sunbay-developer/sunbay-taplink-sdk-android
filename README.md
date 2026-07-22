@@ -712,11 +712,20 @@ client.sale(request, paymentCallback)
 
 ### Signature Configuration (Sale/Auth only)
 
-Use `signatureEntryLocation` to choose signature routing per transaction:
+Use `signatureEntryLocation` to choose per-transaction signature routing. It controls **two** independent behaviors on Tapro: whether the on-screen e-signature page is shown, and whether a signature line is printed on the receipt (also reflected as `printSignatureLine` in `receiptJson`).
 
-- `Signature.ON_SCREEN`: force on-screen e-sign flow
-- `Signature.ON_RECEIPT`: skip on-screen e-sign and print receipt signature line
-- Not set: fallback to Tapro default logic (`shouldShowESignature`), where e-sign is entered only when CVM result is `SIGNATURE`
+- **`Signature.ON_SCREEN`** — force the on-screen e-signature flow.
+  - E-signature page: **always shown**.
+  - Receipt signature line: printed **only when a signature was actually captured**.
+- **`Signature.ON_RECEIPT`** — skip the on-screen e-signature flow.
+  - E-signature page: **never shown**.
+  - Receipt signature line: **always printed** for handwriting.
+- **Not set (`null`)** — fall back to the terminal's signature settings:
+  - Only applies when the transaction is approved and is **not** an EBT transaction.
+  - If the terminal capture method is `ON_SCREEN`: show the e-signature page when the terminal is set to *always require signature*, otherwise only when the CVM result is `SIGNATURE`.
+  - If the terminal capture method is `ON_RECEIPT`: print the receipt signature line when *always require signature* is set, otherwise only when the CVM result is `SIGNATURE`.
+
+> **Note:** `signatureEntryLocation` **overrides** the terminal's signature settings for that single transaction. `ON_SCREEN` / `ON_RECEIPT` take effect regardless of the CVM result; the CVM-result fallback only applies when the field is left unset. EBT transactions never collect a signature.
 
 ```kotlin
 val sale = SaleRequest.builder()
