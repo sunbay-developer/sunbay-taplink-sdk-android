@@ -31,7 +31,6 @@ taplink-sdk-android/
 // Step 1: Initialize in Application.onCreate()
 TaplinkSDK.init(context, TaplinkConfig(
     appId = BuildConfig.TAPLINK_APP_ID,
-    merchantId = BuildConfig.TAPLINK_MERCHANT_ID,
     secretKey = BuildConfig.TAPLINK_SECRET_KEY
 ))
 
