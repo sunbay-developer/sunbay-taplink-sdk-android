@@ -155,6 +155,54 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
+         * Auto-discover LAN Taplink services and connect to the first available.
+         *
+         * @param listener Connection result callback
+         * @see TaplinkApi.autoDiscoverAndConnect
+         */
+        @JvmStatic
+        @JvmName("autoDiscoverAndConnectSDK")
+        fun autoDiscoverAndConnect(listener: ConnectionListener) {
+            getInstance().autoDiscoverAndConnect(listener)
+        }
+
+        /**
+         * Discover LAN Taplink services (mDNS) without connecting.
+         *
+         * @param listener Discovery result callback
+         * @see TaplinkApi.discoverLanServices
+         */
+        @JvmStatic
+        @JvmName("discoverLanServicesSDK")
+        fun discoverLanServices(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+            getInstance().discoverLanServices(listener)
+        }
+
+        /**
+         * Launch QR scanner and connect using scanned Taplink QR code.
+         *
+         * @param listener Connection result callback
+         * @see TaplinkApi.scanAndConnect
+         */
+        @JvmStatic
+        @JvmName("scanAndConnectSDK")
+        fun scanAndConnect(listener: ConnectionListener) {
+            getInstance().scanAndConnect(listener)
+        }
+
+        /**
+         * Launch QR scanner and return the scanned lan:// host/port without connecting.
+         *
+         * @param listener Scan result callback (single-element list on success)
+         * @see TaplinkApi.scanLanQrCode
+         */
+        @JvmStatic
+        @JvmName("scanLanQrCodeSDK")
+        fun scanLanQrCode(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+            getInstance().scanLanQrCode(listener)
+        }
+
+        /**
          * Check connection status
          *
          * @return true if connected, false otherwise
@@ -409,6 +457,22 @@ class TaplinkSDK private constructor() : TaplinkApi {
 
     override fun removeConnectionListener() {
         apiImpl.removeConnectionListener()
+    }
+
+    override fun autoDiscoverAndConnect(listener: ConnectionListener) {
+        apiImpl.autoDiscoverAndConnect(listener)
+    }
+
+    override fun discoverLanServices(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+        apiImpl.discoverLanServices(listener)
+    }
+
+    override fun scanAndConnect(listener: ConnectionListener) {
+        apiImpl.scanAndConnect(listener)
+    }
+
+    override fun scanLanQrCode(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+        apiImpl.scanLanQrCode(listener)
     }
 
     // ==================== Device and Version Information (Instance Methods) ====================

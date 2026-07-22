@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import com.sunmi.tapro.taplink.demo.R
 
 /**
  * 主界面 - 选择测试模式
@@ -14,12 +15,16 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        findViewById<Button>(R.id.btn_host_kernel_test).setOnClickListener {
-            startActivity(Intent(this, UsbHostKernelTestActivity::class.java))
-        }
+        bindLaunchButton("btn_host_kernel_test", UsbHostKernelTestActivity::class.java)
+        bindLaunchButton("btn_accessory_kernel_test", UsbAccessoryKernelTestActivity::class.java)
+    }
 
-        findViewById<Button>(R.id.btn_accessory_kernel_test).setOnClickListener {
-            startActivity(Intent(this, UsbAccessoryKernelTestActivity::class.java))
+    private fun bindLaunchButton(idName: String, target: Class<*>) {
+        val buttonId = resources.getIdentifier(idName, "id", packageName)
+        if (buttonId != 0) {
+            findViewById<Button>(buttonId)?.setOnClickListener {
+                startActivity(Intent(this, target))
+            }
         }
     }
 }

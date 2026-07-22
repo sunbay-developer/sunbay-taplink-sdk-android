@@ -8,7 +8,7 @@ plugins {
 object SdkVersion {
     const val CODE = 14
 
-    const val NAME = "1.0.7.19"
+    const val NAME = "1.0.7.22"
 }
 
 object BuildConfig {
@@ -76,6 +76,15 @@ dependencies {
 
     implementation(libs.jackson.databind)
     implementation(libs.jackson.module.kotlin)
+
+    // CameraX for QR scanner
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+
+    // ZXing for QR decoding
+    implementation(libs.zxing.core)
     
     // Exclude transitive kotlin-stdlib from coroutines to use our forced version
     implementation(libs.kotlinx.coroutines.core) {
