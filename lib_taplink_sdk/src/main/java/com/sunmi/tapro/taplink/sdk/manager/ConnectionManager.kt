@@ -1594,6 +1594,7 @@ class ConnectionManager(
         const val ERROR_OPERATION_IN_PROGRESS = "E503"
         const val ERROR_SCAN_CANCELLED = "E504"
         const val ERROR_CAMERA_PERMISSION_DENIED = "E505"
+        const val ERROR_CAMERA_UNAVAILABLE = "E506"
     }
 
     /**

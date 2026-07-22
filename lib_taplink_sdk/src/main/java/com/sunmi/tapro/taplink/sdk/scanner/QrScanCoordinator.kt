@@ -222,6 +222,28 @@ object QrScanCoordinator {
     }
 
     /**
+     * Called by [QrScannerActivity] when no usable camera can be resolved / the
+     * camera fails to start.
+     */
+    @Synchronized
+    fun onCameraUnavailable() {
+        LogUtil.d(TAG, "Camera unavailable")
+        if (scanOnly) {
+            val onError = scanOnlyOnError
+            cleanupSession()
+            onError?.invoke(
+                ConnectionError(ConnectionManager.ERROR_CAMERA_UNAVAILABLE, "No usable camera available on this device")
+            )
+            return
+        }
+        val listener = currentListener
+        cleanupSession()
+        listener?.onError(
+            ConnectionError(ConnectionManager.ERROR_CAMERA_UNAVAILABLE, "No usable camera available on this device")
+        )
+    }
+
+    /**
      * Cancel the current scan session (called by disconnect()).
      */
     @Synchronized

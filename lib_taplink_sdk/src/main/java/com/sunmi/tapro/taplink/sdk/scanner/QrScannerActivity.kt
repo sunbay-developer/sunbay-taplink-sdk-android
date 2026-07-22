@@ -193,13 +193,38 @@ class QrScannerActivity : AppCompatActivity() {
 
                 provider.unbindAll()
 
-                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                // Prefer the back camera, then the front camera. On many POS terminals
+                // (e.g. Sunmi D3_PRO) the camera reports no lens facing
+                // (CameraValidator logs lensFacingInteger: null), so both DEFAULT_*
+                // selectors resolve to nothing. In that case fall back to selecting the
+                // first available camera regardless of facing. Only report an error when
+                // the device truly exposes no camera at all.
+                val cameraSelector = when {
+                    provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) ->
+                        CameraSelector.DEFAULT_BACK_CAMERA
+                    provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) ->
+                        CameraSelector.DEFAULT_FRONT_CAMERA
+                    provider.availableCameraInfos.isNotEmpty() -> {
+                        LogUtil.d(TAG, "No lens-facing camera; selecting first available camera")
+                        CameraSelector.Builder()
+                            .addCameraFilter { infos ->
+                                if (infos.isEmpty()) infos else listOf(infos.first())
+                            }
+                            .build()
+                    }
+                    else -> {
+                        LogUtil.e(TAG, "No usable camera found on this device")
+                        QrScanCoordinator.onCameraUnavailable()
+                        finish()
+                        return@addListener
+                    }
+                }
                 provider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
 
                 LogUtil.d(TAG, "Camera started successfully")
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Failed to start camera: ${e.message}")
-                QrScanCoordinator.onScanCancelled()
+                QrScanCoordinator.onCameraUnavailable()
                 finish()
             }
         }, ContextCompat.getMainExecutor(this))

@@ -12,6 +12,6 @@
         <activity
             android:name=".scanner.QrScannerActivity"
             android:exported="false"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
+            android:theme="@style/Theme.Taplink.QrScanner" />
     </application>
 </manifest>
