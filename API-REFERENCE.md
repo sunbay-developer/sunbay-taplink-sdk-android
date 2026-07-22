@@ -9,6 +9,7 @@
 - [Response Models](#response-models)
 - [Error Models](#error-models)
 - [Data Models](#data-models)
+- [LAN Discovery & Scan](#lan-discovery--scan)
 - [Enums](#enums)
 
 ---
@@ -63,6 +64,37 @@ client.sale(request, object : PaymentCallbackAdapter() {
 ```
 
 > **Migration note (v1.0.6 → v1.0.7):** In v1.0.6 and earlier, declined transactions were routed to `onFailure(PaymentError)`. From v1.0.7 onwards they arrive in `onSuccess` with `result.isFailed() == true`. If you want to reuse an existing `PaymentError`-based UI, call `result.toPaymentError()` inside `onSuccess`. See README §"Migrating from v1.0.6" for full before/after examples.
+
+---
+
+### DiscoveryListener
+
+*Since v1.0.8.* Result callback for LAN address acquisition APIs — `TaplinkSDK.discoverLanServices(...)` (mDNS) and `TaplinkSDK.scanLanQrCode(...)` (QR scan). These APIs **return** the resolved address; they do not open a connection.
+
+```kotlin
+interface DiscoveryListener {
+    fun onDiscovered(services: List<DiscoveredService>)
+    fun onError(error: ConnectionError)
+}
+```
+
+| Callback | When it fires | Meaning |
+|----------|---------------|---------|
+| `onDiscovered` | Discovery/scan finished successfully | `discoverLanServices`: all resolved services (may be empty). `scanLanQrCode`: a single-element list with the scanned service. |
+| `onError` | Discovery/scan could not complete | SDK not initialized, operation already in progress, no camera, permission denied, or user cancel. See [Discovery / Scan error codes](#discovery--scan-error-codes). |
+
+```kotlin
+TaplinkSDK.discoverLanServices(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val target = services.firstOrNull() ?: return
+        // auto-fill address fields, then connect via the standard LAN flow
+        connectLan(target.host, target.port)
+    }
+    override fun onError(error: ConnectionError) {
+        showError(error.message)
+    }
+})
+```
 
 ---
 
@@ -530,6 +562,52 @@ Present only for CONTACT and CONTACTLESS entry modes. **Required by Visa/Masterc
 
 ---
 
+## LAN Discovery & Scan
+
+### DiscoveredService
+
+*Since v1.0.8.* A LAN Taplink service resolved via mDNS or read from a `lan://host/port` QR code. Returned through [DiscoveryListener](#discoverylistener).
+
+| Field | Type | Description |
+|------|------|-------------|
+| `name` | String | mDNS service instance name (for QR scan results this is a placeholder such as `"QR"`) |
+| `host` | String | Resolved host / IP address (e.g. `"192.168.1.100"`) |
+| `port` | Int | Service port (e.g. `8443`) |
+
+```kotlin
+data class DiscoveredService(
+    val name: String,
+    val host: String,
+    val port: Int
+)
+```
+
+### ConnectionError
+
+Delivered to `DiscoveryListener.onError` (LAN discovery/scan) and `ConnectionListener.onError` (connection lifecycle).
+
+| Field | Type | Description |
+|------|------|-------------|
+| `code` | String | Error code (see below) |
+| `message` | String | Human-readable error message |
+| `deviceId` | String? | Related device ID, if known |
+| `suggestion` | String? | Suggested resolution, if available |
+
+### Discovery / Scan error codes
+
+| Code | Meaning | Applies to |
+|------|---------|------------|
+| `E501` | No services found / discovery failed | `discoverLanServices`, `autoDiscoverAndConnect` |
+| `E502` | All discovered services failed to connect | `autoDiscoverAndConnect` |
+| `E503` | Another discovery/scan operation is already in progress | Discovery & Scan |
+| `E504` | Scan cancelled by the user | `scanLanQrCode`, `scanAndConnect` |
+| `E505` | Camera permission denied | `scanLanQrCode`, `scanAndConnect` |
+| `E506` | No usable camera available on this device | `scanLanQrCode`, `scanAndConnect` |
+
+> **Tip:** Treat `E504` (user cancel) as a silent no-op; surface the real message for `E505` / `E506` instead of a generic "cancelled or invalid" message.
+
+---
+
 ## Error Models
 
 ### PaymentError
@@ -644,4 +722,4 @@ Indicates the status after follow-up actions on the original transaction. Return
 
 ---
 
-*SDK version: 1.0.7*
+*SDK version: 1.0.8*

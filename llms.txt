@@ -1,7 +1,7 @@
 # Taplink SDK for Android — AI Integration Reference
 
 **Taplink SDK** is a semi-integrated payment SDK for Android POS applications provided by SUNBAY.
-Latest public release target: **1.0.7**.
+Latest public release target: **1.0.8**.
 It supports three connection modes: App-to-App (Local), LAN (WLAN), and Cable (USB/Serial).
 
 ## Current Callback Semantics
@@ -120,6 +120,47 @@ val config = ConnectionConfig.createCableMode(CableProtocol.USB_VSP)
 ```kotlin
 val config = ConnectionConfig.createDefault()  // tries APP_TO_APP → Cable → LAN
 ```
+
+---
+
+## LAN Address Acquisition (since v1.0.8)
+
+Get the LAN terminal host/port automatically instead of typing it. These APIs RETURN the address via `DiscoveryListener` (they do NOT connect) — auto-fill your input fields, then connect with `ConnectionConfig.createLanMode(host, port)`.
+
+```kotlin
+// mDNS discovery (_taplink._tcp, 15s timeout) — no extra dependency needed
+TaplinkSDK.discoverLanServices(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val t = services.firstOrNull() ?: return          // (name, host, port)
+        connectLan(t.host, t.port)                          // your standard LAN connect
+    }
+    override fun onError(error: ConnectionError) { showError(error.message) }
+})
+
+// QR scan of a lan://host/port code (built-in camera; returns single-element list)
+TaplinkSDK.scanLanQrCode(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val t = services.firstOrNull() ?: return
+        connectLan(t.host, t.port)
+    }
+    override fun onError(error: ConnectionError) {
+        when (error.code) {
+            "E504" -> {}                                    // user cancel — silent
+            "E505" -> showError("Camera permission denied")
+            "E506" -> showError("No usable camera available on this device")
+            else   -> showError(error.message)
+        }
+    }
+})
+
+// One-step variants that discover/scan AND connect (report via ConnectionListener):
+TaplinkSDK.autoDiscoverAndConnect(connectionListener)
+TaplinkSDK.scanAndConnect(connectionListener)
+```
+
+- `DiscoveredService(name: String, host: String, port: Int)`.
+- QR scan requires the host app to add CameraX 1.3.4 (camera-core/camera2/lifecycle/view) + ZXing 3.5.3 — they are not transitive through the AAR. mDNS discovery needs no extra dependency.
+- Error codes: `E501` no services, `E502` all failed, `E503` operation in progress, `E504` user cancel, `E505` camera permission denied, `E506` no usable camera.
 
 ---
 
