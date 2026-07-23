@@ -1,7 +1,8 @@
 package com.sunmi.tapro.taplink.sdk.protocol
 
-import com.google.gson.Gson
-import com.google.gson.JsonObject
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.model.base.BasicRequest
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.util.SignUtil
@@ -12,8 +13,8 @@ import java.util.*
 /**
  * Protocol Request Builder
  *
- * Converts any request object to the underlying transport protocol format (BasicRequest)
- * Responsible for protocol layer data encapsulation, signature generation, timestamp processing, etc.
+ * Converts any request object to the underlying transport protocol format (BasicRequest).
+ * Uses Jackson for all JSON serialisation — no Gson dependency.
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -22,54 +23,53 @@ object ProtocolRequestBuilder {
 
     private const val TAG = "ProtocolRequestBuilder"
 
-    /** Timestamp format: yyyyMMddHHmmssSSS */
     private val TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.US)
 
-    /** Gson instance */
-    private val gson = Gson()
+    private val mapper: ObjectMapper = ObjectMapper()
+        .registerKotlinModule()
+        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
 
     /**
-     * Convert specific Request to BasicRequest
+     * Convert a specific request object to [BasicRequest].
      *
-     * @param request Specific Request object (e.g., PaymentRequest)
-     * @param version SDK version number
-     * @param secretKey Signature secret key
-     * @return BasicRequest Converted BasicRequest object
+     * @param request  The business request (e.g. PaymentRequest)
+     * @param version  SDK version string
+     * @param appid    App identifier — injected into bizData JSON
+     * @param secretKey HMAC-SHA256 signing key
      */
     fun convertToBasicRequest(
         request: Any,
         version: String,
         appid: String,
-        secretKey: String
+        secretKey: String,
+        appToAppMode: String? = null
     ): BasicRequest {
         try {
-            // 1. Get action (extract from PaymentRequest or use default value)
             val action = getActionByRequest(request)
 
-            // 2. Convert request to JsonObject as bizData
-            val bizDataJson = gson.toJsonTree(request).asJsonObject
+            // Serialise the business request to a mutable map so we can inject appId
+            @Suppress("UNCHECKED_CAST")
+            val bizMap = mapper.convertValue(request, MutableMap::class.java) as MutableMap<String, Any?>
+            bizMap["appId"] = appid
+            // App-to-App mode is carried in bizData so Tapro can decide per-connection behavior.
+            if (!appToAppMode.isNullOrBlank()) {
+                bizMap["appToAppMode"] = appToAppMode
+            }
 
-            bizDataJson.addProperty("appId", appid)
+            val bizDataStr = mapper.writeValueAsString(bizMap)
 
-            // 3. Generate timestamp
             val timestamp = getCurrentTimestamp()
-
-            // 4. Generate traceId (for tracking concurrent requests)
             val traceId = generateTraceId()
 
-            // 5. Build signature data (exclude appSign field, sort by field name, include traceId)
-            val signData = buildSignData(version, timestamp, action, bizDataJson, traceId)
-
-            // 6. Generate signature
+            val signData = buildSignData(version, timestamp, action, bizDataStr, traceId)
             val appSign = SignUtil.generateHMACSHA256(signData, secretKey)
 
-            // 7. Create BasicRequest object
             return BasicRequest(
                 appSign = appSign,
                 version = version,
                 timeStamp = timestamp,
                 action = action,
-                bizData = bizDataJson,
+                bizData = bizDataStr,
                 traceId = traceId
             )
         } catch (e: Exception) {
@@ -78,19 +78,9 @@ object ProtocolRequestBuilder {
         }
     }
 
-    /**
-     * Automatically determine action based on Request type
-     *
-     * @param request Request object
-     * @return String action string
-     */
     fun getActionByRequest(request: Any): String {
         return when (request) {
-            is PaymentRequest -> {
-                // PaymentRequest contains action field, return directly
-                request.action.uppercase()
-            }
-
+            is PaymentRequest -> request.action.uppercase()
             else -> {
                 LogUtil.i(TAG, "Unknown request type: ${request.javaClass.simpleName}, using class name as action")
                 request.javaClass.simpleName.replace("Request", "").lowercase()
@@ -98,54 +88,18 @@ object ProtocolRequestBuilder {
         }
     }
 
-    /**
-     * Build signature data
-     *
-     * Sort by field name, concatenate into string for signature
-     * Format: action={action}&bizData={bizDataJson}&timeStamp={timeStamp}&traceId={traceId}&version={version}
-     *
-     * @param version SDK version number
-     * @param timestamp Timestamp
-     * @param action Operation type
-     * @param bizData Business data JSON object
-     * @param traceId Trace ID
-     * @return String String for signature
-     */
     private fun buildSignData(
         version: String,
         timestamp: String,
         action: String,
-        bizData: JsonObject,
+        bizDataStr: String,
         traceId: String
-    ): String {
-        // Sort by field name: action, bizData, timeStamp, traceId, version
-        val bizDataStr = gson.toJson(bizData)
-        return "action=$action&bizData=$bizDataStr&timeStamp=$timestamp&traceId=$traceId&version=$version"
-    }
+    ): String =
+        "action=$action&bizData=$bizDataStr&timeStamp=$timestamp&traceId=$traceId&version=$version"
 
-    /**
-     * Get current timestamp
-     *
-     * @return String Format: yyyyMMddHHmmssSSS
-     */
-    private fun getCurrentTimestamp(): String {
-        return TIMESTAMP_FORMAT.format(Date())
-    }
+    private fun getCurrentTimestamp(): String = TIMESTAMP_FORMAT.format(Date())
 
-    /**
-     * Generate trace ID
-     *
-     * Use UUID to generate unique trace ID for tracking concurrent requests, ensuring responses return to corresponding callback
-     *
-     * @return String Trace ID (UUID format, without hyphens)
-     */
-    private fun generateTraceId(): String {
-        return UUID.randomUUID().toString().replace("-", "")
-    }
+    private fun generateTraceId(): String = UUID.randomUUID().toString().replace("-", "")
 
-    /**
-     * Request conversion exception
-     */
     class RequestConvertException(message: String, cause: Throwable? = null) : Exception(message, cause)
 }
-

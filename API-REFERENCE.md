@@ -9,6 +9,7 @@
 - [Response Models](#response-models)
 - [Error Models](#error-models)
 - [Data Models](#data-models)
+- [LAN Discovery & Scan](#lan-discovery--scan)
 - [Enums](#enums)
 
 ---
@@ -66,6 +67,37 @@ client.sale(request, object : PaymentCallbackAdapter() {
 
 ---
 
+### DiscoveryListener
+
+*Since v1.0.8.* Result callback for LAN address acquisition APIs — `TaplinkSDK.discoverLanServices(...)` (mDNS) and `TaplinkSDK.scanLanQrCode(...)` (QR scan). These APIs **return** the resolved address; they do not open a connection.
+
+```kotlin
+interface DiscoveryListener {
+    fun onDiscovered(services: List<DiscoveredService>)
+    fun onError(error: ConnectionError)
+}
+```
+
+| Callback | When it fires | Meaning |
+|----------|---------------|---------|
+| `onDiscovered` | Discovery/scan finished successfully | `discoverLanServices`: all resolved services (may be empty). `scanLanQrCode`: a single-element list with the scanned service. |
+| `onError` | Discovery/scan could not complete | SDK not initialized, operation already in progress, no camera, permission denied, or user cancel. See [Discovery / Scan error codes](#discovery--scan-error-codes). |
+
+```kotlin
+TaplinkSDK.discoverLanServices(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val target = services.firstOrNull() ?: return
+        // auto-fill address fields, then connect via the standard LAN flow
+        connectLan(target.host, target.port)
+    }
+    override fun onError(error: ConnectionError) {
+        showError(error.message)
+    }
+})
+```
+
+---
+
 ## Request Models
 
 ### AmountInfo
@@ -104,6 +136,7 @@ val amount = AmountInfo.of(1000L, "USD") // $10.00
 | `staffInfo` | StaffInfo | No | Staff information |
 | `tipConfig` | TipConfig | No | Tip configuration, mutually exclusive with `amount.tipAmount` |
 | `printReceipt` | PrintReceipt | No | Receipt print mode, defaults to AUTO |
+| `signatureEntryLocation` | Signature | No | Signature routing for Sale: `ON_SCREEN` or `ON_RECEIPT` |
 
 ```kotlin
 val request = SaleRequest.builder()
@@ -130,6 +163,7 @@ val request = SaleRequest.builder()
 | `requestTimeout` | Long | No | Timeout in seconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
+| `signatureEntryLocation` | Signature | No | Signature routing for Auth: `ON_SCREEN` or `ON_RECEIPT` |
 
 ---
 
@@ -313,6 +347,8 @@ All transaction operations return this object through `onSuccess`.
 | Field | Type | Description |
 |------|------|-------------|
 | `transactionStatus` | String? | `SUCCESS`, `PROCESSING`, or `FAILED` |
+| `transactionBatchStatus` | String? | Transaction batch status: `N` (No need batch), `U` (Unfinished batch), `C` (Completed batch). Only returned in query responses. |
+| `relatedTransactionStatus` | String? | Related transaction status indicating follow-up actions on the original transaction: `VOIDED`, `INCREMENTAL`, `REFUNDED`, `CAPTURE`, `PART_REFUNDED`. Only returned in query responses. |
 | `transactionType` | String? | Transaction type, such as SALE, AUTH, REFUND, VOID, etc. |
 
 #### Amount and time
@@ -526,6 +562,52 @@ Present only for CONTACT and CONTACTLESS entry modes. **Required by Visa/Masterc
 
 ---
 
+## LAN Discovery & Scan
+
+### DiscoveredService
+
+*Since v1.0.8.* A LAN Taplink service resolved via mDNS or read from a `lan://host/port` QR code. Returned through [DiscoveryListener](#discoverylistener).
+
+| Field | Type | Description |
+|------|------|-------------|
+| `name` | String | mDNS service instance name (for QR scan results this is a placeholder such as `"QR"`) |
+| `host` | String | Resolved host / IP address (e.g. `"192.168.1.100"`) |
+| `port` | Int | Service port (e.g. `8443`) |
+
+```kotlin
+data class DiscoveredService(
+    val name: String,
+    val host: String,
+    val port: Int
+)
+```
+
+### ConnectionError
+
+Delivered to `DiscoveryListener.onError` (LAN discovery/scan) and `ConnectionListener.onError` (connection lifecycle).
+
+| Field | Type | Description |
+|------|------|-------------|
+| `code` | String | Error code (see below) |
+| `message` | String | Human-readable error message |
+| `deviceId` | String? | Related device ID, if known |
+| `suggestion` | String? | Suggested resolution, if available |
+
+### Discovery / Scan error codes
+
+| Code | Meaning | Applies to |
+|------|---------|------------|
+| `E501` | No services found / discovery failed | `discoverLanServices`, `autoDiscoverAndConnect` |
+| `E502` | All discovered services failed to connect | `autoDiscoverAndConnect` |
+| `E503` | Another discovery/scan operation is already in progress | Discovery & Scan |
+| `E504` | Scan cancelled by the user | `scanLanQrCode`, `scanAndConnect` |
+| `E505` | Camera permission denied | `scanLanQrCode`, `scanAndConnect` |
+| `E506` | No usable camera available on this device | `scanLanQrCode`, `scanAndConnect` |
+
+> **Tip:** Treat `E504` (user cancel) as a silent no-op; surface the real message for `E505` / `E506` instead of a generic "cancelled or invalid" message.
+
+---
+
 ## Error Models
 
 ### PaymentError
@@ -593,6 +675,22 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `CUSTOMER` | Print customer copy only |
 | `BOTH` | Print both copies |
 
+### Signature
+
+Per-transaction signature routing for Sale/Auth (field `signatureEntryLocation`). It controls both the on-screen e-signature page and the receipt signature line (`printSignatureLine` in `receiptJson`), and **overrides** the terminal signature settings for that transaction.
+
+| Value | E-signature page | Receipt signature line |
+|------|------------------|------------------------|
+| `ON_SCREEN` | Always shown | Printed only when a signature was captured |
+| `ON_RECEIPT` | Never shown | Always printed for handwriting |
+
+When `signatureEntryLocation` is **not set**, Tapro falls back to the terminal's signature settings (approved, non-EBT transactions only):
+
+- Terminal capture method `ON_SCREEN`: show the e-signature page when *always require signature* is enabled, otherwise only when the CVM result is `SIGNATURE`.
+- Terminal capture method `ON_RECEIPT`: print the receipt signature line when *always require signature* is enabled, otherwise only when the CVM result is `SIGNATURE`.
+
+> EBT transactions never collect a signature regardless of this setting.
+
 ### Transaction status values
 
 | Value | Meaning |
@@ -600,6 +698,28 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `SUCCESS` | Transaction approved |
 | `PROCESSING` | Transaction still in progress |
 | `FAILED` | Transaction declined, cancelled, or aborted |
+
+### Transaction batch status values
+
+Indicates the settlement batch status of a transaction. Returned in query responses only.
+
+| Value | Meaning |
+|------|---------|
+| `N` | No need batch |
+| `U` | Unfinished batch |
+| `C` | Completed batch |
+
+### Related transaction status values
+
+Indicates the status after follow-up actions on the original transaction. Returned in query responses only.
+
+| Value | Meaning |
+|------|---------|
+| `VOIDED` | Voided |
+| `INCREMENTAL` | Incremental authorization applied |
+| `REFUNDED` | Fully refunded |
+| `CAPTURE` | Captured (post-authorization completed) |
+| `PART_REFUNDED` | Partially refunded |
 
 ---
 
@@ -611,4 +731,4 @@ Returned only from `onFailure`, which represents communication or technical erro
 
 ---
 
-*SDK version: 1.0.7*
+*SDK version: 1.0.8*

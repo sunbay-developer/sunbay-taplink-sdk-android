@@ -903,7 +903,8 @@ class ConnectionActivity : AppCompatActivity() {
         
         when (protocol) {
             ConnectionPreferences.CableProtocol.AUTO -> {
-                // Let SDK auto-detect, no additional config needed
+                // Persist explicit AUTO to avoid null cableProtocol in cached config
+                connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.AUTO)
             }
             ConnectionPreferences.CableProtocol.USB_AOA -> {
                 connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA)

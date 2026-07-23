@@ -17,6 +17,8 @@ import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.hoho.android.usbserial.driver.CdcAcmSerialDriver
+import com.hoho.android.usbserial.driver.ProbeTable
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
@@ -91,6 +93,16 @@ class VSPClientKernel(
     private var parity: Int = UsbSerialPort.PARITY_NONE
     private var stopBits: Int = UsbSerialPort.STOPBITS_1
     private var targetDeviceName: String? = null
+
+    /**
+     * 接收数据缓冲区：USB CDC-ACM 分包到达时暂存不完整的 JSON，
+     * 由 [extractNextJsonObject] 按大括号深度提取完整对象后再交给 [dataReceiver]。
+     * 仅在 dataReceiveJob 协程内访问，无并发争用。
+     */
+    private val receiveBuffer = StringBuilder()
+
+    /** 缓冲区上限：超限清空，防止异常数据导致内存持续增长 */
+    private val MAX_RECEIVE_BUFFER_SIZE = 512 * 1024 // 512 KB
 
     // Permission request broadcast receiver
     private val permissionReceiver = object : BroadcastReceiver() {
@@ -235,7 +247,10 @@ class VSPClientKernel(
         try {
             dataReceiveJob?.cancel()
             dataReceiveJob = null
-            
+
+            // 清空接收缓冲，避免重连后读到上次的残留数据
+            receiveBuffer.clear()
+
             usbSerialPort?.close()
             usbSerialPort = null
             
@@ -272,54 +287,105 @@ class VSPClientKernel(
     }
 
     /**
-     * Connect to VSP device
+     * 判断 USB 设备是否为商米 VSP 设备。
+     * 识别依据：存在 interfaceClass=10 且名称为 "CDC ACM Data" 的接口。
+     */
+    private fun isVspDevice(device: UsbDevice): Boolean {
+        for (i in 0 until device.interfaceCount) {
+            val iface = device.getInterface(i)
+            if (iface.interfaceClass == 10 &&
+                "CDC ACM Data".equals(iface.name, ignoreCase = true)
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * 在已连接的 USB 设备中找到第一个商米 VSP 设备（按接口名识别，不依赖 VID/PID）。
+     */
+    private fun findVspUsbDevice(): UsbDevice? {
+        for (device in usbManager.deviceList.values) {
+            LogUtil.d(
+                TAG, "USB device: ${device.deviceName} " +
+                    "VID=0x${"%04X".format(device.vendorId)} " +
+                    "PID=0x${"%04X".format(device.productId)} " +
+                    "manufacturer=${device.manufacturerName}"
+            )
+            if (isVspDevice(device)) {
+                LogUtil.i(TAG, "VSP device found: ${device.deviceName}")
+                return device
+            }
+        }
+        return null
+    }
+
+    /**
+     * 构建自定义探针。
+     *
+     * 根本原因：商米 VSP 设备 VID/PID 不在默认 ProbeTable 中，
+     * [UsbSerialProber.getDefaultProber] 的 findAllDrivers 始终返回空列表。
+     *
+     * 修复策略：
+     * - 注册已知商米 VID/PID 作为兜底（使用标准 CdcAcmSerialDriver）
+     * - 对运行时检测到的设备注册 [VSPSerialDriver]：
+     *   该驱动按接口名 "CDC ACM Data" 选择正确的数据接口，
+     *   标准 CdcAcmSerialDriver 按顺序选接口，在多接口设备上会选错导致无法收发数据
+     */
+    private fun buildCustomProber(targetDevice: UsbDevice? = null): UsbSerialProber {
+        val table = ProbeTable()
+        // 已知商米 VSP VID/PID 兜底
+        table.addProduct(0x16d0, 0x087e, CdcAcmSerialDriver::class.java)
+        table.addProduct(0x067b, 0x23c3, CdcAcmSerialDriver::class.java)
+        // 运行时设备使用 VSPSerialDriver，确保选到正确的 "CDC ACM Data" 接口
+        if (targetDevice != null) {
+            table.addProduct(targetDevice.vendorId, targetDevice.productId, VSPSerialDriver::class.java)
+            LogUtil.d(
+                TAG, "Custom prober: VID=0x${"%04X".format(targetDevice.vendorId)} " +
+                    "PID=0x${"%04X".format(targetDevice.productId)} → VSPSerialDriver"
+            )
+        }
+        return UsbSerialProber(table)
+    }
+
+    /**
+     * 连接到 VSP 设备。
+     *
+     * 修复：原实现用 getDefaultProber() 找不到商米设备。
+     * 改为按接口名枚举设备，再用自定义探针（含 VSPSerialDriver）打开正确接口。
      */
     private suspend fun connectToVspDevice(): Boolean {
         return try {
-            // Find available USB serial port devices
-            val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
-
-            if (availableDrivers.isEmpty()) {
-                LogUtil.e(TAG, "No USB serial drivers found")
+            val vspDevice = findVspUsbDevice()
+            if (vspDevice == null) {
+                LogUtil.e(TAG, "No VSP device found (no device with 'CDC ACM Data' interface)")
                 return false
             }
 
-            // Select target device
-            val targetDriver = selectTargetDevice(availableDrivers)
+            val targetDriver = buildCustomProber(vspDevice).probeDevice(vspDevice)
             if (targetDriver == null) {
-                LogUtil.e(TAG, "Target VSP device not found")
+                LogUtil.e(TAG, "Failed to probe VSP device: ${vspDevice.deviceName}")
                 return false
             }
+            LogUtil.d(TAG, "VSP driver: ${targetDriver.javaClass.simpleName}, ports=${targetDriver.ports.size}")
 
-            val usbDevice = targetDriver.device
-
-            // Check permission
-            if (!usbManager.hasPermission(usbDevice)) {
-                LogUtil.d(TAG, "No permission for USB device: ${usbDevice.deviceName}, requesting permission...")
-                
-                // Request permission
-                synchronized(this@VSPClientKernel) {
-                    pendingDevice = usbDevice
-                }
-                
+            if (!usbManager.hasPermission(vspDevice)) {
+                LogUtil.d(TAG, "No permission for ${vspDevice.deviceName}, requesting...")
+                synchronized(this@VSPClientKernel) { pendingDevice = vspDevice }
                 try {
-                    usbManager.requestPermission(usbDevice, createUsbPermissionPendingIntent(usbDevice))
-                    LogUtil.d(TAG, "USB permission request sent for VSP device: ${usbDevice.deviceName}")
+                    usbManager.requestPermission(vspDevice, createUsbPermissionPendingIntent(vspDevice))
+                    LogUtil.d(TAG, "USB permission request sent for: ${vspDevice.deviceName}")
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Failed to request USB permission: ${e.message}")
-                    synchronized(this@VSPClientKernel) {
-                        pendingDevice = null
-                    }
+                    synchronized(this@VSPClientKernel) { pendingDevice = null }
                     return false
                 }
-                
-                // Permission request sent; continueConnection() runs from receiver — do not report success here
+                // 等待权限广播，由 continueConnection() 继续后续流程
                 return false
             }
 
-            // Already have permission, connect directly
-            return continueConnectionInternal(targetDriver)
-
+            continueConnectionInternal(targetDriver)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to connect to VSP device: ${e.message}")
             false
@@ -327,20 +393,19 @@ class VSPClientKernel(
     }
 
     /**
-     * Continue connection after permission granted
+     * 权限授予后继续建立连接。
+     *
+     * 修复：原实现同样使用 getDefaultProber()，此处同样改为自定义探针。
      */
     private suspend fun continueConnection(device: UsbDevice, connectionCallback: ConnectionCallback) {
         try {
-            // Need to re-find driver, as device may have changed
-            val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
-            val targetDriver = availableDrivers.find { isSameUsbDevice(it.device, device) }
-            
+            val targetDriver = buildCustomProber(device).probeDevice(device)
             if (targetDriver == null) {
                 LogUtil.e(TAG, "Driver not found for device: ${device.deviceName}")
-                connectionCallback.onDisconnected("DRIVER_NOT_FOUND", "Driver not found for device")
+                connectionCallback.onDisconnected("DRIVER_NOT_FOUND", "Driver not found after permission grant")
                 return
             }
-            
+
             val success = continueConnectionInternal(targetDriver)
             if (success) {
                 if (awaitVspHandshake()) {
@@ -419,22 +484,25 @@ class VSPClientKernel(
     }
 
     /**
-     * Select target device
+     * 获取当前可用的 VSP 设备列表（使用自定义探针，避免默认探针遗漏商米设备）。
      */
-    private fun selectTargetDevice(availableDrivers: List<UsbSerialDriver>): UsbSerialDriver? {
-        return if (targetDeviceName != null) {
-            // Find by device name
-            availableDrivers.find { driver ->
-                driver.device.deviceName.contains(targetDeviceName!!, ignoreCase = true) ||
-                driver.device.productName?.contains(targetDeviceName!!, ignoreCase = true) == true
-            }
-        } else {
-            // Use first available device
-            availableDrivers.firstOrNull()
-        }?.also { driver ->
-            LogUtil.d(TAG, "Selected VSP device: ${driver.device.deviceName}")
-            LogUtil.d(TAG, "Device info: VID=${String.format("0x%04X", driver.device.vendorId)}, " +
-                    "PID=${String.format("0x%04X", driver.device.productId)}")
+    fun getAvailableDevices(): List<Map<String, String>> {
+        return try {
+            usbManager.deviceList.values
+                .filter { isVspDevice(it) }
+                .map { device ->
+                    val driver = buildCustomProber(device).probeDevice(device)
+                    mapOf(
+                        "deviceName" to device.deviceName,
+                        "productName" to (device.productName ?: "Unknown"),
+                        "vendorId" to "0x${"%04X".format(device.vendorId)}",
+                        "productId" to "0x${"%04X".format(device.productId)}",
+                        "driverClass" to (driver?.javaClass?.simpleName ?: "Unknown")
+                    )
+                }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to get available devices: ${e.message}")
+            emptyList()
         }
     }
 
@@ -483,12 +551,14 @@ class VSPClientKernel(
     /**
      * Start data reception loop.
      *
-     * Server initiates handshake with [VspHandshake.REQ]; client replies with [VspHandshake.ACK].
-     * Any remaining payload in the same read is forwarded to [dataReceiver] as usual.
+     * 握手：服务端发 [VspHandshake.REQ]，客户端回 [VspHandshake.ACK]。
+     * 非握手数据追加到 [receiveBuffer]，由 [extractNextJsonObject] 按大括号深度
+     * 提取完整 JSON 后再交给 [dataReceiver]，解决 USB CDC-ACM 分包导致的 JSON 残缺问题。
      */
     private fun startDataReceive() {
         dataReceiveJob?.cancel()
         dataReceiveJob = scope.launch {
+            receiveBuffer.clear()
             val buffer = ByteArray(16384)
 
             LogUtil.d(TAG, "Starting VSP client data receive loop...")
@@ -500,7 +570,7 @@ class VSPClientKernel(
                     if (bytesRead > 0) {
                         val data = buffer.copyOf(bytesRead)
                         val dataString = String(data, Charsets.UTF_8)
-                        LogUtil.d(TAG, "VSP client data received: $dataString (${data.size} bytes)")
+                        LogUtil.d(TAG, "VSP client raw received: ${data.size} bytes")
 
                         if (VspHandshake.isHandshakeMessage(dataString)) {
                             if (VspHandshake.containsReq(dataString)) {
@@ -508,21 +578,20 @@ class VSPClientKernel(
                                     signalHandshakeSuccess()
                                 }
                             } else if (VspHandshake.containsAck(dataString)) {
-                                // Symmetric with service handling "mutual REQ" — link already verified
                                 signalHandshakeSuccess()
                             }
+                            // 握手包可能携带后续 payload（对端合并发送）
                             val remaining = VspHandshake.stripHandshakeMarkers(dataString)
                             if (remaining != null) {
-                                dataReceiver?.invoke(remaining.toByteArray(Charsets.UTF_8))
+                                processIncomingPayload(remaining.toByteArray(Charsets.UTF_8))
                             }
                             continue
                         }
 
-                        dataReceiver?.invoke(data)
+                        processIncomingPayload(data)
                     }
                 } catch (e: IOException) {
                     LogUtil.e(TAG, "Error receiving VSP client data: ${e.message}")
-
                     if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
                         handshakeWaiter?.completeExceptionally(e)
                     }
@@ -532,7 +601,6 @@ class VSPClientKernel(
                     break
                 } catch (e: Exception) {
                     LogUtil.e(TAG, "Unexpected error in VSP client receive loop: ${e.message}")
-
                     if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING) {
                         handshakeWaiter?.completeExceptionally(e)
                     }
@@ -545,6 +613,62 @@ class VSPClientKernel(
             
             LogUtil.d(TAG, "VSP client data receive loop ended")
         }
+    }
+
+    /**
+     * 将新到字节追加到 [receiveBuffer]，触发 JSON 对象提取。
+     */
+    private fun processIncomingPayload(data: ByteArray) {
+        if (data.isNotEmpty()) {
+            if (receiveBuffer.length + data.size > MAX_RECEIVE_BUFFER_SIZE) {
+                LogUtil.w(TAG, "Receive buffer overflow (${receiveBuffer.length} chars), clearing")
+                receiveBuffer.clear()
+            }
+            receiveBuffer.append(String(data, Charsets.UTF_8))
+        }
+        extractNextJsonObject()
+    }
+
+    /**
+     * 按大括号深度从 [receiveBuffer] 提取完整 JSON 对象，分发给 [dataReceiver]，
+     * 然后递归处理剩余内容（应对单次 read 包含多条消息的情况）。
+     *
+     * 与 Tapro VSPServiceKernel.unwrapVspFramedUartPayload 算法一致：
+     * '{' 深度+1，'}' 深度-1，归零即为完整 JSON。
+     */
+    private fun extractNextJsonObject() {
+        val startIdx = receiveBuffer.indexOf('{')
+        if (startIdx < 0) {
+            if (receiveBuffer.isNotEmpty()) {
+                LogUtil.d(TAG, "VSP buffer has no '{', clearing ${receiveBuffer.length} chars")
+                receiveBuffer.clear()
+            }
+            return
+        }
+        if (startIdx > 0) {
+            // 丢弃 '{' 之前的非 JSON 前缀（如 UART 帧头字节）
+            receiveBuffer.delete(0, startIdx)
+        }
+
+        var depth = 0
+        for (i in receiveBuffer.indices) {
+            when (receiveBuffer[i]) {
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0) {
+                        val jsonStr = receiveBuffer.substring(0, i + 1)
+                        LogUtil.d(TAG, "VSP complete JSON extracted: ${jsonStr.length} chars")
+                        dataReceiver?.invoke(jsonStr.toByteArray(Charsets.UTF_8))
+                        receiveBuffer.delete(0, i + 1)
+                        if (receiveBuffer.isNotEmpty()) extractNextJsonObject()
+                        return
+                    }
+                }
+            }
+        }
+
+        LogUtil.d(TAG, "VSP buffer: ${receiveBuffer.length} chars, waiting for more data")
     }
 
     /**
@@ -644,26 +768,6 @@ class VSPClientKernel(
      */
     fun isVspConnected(): Boolean = isVspReady()
 
-    /**
-     * Get list of available VSP devices
-     */
-    fun getAvailableDevices(): List<Map<String, String>> {
-        return try {
-            val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
-            availableDrivers.map { driver ->
-                mapOf(
-                    "deviceName" to driver.device.deviceName,
-                    "productName" to (driver.device.productName ?: "Unknown"),
-                    "vendorId" to String.format("0x%04X", driver.device.vendorId),
-                    "productId" to String.format("0x%04X", driver.device.productId),
-                    "driverClass" to driver.javaClass.simpleName
-                )
-            }
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to get available devices: ${e.message}")
-            emptyList()
-        }
-    }
 
     /**
      * Clean up resources

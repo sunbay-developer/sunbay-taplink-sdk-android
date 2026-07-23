@@ -30,6 +30,11 @@ interface PaymentCallback {
      * Called multiple times during a transaction as it moves through different stages
      * (waiting for card, card detected, PIN entry, online authorization, printing, etc.).
      *
+     * In Headless mode, intermediate callbacks may be delivered as
+     * [com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent.HeadlessEvent], which carries
+     * full metadata (`eventId`, `transactionRequestId`, `referenceOrderId`, `cancelable`,
+     * `timestamp`, and `data`) for idempotency and UI recovery.
+     *
      * @param event Progress event with stage code and description
      */
     fun onProgress(event: PaymentEvent)
@@ -74,5 +79,4 @@ interface PaymentCallback {
     fun onFailure(error: PaymentError)
 
 }
-
 

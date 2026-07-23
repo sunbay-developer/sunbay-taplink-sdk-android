@@ -1,7 +1,9 @@
 package com.sunmi.tapro.taplink.sdk.manager
 
 import android.content.Context
-import com.google.gson.Gson
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.R
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
@@ -19,6 +21,7 @@ import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
+import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
@@ -44,10 +47,9 @@ class PaymentManager(
 ) {
     private val TAG = "PaymentManager"
 
-    /**
-     * Gson instance for JSON serialization
-     */
-    private val gson = Gson()
+    private val mapper: ObjectMapper = ObjectMapper()
+        .registerKotlinModule()
+        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
 
     /**
      * Callback manager for managing multiple async request callbacks
@@ -102,6 +104,8 @@ class PaymentManager(
             LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
             hasPendingAutoConnectTransaction = false
         }
+        // Clear processed terminal events when connection is lost to allow fresh start on reconnection
+        responseProcessor.clearProcessedTerminalEvents()
     }
 
     /**
@@ -194,15 +198,17 @@ class PaymentManager(
             if (!validateAmount(request, callback)) return
 
             // Convert PaymentRequest to BasicRequest
+            val appToAppMode = resolveAppToAppModeForRequest()
             val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
                 request = request,
                 version = config.version,
                 config.appId,
-                secretKey = config.secretKey
+                secretKey = config.secretKey,
+                appToAppMode = appToAppMode
             )
 
-            // Convert BasicRequest to JSON string
-            val requestJson = gson.toJson(basicRequest)
+            // Serialise BasicRequest to JSON string for transport
+            val requestJson = mapper.writeValueAsString(basicRequest)
             LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
 
             // Create internal callback for receiving raw response
@@ -271,6 +277,25 @@ class PaymentManager(
                 transactionRequestId = request.transactionRequestId
             )
         }
+    }
+
+    /**
+     * Resolves App-to-App mode attached to outgoing bizData.
+     *
+     * The mode is only attached for APP_TO_APP connection.
+     * If caller did not explicitly set it in ConnectionConfig, default to CUSTOM.
+     */
+    private fun resolveAppToAppModeForRequest(): String? {
+        val isAppToApp = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
+        if (!isAppToApp) {
+            return null
+        }
+        val configuredMode = connectionManager.getAppToAppMode()
+        val resolvedMode = configuredMode ?: AppToAppMode.CUSTOM
+        if (configuredMode == null) {
+            LogUtil.d(TAG, "App-to-App mode not configured, using default: ${resolvedMode.name}")
+        }
+        return resolvedMode.name
     }
 
     /**

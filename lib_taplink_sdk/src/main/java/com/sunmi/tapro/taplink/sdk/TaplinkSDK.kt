@@ -155,6 +155,54 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
+         * Auto-discover LAN Taplink services and connect to the first available.
+         *
+         * @param listener Connection result callback
+         * @see TaplinkApi.autoDiscoverAndConnect
+         */
+        @JvmStatic
+        @JvmName("autoDiscoverAndConnectSDK")
+        fun autoDiscoverAndConnect(listener: ConnectionListener) {
+            getInstance().autoDiscoverAndConnect(listener)
+        }
+
+        /**
+         * Discover LAN Taplink services (mDNS) without connecting.
+         *
+         * @param listener Discovery result callback
+         * @see TaplinkApi.discoverLanServices
+         */
+        @JvmStatic
+        @JvmName("discoverLanServicesSDK")
+        fun discoverLanServices(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+            getInstance().discoverLanServices(listener)
+        }
+
+        /**
+         * Launch QR scanner and connect using scanned Taplink QR code.
+         *
+         * @param listener Connection result callback
+         * @see TaplinkApi.scanAndConnect
+         */
+        @JvmStatic
+        @JvmName("scanAndConnectSDK")
+        fun scanAndConnect(listener: ConnectionListener) {
+            getInstance().scanAndConnect(listener)
+        }
+
+        /**
+         * Launch QR scanner and return the scanned lan:// host/port without connecting.
+         *
+         * @param listener Scan result callback (single-element list on success)
+         * @see TaplinkApi.scanLanQrCode
+         */
+        @JvmStatic
+        @JvmName("scanLanQrCodeSDK")
+        fun scanLanQrCode(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+            getInstance().scanLanQrCode(listener)
+        }
+
+        /**
          * Check connection status
          *
          * @return true if connected, false otherwise
@@ -281,6 +329,71 @@ class TaplinkSDK private constructor() : TaplinkApi {
             return getInstance().clientInstance
         }
 
+        // ==================== Headless Mode APIs ====================
+
+        /**
+         * Cancel the current in-progress transaction.
+         *
+         * Only effective when the transaction is in a cancelable stage.
+         * In Headless mode, use this when you need to abort a transaction
+         * that hasn't reached the online processing stage yet.
+         *
+         * @param transactionRequestId The ID of the transaction to cancel (optional)
+         * @param callback Callback to receive the cancellation result
+         */
+        @JvmStatic
+        @JvmName("cancelSDKTransaction")
+        fun cancelTransaction(transactionRequestId: String? = null, callback: PaymentCallback) {
+            getInstance().cancelTransaction(transactionRequestId, callback)
+        }
+
+        /**
+         * Query the current transaction status.
+         *
+         * Used for crash recovery — when the POS app restarts,
+         * call this to check if a transaction is still in progress.
+         *
+         * @param transactionRequestId The transaction request ID to query
+         * @param callback Callback to receive the status
+         */
+        @JvmStatic
+        @JvmName("querySDKTransactionStatus")
+        fun queryTransactionStatus(transactionRequestId: String, callback: PaymentCallback) {
+            getInstance().queryTransactionStatus(transactionRequestId, callback)
+        }
+
+        /**
+         * Switch the current Headless transaction to manual card entry.
+         *
+         * This API sends a dedicated control request and is only effective when
+         * the current in-progress transaction is at WAITING_CARD stage.
+         *
+         * @param transactionRequestId The transaction request ID to switch (optional)
+         * @param callback Callback to receive the switch result
+         */
+        @JvmStatic
+        @JvmName("switchSDKToManualEntry")
+        fun switchToManualEntry(transactionRequestId: String? = null, callback: PaymentCallback) {
+            getInstance().switchToManualEntry(transactionRequestId, callback)
+        }
+
+        /**
+         * Open TaPro USB secondary-screen player application.
+         *
+         * POS applications should call this before showing Android Presentation content
+         * on the secondary display.
+         *
+         * @param callback Callback to receive control result
+         */
+        @JvmStatic
+        @JvmName("openSDKUsbScreenPlayer")
+        fun openUsbScreenPlayer(callback: PaymentCallback) {
+            getInstance().openUsbScreenPlayer(callback)
+        }
+
+
+
+
         // ==================== Backward Compatible Interfaces (Deprecated) ====================
 
         /**
@@ -346,6 +459,22 @@ class TaplinkSDK private constructor() : TaplinkApi {
         apiImpl.removeConnectionListener()
     }
 
+    override fun autoDiscoverAndConnect(listener: ConnectionListener) {
+        apiImpl.autoDiscoverAndConnect(listener)
+    }
+
+    override fun discoverLanServices(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+        apiImpl.discoverLanServices(listener)
+    }
+
+    override fun scanAndConnect(listener: ConnectionListener) {
+        apiImpl.scanAndConnect(listener)
+    }
+
+    override fun scanLanQrCode(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+        apiImpl.scanLanQrCode(listener)
+    }
+
     // ==================== Device and Version Information (Instance Methods) ====================
 
     override fun getConnectedDeviceId(): String? {
@@ -371,6 +500,26 @@ class TaplinkSDK private constructor() : TaplinkApi {
     override fun getConnectionConfig(): ConnectionConfig? {
         return apiImpl.getConnectionConfig()
     }
+
+    // ==================== Headless Mode APIs (Instance Methods) ====================
+
+    override fun cancelTransaction(transactionRequestId: String?, callback: PaymentCallback) {
+        apiImpl.cancelTransaction(transactionRequestId, callback)
+    }
+
+    override fun queryTransactionStatus(transactionRequestId: String, callback: PaymentCallback) {
+        apiImpl.queryTransactionStatus(transactionRequestId, callback)
+    }
+
+    override fun switchToManualEntry(transactionRequestId: String?, callback: PaymentCallback) {
+        apiImpl.switchToManualEntry(transactionRequestId, callback)
+    }
+
+    override fun openUsbScreenPlayer(callback: PaymentCallback) {
+        apiImpl.openUsbScreenPlayer(callback)
+    }
+
+
 
     // ==================== Backward Compatible Interfaces (Instance Methods, Deprecated) ====================
 

@@ -2,7 +2,9 @@ package com.sunmi.tapro.taplink.sdk.persistence
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
@@ -31,7 +33,9 @@ class ConnectionPersistence(context: Context) {
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val gson = Gson()
+    private val mapper: ObjectMapper = ObjectMapper()
+        .registerKotlinModule()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
     
     /**
      * Device service information for mDNS discovery
@@ -58,7 +62,7 @@ class ConnectionPersistence(context: Context) {
 
             // Save connection config
             if (config != null) {
-                val configJson = gson.toJson(config)
+                val configJson = mapper.writeValueAsString(config)
                 editor.putString(KEY_LAST_CONNECTION_CONFIG, configJson)
                 LogUtil.d(TAG, "Saved connection config: $configJson")
             }
@@ -134,7 +138,7 @@ class ConnectionPersistence(context: Context) {
         return try {
             val configJson = prefs.getString(KEY_LAST_CONNECTION_CONFIG, null)
             if (configJson != null) {
-                val config = gson.fromJson(configJson, ConnectionConfig::class.java)
+                val config = mapper.readValue(configJson, ConnectionConfig::class.java)
                 LogUtil.d(TAG, "Retrieved last connection config: $configJson")
                 config
             } else {
@@ -143,6 +147,8 @@ class ConnectionPersistence(context: Context) {
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to retrieve connection config: ${e.message}")
+            prefs.edit().remove(KEY_LAST_CONNECTION_CONFIG).apply()
+            LogUtil.w(TAG, "Removed invalid cached connection config")
             null
         }
     }
@@ -171,7 +177,7 @@ class ConnectionPersistence(context: Context) {
     fun saveDeviceServiceInfo(deviceServiceInfo: DeviceServiceInfo) {
         try {
             val key = KEY_DEVICE_SERVICE_INFO + deviceServiceInfo.deviceId
-            val serviceInfoJson = gson.toJson(deviceServiceInfo)
+            val serviceInfoJson = mapper.writeValueAsString(deviceServiceInfo)
             
             prefs.edit()
                 .putString(key, serviceInfoJson)
@@ -196,7 +202,7 @@ class ConnectionPersistence(context: Context) {
             val serviceInfoJson = prefs.getString(key, null)
             
             if (serviceInfoJson != null) {
-                val serviceInfo = gson.fromJson(serviceInfoJson, DeviceServiceInfo::class.java)
+                val serviceInfo = mapper.readValue(serviceInfoJson, DeviceServiceInfo::class.java)
                 LogUtil.d(TAG, "Retrieved device service info for $deviceId: $serviceInfoJson")
                 serviceInfo
             } else {
@@ -319,7 +325,7 @@ class ConnectionPersistence(context: Context) {
             for ((key, value) in allPrefs) {
                 if (key.startsWith(KEY_DEVICE_SERVICE_INFO) && value is String) {
                     try {
-                        val serviceInfo = gson.fromJson(value, DeviceServiceInfo::class.java)
+                        val serviceInfo = mapper.readValue(value, DeviceServiceInfo::class.java)
                         result.add(serviceInfo)
                     } catch (e: Exception) {
                         LogUtil.w(TAG, "Failed to parse device service info: $key")

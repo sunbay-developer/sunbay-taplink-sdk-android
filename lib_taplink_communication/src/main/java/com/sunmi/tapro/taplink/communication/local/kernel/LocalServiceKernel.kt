@@ -12,7 +12,7 @@ import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.local.ITransaction
 import com.sunmi.tapro.taplink.communication.local.ITransactionCallback
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
@@ -47,10 +47,7 @@ class LocalServiceKernel constructor(
 
     override fun getTag(): String = TAG
 
-    /**
-     * Gson instance for JSON parsing
-     */
-    private val gson = Gson()
+    private val mapper = ObjectMapper()
 
     /**
      * Currently connected service Intent
@@ -195,8 +192,8 @@ class LocalServiceKernel constructor(
                 val errorCode = code ?: "UNKNOWN_ERROR"
                 val errorMsg = msg ?: "Unknown error"
                 val errorResponse = try {
-                    // Use Gson to properly escape the errorMsg value, which may itself be a JSON string
-                    val escapedMsg = gson.toJson(errorMsg)
+                    // Use Jackson to properly escape errorMsg — it may itself be a JSON string
+                    val escapedMsg = mapper.writeValueAsString(errorMsg)
                     """{"traceId":"$traceId","eventCode":"ERROR","errorCode":"$errorCode","eventMsg":$escapedMsg}"""
                 } catch (e: Exception) {
                     "ERROR: $errorCode - $errorMsg"

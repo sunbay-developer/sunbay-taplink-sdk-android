@@ -84,6 +84,105 @@ class ServiceDiscoveryManager(
         }
     }
     
+    /**
+     * Isolated one-shot service discovery with independent result set.
+     * Does NOT share state with startServiceMonitoring/stopServiceMonitoring.
+     * Supports coroutine cancellation; NSD listener is always cleaned up in finally.
+     *
+     * @param serviceType mDNS service type (e.g. "_taplink._tcp")
+     * @param timeoutMs Discovery window in milliseconds
+     * @return List of discovered services (may be empty)
+     */
+    suspend fun discoverServicesIsolated(
+        serviceType: String,
+        timeoutMs: Long = DISCOVERY_TIMEOUT_MS
+    ): List<ServiceInfo> {
+        return withContext(Dispatchers.IO) {
+            val isolatedResults = ConcurrentHashMap<String, ServiceInfo>()
+            val isolatedResolving = ConcurrentHashMap<String, AtomicBoolean>()
+            var tempListener: NsdManager.DiscoveryListener? = null
+
+            try {
+                LogUtil.d(TAG, "Starting isolated service discovery for: $serviceType (timeout=${timeoutMs}ms)")
+
+                tempListener = object : NsdManager.DiscoveryListener {
+                    override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                        LogUtil.e(TAG, "Isolated discovery start failed: $serviceType, error: $errorCode")
+                    }
+
+                    override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                        LogUtil.w(TAG, "Isolated discovery stop failed: $serviceType, error: $errorCode")
+                    }
+
+                    override fun onDiscoveryStarted(serviceType: String) {
+                        LogUtil.d(TAG, "Isolated discovery started: $serviceType")
+                    }
+
+                    override fun onDiscoveryStopped(serviceType: String) {
+                        LogUtil.d(TAG, "Isolated discovery stopped: $serviceType")
+                    }
+
+                    override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                        val serviceName = serviceInfo.serviceName
+                        LogUtil.d(TAG, "Isolated: service found: $serviceName")
+
+                        val isResolving = isolatedResolving.computeIfAbsent(serviceName) { AtomicBoolean(false) }
+                        if (isResolving.compareAndSet(false, true)) {
+                            nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                                override fun onResolveFailed(si: NsdServiceInfo, errorCode: Int) {
+                                    LogUtil.w(TAG, "Isolated: resolve failed: ${si.serviceName}, error: $errorCode")
+                                    isolatedResolving.remove(serviceName)
+                                }
+
+                                override fun onServiceResolved(si: NsdServiceInfo) {
+                                    val service = convertToServiceInfo(si)
+                                    if (service != null) {
+                                        isolatedResults[service.name] = service
+                                        LogUtil.d(TAG, "Isolated: resolved ${service.name} at ${service.getAddress()}")
+                                    }
+                                    isolatedResolving.remove(serviceName)
+                                }
+                            })
+                        }
+                    }
+
+                    override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+                        LogUtil.d(TAG, "Isolated: service lost: ${serviceInfo.serviceName}")
+                        isolatedResults.remove(serviceInfo.serviceName)
+                        isolatedResolving.remove(serviceInfo.serviceName)
+                    }
+                }
+
+                nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, tempListener)
+
+                // Wait for discovery window, checking for cancellation
+                delay(timeoutMs)
+
+                val results = isolatedResults.values.toList()
+                LogUtil.d(TAG, "Isolated discovery completed, found ${results.size} services")
+                results
+
+            } catch (e: CancellationException) {
+                LogUtil.d(TAG, "Isolated discovery cancelled")
+                throw e
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Isolated discovery failed: ${e.message}")
+                emptyList()
+            } finally {
+                // Always stop discovery listener
+                tempListener?.let { listener ->
+                    try {
+                        nsdManager.stopServiceDiscovery(listener)
+                    } catch (e: Exception) {
+                        LogUtil.w(TAG, "Error stopping isolated discovery: ${e.message}")
+                    }
+                }
+                isolatedResults.clear()
+                isolatedResolving.clear()
+            }
+        }
+    }
+
     fun startServiceMonitoring(serviceType: String, listener: ServiceChangeListener) {
         if (isMonitoring) {
             LogUtil.w(TAG, "Service monitoring already started")

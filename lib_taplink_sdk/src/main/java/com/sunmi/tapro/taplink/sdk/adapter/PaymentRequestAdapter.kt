@@ -34,6 +34,7 @@ object PaymentRequestAdapter {
             requestTimeout = request.requestTimeout,
             tipConfig = request.tipConfig,
             printReceipt = request.printReceipt,
+            signatureEntryLocation = request.signatureEntryLocation,
         )
     }
 
@@ -57,7 +58,8 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            printReceipt = request.printReceipt,
+            signatureEntryLocation = request.signatureEntryLocation,
         )
     }
 
@@ -81,7 +83,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            printReceipt = request.printReceipt,
         )
     }
 
@@ -102,7 +104,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            printReceipt = request.printReceipt,
         )
     }
 
@@ -161,7 +163,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            printReceipt = request.printReceipt,
         )
     }
 

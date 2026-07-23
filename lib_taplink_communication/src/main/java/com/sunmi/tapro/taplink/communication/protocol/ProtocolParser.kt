@@ -96,6 +96,7 @@ object ProtocolParser {
 
         return when {
             protocol.startsWith(ProtocolConstants.LOCAL_PROTOCOL_PREFIX) -> parseLocalProtocol(protocol)
+            protocol.startsWith(ProtocolConstants.LAN_QR_PROTOCOL_PREFIX) -> parseLanQrProtocol(protocol)
             protocol.startsWith(ProtocolConstants.LAN_PROTOCOL_PREFIX) -> parseLanProtocol(protocol)
             protocol.startsWith(ProtocolConstants.LAN_WS_PROTOCOL_PREFIX) -> parseLanProtocol(protocol)
             protocol.startsWith(ProtocolConstants.VSP_PROTOCOL_PREFIX) -> parseVspProtocol(protocol)
@@ -139,7 +140,48 @@ object ProtocolParser {
     }
 
     /**
-     * Parse LAN protocol: lan://ip/port
+     * Parse QR code LAN protocol: lan://host/port
+     * Fixed mapping to non-TLS WebSocket (secure = false)
+     * Only supports lan://host/port format, no query params, fragments or extra paths
+     *
+     * @param protocol Protocol string
+     * @return ProtocolParseResult.LanProtocol or Error
+     */
+    private fun parseLanQrProtocol(protocol: String): ProtocolParseResult {
+        try {
+            val content = protocol.removePrefix(ProtocolConstants.LAN_QR_PROTOCOL_PREFIX)
+            if (content.isEmpty()) {
+                return ProtocolParseResult.Error("lan:// content is empty")
+            }
+
+            val parts = content.split("/")
+            if (parts.size != 2) {
+                return ProtocolParseResult.Error(
+                    "Invalid lan:// format, expected: lan://host/port, got: $protocol"
+                )
+            }
+
+            val host = parts[0]
+            val port = parts[1].toIntOrNull()
+
+            if (host.isEmpty()) {
+                return ProtocolParseResult.Error("Host is empty in lan:// protocol")
+            }
+
+            if (port == null || port <= 0 || port > 65535) {
+                return ProtocolParseResult.Error("Invalid port in lan:// protocol: ${parts[1]}")
+            }
+
+            // lan:// always maps to non-TLS (secure = false)
+            return ProtocolParseResult.LanProtocol(host, port, secure = false)
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to parse lan:// protocol: $protocol\n${e.stackTraceToString()}")
+            return ProtocolParseResult.Error("Failed to parse lan:// protocol: ${e.message}")
+        }
+    }
+
+    /**
+     * Parse LAN protocol: wss://host:port or ws://host:port
      *
      * @param protocol Protocol string
      * @return ProtocolParseResult.LanProtocol or Error

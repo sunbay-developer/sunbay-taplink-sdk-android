@@ -470,7 +470,8 @@ class MainActivity : Activity() {
                 val protocol = ConnectionPreferences.getCableProtocol(this)
                 when (protocol) {
                     ConnectionPreferences.CableProtocol.AUTO -> {
-                        // Let SDK auto-detect the best protocol for the connected hardware
+                        // Persist explicit AUTO to avoid null cableProtocol in cached config
+                        connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.AUTO)
                     }
 
                     ConnectionPreferences.CableProtocol.USB_AOA -> {

@@ -431,6 +431,16 @@ class ReconnectManager(
     }
 
     /**
+     * Get the last connection listener used by connect()/prepareConnect().
+     *
+     * Used as fallback for internal reconnection paths (e.g. LAN service address change)
+     * when no global persistent connectionListener is registered.
+     */
+    fun getLastConnectionListener(): ConnectionListener? {
+        return lastConnectionListener
+    }
+
+    /**
      * Update device service information for mDNS discovery
      *
      * @param deviceId Device ID

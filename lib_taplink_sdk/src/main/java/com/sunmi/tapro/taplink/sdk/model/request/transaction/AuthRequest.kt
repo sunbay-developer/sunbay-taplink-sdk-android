@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
+import com.sunmi.tapro.taplink.sdk.enums.Signature
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
@@ -18,6 +19,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param notifyUrl Notification URL (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
+ * @param signatureEntryLocation Signature routing (optional): ON_SCREEN / ON_RECEIPT
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -32,7 +34,8 @@ data class AuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val printReceipt: PrintReceipt? = PrintReceipt.AUTO
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
+    val signatureEntryLocation: Signature? = null
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -72,6 +75,7 @@ data class AuthRequest(
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
+        private var signatureEntryLocation: Signature? = null
 
         /**
          * Set reference order ID
@@ -154,6 +158,14 @@ data class AuthRequest(
         }
 
         /**
+         * Set signature collection preference.
+         */
+        fun setSignatureEntryLocation(signatureEntryLocation: Signature): Builder {
+            this.signatureEntryLocation = signatureEntryLocation
+            return this
+        }
+
+        /**
          * Build AuthRequest instance
          * 
          * @throws TransactionRequestValidationException If validation fails
@@ -169,7 +181,8 @@ data class AuthRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
-                printReceipt = printReceipt
+                printReceipt = printReceipt,
+                signatureEntryLocation = signatureEntryLocation
             )
 
             val validationResult = request.validate()

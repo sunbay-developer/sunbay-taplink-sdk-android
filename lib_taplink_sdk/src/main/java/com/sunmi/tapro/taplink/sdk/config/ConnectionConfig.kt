@@ -2,6 +2,7 @@ package com.sunmi.tapro.taplink.sdk.config
 
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
+import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 
 /**
  * Connection configuration class.
@@ -22,6 +23,13 @@ class ConnectionConfig {
      * Specifies which connection mode to use: App-to-App, Cable, or Local Area Network (LAN).
      */
     var connectionMode: ConnectionMode? = null
+        private set
+
+    /**
+     * App-to-App transaction mode (optional, default: CUSTOM).
+     * Only used when [connectionMode] is [ConnectionMode.APP_TO_APP].
+     */
+    var appToAppMode: AppToAppMode = AppToAppMode.CUSTOM
         private set
 
     /**
@@ -91,13 +99,26 @@ class ConnectionConfig {
     }
 
     /**
+     * Sets App-to-App transaction mode.
+     *
+     * If not set, SDK defaults to [AppToAppMode.CUSTOM].
+     *
+     * @param mode App-to-App mode
+     * @return the current configuration instance for method chaining
+     */
+    fun setAppToAppMode(mode: AppToAppMode): ConnectionConfig {
+        this.appToAppMode = mode
+        return this
+    }
+
+    /**
      * Sets the cable protocol.
      *
      * @param protocol the cable protocol type
      * @return the current configuration instance for method chaining
      */
-    fun setCableProtocol(protocol: CableProtocol): ConnectionConfig {
-        this.cableProtocol = protocol
+    fun setCableProtocol(protocol: CableProtocol?): ConnectionConfig {
+        this.cableProtocol = protocol ?: CableProtocol.AUTO
         return this
     }
 
@@ -196,6 +217,7 @@ class ConnectionConfig {
         if (other == null) return false
         
         return this.connectionMode == other.connectionMode &&
+                this.appToAppMode == other.appToAppMode &&
                this.cableProtocol == other.cableProtocol &&
                this.host == other.host &&
                this.port == other.port &&
@@ -213,6 +235,7 @@ class ConnectionConfig {
     override fun toString(): String {
         return "ConnectionConfig(" +
                 "connectionMode=$connectionMode, " +
+                "appToAppMode=$appToAppMode, " +
                 "cableProtocol=$cableProtocol, " +
                 "host=$host, " +
                 "port=$port, " +
@@ -243,8 +266,10 @@ class ConnectionConfig {
          *
          * @return the App-to-App mode configuration
          */
-        fun createAppMode(): ConnectionConfig {
-            return ConnectionConfig().setConnectionMode(ConnectionMode.APP_TO_APP)
+        fun createAppMode(mode: AppToAppMode = AppToAppMode.CUSTOM): ConnectionConfig {
+            return ConnectionConfig()
+                .setConnectionMode(ConnectionMode.APP_TO_APP)
+                .setAppToAppMode(mode)
         }
 
         /**
@@ -253,13 +278,10 @@ class ConnectionConfig {
          * @param protocol the cable protocol type (optional)
          * @return the Cable mode configuration
          */
-        fun createCableMode(protocol: CableProtocol? = null): ConnectionConfig {
-            val config = ConnectionConfig().setConnectionMode(ConnectionMode.CABLE)
-            return if (protocol != null) {
-                config.setCableProtocol(protocol)
-            } else {
-                config
-            }
+        fun createCableMode(protocol: CableProtocol = CableProtocol.AUTO): ConnectionConfig {
+            return ConnectionConfig()
+                .setConnectionMode(ConnectionMode.CABLE)
+                .setCableProtocol(protocol)
         }
 
         /**
@@ -308,8 +330,6 @@ class ConnectionConfig {
         }
     }
 }
-
-
 
 
 

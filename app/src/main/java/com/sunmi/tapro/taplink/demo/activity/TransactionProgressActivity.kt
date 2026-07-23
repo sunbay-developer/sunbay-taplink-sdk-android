@@ -850,7 +850,7 @@ class TransactionProgressActivity : AppCompatActivity() {
                 abortButton.text = "Aborting..."
             }
             "PROCESSING", "TIP_PROCESSING", "WAITING_CARD", "CARD_DETECTED", "READING_CARD",
-            "WAITING_PIN", "WAITING_SIGNATURE", "WAITING_RESPONSE", "PRINTING",
+            "WAITING_PIN", "WAITING_SIGNATURE", "ONLINE_PROCESSING", "PRINTING",
             "WAITING", "CONNECTING" -> {
                 // Enable abort button for supported transaction types
                 val shouldShowAbort = when (transaction.type) {

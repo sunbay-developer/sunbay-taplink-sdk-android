@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 成功响应 -->
+    <string name="error_100_description">操作成功</string>
+    <string name="error_100_solution">操作成功完成</string>
+    
+    <string name="error_0_description">接口响应成功</string>
+    <string name="error_0_solution">接口响应成功，但不代表交易成功。检查交易状态和结果码确定实际交易状态</string>
+
+    <!-- 初始化错误 (20x) -->
+    <string name="error_201_description">SDK未初始化</string>
+    <string name="error_201_solution">调用 TaplinkSDK.init() 初始化SDK</string>
+    
+    <string name="error_202_description">SDK服务异常</string>
+    <string name="error_202_solution">重启应用</string>
+    
+    <string name="error_203_description">Tapro初始化失败</string>
+    <string name="error_203_solution">重新连接</string>
+
+    <!-- 连接状态/失败错误 (21x) -->
+    <string name="error_211_description">连接已存在，无需重复连接</string>
+    <string name="error_211_solution">无需重复连接</string>
+    
+    <string name="error_212_description">设备未连接</string>
+    <string name="error_212_solution">先调用 connect() 建立连接</string>
+    
+    <string name="error_213_description">连接已断开</string>
+    <string name="error_213_solution">重新调用 connect()</string>
+    
+    <string name="error_214_description">无法建立连接</string>
+    <string name="error_214_solution">检查网络或设备状态后重试</string>
+    
+    <string name="error_221_description">认证失败</string>
+    <string name="error_221_solution">检查appId和secretKey是否正确</string>
+
+    <!-- 本地模式连接失败 (23x) -->
+    <string name="error_231_description">Tapro应用未安装</string>
+    <string name="error_231_solution">安装Tapro应用</string>
+    
+    <string name="error_232_description">无法连接到Tapro</string>
+    <string name="error_232_solution">重启Tapro应用或设备</string>
+
+    <!-- 局域网模式连接失败 (24x) -->
+    <string name="error_241_description">无法连接到服务端</string>
+    <string name="error_241_solution">检查网络连接和防火墙设置</string>
+    
+    <string name="error_242_description">无法发现服务端</string>
+    <string name="error_242_solution">手动输入服务端IP地址</string>
+
+    <!-- USB模式连接失败 (25x) -->
+    <string name="error_251_description">线缆未连接</string>
+    <string name="error_251_solution">连接USB线或串口线</string>
+    
+    <string name="error_252_description">USB权限被拒绝</string>
+    <string name="error_252_solution">授权应用使用USB设备</string>
+    
+    <string name="error_253_description">USB连接超时</string>
+    <string name="error_253_solution">重新插拔USB线</string>
+    
+    <string name="error_254_description">USB协议不支持</string>
+    <string name="error_254_solution">使用自动检测模式，或联系技术支持</string>
+    
+    <string name="error_255_description">串口设备未就绪</string>
+    <string name="error_255_solution">重新插拔串口线</string>
+
+    <!-- 交易处理错误 (30x + 399) -->
+    <string name="error_301_description">缺少必填参数</string>
+    <string name="error_301_solution">检查金额、交易类型等必填参数</string>
+    
+    <string name="error_302_description">请求数据格式错误</string>
+    <string name="error_302_solution">检查参数格式是否符合API文档要求</string>
+    
+    <string name="error_303_description">不支持的交易类型</string>
+    <string name="error_303_solution">检查action参数（SALE/REFUND/VOID等）</string>
+    
+    <string name="error_304_description">请求发送失败</string>
+    <string name="error_304_solution">检查网络连接后重试</string>
+    
+    <string name="error_305_description">交易正在进行</string>
+    <string name="error_305_solution">等待当前交易完成</string>
+    
+    <string name="error_306_description">响应超时</string>
+    <string name="error_306_solution">先查询交易状态，确认后再重试</string>
+    
+    <string name="error_307_description">交易被拒绝</string>
+    <string name="error_307_solution">检查参数后使用新ID重试</string>
+    
+    <string name="error_308_description">交易处理中</string>
+    <string name="error_308_solution">先查询交易状态，确认后再重试</string>
+    
+    <string name="error_309_description">交易已终止</string>
+    <string name="error_309_solution">不要重试</string>
+    
+    <string name="error_310_description">余额不足</string>
+    <string name="error_310_solution">提示用户余额不足，使用新ID重试</string>
+    
+    <string name="error_311_description">密码错误</string>
+    <string name="error_311_solution">提示用户重新输入密码，使用新ID重试</string>
+    
+    <string name="error_312_description">查询交易失败</string>
+    <string name="error_312_solution">检查连接状态后重试查询，或检查交易ID是否有效</string>
+    
+    <string name="error_399_description">交易失败</string>
+    <string name="error_399_solution">查看错误详情，使用新ID重试</string>
+
+    <!-- T系列错误码（向后兼容） -->
+    <string name="error_t01_description">SDK未初始化</string>
+    <string name="error_t01_solution">调用connect()前先调用TaplinkSDK.init()初始化SDK</string>
+    
+    <string name="error_t02_description">Tapro应用未安装（应用间模式）</string>
+    <string name="error_t02_solution">在设备上安装Tapro应用</string>
+    
+    <string name="error_t03_description">IPC服务绑定失败（应用间模式）</string>
+    <string name="error_t03_solution">检查Tapro应用是否正常运行，重启应用或设备</string>
+    
+    <string name="error_t04_description">WebSocket连接失败（局域网模式）</string>
+    <string name="error_t04_solution">检查网络防火墙设置，确保端口8443-8453未被阻止</string>
+    
+    <string name="error_t05_description">mDNS发现失败（局域网模式）</string>
+    <string name="error_t05_solution">检查网络是否支持mDNS，或手动输入IP地址</string>
+    
+    <string name="error_t06_description">连接已断开</string>
+    <string name="error_t06_solution">检查连接状态，调用connect()重新建立连接</string>
+    
+    <string name="error_t07_description">未建立连接</string>
+    <string name="error_t07_solution">发起交易前先调用connect()建立连接</string>
+    
+    <string name="error_t08_description">手动断开连接</string>
+    <string name="error_t08_solution">正常的手动断开，无需处理</string>
+    
+    <string name="error_t09_description">连接已存在</string>
+    <string name="error_t09_solution">连接已存在，无需重复建立</string>
+    
+    <string name="error_t10_description">无效的USB协议</string>
+    <string name="error_t10_solution">使用支持的USB协议（USB AOA/USB-VSP/RS232）或启用自动检测</string>
+    
+    <string name="error_t11_description">USB设备访问被拒绝</string>
+    <string name="error_t11_solution">重新授权USB设备权限</string>
+    
+    <string name="error_t12_description">USB设备连接超时</string>
+    <string name="error_t12_solution">检查USB连接，重新插拔设备</string>
+    
+    <string name="error_t13_description">串口设备未就绪</string>
+    <string name="error_t13_solution">重新初始化串口连接</string>
+    
+    <string name="error_t14_description">VSP客户端未就绪</string>
+    <string name="error_t14_solution">重新初始化VSP客户端</string>
+
+    <!-- T系列错误码 - 参数校验 (T15-T19) -->
+    <string name="error_t15_description">缺少请求参数</string>
+    <string name="error_t15_solution">确保提供所有必需参数</string>
+    
+    <string name="error_t16_description">请求JSON格式错误</string>
+    <string name="error_t16_solution">检查JSON结构、括号匹配和数据类型有效性</string>
+    
+    <string name="error_t17_description">协议数据无效或解析失败</string>
+    <string name="error_t17_solution">检查协议数据格式是否正确</string>
+    
+    <string name="error_t18_description">金额参数无效</string>
+    <string name="error_t18_solution">检查金额格式和范围有效性</string>
+    
+    <string name="error_t19_description">协议类型不匹配</string>
+    <string name="error_t19_solution">确认协议类型与预期值匹配</string>
+
+    <!-- T系列错误码 - 数据传输 (T20-T25) -->
+    <string name="error_t20_description">无可用服务内核</string>
+    <string name="error_t20_solution">重新初始化服务内核</string>
+    
+    <string name="error_t21_description">发送数据失败</string>
+    <string name="error_t21_solution">检查网络连接，重试数据传输</string>
+    
+    <string name="error_t22_description">无法发送数据，未连接</string>
+    <string name="error_t22_solution">先建立连接再发送数据</string>
+    
+    <string name="error_t23_description">发送数据失败</string>
+    <string name="error_t23_solution">检查网络/硬件状态，重试传输</string>
+    
+    <string name="error_t24_description">发送数据时发生意外错误</string>
+    <string name="error_t24_solution">记录错误详情，重启服务或重试</string>
+    
+    <string name="error_t25_description">ITransaction为空</string>
+    <string name="error_t25_solution">重新绑定交易服务接口</string>
+
+    <!-- T系列错误码 - 交易处理 (T27-T31) -->
+    <string name="error_t27_description">交易锁定（防并发操作）</string>
+    <string name="error_t27_solution">等待当前操作完成后重试</string>
+    
+    <string name="error_t28_description">不支持的交易类型（Action）</string>
+    <string name="error_t28_solution">检查action参数是否正确且受支持</string>
+    
+    <string name="error_t29_description">交易已取消</string>
+    <string name="error_t29_solution">交易已被取消，无需重试</string>
+    
+    <string name="error_t30_description">系统正在处理其他交易</string>
+    <string name="error_t30_solution">等待当前交易完成后重试</string>
+    
+    <string name="error_t31_description">初始化失败：系统正在处理其他交易</string>
+    <string name="error_t31_solution">等待交易完成后重新初始化</string>
+
+    <!-- T系列错误码 - 系统超时 (T34) -->
+    <string name="error_t34_description">Tapro响应超时</string>
+    <string name="error_t34_solution">增加超时时长或检查系统响应</string>
+
+    <!-- T系列错误码 - 扩展连接错误 (T35, T37, T38) -->
+    <string name="error_t35_description">线缆未连接</string>
+    <string name="error_t35_solution">检查线缆物理连接状态</string>
+    
+    <string name="error_t37_description">未建立连接</string>
+    <string name="error_t37_solution">先调用connect()建立连接</string>
+    
+    <string name="error_t38_description">host交易拒绝</string>
+    <string name="error_t38_solution">交易被host拒绝，检查交易参数后重试</string>
+    
+    <!-- T系列错误码 - 交易处理 (T39) -->
+    <string name="error_t39_description">Host交易处理中，需要查询</string>
+    <string name="error_t39_solution">Host正在处理交易，请查询交易状态确认结果</string>
+    
+    <!-- T系列错误码 - 交易处理 (T40) -->
+    <string name="error_t40_description">终止失败</string>
+    <string name="error_t40_solution">交易终止操作失败，检查交易状态后重试</string>
+    
+    <!-- T系列错误码 - 连接认证 (T41) -->
+    <string name="error_t41_description">连接认证失败</string>
+    <string name="error_t41_solution">检查认证参数（appId、secretKey等），重新建立连接</string>
+
+    <!-- 其他错误码 -->
+    <string name="error_e04_description">系统异常</string>
+    <string name="error_e04_solution">捕获系统抛出的异常并反馈给调用方</string>
+    
+    <string name="error_996_description">系统超时</string>
+    <string name="error_996_solution">调用订单查询接口确认交易状态，如未支付则重试，如仍失败请联系技术支持</string>
+
+    <!-- 未知错误 -->
+    <string name="error_unknown_description">未知错误码</string>
+    <string name="error_empty_description">错误码为空</string>
+
+    <!-- 错误分类 -->
+    <string name="category_initialization_display_name">初始化错误</string>
+    <string name="category_initialization_description">SDK初始化相关错误</string>
+    
+    <string name="category_connection_display_name">连接错误</string>
+    <string name="category_connection_description">连接状态和连接失败错误</string>
+    
+    <string name="category_authentication_display_name">认证错误</string>
+    <string name="category_authentication_description">认证失败错误</string>
+    
+    <string name="category_transaction_display_name">交易错误</string>
+    <string name="category_transaction_description">交易处理相关错误</string>
+    
+    <string name="category_unknown_display_name">未知错误</string>
+    <string name="category_unknown_description">未分类的错误码</string>
+
+</resources>
