@@ -317,6 +317,17 @@ val queryByRequestId = QueryRequest.byTransactionRequestId("req_abcdef")
 | `transactionRequestId` | String | Yes | Request ID |
 | `description` | String | No | Batch close description, max 128 characters |
 | `requestTimeout` | Long | No | Timeout in seconds |
+| `printReceipt` | PrintReceipt | No | Batch report print mode. Defaults to `AUTO`; supports `AUTO`, `BOTH`, `TOTAL`, `DETAIL`, and `NONE` |
+
+For Batch Close, `printReceipt` controls batch reports rather than merchant/customer transaction copies:
+
+- `AUTO`: Use the current Tapro batch report setting.
+- `BOTH`: Print both the batch total and transaction detail reports.
+- `TOTAL`: Print only the batch total report.
+- `DETAIL`: Print only the batch transaction detail report.
+- `NONE`: Do not print a batch report.
+
+`MERCHANT` and `CUSTOMER` are transaction-receipt modes and are not valid for `BatchCloseRequest`.
 
 ---
 
@@ -674,6 +685,8 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `MERCHANT` | Print merchant copy only |
 | `CUSTOMER` | Print customer copy only |
 | `BOTH` | Print both copies |
+| `TOTAL` | Print the batch total report only (`BatchCloseRequest` only) |
+| `DETAIL` | Print the batch transaction detail report only (`BatchCloseRequest` only) |
 
 ### Signature
 

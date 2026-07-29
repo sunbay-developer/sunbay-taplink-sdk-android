@@ -214,6 +214,8 @@ data class PaymentRequest(
      * - MERCHANT: Only the merchant copy will be printed
      * - CUSTOMER: Only the customer copy will be printed
      * - BOTH: Both merchant and customer copies will be printed
+     * - TOTAL: Only the batch total report will be printed (batch close only)
+     * - DETAIL: Only the batch detail report will be printed (batch close only)
      */
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
 

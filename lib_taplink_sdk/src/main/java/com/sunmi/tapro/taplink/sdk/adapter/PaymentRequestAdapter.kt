@@ -203,7 +203,8 @@ object PaymentRequestAdapter {
             action = TransactionAction.BATCH_CLOSE.value,
             transactionRequestId = request.transactionRequestId,
             description = request.description ?: "Batch Close",
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            printReceipt = request.printReceipt
         )
     }
 }

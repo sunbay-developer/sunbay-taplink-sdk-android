@@ -1,8 +1,10 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction.settlement
 
+import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.BaseTransactionRequest
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidationException
+import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
 
 /**
@@ -13,6 +15,7 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
  * @param transactionRequestId Transaction request ID (required)
  * @param description Close description (optional, max 128 characters)
  * @param requestTimeout Request timeout (optional, in seconds)
+ * @param printReceipt Batch report type (AUTO, BOTH, TOTAL, DETAIL, or NONE; default AUTO)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -20,8 +23,34 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
 data class BatchCloseRequest(
     val transactionRequestId: String,
     val description: String? = null,
-    val requestTimeout: Long? = null
+    val requestTimeout: Long? = null,
+    val printReceipt: PrintReceipt?
 ) : BaseTransactionRequest() {
+
+    /**
+     * Preserves binary compatibility with SDK versions where BatchCloseRequest had three fields.
+     */
+    constructor(
+        transactionRequestId: String,
+        description: String? = null,
+        requestTimeout: Long? = null
+    ) : this(transactionRequestId, description, requestTimeout, PrintReceipt.AUTO)
+
+    /**
+     * Preserves the three-field data-class copy API from earlier SDK versions.
+     */
+    fun copy(
+        transactionRequestId: String = this.transactionRequestId,
+        description: String? = this.description,
+        requestTimeout: Long? = this.requestTimeout
+    ): BatchCloseRequest {
+        return BatchCloseRequest(
+            transactionRequestId,
+            description,
+            requestTimeout,
+            printReceipt
+        )
+    }
 
     override fun validate(): ValidationResult {
         val descriptionValidation = if (description != null) {
@@ -30,9 +59,22 @@ data class BatchCloseRequest(
             ValidationResult.success()
         }
 
+        val printReceiptValidation = if (
+            printReceipt == PrintReceipt.MERCHANT || printReceipt == PrintReceipt.CUSTOMER
+        ) {
+            ValidationResult.failure(
+                ValidationError.CustomError(
+                    "printReceipt must be AUTO, BOTH, TOTAL, DETAIL, or NONE for batch close"
+                )
+            )
+        } else {
+            ValidationResult.success()
+        }
+
         return TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            descriptionValidation
+            descriptionValidation,
+            printReceiptValidation
         )
     }
 
@@ -50,6 +92,7 @@ data class BatchCloseRequest(
         private var transactionRequestId: String? = null
         private var description: String? = null
         private var requestTimeout: Long? = null
+        private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
 
         /**
          * Set transaction request ID
@@ -76,6 +119,14 @@ data class BatchCloseRequest(
         }
 
         /**
+         * Set the batch report type.
+         */
+        fun setPrintReceipt(printReceipt: PrintReceipt): Builder {
+            this.printReceipt = printReceipt
+            return this
+        }
+
+        /**
          * Build BatchCloseRequest instance
          * 
          * @throws TransactionRequestValidationException if validation fails
@@ -84,7 +135,8 @@ data class BatchCloseRequest(
             val request = BatchCloseRequest(
                 transactionRequestId = requireNotNull(transactionRequestId) { "transactionRequestId is required" },
                 description = description,
-                requestTimeout = requestTimeout
+                requestTimeout = requestTimeout,
+                printReceipt = printReceipt
             )
 
             val validationResult = request.validate()

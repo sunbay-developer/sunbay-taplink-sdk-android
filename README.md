@@ -937,6 +937,7 @@ End-of-day settlement to close the current batch.
 val request = BatchCloseRequest.builder()
     .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setDescription("Batch Close")
+    .setPrintReceipt(PrintReceipt.BOTH)
     .build()
 
 client.batchClose(request, object : PaymentCallback {
@@ -955,6 +956,18 @@ client.batchClose(request, object : PaymentCallback {
     }
 })
 ```
+
+`BatchCloseRequest.printReceipt` is optional and defaults to `AUTO`.
+
+| Value | Batch Close behavior |
+|---|---|
+| `AUTO` | Use the current Tapro batch report setting |
+| `BOTH` | Print both total and detail reports |
+| `TOTAL` | Print the total report only |
+| `DETAIL` | Print the transaction detail report only |
+| `NONE` | Do not print a batch report |
+
+`MERCHANT` and `CUSTOMER` apply to transaction receipts and are rejected for Batch Close.
 
 ### Abort Transaction
 
