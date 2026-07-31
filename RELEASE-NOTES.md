@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [v1.0.8](#v108) — LAN discovery & QR scan, signature routing, connection helpers
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
 - [v1.0.6](#v106) — Tip config moves to the transaction request
 - [v1.0.5](#v105) — Declines split out, callback adapters, status helpers
@@ -19,6 +20,99 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## v1.0.8
+
+**Released 2026-07-15**
+
+Adds LAN terminal discovery (mDNS and QR code scan), per-transaction signature routing, and convenient `ConnectionConfig` factory methods — making LAN setup zero-config for end users.
+
+```kotlin
+dependencies {
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.8")
+}
+```
+
+### 🚀 New Features
+
+- **LAN service discovery** — `TaplinkSDK.discoverLanServices(DiscoveryListener)` runs a one-shot mDNS (`_taplink._tcp`) discovery and returns the resolved `host`/`port` list **without connecting**. Discovery times out after 15 seconds.
+- **LAN QR code scan** — `TaplinkSDK.scanLanQrCode(DiscoveryListener)` opens the SDK's built-in full-screen camera scanner, reads a `lan://host/port` QR code shown by Tapro, and returns the address **without connecting**.
+- **One-call connection variants** — `TaplinkSDK.autoDiscoverAndConnect(ConnectionListener)` and `TaplinkSDK.scanAndConnect(ConnectionListener)` discover/scan and connect in a single step.
+- **`DiscoveredService`** model and **`DiscoveryListener`** callback for the new discovery APIs.
+- **Discovery/scan error codes** `E501`–`E506` (no services found, all failed, already in progress, user cancel, permission denied, no camera).
+- **Signature routing** — `signatureEntryLocation` field on `SaleRequest` and `AuthRequest` controls per-transaction signature capture. `Signature.ON_SCREEN` forces the e-signature page; `Signature.ON_RECEIPT` skips the screen and prints a signature line. Overrides terminal-level settings for that transaction.
+- **`ConnectionConfig` factory methods** — `createAppMode()`, `createCableMode()`, `createLanMode(host, port)`, `createLanMode()` (cached), and `createDefault()` for concise connection setup.
+
+### 📦 Dependencies
+
+- QR scanner is built on **CameraX 1.3.4** and **ZXing 3.5.3**. These are `implementation` dependencies inside the SDK and are **not** exposed transitively. Host apps that use `scanLanQrCode` or `scanAndConnect` must add them explicitly:
+
+```kotlin
+dependencies {
+    // Required only if you use the QR scan APIs
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+    implementation("com.google.zxing:core:3.5.3")
+}
+```
+
+- mDNS discovery (`discoverLanServices` / `autoDiscoverAndConnect`) uses Android's built-in NSD — **no extra dependency required**.
+
+### 🔧 Improvements
+
+- `CAMERA` permission and scanner Activity are pre-declared in the SDK manifest — no manifest changes needed in your app.
+- Scanner selects back camera → front camera → first available camera; reports `E506` if none is usable.
+- `BatchCloseRequest.printReceipt` now supports batch-report-specific values: `TOTAL` (total report only) and `DETAIL` (detail report only) alongside the existing `AUTO`, `BOTH`, and `NONE`.
+
+### 🧭 Migration from v1.0.7
+
+No breaking changes — v1.0.8 is a drop-in upgrade from v1.0.7. All new APIs are additive.
+
+**LAN Discovery (optional)**
+
+Replace manual IP/port input with automatic discovery:
+
+```kotlin
+// Before (v1.0.7) — user must type IP and port manually
+val config = ConnectionConfig()
+    .setConnectionMode(ConnectionMode.LAN)
+    .setHost("192.168.1.100")
+    .setPort(8443)
+TaplinkSDK.connect(config, listener)
+
+// After (v1.0.8) — auto-discover and connect
+TaplinkSDK.autoDiscoverAndConnect(listener)
+
+// Or: discover first, then connect manually
+TaplinkSDK.discoverLanServices(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val target = services.firstOrNull() ?: return
+        val config = ConnectionConfig.createLanMode(target.host, target.port)
+        TaplinkSDK.connect(config, listener)
+    }
+    override fun onError(error: ConnectionError) { showError(error.message) }
+})
+```
+
+**Signature Routing (optional)**
+
+Add per-transaction signature control to Sale or Auth:
+
+```kotlin
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_001")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo.of(1000L, "USD"))
+    .setSignatureEntryLocation(Signature.ON_SCREEN)  // new in v1.0.8
+    .build()
+```
+
+See also the [API Reference](API-REFERENCE.md) and the [LAN Address Acquisition guide](README.md#lan-address-acquisition-discovery--qr-scan).
 
 ---
 

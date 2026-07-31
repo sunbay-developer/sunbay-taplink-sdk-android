@@ -2,12 +2,12 @@ package com.sunmi.tapro.taplink.sdk.model.request
 
 import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
-import com.sunmi.tapro.taplink.sdk.enums.Signature
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
 import com.sunmi.tapro.taplink.sdk.model.common.GoodsDetail
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
+import com.sunmi.tapro.taplink.sdk.model.common.SignatureConfig
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 import java.math.BigDecimal
@@ -220,14 +220,10 @@ data class PaymentRequest(
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
 
     /**
-     * Signature collection preference (optional).
-     * Used by SALE and AUTH.
-     * - ON_SCREEN: collect e-signature on terminal
-     * - ON_RECEIPT: skip on-screen signature and print signature line on receipt
-     *
-     * If not set, Tapro uses terminal-side default signature policy.
+     * Per-transaction signature configuration for SALE and AUTH.
+     * If not set, Tapro uses its terminal-side default signature policy.
      */
-    val signatureEntryLocation: Signature? = null,
+    val signatureConfig: SignatureConfig? = null,
 
     // ========== Tip configuration ==========
 
@@ -373,10 +369,10 @@ data class PaymentRequest(
     fun setPrintReceipt(printReceipt: PrintReceipt): PaymentRequest = copy(printReceipt = printReceipt)
 
     /**
-     * Chain call: Set signature collection preference.
+     * Chain call: Set per-transaction signature configuration.
      */
-    fun setSignatureEntryLocation(signatureEntryLocation: Signature): PaymentRequest =
-        copy(signatureEntryLocation = signatureEntryLocation)
+    fun setSignatureConfig(signatureConfig: SignatureConfig): PaymentRequest =
+        copy(signatureConfig = signatureConfig)
 
     // ========== Chain call methods for tip configuration ==========
 
@@ -438,7 +434,7 @@ data class PaymentRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
-        private var signatureEntryLocation: Signature? = null
+        private var signatureConfig: SignatureConfig? = null
         private var tipConfig: TipConfig? = null
 
         /**
@@ -474,8 +470,8 @@ data class PaymentRequest(
         fun setNotifyUrl(notifyUrl: String) = apply { this.notifyUrl = notifyUrl }
         fun setRequestTimeout(requestTimeout: Long) = apply { this.requestTimeout = requestTimeout }
         fun setPrintReceipt(printReceipt: PrintReceipt) = apply { this.printReceipt = printReceipt }
-        fun setSignatureEntryLocation(signatureEntryLocation: Signature) =
-            apply { this.signatureEntryLocation = signatureEntryLocation }
+        fun setSignatureConfig(signatureConfig: SignatureConfig) =
+            apply { this.signatureConfig = signatureConfig }
         fun setTipConfig(tipConfig: TipConfig) = apply { this.tipConfig = tipConfig }
 
         /**
@@ -517,7 +513,7 @@ data class PaymentRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 printReceipt = printReceipt,
-                signatureEntryLocation = signatureEntryLocation,
+                signatureConfig = signatureConfig,
                 tipConfig = tipConfig,
             )
         }

@@ -194,6 +194,8 @@ class PaymentManager(
             // Validate preconditions
             if (!validateConnection(callback)) return
 
+            if (!validateSignatureConfig(request, callback)) return
+
             // Validate amount (must be integer, no decimal)
             if (!validateAmount(request, callback)) return
 
@@ -488,6 +490,28 @@ class PaymentManager(
             }
         }
 
+        return true
+    }
+
+    private fun validateSignatureConfig(request: PaymentRequest, callback: PaymentCallback): Boolean {
+        val signatureConfig = request.signatureConfig ?: return true
+        if (request.action != TransactionAction.SALE.value && request.action != TransactionAction.AUTH.value) {
+            callback.onFailure(
+                errorCode = InnerErrorCode.E302,
+                errorMessage = "${InnerErrorCode.E302.description}(signatureConfig is only supported for SALE and AUTH)",
+                transactionRequestId = request.transactionRequestId
+            )
+            return false
+        }
+        val validationResult = TransactionRequestValidator.validateSignatureConfig(signatureConfig)
+        if (!validationResult.isValid) {
+            callback.onFailure(
+                errorCode = InnerErrorCode.E302,
+                errorMessage = "${InnerErrorCode.E302.description}(${validationResult.getErrorMessage()})",
+                transactionRequestId = request.transactionRequestId
+            )
+            return false
+        }
         return true
     }
 

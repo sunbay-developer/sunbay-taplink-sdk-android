@@ -2,9 +2,9 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
-import com.sunmi.tapro.taplink.sdk.enums.Signature
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
+import com.sunmi.tapro.taplink.sdk.model.common.SignatureConfig
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 
@@ -24,7 +24,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
  * @param tipConfig Tip configuration (optional, mutually exclusive with amount.tipAmount)
- * @param signatureEntryLocation Signature routing (optional): ON_SCREEN / ON_RECEIPT
+ * @param signatureConfig Per-transaction signature configuration (optional)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -42,7 +42,7 @@ data class SaleRequest(
     val staffInfo: StaffInfo? = null,
     val tipConfig: TipConfig? = null,
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
-    val signatureEntryLocation: Signature? = null,
+    val signatureConfig: SignatureConfig? = null,
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
@@ -51,6 +51,7 @@ data class SaleRequest(
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
             TransactionRequestValidator.validateAmount(amount),
             TransactionRequestValidator.validateTipConfig(amount.tipAmount, tipConfig),
+            TransactionRequestValidator.validateSignatureConfig(signatureConfig),
         )
     }
 
@@ -77,7 +78,7 @@ data class SaleRequest(
         private var staffInfo: StaffInfo? = null
         private var tipConfig: TipConfig? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
-        private var signatureEntryLocation: Signature? = null
+        private var signatureConfig: SignatureConfig? = null
 
         /**
          * Set reference order ID
@@ -176,10 +177,10 @@ data class SaleRequest(
         }
 
         /**
-         * Set signature collection preference.
+         * Set per-transaction signature configuration.
          */
-        fun setSignatureEntryLocation(signatureEntryLocation: Signature): Builder {
-            this.signatureEntryLocation = signatureEntryLocation
+        fun setSignatureConfig(signatureConfig: SignatureConfig): Builder {
+            this.signatureConfig = signatureConfig
             return this
         }
 
@@ -202,7 +203,7 @@ data class SaleRequest(
                 staffInfo = staffInfo,
                 tipConfig = tipConfig,
                 printReceipt = printReceipt,
-                signatureEntryLocation = signatureEntryLocation,
+                signatureConfig = signatureConfig,
             )
 
             val validationResult = request.validate()

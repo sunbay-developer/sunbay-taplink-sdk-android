@@ -1,6 +1,8 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.SignatureEntryLocation
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
+import com.sunmi.tapro.taplink.sdk.model.common.SignatureConfig
 import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 import java.math.BigDecimal
 
@@ -118,7 +120,7 @@ object TransactionRequestValidator {
      * - tipConfig is only valid when tipAmount is null
      *
      * @param tipAmount Tip amount from AmountInfo
-        * @param tipConfig Tip configuration from the transaction request
+     * @param tipConfig Tip configuration from the transaction request
      * @return ValidationResult validation result
      */
     fun validateTipConfig(tipAmount: BigDecimal?, tipConfig: TipConfig?): ValidationResult {
@@ -129,6 +131,7 @@ object TransactionRequestValidator {
         if (tipConfig == null) {
             return ValidationResult.success()
         }
+
         // tipConfig and tipAmount are mutually exclusive
         if (tipAmount != null) {
             return ValidationResult.failure(ValidationError.TipConfigConflict)
@@ -141,6 +144,26 @@ object TransactionRequestValidator {
             if (suggestions.values.any { it < 0 }) {
                 return ValidationResult.failure(ValidationError.TipConfigNegativeSuggestionValues)
             }
+        }
+        return ValidationResult.success()
+    }
+
+    /**
+     * Validate per-transaction signature configuration.
+     */
+    fun validateSignatureConfig(signatureConfig: SignatureConfig?): ValidationResult {
+        if (signatureConfig == null) {
+            return ValidationResult.success()
+        }
+        val threshold = signatureConfig.threshold
+        if (signatureConfig.entryLocation == SignatureEntryLocation.NONE && threshold != null) {
+            return ValidationResult.failure(ValidationError.SignatureThresholdWithNone)
+        }
+        if (threshold != null && threshold < BigDecimal.ZERO) {
+            return ValidationResult.failure(ValidationError.InvalidSignatureThreshold)
+        }
+        if (threshold != null && threshold.stripTrailingZeros().scale() > 0) {
+            return ValidationResult.failure(ValidationError.NonIntegerSignatureThreshold)
         }
         return ValidationResult.success()
     }

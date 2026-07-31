@@ -1,8 +1,8 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
-import com.sunmi.tapro.taplink.sdk.enums.Signature
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
+import com.sunmi.tapro.taplink.sdk.model.common.SignatureConfig
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
@@ -19,7 +19,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param notifyUrl Notification URL (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
- * @param signatureEntryLocation Signature routing (optional): ON_SCREEN / ON_RECEIPT
+ * @param signatureConfig Per-transaction signature configuration (optional)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -35,14 +35,15 @@ data class AuthRequest(
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
-    val signatureEntryLocation: Signature? = null
+    val signatureConfig: SignatureConfig? = null
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
         return TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateReferenceOrderId(referenceOrderId),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            validateAuthAmount(amount)
+            validateAuthAmount(amount),
+            TransactionRequestValidator.validateSignatureConfig(signatureConfig),
         )
     }
 
@@ -75,7 +76,7 @@ data class AuthRequest(
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
-        private var signatureEntryLocation: Signature? = null
+        private var signatureConfig: SignatureConfig? = null
 
         /**
          * Set reference order ID
@@ -158,10 +159,10 @@ data class AuthRequest(
         }
 
         /**
-         * Set signature collection preference.
+         * Set per-transaction signature configuration.
          */
-        fun setSignatureEntryLocation(signatureEntryLocation: Signature): Builder {
-            this.signatureEntryLocation = signatureEntryLocation
+        fun setSignatureConfig(signatureConfig: SignatureConfig): Builder {
+            this.signatureConfig = signatureConfig
             return this
         }
 
@@ -182,7 +183,7 @@ data class AuthRequest(
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
                 printReceipt = printReceipt,
-                signatureEntryLocation = signatureEntryLocation
+                signatureConfig = signatureConfig
             )
 
             val validationResult = request.validate()

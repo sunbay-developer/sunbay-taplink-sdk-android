@@ -174,6 +174,12 @@ afterEvaluate {
             task.enabled = false
             task.group = null
         }
+        // 确保发布前先重新构建并复制最新 AAR，避免发布 ../build 下的旧包
+        if (task.publication.name == 'debug') {
+            task.dependsOn('copyDebugAar')
+        } else if (task.publication.name == 'release') {
+            task.dependsOn('copyReleaseAar')
+        }
         task.doLast {
             def username = getRepositoryUsername()
             def password = getRepositoryPassword()
