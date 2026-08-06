@@ -24,7 +24,23 @@ data class SignatureConfig(
      *   to explicitly disable signature capture)
      */
     val useHostConfig: Boolean = true,
+    /**
+     * Where the signature is captured for this transaction.
+     *
+     * Required when the request configuration is used. [SignatureEntryLocation.NONE] explicitly
+     * disables signature capture and cannot be combined with a [threshold].
+     */
     val entryLocation: SignatureEntryLocation? = null,
+    /**
+     * Amount above which a signature is captured, in the smallest currency unit (cents).
+     *
+     * The comparison is **strictly greater than**: with `threshold = 5000` ($50.00) a $50.00
+     * transaction captures **no** signature, while $50.01 does. `null` (the default) captures a
+     * signature for every amount.
+     *
+     * Must be a non-negative integer, and must be `null` when [entryLocation] is
+     * [SignatureEntryLocation.NONE].
+     */
     val threshold: BigDecimal? = null,
 ) {
     /**
