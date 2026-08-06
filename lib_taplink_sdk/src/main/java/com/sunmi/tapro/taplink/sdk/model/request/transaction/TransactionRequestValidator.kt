@@ -118,6 +118,7 @@ object TransactionRequestValidator {
      * Validate tip configuration and tip amount.
      * - tipAmount must be non-negative when present
      * - tipConfig is only valid when tipAmount is null
+     * - request fields are only validated when tipConfig.useHostConfig is false
      *
      * @param tipAmount Tip amount from AmountInfo
      * @param tipConfig Tip configuration from the transaction request
@@ -136,6 +137,10 @@ object TransactionRequestValidator {
         if (tipAmount != null) {
             return ValidationResult.failure(ValidationError.TipConfigConflict)
         }
+        // The host configuration is used as a whole; other request fields are ignored.
+        if (tipConfig.useHostConfig) {
+            return ValidationResult.success()
+        }
         val suggestions = tipConfig.suggestions
         if (suggestions != null) {
             if (suggestions.values.isEmpty()) {
@@ -150,13 +155,22 @@ object TransactionRequestValidator {
 
     /**
      * Validate per-transaction signature configuration.
+     *
+     * Request fields are only validated when the request configuration is the effective source
+     * (see [SignatureConfig.resolvedUseHostConfig]); `entryLocation` is then mandatory, because a
+     * missing field must not be interpreted as "no signature".
      */
     fun validateSignatureConfig(signatureConfig: SignatureConfig?): ValidationResult {
         if (signatureConfig == null) {
             return ValidationResult.success()
         }
+        if (signatureConfig.resolvedUseHostConfig) {
+            return ValidationResult.success()
+        }
+        val entryLocation = signatureConfig.entryLocation
+            ?: return ValidationResult.failure(ValidationError.MissingSignatureEntryLocation)
         val threshold = signatureConfig.threshold
-        if (signatureConfig.entryLocation == SignatureEntryLocation.NONE && threshold != null) {
+        if (entryLocation == SignatureEntryLocation.NONE && threshold != null) {
             return ValidationResult.failure(ValidationError.SignatureThresholdWithNone)
         }
         if (threshold != null && threshold < BigDecimal.ZERO) {

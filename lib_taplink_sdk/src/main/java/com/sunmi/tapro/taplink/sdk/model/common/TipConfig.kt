@@ -8,10 +8,20 @@ import com.sunmi.tapro.taplink.sdk.enums.TipMode
  * Defines the on-screen tip behavior and suggestion options for a transaction.
  * This configuration must not be used when the request amount already includes `tipAmount`.
  *
+ * The configuration source is selected as a whole through [useHostConfig]; the host tip
+ * configuration and the request tip configuration are never merged field by field.
+ *
  * @author TaPro Team
  * @since 2025-01-XX
  */
 data class TipConfig(
+    /**
+     * Whether the whole tip configuration comes from the Tapro host (optional, default: false).
+     * - false: the request fields below are used as-is, the host tip configuration is never read
+     * - true: the host tip configuration is used as a whole and every other field here is ignored
+     */
+    val useHostConfig: Boolean = false,
+
     /**
      * Whether to enable on-screen tip prompt (optional, default: false).
      * When true, the payment terminal will display a tip input screen.
@@ -37,6 +47,14 @@ data class TipConfig(
      */
     val suggestions: TipSuggestions? = null
 ) {
+    /**
+     * Sets the configuration source flag.
+     *
+     * @param useHostConfig true to use the host tip configuration as a whole
+     * @return the updated TipConfig instance for method chaining
+     */
+    fun setUseHostConfig(useHostConfig: Boolean): TipConfig = copy(useHostConfig = useHostConfig)
+
     /**
      * Sets the on-screen tip flag.
      *

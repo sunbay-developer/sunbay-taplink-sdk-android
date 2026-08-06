@@ -105,6 +105,7 @@ object PaymentRequestAdapter {
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
             printReceipt = request.printReceipt,
+            signatureConfig = request.signatureConfig,
         )
     }
 

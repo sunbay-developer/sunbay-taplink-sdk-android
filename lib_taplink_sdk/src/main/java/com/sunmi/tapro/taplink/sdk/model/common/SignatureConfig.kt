@@ -6,28 +6,63 @@ import java.math.BigDecimal
 /**
  * Per-transaction signature settings managed by the POS.
  *
+ * The configuration source is selected as a whole through [useHostConfig]; the host signature
+ * configuration and the request signature configuration are never merged field by field.
+ *
+ * For backwards compatibility with the pre-1.0.8 `signatureEntryLocation` field, providing an
+ * [entryLocation] is by itself enough to select the request configuration — see
+ * [resolvedUseHostConfig].
+ *
  * Amounts use the transaction currency's smallest unit.
  */
 data class SignatureConfig(
-    val entryLocation: SignatureEntryLocation,
+    /**
+     * Whether the whole signature configuration comes from the Tapro host (default: true).
+     * - true: the host signature configuration is used and [entryLocation]/[threshold] are ignored
+     * - false: the request configuration is used and the host configuration is never read;
+     *   [entryLocation] must then be provided explicitly (use [SignatureEntryLocation.NONE]
+     *   to explicitly disable signature capture)
+     */
+    val useHostConfig: Boolean = true,
+    val entryLocation: SignatureEntryLocation? = null,
     val threshold: BigDecimal? = null,
 ) {
+    /**
+     * The configuration source actually applied to the transaction.
+     *
+     * An explicitly provided [entryLocation] always wins over [useHostConfig], so
+     * `SignatureConfig(entryLocation = ON_SCREEN)` keeps the pre-1.0.8
+     * `signatureEntryLocation` behaviour (override the host configuration for this
+     * transaction) instead of being silently ignored because [useHostConfig] defaults to true.
+     */
+    val resolvedUseHostConfig: Boolean
+        get() = useHostConfig && entryLocation == null
+
     companion object {
+        /**
+         * Uses the host signature configuration as a whole.
+         */
         @JvmStatic
-        fun onScreen(): SignatureConfig = SignatureConfig(SignatureEntryLocation.ON_SCREEN)
+        fun useHostConfig(): SignatureConfig = SignatureConfig(useHostConfig = true)
+
+        @JvmStatic
+        fun onScreen(): SignatureConfig =
+            SignatureConfig(useHostConfig = false, entryLocation = SignatureEntryLocation.ON_SCREEN)
 
         @JvmStatic
         fun onScreenAbove(threshold: BigDecimal): SignatureConfig =
-            SignatureConfig(SignatureEntryLocation.ON_SCREEN, threshold)
+            SignatureConfig(false, SignatureEntryLocation.ON_SCREEN, threshold)
 
         @JvmStatic
-        fun onReceipt(): SignatureConfig = SignatureConfig(SignatureEntryLocation.ON_RECEIPT)
+        fun onReceipt(): SignatureConfig =
+            SignatureConfig(useHostConfig = false, entryLocation = SignatureEntryLocation.ON_RECEIPT)
 
         @JvmStatic
         fun onReceiptAbove(threshold: BigDecimal): SignatureConfig =
-            SignatureConfig(SignatureEntryLocation.ON_RECEIPT, threshold)
+            SignatureConfig(false, SignatureEntryLocation.ON_RECEIPT, threshold)
 
         @JvmStatic
-        fun none(): SignatureConfig = SignatureConfig(SignatureEntryLocation.NONE)
+        fun none(): SignatureConfig =
+            SignatureConfig(useHostConfig = false, entryLocation = SignatureEntryLocation.NONE)
     }
 }

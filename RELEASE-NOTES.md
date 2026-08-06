@@ -10,7 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
-- [v1.0.8](#v108) — LAN discovery & QR scan, signature routing, connection helpers
+- [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, connection helpers
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
 - [v1.0.6](#v106) — Tip config moves to the transaction request
 - [v1.0.5](#v105) — Declines split out, callback adapters, status helpers
@@ -25,9 +25,9 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## v1.0.8
 
-**Released 2026-07-15**
+**Unreleased**
 
-Adds LAN terminal discovery (mDNS and QR code scan), per-transaction signature routing, and convenient `ConnectionConfig` factory methods — making LAN setup zero-config for end users.
+Adds LAN terminal discovery (mDNS and QR code scan), per-transaction signature and tip configuration with an explicit configuration source, and convenient `ConnectionConfig` factory methods — making LAN setup zero-config for end users.
 
 ```kotlin
 dependencies {
@@ -42,7 +42,9 @@ dependencies {
 - **One-call connection variants** — `TaplinkSDK.autoDiscoverAndConnect(ConnectionListener)` and `TaplinkSDK.scanAndConnect(ConnectionListener)` discover/scan and connect in a single step.
 - **`DiscoveredService`** model and **`DiscoveryListener`** callback for the new discovery APIs.
 - **Discovery/scan error codes** `E501`–`E506` (no services found, all failed, already in progress, user cancel, permission denied, no camera).
-- **Signature routing** — `signatureEntryLocation` field on `SaleRequest` and `AuthRequest` controls per-transaction signature capture. `Signature.ON_SCREEN` forces the e-signature page; `Signature.ON_RECEIPT` skips the screen and prints a signature line. Overrides terminal-level settings for that transaction.
+- **Signature routing** — `signatureConfig` on `SaleRequest`, `AuthRequest` and `RefundRequest.nonReferencedBuilder()` controls per-transaction signature capture. `SignatureConfig.useHostConfig` (default `true`) selects the configuration source **as a whole**: `true` uses the terminal's signature settings and ignores `entryLocation`/`threshold`; `false` uses the request configuration only and never reads the terminal settings. With `useHostConfig = false`, `entryLocation` is mandatory — `ON_SCREEN` forces the e-signature page, `ON_RECEIPT` skips the screen and prints a signature line, and `NONE` explicitly disables signature capture. Optional `threshold` (smallest currency unit) captures a signature only when the final amount is **greater than** the threshold. For compatibility with the previous `signatureEntryLocation` field, providing an `entryLocation` is by itself enough to select the request configuration — `SignatureConfig(entryLocation = ON_SCREEN)` overrides the terminal settings instead of being ignored because `useHostConfig` defaults to `true` (see `SignatureConfig.resolvedUseHostConfig`).
+- **Signature on non-referenced refunds** — `RefundRequest.nonReferencedBuilder().setSignatureConfig(...)` applies the same signature rules to a non-referenced refund, where the cardholder presents a card and can be asked to sign. A **referenced** refund reuses the original transaction's card data and rejects `signatureConfig` with `IllegalArgumentException` (raw JSON / Cloud requests are rejected with `E302`).
+- **Tip configuration source** — `TipConfig.useHostConfig` (default `false`) selects the tip configuration source as a whole: `false` uses the request fields as-is (`suggestions = null` now means "no suggestions" rather than "fall back to the terminal's suggestions"); `true` uses the terminal's tip configuration and ignores `onScreenTip`/`tipMode`/`tipWithTax`/`suggestions`. When `true` and the terminal has no tip configuration, the transaction is **not** blocked — the tip flow is simply skipped.
 - **`ConnectionConfig` factory methods** — `createAppMode()`, `createCableMode()`, `createLanMode(host, port)`, `createLanMode()` (cached), and `createDefault()` for concise connection setup.
 
 ### 📦 Dependencies
@@ -71,7 +73,25 @@ dependencies {
 
 ### 🧭 Migration from v1.0.7
 
-No breaking changes — v1.0.8 is a drop-in upgrade from v1.0.7. All new APIs are additive.
+v1.0.8 is a drop-in upgrade from v1.0.7 for connection and transaction APIs — all new APIs are additive. Two tip-related details are worth checking:
+
+- **`TipConfig` no longer falls back to the terminal configuration field by field.** With the default `useHostConfig = false`, `suggestions = null` means "no suggestions" instead of "use the terminal's suggested values". Pass `TipConfig(useHostConfig = true)` to keep letting the terminal own the tip experience, or provide `suggestions` explicitly.
+- **`TipConfig` gained `useHostConfig` as its first constructor parameter.** Named arguments and the `setXxx()` chaining API are unaffected; only positional construction such as `TipConfig(true, TipMode.ON_SALE)` needs updating.
+
+**Signature entry location (raw JSON / Cloud integrations)**
+
+Integrations that send the legacy `signatureEntryLocation` field — the Cloud API and raw-JSON semi-integrations — keep working unchanged: Tapro maps it to a request-side `signatureConfig` with the same override semantics as before. `signatureConfig` takes precedence when both are present.
+
+```jsonc
+// Still supported — behaves exactly as in v1.0.7
+{ "signatureEntryLocation": "ON_RECEIPT" }
+
+// Equivalent v1.0.8 form
+{ "signatureConfig": { "useHostConfig": false, "entryLocation": "ON_RECEIPT" } }
+
+// Also equivalent — an explicit entryLocation implies the request configuration
+{ "signatureConfig": { "entryLocation": "ON_RECEIPT" } }
+```
 
 **LAN Discovery (optional)**
 
@@ -101,15 +121,39 @@ TaplinkSDK.discoverLanServices(object : DiscoveryListener {
 
 **Signature Routing (optional)**
 
-Add per-transaction signature control to Sale or Auth:
+Add per-transaction signature control to Sale or Auth. Omitting `signatureConfig` keeps the v1.0.7 behavior (the terminal's own signature settings apply):
 
 ```kotlin
+// Use the terminal (host) signature configuration — same as omitting the object
 val request = SaleRequest.builder()
     .setReferenceOrderId("ORDER_001")
     .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setAmount(AmountInfo.of(1000L, "USD"))
-    .setSignatureEntryLocation(Signature.ON_SCREEN)  // new in v1.0.8
+    .setSignatureConfig(SignatureConfig.useHostConfig())  // new in v1.0.8
     .build()
+
+// Use the request configuration only
+.setSignatureConfig(SignatureConfig.onScreen())                          // always sign on screen
+.setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("2500")))   // sign above $25.00
+.setSignatureConfig(SignatureConfig.onReceipt())                         // print a signature line
+.setSignatureConfig(SignatureConfig.none())                              // explicitly no signature
+```
+
+**Tip Configuration Source (optional)**
+
+`TipConfig` gains `useHostConfig`. The default (`false`) keeps the v1.0.7 request-driven behavior, except that `suggestions` is no longer implicitly filled in from the terminal — pass it explicitly when you need suggested values:
+
+```kotlin
+// Let the terminal own the whole tip experience
+TipConfig(useHostConfig = true)
+
+// Drive the tip experience entirely from the request
+TipConfig(
+    useHostConfig = false,
+    onScreenTip = true,
+    tipMode = TipMode.ON_SALE,
+    suggestions = TipSuggestions(FeeMode.RATE, listOf(15, 18, 20))
+)
 ```
 
 See also the [API Reference](API-REFERENCE.md) and the [LAN Address Acquisition guide](README.md#lan-address-acquisition-discovery--qr-scan).

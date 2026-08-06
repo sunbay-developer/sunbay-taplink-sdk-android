@@ -495,10 +495,10 @@ class PaymentManager(
 
     private fun validateSignatureConfig(request: PaymentRequest, callback: PaymentCallback): Boolean {
         val signatureConfig = request.signatureConfig ?: return true
-        if (request.action != TransactionAction.SALE.value && request.action != TransactionAction.AUTH.value) {
+        if (!isSignatureConfigSupported(request)) {
             callback.onFailure(
                 errorCode = InnerErrorCode.E302,
-                errorMessage = "${InnerErrorCode.E302.description}(signatureConfig is only supported for SALE and AUTH)",
+                errorMessage = "${InnerErrorCode.E302.description}(signatureConfig is only supported for SALE, AUTH and non-referenced REFUND)",
                 transactionRequestId = request.transactionRequestId
             )
             return false
@@ -513,6 +513,18 @@ class PaymentManager(
             return false
         }
         return true
+    }
+
+    /**
+     * A signature can only be captured when the cardholder is present with a card, i.e. for SALE,
+     * AUTH and non-referenced REFUND. A referenced refund reuses the original transaction's card
+     * data, so a signature configuration is meaningless there.
+     */
+    private fun isSignatureConfigSupported(request: PaymentRequest): Boolean = when (request.action) {
+        TransactionAction.SALE.value, TransactionAction.AUTH.value -> true
+        TransactionAction.REFUND.value ->
+            request.originalTransactionId == null && request.originalTransactionRequestId == null
+        else -> false
     }
 
     /**
