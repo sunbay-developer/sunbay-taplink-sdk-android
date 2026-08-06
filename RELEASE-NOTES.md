@@ -70,12 +70,14 @@ dependencies {
 - `CAMERA` permission and scanner Activity are pre-declared in the SDK manifest — no manifest changes needed in your app.
 - Scanner selects back camera → front camera → first available camera; reports `E506` if none is usable.
 - `BatchCloseRequest.printReceipt` now supports batch-report-specific values: `TOTAL` (total report only) and `DETAIL` (detail report only) alongside the existing `AUTO`, `BOTH`, and `NONE`.
+- `BatchCloseRequest` no longer rejects the transaction-receipt values `MERCHANT` and `CUSTOMER`. They describe receipt copies and are meaningless for a batch report, so the SDK normalizes them (together with `AUTO` and `null`) to `AUTO` through the new `BatchCloseRequest.resolvedPrintReceipt` property. The terminal therefore falls back to its own batch report configuration instead of receiving a validation error.
 
 ### 🧭 Migration from v1.0.7
 
 v1.0.8 is a drop-in upgrade from v1.0.7 for connection and transaction APIs — all new APIs are additive. Two tip-related details are worth checking:
 
 - **`TipConfig` no longer falls back to the terminal configuration field by field.** With the default `useHostConfig = false`, `suggestions = null` means "no suggestions" instead of "use the terminal's suggested values". Pass `TipConfig(useHostConfig = true)` to keep letting the terminal own the tip experience, or provide `suggestions` explicitly.
+- **Batch Close no longer fails on `MERCHANT` / `CUSTOMER`.** If your integration relied on receiving a validation error for those values, note that a batch close is now accepted and printed according to the terminal's batch report configuration.
 - **`TipConfig` gained `useHostConfig` as its first constructor parameter.** Named arguments and the `setXxx()` chaining API are unaffected; only positional construction such as `TipConfig(true, TipMode.ON_SALE)` needs updating.
 
 **Signature entry location (raw JSON / Cloud integrations)**

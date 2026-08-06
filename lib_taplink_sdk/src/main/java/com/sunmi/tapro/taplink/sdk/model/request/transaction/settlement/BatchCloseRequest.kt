@@ -4,7 +4,6 @@ import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.BaseTransactionRequest
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidationException
-import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
 
 /**
@@ -15,7 +14,9 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
  * @param transactionRequestId Transaction request ID (required)
  * @param description Close description (optional, max 128 characters)
  * @param requestTimeout Request timeout (optional, in seconds)
- * @param printReceipt Batch report type (AUTO, BOTH, TOTAL, DETAIL, or NONE; default AUTO)
+ * @param printReceipt Batch report type (AUTO, BOTH, TOTAL, DETAIL, or NONE; default AUTO).
+ *   `MERCHANT` and `CUSTOMER` are meaningless for a batch report and are treated as `AUTO`
+ *   (the terminal's batch close configuration is used) instead of being rejected.
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -52,6 +53,23 @@ data class BatchCloseRequest(
         )
     }
 
+    /**
+     * The batch report type actually applied.
+     *
+     * `MERCHANT` and `CUSTOMER` describe receipt copies rather than a batch report, so they carry
+     * no meaning here and fall back to [PrintReceipt.AUTO] (the terminal's batch close
+     * configuration).
+     */
+    val resolvedPrintReceipt: PrintReceipt
+        get() = when (printReceipt) {
+            PrintReceipt.BOTH,
+            PrintReceipt.TOTAL,
+            PrintReceipt.DETAIL,
+            PrintReceipt.NONE -> printReceipt
+
+            else -> PrintReceipt.AUTO
+        }
+
     override fun validate(): ValidationResult {
         val descriptionValidation = if (description != null) {
             TransactionRequestValidator.validateDescription(description)
@@ -59,22 +77,9 @@ data class BatchCloseRequest(
             ValidationResult.success()
         }
 
-        val printReceiptValidation = if (
-            printReceipt == PrintReceipt.MERCHANT || printReceipt == PrintReceipt.CUSTOMER
-        ) {
-            ValidationResult.failure(
-                ValidationError.CustomError(
-                    "printReceipt must be AUTO, BOTH, TOTAL, DETAIL, or NONE for batch close"
-                )
-            )
-        } else {
-            ValidationResult.success()
-        }
-
         return TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            descriptionValidation,
-            printReceiptValidation
+            descriptionValidation
         )
     }
 

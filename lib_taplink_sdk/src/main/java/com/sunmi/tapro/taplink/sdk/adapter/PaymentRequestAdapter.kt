@@ -205,7 +205,8 @@ object PaymentRequestAdapter {
             transactionRequestId = request.transactionRequestId,
             description = request.description ?: "Batch Close",
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            // MERCHANT/CUSTOMER are receipt copies, not batch report types — normalise to AUTO.
+            printReceipt = request.resolvedPrintReceipt
         )
     }
 }
