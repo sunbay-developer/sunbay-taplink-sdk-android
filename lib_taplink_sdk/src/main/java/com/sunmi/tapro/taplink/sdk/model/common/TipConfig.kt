@@ -11,6 +11,15 @@ import com.sunmi.tapro.taplink.sdk.enums.TipMode
  * The configuration source is selected as a whole through [useHostConfig]; the host tip
  * configuration and the request tip configuration are never merged field by field.
  *
+ * Combining [onScreenTip] and [suggestions] selects where the tip is collected:
+ *
+ * | onScreenTip | suggestions | Behavior |
+ * |---|---|---|
+ * | true | provided | Tip screen with the given suggestions |
+ * | true | null | Tip screen without suggestions (custom amount only) |
+ * | false | provided | No tip screen; suggested tip amounts are printed on the receipt |
+ * | false | null | Tip flow is skipped entirely |
+ *
  * @author TaPro Team
  * @since 2025-01-XX
  */
@@ -24,7 +33,12 @@ data class TipConfig(
 
     /**
      * Whether to enable on-screen tip prompt (optional, default: false).
-     * When true, the payment terminal will display a tip input screen.
+     * - true: the terminal displays a tip input screen and the tip is captured on screen
+     * - false: no tip screen is displayed. If [suggestions] is also provided, the terminal
+     *   prints the suggested tip amounts on the receipt instead, so the cardholder can write
+     *   the tip by hand. If [suggestions] is null, the tip flow is skipped entirely.
+     *
+     * This field is ignored when [useHostConfig] is true.
      */
     val onScreenTip: Boolean = false,
 
@@ -43,7 +57,13 @@ data class TipConfig(
 
     /**
      * Tip suggestion options (optional).
-     * Provides predefined tip choices for the customer to select from.
+     *
+     * Where the suggestions are shown depends on [onScreenTip]:
+     * - [onScreenTip] = true: the suggestions become the selectable tip options on the tip screen
+     * - [onScreenTip] = false: the suggestions are printed on the receipt as suggested tip
+     *   amounts and no tip screen is shown
+     *
+     * A null value means no suggestions are used; it never falls back to the host suggestions.
      */
     val suggestions: TipSuggestions? = null
 ) {
