@@ -169,6 +169,15 @@ afterEvaluate {
             sign publishing.publications.release
         }
     }
+    tasks.withType(Sign) { task ->
+        // Ensure sign tasks depend on copyReleaseAar / copyDebugAar to avoid task dependency validation errors
+        if (task.name == 'signReleasePublication') {
+            task.dependsOn('copyReleaseAar')
+        } else if (task.name == 'signDebugPublication') {
+            task.dependsOn('copyDebugAar')
+        }
+    }
+
     tasks.withType(PublishToMavenRepository) { task ->
         if (task.publication.hasProperty('repo') && task.publication.repo != task.repository.name) {
             task.enabled = false
