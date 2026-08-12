@@ -13,12 +13,23 @@ import com.sunmi.tapro.taplink.sdk.enums.TipMode
  *
  * Combining [onScreenTip] and [suggestions] selects where the tip is collected:
  *
- * | onScreenTip | suggestions | Behavior |
- * |---|---|---|
- * | true | provided | Tip screen with the given suggestions |
- * | true | null | Tip screen without suggestions (custom amount only) |
- * | false | provided | No tip screen; suggested tip amounts are printed on the receipt |
- * | false | null | Tip flow is skipped entirely |
+ * | onScreenTip | suggestions | Screen | Receipt tip area |
+ * |---|---|---|---|
+ * | true | provided | Tip screen with the given suggestions | None |
+ * | true | null | Tip screen, custom amount only | None |
+ * | false | provided | No tip screen | Suggested amounts, for a hand-written tip |
+ * | false | null | No tip screen | Blank tip line, for a hand-written tip |
+ *
+ * The tip is only ever captured in one place. With [onScreenTip] enabled the amount is settled
+ * on the tip screen, so the receipt carries no tip area at all. With [onScreenTip] disabled the
+ * receipt takes over: it prints your [suggestions] when provided, or a blank tip line when not.
+ * The request configuration replaces the host receipt tip settings as a whole and the two are
+ * never combined.
+ *
+ * When [useHostConfig] is false, a field left at its default is treated as "not specified by the
+ * request" and never falls back to the host value. Note that [tipMode] and [tipWithTax] are
+ * non-null with defaults, so typed SDK requests always carry a value; only raw-JSON and Cloud
+ * requests can omit them.
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -34,9 +45,9 @@ data class TipConfig(
     /**
      * Whether to enable on-screen tip prompt (optional, default: false).
      * - true: the terminal displays a tip input screen and the tip is captured on screen
-     * - false: no tip screen is displayed. If [suggestions] is also provided, the terminal
-     *   prints the suggested tip amounts on the receipt instead, so the cardholder can write
-     *   the tip by hand. If [suggestions] is null, the tip flow is skipped entirely.
+     * - false: no tip screen is displayed and the tip is captured on the receipt instead, so the
+     *   cardholder can write it by hand — the terminal prints the suggested tip amounts when
+     *   [suggestions] is provided, or a blank tip line when it is null.
      *
      * This field is ignored when [useHostConfig] is true.
      */
@@ -46,12 +57,18 @@ data class TipConfig(
      * Tip mode (optional, default: ON_SALE).
      * - ON_SALE: Tip is collected during the sale transaction
      * - AFTER_SALE: Tip is collected after the sale transaction
+     *
+     * This field is ignored when [useHostConfig] is true. When [useHostConfig] is false it is
+     * used as-is and never falls back to the host tip mode.
      */
     val tipMode: TipMode = TipMode.ON_SALE,
 
     /**
      * Whether tip calculation includes tax amount (optional, default: false).
      * When true, the tip percentage is calculated based on the amount including tax.
+     *
+     * This field is ignored when [useHostConfig] is true. When [useHostConfig] is false it is
+     * used as-is and never falls back to the host setting.
      */
     val tipWithTax: Boolean = false,
 
@@ -59,11 +76,13 @@ data class TipConfig(
      * Tip suggestion options (optional).
      *
      * Where the suggestions are shown depends on [onScreenTip]:
-     * - [onScreenTip] = true: the suggestions become the selectable tip options on the tip screen
+     * - [onScreenTip] = true: the suggestions become the selectable tip options on the tip screen,
+     *   and the receipt carries no tip area
      * - [onScreenTip] = false: the suggestions are printed on the receipt as suggested tip
      *   amounts and no tip screen is shown
      *
      * A null value means no suggestions are used; it never falls back to the host suggestions.
+     * With [onScreenTip] = false and no suggestions, the receipt prints a blank tip line instead.
      */
     val suggestions: TipSuggestions? = null
 ) {

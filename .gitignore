@@ -18,3 +18,7 @@ local.properties
 /.codegen
 /.kotlin
 /docs
+/.kiro/*
+/AGENT.md
+/AGENTS.md
+/lib_taplink_sdk/src/test/*
