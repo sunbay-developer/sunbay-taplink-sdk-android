@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
 - [v1.0.6](#v106) — Tip config moves to the transaction request
 - [v1.0.5](#v105) — Declines split out, callback adapters, status helpers
@@ -19,6 +20,161 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## v1.0.8
+
+**Released 2026-08-07**
+
+Adds LAN terminal discovery (mDNS and QR code scan), per-transaction signature and tip configuration with an explicit configuration source, more granular transaction progress events, and convenient `ConnectionConfig` factory methods. JSON serialisation moves from Gson to Jackson.
+
+```kotlin
+dependencies {
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.8")
+}
+```
+
+### 🚀 New Features
+
+- **LAN service discovery** — `TaplinkSDK.discoverLanServices(DiscoveryListener)` runs a one-shot mDNS (`_taplink._tcp`) discovery and returns the resolved `host`/`port` list **without connecting**. Discovery times out after 15 seconds.
+- **LAN QR code scan** — `TaplinkSDK.scanLanQrCode(DiscoveryListener)` opens the SDK's built-in full-screen camera scanner, reads a `lan://host/port` QR code shown by Tapro, and returns the address **without connecting**.
+- **One-call connection variants** — `TaplinkSDK.autoDiscoverAndConnect(ConnectionListener)` and `TaplinkSDK.scanAndConnect(ConnectionListener)` discover/scan and connect in a single step.
+- **`DiscoveredService`** model and **`DiscoveryListener`** callback for the new discovery APIs.
+- **Discovery/scan error codes** `E501`–`E506` (no services found, all failed, already in progress, user cancel, permission denied, no camera).
+- **Signature routing** — `signatureConfig` on `SaleRequest`, `AuthRequest` and `RefundRequest.nonReferencedBuilder()` controls per-transaction signature capture. `SignatureConfig.useHostConfig` (default `true`) selects the configuration source **as a whole**: `true` uses the terminal's signature settings and ignores `entryLocation`/`threshold`; `false` uses the request configuration only and never reads the terminal settings. With `useHostConfig = false`, `entryLocation` is mandatory — `ON_SCREEN` forces the e-signature page, `ON_RECEIPT` skips the screen and prints a signature line, and `NONE` explicitly disables signature capture. Optional `threshold` (smallest currency unit) captures a signature only when the final amount is **greater than** the threshold. For compatibility with the previous `signatureEntryLocation` field, providing an `entryLocation` is by itself enough to select the request configuration — `SignatureConfig(entryLocation = ON_SCREEN)` overrides the terminal settings instead of being ignored because `useHostConfig` defaults to `true` (see `SignatureConfig.resolvedUseHostConfig`).
+- **Signature on non-referenced refunds** — `RefundRequest.nonReferencedBuilder().setSignatureConfig(...)` applies the same signature rules to a non-referenced refund, where the cardholder presents a card and can be asked to sign. A **referenced** refund reuses the original transaction's card data and rejects `signatureConfig` with `IllegalArgumentException` (raw JSON / Cloud requests are rejected with `E302`).
+- **Request-driven receipt tip area** — when the request tip configuration applies (`useHostConfig = false`), it replaces the terminal's receipt tip settings **as a whole** and the two are never combined. The tip is captured in exactly one place: with `onScreenTip = true` the amount is settled on the tip screen and the receipt carries no tip area at all, while `onScreenTip = false` moves capture to the receipt — the terminal prints the suggested tip amounts when `suggestions` is provided, or a blank tip line when it is not, so the cardholder can write the tip by hand. The terminal's own blank tip line is never added on top. The resulting tip area is also written into the `receiptJson` returned with the transaction result, so it is available whether the terminal prints the receipt or your app does.
+- **Tip configuration source** — `TipConfig.useHostConfig` (default `false`) selects the tip configuration source as a whole: `false` uses the request fields as-is, and any field left out is treated as "not specified by the request" rather than falling back to the terminal value — this now applies to `tipMode` and `tipWithTax` as well as to `suggestions`. `true` uses the terminal's tip configuration and ignores `onScreenTip`/`tipMode`/`tipWithTax`/`suggestions`; it is evaluated **before** `onScreenTip`, so `useHostConfig = true` combined with `onScreenTip = false` does not skip tipping. When `true` and the terminal has no tip configuration, the transaction is **not** blocked — the tip flow is simply skipped. Note that `tipMode` and `tipWithTax` are non-null with defaults in the typed SDK, so only raw-JSON and Cloud requests can actually omit them.
+- **More `PaymentEvent` progress states** — `PaymentCallback.onProgress(event)` can now report additional stages of the transaction, including `OnlineProcessing`, `EmvProcessing`, `RemoveCard`, `CardRemoved`, `SignatureCompleted`, `PrintCompleted` and `PrintFailed`. Event codes the SDK does not recognize are delivered as a generic fallback event instead of being dropped, so a newer terminal never breaks an older SDK. Treat `PaymentEvent` as an **open set**: match only the states you care about and always keep an `else` branch.
+- **`AppToAppMode`** enum with `ConnectionConfig.setAppToAppMode(mode)` and `ConnectionConfig.createAppMode(mode)` for selecting the App-to-App behaviour per connection.
+- **`TipSuggestions.names`** — optional display labels matched positionally to `values`; set through the constructor or `setNames(...)`. When `names` is missing or its size differs from `values`, the labels are ignored and the values are still used.
+- **`PaymentResult.relatedTransactionStatus` and `PaymentResult.transactionBatchStatus`** — expose the status of the related transaction and of the batch the transaction belongs to.
+- **`PrintReceipt.TOTAL` and `PrintReceipt.DETAIL`** enum constants for batch report printing.
+- **`ConnectionConfig` factory methods** — `createAppMode()`, `createCableMode()`, `createLanMode(host, port)`, `createLanMode()` (cached), and `createDefault()` for concise connection setup.
+
+### 💥 Breaking Changes
+
+- **JSON serialisation moved from Gson to Jackson.** The published POM now declares `com.fasterxml.jackson.core:jackson-databind:2.17.2` and `com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2` instead of `com.google.code.gson:gson:2.13.1`. Both are `implementation` dependencies of the SDK, so **integrations that only use the typed request/response models need no change** — the switch is not visible through `TaplinkClient`, `SaleRequest`, `PaymentResult`, and so on.
+- **`BasicRequest.bizData` and `BasicResponse.bizData` changed type** from `com.google.gson.JsonObject` to `String` (the raw JSON payload). This only affects integrations that build or read the low-level protocol envelope directly. Parse the string with your own JSON library, or move to the typed request/response models.
+- **`BasicResponseTypeAdapter` (Gson) was removed** and replaced by `BasicResponseJacksonSerializer` / `BasicResponseJacksonDeserializer`. These are internal serialisation helpers — remove any manual Gson `registerTypeAdapter` wiring for `BasicResponse`.
+- **`PaymentEvent.WaitingOnlineResponse` was removed.** Use `PaymentEvent.OnlineProcessing` instead, which reports the same stage. Because `PaymentEvent` gained further states in this release, an exhaustive `when` over it will no longer compile — add an `else` branch.
+- **`TipConfig` and `TipSuggestions` constructors gained parameters** (`useHostConfig` and `names` respectively). Named arguments and the `setXxx()` chaining API are unaffected; only positional construction needs updating.
+- **`ConnectionConfig.createAppMode()` now takes an optional `AppToAppMode`.** Kotlin callers are unaffected thanks to the default value; Java callers using the no-argument form must pass `AppToAppMode.CUSTOM` explicitly.
+
+### 📦 Dependencies
+
+- **Jackson replaces Gson** — `jackson-databind` and `jackson-module-kotlin` **2.17.2**. If you previously added Gson manually to work around missing SDK classes, that workaround is no longer needed. Applications that use Gson for their own code are unaffected — the SDK no longer pulls it in transitively.
+- QR scanner is built on **CameraX 1.3.4** and **ZXing 3.5.3**. These are `implementation` dependencies inside the SDK and are **not** exposed transitively. Host apps that use `scanLanQrCode` or `scanAndConnect` must add them explicitly:
+
+```kotlin
+dependencies {
+    // Required only if you use the QR scan APIs
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+    implementation("com.google.zxing:core:3.5.3")
+}
+```
+
+- mDNS discovery (`discoverLanServices` / `autoDiscoverAndConnect`) uses Android's built-in NSD — **no extra dependency required**.
+
+### 🔧 Improvements
+
+- `CAMERA` permission and scanner Activity are pre-declared in the SDK manifest — no manifest changes needed in your app.
+- Scanner selects back camera → front camera → first available camera; reports `E506` if none is usable.
+- `BatchCloseRequest.printReceipt` now supports batch-report-specific values: `TOTAL` (total report only) and `DETAIL` (detail report only) alongside the existing `AUTO`, `BOTH`, and `NONE`.
+- `BatchCloseRequest` no longer rejects the transaction-receipt values `MERCHANT` and `CUSTOMER`. They describe receipt copies and are meaningless for a batch report, so the SDK normalizes them (together with `AUTO` and `null`) to `AUTO` through the new `BatchCloseRequest.resolvedPrintReceipt` property. The terminal therefore falls back to its own batch report configuration instead of receiving a validation error.
+
+### 🧭 Migration from v1.0.7
+
+For integrations built on the typed request/response models (`TaplinkClient`, `SaleRequest`, `PaymentResult`, …), v1.0.8 is a drop-in upgrade — the Gson-to-Jackson switch is invisible at that level. Check the [Breaking Changes](#-breaking-changes) above if you touch `BasicRequest`/`BasicResponse` directly or exhaustively match on `PaymentEvent`. Beyond that, these details are worth checking:
+
+- **`TipConfig` no longer falls back to the terminal configuration field by field.** With the default `useHostConfig = false`, `suggestions = null` means "no suggestions" instead of "use the terminal's suggested values". Pass `TipConfig(useHostConfig = true)` to keep letting the terminal own the tip experience, or provide `suggestions` explicitly.
+- **Batch Close no longer fails on `MERCHANT` / `CUSTOMER`.** If your integration relied on receiving a validation error for those values, note that a batch close is now accepted and printed according to the terminal's batch report configuration.
+- **`TipConfig` gained `useHostConfig` as its first constructor parameter.** Named arguments and the `setXxx()` chaining API are unaffected; only positional construction such as `TipConfig(true, TipMode.ON_SALE)` needs updating.
+
+**Signature entry location (raw JSON / Cloud integrations)**
+
+Integrations that send the legacy `signatureEntryLocation` field — the Cloud API and raw-JSON semi-integrations — keep working unchanged: Tapro maps it to a request-side `signatureConfig` with the same override semantics as before. `signatureConfig` takes precedence when both are present.
+
+```jsonc
+// Still supported — behaves exactly as in v1.0.7
+{ "signatureEntryLocation": "ON_RECEIPT" }
+
+// Equivalent v1.0.8 form
+{ "signatureConfig": { "useHostConfig": false, "entryLocation": "ON_RECEIPT" } }
+
+// Also equivalent — an explicit entryLocation implies the request configuration
+{ "signatureConfig": { "entryLocation": "ON_RECEIPT" } }
+```
+
+**LAN Discovery (optional)**
+
+Replace manual IP/port input with automatic discovery:
+
+```kotlin
+// Before (v1.0.7) — user must type IP and port manually
+val config = ConnectionConfig()
+    .setConnectionMode(ConnectionMode.LAN)
+    .setHost("192.168.1.100")
+    .setPort(8443)
+TaplinkSDK.connect(config, listener)
+
+// After (v1.0.8) — auto-discover and connect
+TaplinkSDK.autoDiscoverAndConnect(listener)
+
+// Or: discover first, then connect manually
+TaplinkSDK.discoverLanServices(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val target = services.firstOrNull() ?: return
+        val config = ConnectionConfig.createLanMode(target.host, target.port)
+        TaplinkSDK.connect(config, listener)
+    }
+    override fun onError(error: ConnectionError) { showError(error.message) }
+})
+```
+
+**Signature Routing (optional)**
+
+Add per-transaction signature control to Sale or Auth. Omitting `signatureConfig` keeps the v1.0.7 behavior (the terminal's own signature settings apply):
+
+```kotlin
+// Use the terminal (host) signature configuration — same as omitting the object
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_001")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo.of(1000L, "USD"))
+    .setSignatureConfig(SignatureConfig.useHostConfig())  // new in v1.0.8
+    .build()
+
+// Use the request configuration only
+.setSignatureConfig(SignatureConfig.onScreen())                          // always sign on screen
+.setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("2500")))   // sign above $25.00
+.setSignatureConfig(SignatureConfig.onReceipt())                         // print a signature line
+.setSignatureConfig(SignatureConfig.none())                              // explicitly no signature
+```
+
+**Tip Configuration Source (optional)**
+
+`TipConfig` gains `useHostConfig`. The default (`false`) keeps the v1.0.7 request-driven behavior, except that `suggestions` is no longer implicitly filled in from the terminal — pass it explicitly when you need suggested values:
+
+```kotlin
+// Let the terminal own the whole tip experience
+TipConfig(useHostConfig = true)
+
+// Drive the tip experience entirely from the request
+TipConfig(
+    useHostConfig = false,
+    onScreenTip = true,
+    tipMode = TipMode.ON_SALE,
+    suggestions = TipSuggestions(FeeMode.RATE, listOf(15, 18, 20))
+)
+```
+
+See also the [API Reference](API-REFERENCE.md) and the [LAN Address Acquisition guide](README.md#lan-address-acquisition-discovery--qr-scan).
 
 ---
 
