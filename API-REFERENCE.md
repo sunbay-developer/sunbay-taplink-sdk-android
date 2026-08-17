@@ -120,6 +120,47 @@ val amount = AmountInfo.of(1000L, "USD") // $10.00
 
 ---
 
+### TipConfig
+
+Per-transaction tip configuration for interactive terminal tip collection. Controls where and how tip is captured, and the suggested tip options shown to the customer.
+
+| Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `useHostConfig` | Boolean | `false` | Whether to use the terminal's tip configuration (true) or the request configuration (false). When `true`, all other fields are ignored and the terminal settings are used as-is. |
+| `onScreenTip` | Boolean | `false` | Whether to enable on-screen tip prompt. `true` → show terminal tip screen; `false` → customer writes tip on receipt. |
+| `tipMode` | TipMode | `ON_SALE` | When the tip is collected. `ON_SALE` — during sale; `AFTER_SALE` — via `TipAdjust` transaction after sale. |
+| `tipWithTax` | Boolean | `false` | Whether tip percentage is calculated on amount including tax. Only applies when `feeMode=RATE`. |
+| `suggestions` | TipSuggestions? | `null` | Predefined tip options shown to the customer. When `onScreenTip=true`, shown on screen; when `onScreenTip=false`, printed on receipt. |
+
+**Example:**
+```kotlin
+val tipConfig = TipConfig(
+    useHostConfig = false,
+    onScreenTip = true,
+    tipMode = TipMode.ON_SALE,
+    tipWithTax = false,
+    suggestions = TipSuggestions(
+        feeMode = FeeMode.RATE,
+        values = listOf(15, 18, 20),
+        names = listOf("Acceptable", "Good", "Great")
+    )
+)
+```
+
+---
+
+### TipSuggestions
+
+Tip suggestion configuration for predefined tip options shown to the customer.
+
+| Field | Type | Required | Description |
+|------|------|----------|-------------|
+| `feeMode` | FeeMode | ✅ | How `values` are interpreted. `RATE` — percentage (e.g., `15` = 15%); `AMOUNT` — fixed amount in smallest currency unit (e.g., `100` = $1.00). |
+| `values` | List<Int> | ✅ | Suggested tip amounts/percentages, e.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts (cents). |
+| `names` | List<String>? | ❌ | Optional descriptive labels for each suggestion, e.g., `["Acceptable", "Good", "Great"]`. Length should match `values` length. |
+
+---
+
 ### SaleRequest
 
 | Field | Type | Required | Description |
@@ -136,7 +177,7 @@ val amount = AmountInfo.of(1000L, "USD") // $10.00
 | `staffInfo` | StaffInfo | No | Staff information |
 | `tipConfig` | TipConfig | No | Tip configuration, mutually exclusive with `amount.tipAmount` |
 | `printReceipt` | PrintReceipt | No | Receipt print mode, defaults to AUTO |
-| `signatureEntryLocation` | Signature | No | Signature routing for Sale: `ON_SCREEN` or `ON_RECEIPT` |
+| `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (optional) |
 
 ```kotlin
 val request = SaleRequest.builder()
@@ -163,7 +204,7 @@ val request = SaleRequest.builder()
 | `requestTimeout` | Long | No | Timeout in seconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
-| `signatureEntryLocation` | Signature | No | Signature routing for Auth: `ON_SCREEN` or `ON_RECEIPT` |
+| `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (optional) |
 
 ---
 
@@ -247,6 +288,7 @@ Supports two refund modes:
 | `requestTimeout` | Long | No | Timeout in seconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
+| `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (non-referenced refund only) |
 
 ```kotlin
 val request = RefundRequest.referencedBuilder()
@@ -310,6 +352,52 @@ val queryByRequestId = QueryRequest.byTransactionRequestId("req_abcdef")
 
 ---
 
+### SignatureConfig
+
+Per-transaction signature configuration for `SaleRequest` and `AuthRequest`. Controls where (or whether) a signature is captured for the transaction, and can override terminal signature settings.
+
+| Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `useHostConfig` | Boolean | `true` | Whether to use the terminal's signature configuration. When `true`, `entryLocation` and `threshold` are ignored. |
+| `entryLocation` | SignatureEntryLocation? | `null` | Where to capture the signature: `ON_SCREEN`, `ON_RECEIPT`, or `NONE`. Required when using request configuration. |
+| `threshold` | BigDecimal? | `null` | Minimum amount (in smallest currency unit) above which a signature is required. Comparison is strictly greater than; `null` means signature required for all amounts. Invalid when `entryLocation` is `NONE`. |
+
+**Static factory methods for common scenarios:**
+
+```kotlin
+// Use terminal settings (default)
+SignatureConfig.useHostConfig()
+
+// Always capture on terminal screen
+SignatureConfig.onScreen()
+
+// Capture on screen only for amounts > $50.00
+SignatureConfig.onScreenAbove(BigDecimal("5000"))
+
+// Always print signature line on receipt
+SignatureConfig.onReceipt()
+
+// Print signature line on receipt only for amounts > $50.00
+SignatureConfig.onReceiptAbove(BigDecimal("5000"))
+
+// Never collect signature
+SignatureConfig.none()
+```
+
+**Example usage:**
+
+```kotlin
+// Require on-screen signature for amounts > $100.00
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER-001")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo.of(15000L, "USD"))
+    .setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("10000")))
+    .build()
+```
+
+---
+
 ### BatchCloseRequest
 
 | Field | Type | Required | Description |
@@ -317,6 +405,17 @@ val queryByRequestId = QueryRequest.byTransactionRequestId("req_abcdef")
 | `transactionRequestId` | String | Yes | Request ID |
 | `description` | String | No | Batch close description, max 128 characters |
 | `requestTimeout` | Long | No | Timeout in seconds |
+| `printReceipt` | PrintReceipt | No | Batch report print mode. Defaults to `AUTO`; supports `AUTO`, `BOTH`, `TOTAL`, `DETAIL`, and `NONE` |
+
+For Batch Close, `printReceipt` controls batch reports rather than merchant/customer transaction copies:
+
+- `AUTO`: Use the current Tapro batch report setting.
+- `BOTH`: Print both the batch total and transaction detail reports.
+- `TOTAL`: Print only the batch total report.
+- `DETAIL`: Print only the batch transaction detail report.
+- `NONE`: Do not print a batch report.
+
+`MERCHANT` and `CUSTOMER` are transaction-receipt modes and are not valid for `BatchCloseRequest`.
 
 ---
 
@@ -674,22 +773,68 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `MERCHANT` | Print merchant copy only |
 | `CUSTOMER` | Print customer copy only |
 | `BOTH` | Print both copies |
+| `TOTAL` | Print the batch total report only (`BatchCloseRequest` only) |
+| `DETAIL` | Print the batch transaction detail report only (`BatchCloseRequest` only) |
 
-### Signature
+### Signature Configuration
 
-Per-transaction signature routing for Sale/Auth (field `signatureEntryLocation`). It controls both the on-screen e-signature page and the receipt signature line (`printSignatureLine` in `receiptJson`), and **overrides** the terminal signature settings for that transaction.
+*Since v1.0.8.* Per-transaction signature configuration is managed through the `SignatureConfig` object, which offers flexible control over signature capture behavior and can be applied to `SaleRequest` and `AuthRequest` via the `signatureConfig` field.
+
+#### SignatureConfig
+
+| Field | Type | Description |
+|------|------|-------------|
+| `useHostConfig` | Boolean | Whether to use the host terminal's signature configuration (default: `true`). When `true`, the terminal's configured signature settings are used and `entryLocation`/`threshold` are ignored. |
+| `entryLocation` | SignatureEntryLocation? | Where the signature is captured (required when request configuration is used). Valid values: `ON_SCREEN`, `ON_RECEIPT`, `NONE`. |
+| `threshold` | BigDecimal? | Amount threshold above which a signature is captured, in the smallest currency unit (cents). The comparison is strictly greater than: with `threshold = 5000` ($50.00), a $50.00 transaction captures **no** signature, while $50.01 does. Must be `null` when `entryLocation` is `NONE`. |
+| `resolvedUseHostConfig` | Boolean (read-only) | The configuration source actually applied to the transaction. |
+
+**Factory methods:**
+- `SignatureConfig.useHostConfig()`: Uses host terminal settings (default behavior)
+- `SignatureConfig.onScreen()`: Always capture on terminal screen
+- `SignatureConfig.onScreenAbove(threshold)`: Capture on screen only above threshold
+- `SignatureConfig.onReceipt()`: Always print signature line on receipt
+- `SignatureConfig.onReceiptAbove(threshold)`: Print signature line on receipt only above threshold
+- `SignatureConfig.none()`: Never collect signature
+
+**Example:**
+```kotlin
+// Always require on-screen signature
+val config = SignatureConfig.onScreen()
+
+// Require signature only for amounts > $50.00
+val config = SignatureConfig.onScreenAbove(BigDecimal("5000"))
+
+// Never collect signature
+val config = SignatureConfig.none()
+
+// Use host terminal settings
+val config = SignatureConfig.useHostConfig()
+
+// Include in request
+val request = SaleRequest.builder()
+    .setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("5000")))
+    .build()
+```
+
+#### SignatureEntryLocation
+
+Per-transaction signature routing for Sale/Auth (field `signatureConfig.entryLocation`). It controls both the on-screen e-signature page and the receipt signature line (`printSignatureLine` in `receiptJson`), and **overrides** the terminal signature settings for that transaction.
 
 | Value | E-signature page | Receipt signature line |
 |------|------------------|------------------------|
 | `ON_SCREEN` | Always shown | Printed only when a signature was captured |
 | `ON_RECEIPT` | Never shown | Always printed for handwriting |
+| `NONE` | Never shown | Never printed |
 
-When `signatureEntryLocation` is **not set**, Tapro falls back to the terminal's signature settings (approved, non-EBT transactions only):
+When `signatureConfig` is **not set** (or `useHostConfig` is `true`), Tapro falls back to the terminal's signature settings (approved, non-EBT transactions only):
 
 - Terminal capture method `ON_SCREEN`: show the e-signature page when *always require signature* is enabled, otherwise only when the CVM result is `SIGNATURE`.
 - Terminal capture method `ON_RECEIPT`: print the receipt signature line when *always require signature* is enabled, otherwise only when the CVM result is `SIGNATURE`.
 
 > EBT transactions never collect a signature regardless of this setting.
+
+> **Backward compatibility (v1.0.7 → v1.0.8):** The deprecated `signatureEntryLocation` field is no longer supported. Use `SignatureConfig` instead. `SignatureConfig(entryLocation = SignatureEntryLocation.ON_SCREEN)` provides equivalent behavior to the old `signatureEntryLocation = Signature.ON_SCREEN`.
 
 ### Transaction status values
 

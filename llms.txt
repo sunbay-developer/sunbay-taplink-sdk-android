@@ -1,8 +1,8 @@
 # Taplink SDK for Android — AI Integration Reference
 
 **Taplink SDK** is a semi-integrated payment SDK for Android POS applications provided by SUNBAY.
-Latest public release: **1.0.8** (released 2026-08-07).
-It supports four connection modes: App-to-App (Local), LAN (WLAN), Cable (USB/Serial), and Cloud (HTTP).
+Latest public release target: **1.0.8**.
+It supports three connection modes: App-to-App (Local), LAN (WLAN), and Cable (USB/Serial).
 
 ## Current Callback Semantics
 
@@ -23,26 +23,11 @@ Only depend on `lib_taplink_sdk`. Never import from `lib_taplink_communication`.
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.8")
-    
-    // Required only if you use QR scan APIs (discoverLanServices / scanLanQrCode)
-    val cameraxVersion = "1.3.4"
-    implementation("androidx.camera:camera-core:$cameraxVersion")
-    implementation("androidx.camera:camera-camera2:$cameraxVersion")
-    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
-    implementation("androidx.camera:camera-view:$cameraxVersion")
-    implementation("com.google.zxing:core:3.5.3")
+    implementation(project(":lib_taplink_sdk"))
 }
 ```
 
-Public API packages:
-- `com.sunmi.tapro.taplink.sdk.api` — Main API (TaplinkSDK singleton, TaplinkClient)
-- `com.sunmi.tapro.taplink.sdk.callback` — Listeners (ConnectionListener, PaymentCallback, DiscoveryListener, *Adapter)
-- `com.sunmi.tapro.taplink.sdk.config` — Configuration (TaplinkConfig, ConnectionConfig)
-- `com.sunmi.tapro.taplink.sdk.enums` — Enums (ConnectionMode, CableProtocol, CardNetworkType, TipMode, FeeMode, etc.)
-- `com.sunmi.tapro.taplink.sdk.model` — Data models (requests, responses, common structures)
-- `com.sunmi.tapro.taplink.sdk.error` — Error models (PaymentError, ConnectionError)
-- `com.sunmi.tapro.taplink.sdk.scanner` — QR scanner for LAN discovery
+Main package: `com.sunmi.tapro.taplink.sdk`
 
 ---
 
@@ -136,17 +121,9 @@ val config = ConnectionConfig.createCableMode(CableProtocol.USB_VSP)
 val config = ConnectionConfig.createDefault()  // tries APP_TO_APP → Cable → LAN
 ```
 
-### Cloud Mode (HTTP / Remote)
-```kotlin
-// Requires Tapro to be configured in cloud gateway
-val config = ConnectionConfig()
-    .setConnectionMode(ConnectionMode.CLOUD)
-    // Additional Cloud-specific configuration via environment or BuildConfig
-```
-
 ---
 
-## LAN Address Acquisition (v1.0.8)
+## LAN Address Acquisition (since v1.0.8)
 
 Get the LAN terminal host/port automatically instead of typing it. These APIs RETURN the address via `DiscoveryListener` (they do NOT connect) — auto-fill your input fields, then connect with `ConnectionConfig.createLanMode(host, port)`.
 
@@ -181,10 +158,9 @@ TaplinkSDK.autoDiscoverAndConnect(connectionListener)
 TaplinkSDK.scanAndConnect(connectionListener)
 ```
 
-- `DiscoveredService(name: String, host: String, port: Int)` — returned by discovery/scan APIs.
-- QR scan requires CameraX 1.3.4 (camera-core/camera2/lifecycle/view) + ZXing 3.5.3 — add to your app's `build.gradle.kts` if using QR APIs. mDNS discovery needs no extra dependency.
+- `DiscoveredService(name: String, host: String, port: Int)`.
+- QR scan requires the host app to add CameraX 1.3.4 (camera-core/camera2/lifecycle/view) + ZXing 3.5.3 — they are not transitive through the AAR. mDNS discovery needs no extra dependency.
 - Error codes: `E501` no services, `E502` all failed, `E503` operation in progress, `E504` user cancel, `E505` camera permission denied, `E506` no usable camera.
-- Backend: mDNS uses Android's built-in NSD; QR scan uses built-in Camera permission and Activity (pre-declared in SDK manifest).
 
 ---
 
@@ -199,10 +175,9 @@ TaplinkSDK.scanAndConnect(connectionListener)
 | `client.postAuth()` | `PostAuthRequest` | Complete a pre-auth |
 | `client.incrementalAuth()` | `IncrementalAuthRequest` | Increase pre-auth amount |
 | `client.tipAdjust()` | `TipAdjustRequest` | Adjust tip after sale |
-| `client.abort()` | `AbortRequest` | Cancel in-progress transaction (before auth only) |
-| `client.batchClose()` | `BatchCloseRequest` | End-of-day settlement (supports batch report printing) |
-| `client.query()` | `QueryRequest` | Query transaction status (background, no Tapro UI — show your own loading) |
-| `client.forcedAuth()` | `ForcedAuthRequest` | Offline / voice authorization |
+| `client.abort()` | `AbortRequest` | Cancel in-progress transaction |
+| `client.batchClose()` | `BatchCloseRequest` | End-of-day settlement |
+| `client.query()` | `QueryRequest` | Query transaction status (runs in background, no Tapro UI shown — implement your own loading indicator) |
 
 ### Refund
 ```kotlin
@@ -276,17 +251,6 @@ val request = IncrementalAuthRequest.builder()
 client.incrementalAuth(request, paymentCallback)  // Increase pre-auth amount
 ```
 
-### Forced Authorization (Offline / Voice Auth)
-```kotlin
-val request = ForcedAuthRequest.builder()
-    .setReferenceOrderId("FORCED_${System.currentTimeMillis()}")
-    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
-    .setAmount(AuthAmountInfo(authAmount = BigDecimal("3000"), pricingCurrency = "USD"))
-    .build()
-
-client.forcedAuth(request, paymentCallback)
-```
-
 ---
 
 ## AmountInfo — CRITICAL: Smallest Currency Unit
@@ -321,71 +285,96 @@ If `surchargeAmount` is present and the customer pays with a **Debit Card**, Tap
 
 ---
 
-## TipConfig & Signature Routing (v1.0.8)
-
-### Tip Configuration
+## TipConfig — On-Screen Tip
 
 Use `tipConfig` when the terminal should collect tip interactively.
-Set it on `SaleRequest` or `PostAuthRequest` as a top-level field.
-**Mutually exclusive:** `tipConfig` and `amount.tipAmount` cannot both be set.
+Set it on `SaleRequest`, `AuthRequest`, or `PostAuthRequest` as a top-level field.
+`tipConfig` and `amount.tipAmount` are **mutually exclusive**.
 
 ```kotlin
-val tipConfig = TipConfig(
-    useHostConfig = false,           // true: use terminal's settings, false: use request config (default)
-    onScreenTip = true,              // true: on-screen tip prompt, false: tip line on receipt
-    tipMode     = TipMode.ON_SALE,   // ON_SALE or AFTER_SALE
-    tipWithTax  = false,             // include tax in tip calculation base
-    suggestions = TipSuggestions(
-        feeMode = FeeMode.RATE,              // RATE (%) or AMOUNT (fixed cents)
-        values  = listOf(15, 18, 20),        // 15%, 18%, 20%
-        names   = listOf("15%", "18%", "20%") // optional display labels (v1.0.8)
-    )
-)
-
 val request = SaleRequest.builder()
-    .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
-    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
-    .setAmount(AmountInfo(BigDecimal("1000"), "USD"))  // base order amount, NOT including tip
-    .setTipConfig(tipConfig)
-    .build()
-```
-
-**New in v1.0.8:** `TipConfig.useHostConfig` controls whether to use the terminal's tip settings (`true`, default behavior before v1.0.8) or the request fields (`false`, request-driven, new in v1.0.8). When `false`, unspecified fields are treated as "not specified by request" (not "use terminal default"). When `true`, `onScreenTip`/`tipMode`/`tipWithTax`/`suggestions` in the request are ignored, and the terminal owns the entire tip experience.
-
-| TipMode | Description |
-|---------|-------------|
-| `ON_SALE` | Tip collected during sale; included in card charge |
-| `AFTER_SALE` | Tip adjusted after sale via `TipAdjust` transaction |
-
-| FeeMode | Description |
-|---------|-------------|
-| `RATE` | Percentage (e.g., `15` = 15%) |
-| `AMOUNT` | Fixed amount in smallest unit (e.g., `100` = $1.00) |
-
-### Signature Routing
-
-**New in v1.0.8:** Control per-transaction signature capture on `SaleRequest`, `AuthRequest`, and `RefundRequest.nonReferencedBuilder()`.
-
-```kotlin
-val signatureConfig = SignatureConfig(
-    useHostConfig = true,                    // true: use terminal config, false: use request config
-    entryLocation = SignatureEntryLocation.ON_SCREEN,  // ON_SCREEN, ON_RECEIPT, NONE
-    threshold = BigDecimal("5000")          // optional: capture only when amount > threshold (cents)
-)
-
-val request = SaleRequest.builder()
-    .setReferenceOrderId("ORDER_${System.currentTimeMillis()}")
-    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setReferenceOrderId("ORDER001")
+    .setTransactionRequestId("TXN001")
     .setAmount(AmountInfo(BigDecimal("1000"), "USD"))
-    .setSignatureConfig(signatureConfig)  // v1.0.8 new
+    .setTipConfig(TipConfig(
+        useHostConfig = false,           // Use request config (default)
+        onScreenTip = true,              // Show tip prompt on terminal
+        tipMode = TipMode.ON_SALE,       // Collect during sale
+        tipWithTax = false,              // Don't include tax in tip base
+        suggestions = TipSuggestions(
+            feeMode = FeeMode.RATE,      // Percentages
+            values = listOf(15, 18, 20), // 15%, 18%, 20%
+            names = null                 // Optional labels
+        )
+    ))
     .build()
 ```
 
-**Note:** Referenced refunds reuse the original transaction's card data and do NOT accept `signatureConfig` (will throw `IllegalArgumentException`).
+**`TipConfig` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `useHostConfig` | Boolean | `false` | Whether to use the terminal's tip configuration (true) or the request configuration (false). When `true`, all other fields are ignored and the terminal settings are used as-is. |
+| `onScreenTip` | Boolean | `false` | Whether to enable on-screen tip prompt. `true` → show terminal tip screen; `false` → customer writes tip on receipt. |
+| `tipMode` | TipMode | `ON_SALE` | When the tip is collected. `ON_SALE` — during sale; `AFTER_SALE` — via `TipAdjust` transaction after sale. |
+| `tipWithTax` | Boolean | `false` | Whether tip percentage is calculated on amount including tax. When `true` and `feeMode=RATE`, the tip % applies to total with tax. |
+| `suggestions` | TipSuggestions? | `null` | Predefined tip options. When provided, shown as selectable buttons on screen (if `onScreenTip=true`) or printed on receipt (if `onScreenTip=false`). |
+
+**`TipSuggestions` fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `feeMode` | FeeMode | ✅ | How values are interpreted: `RATE` (percentage) or `AMOUNT` (fixed cents). |
+| `values` | List<Int> | ✅ | Suggested tip amounts/percentages, e.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts (cents). |
+| `names` | List<String>? | ❌ | Optional labels for each suggestion, e.g., `["Acceptable", "Good", "Great"]`. Position must match `values`. |
 
 ---
 
-## PaymentCallback & PaymentEvent
+## Signature Configuration (Sale/Auth only)
+
+*Since v1.0.8,* use `SignatureConfig` to control per-transaction signature capture.
+Set it on `SaleRequest`, `AuthRequest`, or `RefundRequest.nonReferencedBuilder()`.
+
+```kotlin
+// Always capture on terminal screen
+val config = SignatureConfig.onScreen()
+
+// Capture on screen only for amounts > $50.00
+val config = SignatureConfig.onScreenAbove(BigDecimal("5000"))
+
+// Always print signature line on receipt
+val config = SignatureConfig.onReceipt()
+
+// Print signature line on receipt only for amounts > $50.00
+val config = SignatureConfig.onReceiptAbove(BigDecimal("5000"))
+
+// Never collect signature
+val config = SignatureConfig.none()
+
+// Use the terminal's configured signature settings (default)
+val config = SignatureConfig.useHostConfig()
+
+// Apply to request
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_001")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo.of(15000L, "USD"))  // $150.00
+    .setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("10000")))  // Require signature only > $100
+    .build()
+```
+
+| Factory Method | Behavior |
+|---|---|
+| `useHostConfig()` | Use terminal signature settings (default) |
+| `onScreen()` | Always show e-signature page on terminal |
+| `onScreenAbove(threshold)` | Show e-signature page only for amounts > threshold |
+| `onReceipt()` | Always print signature line on receipt |
+| `onReceiptAbove(threshold)` | Print signature line on receipt only for amounts > threshold |
+| `none()` | Never collect signature |
+
+---
+
+## PaymentCallback
 
 **CRITICAL:** `onSuccess` means the SDK received a valid response from Tapro—**not** that the payment was approved.
 Always check `result.transactionStatus` (via `result.isSuccess()`, `result.isProcessing()`, `result.isFailed()`) inside `onSuccess`.
@@ -393,21 +382,13 @@ Always check `result.transactionStatus` (via `result.isSuccess()`, `result.isPro
 ```kotlin
 object : PaymentCallback {
     override fun onProgress(event: PaymentEvent) {
-        // v1.0.8: PaymentEvent is now an OPEN SET — always keep an else branch
         when (event.eventCode) {
             "WAITING_CARD"      -> showMsg("Present card")
             "WAITING_PIN"       -> showMsg("Enter PIN on terminal")
             "WAITING_SIGNATURE" -> showMsg("Sign on terminal")
             "WAITING_RESPONSE"  -> showMsg("Authorizing...")
-            "ON_SCREEN_TIP"     -> showMsg("Tip selection...")  // v1.0.8
-            "ONLINE_PROCESSING" -> showMsg("Processing...")    // v1.0.8
-            "EMV_PROCESSING"    -> showMsg("Card processing...")// v1.0.8
-            "SIGNATURE_COMPLETED" -> showMsg("Signature captured") // v1.0.8
-            "PRINT_COMPLETED"   -> showMsg("Receipt printed")  // v1.0.8
-            "PRINT_FAILED"      -> showMsg("Print failed")     // v1.0.8
             "COMPLETED"         -> hideMsg()
             "CANCEL"            -> showMsg("Cancelled")
-            else                -> {} // Future event codes — be defensive
         }
     }
 
@@ -439,36 +420,24 @@ object : PaymentCallback {
 }
 ```
 
-**New event codes in v1.0.8** (non-exhaustive list):
-- `OnlineProcessing` — authorizing with gateway
-- `EmvProcessing` — processing EMV chip card
-- `RemoveCard` — prompt to remove card
-- `CardRemoved` — card removal detected
-- `SignatureCompleted` — signature capture done
-- `PrintCompleted` — receipt printed successfully
-- `PrintFailed` — receipt print failed
-
-Treat `PaymentEvent` as an open set — **always add an `else` branch** so unrecognized future event codes don't crash your app.
-
 ---
 
 ## Error Handling
 
-### Error Categories (v1.0.8: categories now more granular)
+### Error Categories
 | Category | Cause | Action |
 |----------|-------|--------|
 | `INITIALIZATION` | SDK not initialized | Re-call `TaplinkSDK.init()` |
 | `CONNECTION` | Connection failed/lost | Check mode, re-call `TaplinkSDK.connect()` |
 | `AUTHENTICATION` | Wrong credentials | Verify `TaplinkConfig` fields |
 | `TRANSACTION` | Transaction error | Check `error.code` and `canRetryWithSameId` |
-| `DISCOVERY` | LAN discovery/scan error | Check network or camera permissions (v1.0.8) |
 
 ### Transaction Error Codes
-| Code | Issue | Retry | Details |
-|------|-------|-------|---------|
-| 301–305 | SDK/network errors | ✅ Same ID | Parameter validation or protocol errors |
-| 306 | Timeout | ⚠️ Query first | **MANDATORY:** must call `query()` before deciding |
-| 307–311 | Transaction rejected/duplicate/failed | ❌ New ID | Card declined, duplicate ID, or gateway rejection |
+| Code | Issue | Retry |
+|------|-------|-------|
+| 301–305 | SDK/network errors | ✅ Same ID |
+| 306 | Timeout | ⚠️ Query first |
+| 307–311 | Transaction rejected/duplicate/failed | ❌ New ID |
 
 ### Error 306 — Timeout Pattern (MANDATORY)
 
@@ -504,16 +473,6 @@ fun pollStatus(txnRequestId: String, attempt: Int = 1) {
 }
 ```
 
-### Discovery / QR Scan Error Codes (v1.0.8)
-| Code | Meaning | Action |
-|------|---------|--------|
-| E501 | No services found | Check network, retry discovery |
-| E502 | All services failed to connect | Network issue or terminal unreachable |
-| E503 | Discovery/scan already in progress | Wait or cancel previous operation |
-| E504 | User cancelled QR scan | Silent; let user retry |
-| E505 | Camera permission denied | Request runtime permission or skip QR |
-| E506 | No usable camera on device | Cannot use QR scan mode |
-
 ---
 
 ## Key Rules (Never Violate)
@@ -532,8 +491,7 @@ fun pollStatus(txnRequestId: String, attempt: Int = 1) {
 10. **Debit surcharge handling**: If `surchargeAmount` is sent and the card used is a Debit Card, Tapro removes the surcharge amount before completion.
 11. **Abort prerequisites**: Abort only works before gateway authorization (during card detection/PIN entry stages). For authorized transactions, use Void (same-day) or Refund (cross-day).
 12. **INIT is automatic**: Do not call INIT manually. It runs on the first transaction after connect.
-13. **Signature & Tip Configuration (v1.0.8)**: `SignatureConfig.useHostConfig` and `TipConfig.useHostConfig` control whether to use terminal settings or request settings as-is. When `false` (request-driven), unspecified fields mean "not specified by request", not "fall back to terminal".
-14. **PaymentEvent is open set (v1.0.8)**: Always add an `else` branch to `onProgress(event)` handlers since new event codes can arrive from future terminals without breaking your app.
+13. **signatureConfig**: Use factory methods (`onScreen()`, `onReceipt()`, `onScreenAbove()`, `none()`, `useHostConfig()`) to configure per-transaction signature behavior. Can be combined with Sale, Auth, and non-referenced Refund.
 
 ---
 
@@ -561,21 +519,19 @@ client.sale(request, new PaymentCallbackAdapter() {
 ## PaymentResult Key Fields
 
 ```
-result.code                    // "0" = success
-result.transactionStatus       // "SUCCESS" | "PROCESSING" | "FAILED"
-result.transactionId           // SUNBAY platform ID — use for void/refund/postAuth
-result.referenceOrderId        // Echoed from request
-result.amount                  // TransactionAmount (total, tip, tax breakdown)
-result.cardInfo                // Card type, last 4 digits, input method
-result.authCode                // Bank authorization code
-result.rrn                     // Retrieval Reference Number
-result.stan                    // System Trace Audit Number
-result.receiptJson             // Receipt data as JSON (v1.0.8: includes signature/tip areas)
-result.relatedTransactionStatus// Status of related transaction (v1.0.8)
-result.transactionBatchStatus  // Status of the transaction's batch (v1.0.8)
-result.isSuccess()             // code=="0" && transactionStatus=="SUCCESS"
-result.isProcessing()          // transactionStatus=="PROCESSING"
-result.isFailed()              // transactionStatus=="FAILED" || code!="0"
+result.code                // "0" = success
+result.transactionStatus   // "SUCCESS" | "PROCESSING" | "FAILED"
+result.transactionId       // SUNBAY platform ID — use for void/refund/postAuth
+result.referenceOrderId    // Echoed from request
+result.amount              // TransactionAmount (total, tip, tax breakdown)
+result.cardInfo            // Card type, last 4 digits, input method
+result.authCode            // Bank authorization code
+result.rrn                 // Retrieval Reference Number
+result.stan                // System Trace Audit Number
+result.receiptJson         // Receipt data as JSON
+result.isSuccess()         // code=="0" && transactionStatus=="SUCCESS"
+result.isProcessing()      // transactionStatus=="PROCESSING"
+result.isFailed()          // transactionStatus=="FAILED" || code!="0"
 ```
 
 ---
@@ -591,11 +547,3 @@ result.isFailed()              // transactionStatus=="FAILED" || code!="0"
 - [ ] `disconnect()` + `removeConnectionListener()` in `onDestroy()`
 - [ ] USB permission handling for Cable mode
 - [ ] Tested disconnect/reconnect cycle
-- [ ] Callbacks handle UI updates on main thread (via `runOnUiThread`)
-- [ ] `PaymentEvent.onProgress()` handler has `else` branch for unknown event codes (v1.0.8)
-- [ ] Signature routing (`SignatureConfig`) validated if using per-transaction signature control (v1.0.8)
-- [ ] Tip configuration (`TipConfig`) source (`useHostConfig`) matches business logic (v1.0.8)
-- [ ] QR scanner dependencies (CameraX + ZXing) added if using `scanLanQrCode` / `scanAndConnect` (v1.0.8)
-- [ ] mDNS discovery tested on target devices (Android NSD works, no extra dependency) (v1.0.8)
-- [ ] Credentials injected via `BuildConfig` or environment, never hardcoded
-- [ ] Referenced refunds do NOT include `SignatureConfig` (throws if present)

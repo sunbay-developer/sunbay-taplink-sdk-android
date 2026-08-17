@@ -194,6 +194,8 @@ class PaymentManager(
             // Validate preconditions
             if (!validateConnection(callback)) return
 
+            if (!validateSignatureConfig(request, callback)) return
+
             // Validate amount (must be integer, no decimal)
             if (!validateAmount(request, callback)) return
 
@@ -489,6 +491,40 @@ class PaymentManager(
         }
 
         return true
+    }
+
+    private fun validateSignatureConfig(request: PaymentRequest, callback: PaymentCallback): Boolean {
+        val signatureConfig = request.signatureConfig ?: return true
+        if (!isSignatureConfigSupported(request)) {
+            callback.onFailure(
+                errorCode = InnerErrorCode.E302,
+                errorMessage = "${InnerErrorCode.E302.description}(signatureConfig is only supported for SALE, AUTH and non-referenced REFUND)",
+                transactionRequestId = request.transactionRequestId
+            )
+            return false
+        }
+        val validationResult = TransactionRequestValidator.validateSignatureConfig(signatureConfig)
+        if (!validationResult.isValid) {
+            callback.onFailure(
+                errorCode = InnerErrorCode.E302,
+                errorMessage = "${InnerErrorCode.E302.description}(${validationResult.getErrorMessage()})",
+                transactionRequestId = request.transactionRequestId
+            )
+            return false
+        }
+        return true
+    }
+
+    /**
+     * A signature can only be captured when the cardholder is present with a card, i.e. for SALE,
+     * AUTH and non-referenced REFUND. A referenced refund reuses the original transaction's card
+     * data, so a signature configuration is meaningless there.
+     */
+    private fun isSignatureConfigSupported(request: PaymentRequest): Boolean = when (request.action) {
+        TransactionAction.SALE.value, TransactionAction.AUTH.value -> true
+        TransactionAction.REFUND.value ->
+            request.originalTransactionId == null && request.originalTransactionRequestId == null
+        else -> false
     }
 
     /**

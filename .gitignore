@@ -18,3 +18,10 @@ local.properties
 /.codegen
 /.kotlin
 /docs
+/.kiro/*
+/AGENT.md
+/AGENTS.md
+/lib_taplink_sdk/src/test/*
+/lib_taplink_sdk/sdk_publish.gradle
+/lib_taplink_sdk/secring.gpg
+/lib_taplink_sdk/gradle.properties

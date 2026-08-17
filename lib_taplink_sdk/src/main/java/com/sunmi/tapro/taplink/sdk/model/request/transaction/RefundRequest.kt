@@ -4,6 +4,7 @@ import com.sunmi.tapro.taplink.sdk.enums.CardNetworkType
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
+import com.sunmi.tapro.taplink.sdk.model.common.SignatureConfig
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
@@ -24,6 +25,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param notifyUrl Notification URL (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
+ * @param signatureConfig Per-transaction signature configuration (optional, non-referenced refund only)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -44,7 +46,15 @@ data class RefundRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val printReceipt: PrintReceipt? = PrintReceipt.AUTO
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
+    /**
+     * Per-transaction signature configuration.
+     *
+     * Only meaningful for a **non-referenced** refund, where the cardholder presents a card and
+     * can therefore be asked for a signature. A referenced refund reuses the original
+     * transaction's card data and never collects a signature.
+     */
+    val signatureConfig: SignatureConfig? = null
 ) : BaseTransactionRequest() {
 
     init {
@@ -53,6 +63,9 @@ data class RefundRequest(
         }
         require(!(isReferencedRefund() && isNonReferencedRefund())) {
             "Refund cannot be both referenced and non-referenced"
+        }
+        require(signatureConfig == null || isNonReferencedRefund()) {
+            "signatureConfig is only supported for non-referenced refund"
         }
     }
 
@@ -82,7 +95,15 @@ data class RefundRequest(
             TransactionRequestValidator.validateReferenceOrderId(referenceOrderId)
         }
 
-        return TransactionRequestValidator.combineResults(baseValidation, modeValidation)
+        val signatureValidation = signatureConfig
+            ?.let { TransactionRequestValidator.validateSignatureConfig(it) }
+            ?: ValidationResult.success()
+
+        return TransactionRequestValidator.combineResults(
+            baseValidation,
+            modeValidation,
+            signatureValidation
+        )
     }
 
     companion object {
@@ -205,6 +226,7 @@ data class RefundRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
+        private var signatureConfig: SignatureConfig? = null
 
         fun setTransactionRequestId(transactionRequestId: String): NonReferencedBuilder {
             this.transactionRequestId = transactionRequestId
@@ -256,6 +278,17 @@ data class RefundRequest(
             return this
         }
 
+        /**
+         * Set the signature configuration for this non-referenced refund.
+         *
+         * Use [SignatureConfig.useHostConfig] to follow the terminal settings, or one of the
+         * request-side factories such as [SignatureConfig.onScreen] to override them.
+         */
+        fun setSignatureConfig(signatureConfig: SignatureConfig?): NonReferencedBuilder {
+            this.signatureConfig = signatureConfig
+            return this
+        }
+
 
         fun build(): RefundRequest {
             val request = RefundRequest(
@@ -268,7 +301,8 @@ data class RefundRequest(
                 attach = attach,
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
-                printReceipt = printReceipt
+                printReceipt = printReceipt,
+                signatureConfig = signatureConfig
             )
 
             val validationResult = request.validate()

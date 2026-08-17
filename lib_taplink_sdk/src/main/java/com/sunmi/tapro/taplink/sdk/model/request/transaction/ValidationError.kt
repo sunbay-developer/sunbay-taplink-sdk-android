@@ -30,6 +30,14 @@ sealed class ValidationError(val message: String) {
     object TipConfigEmptySuggestionValues : ValidationError("tipConfig.suggestions.values must not be empty")
     object TipConfigNegativeSuggestionValues : ValidationError("tipConfig.suggestions.values must contain only non-negative values")
 
+    // Signature configuration validation errors
+    object MissingSignatureEntryLocation :
+        ValidationError("signatureConfig.entryLocation is required when useHostConfig is false")
+    object InvalidSignatureThreshold : ValidationError("signatureConfig.threshold must be non-negative")
+    object NonIntegerSignatureThreshold : ValidationError("signatureConfig.threshold must be an integer")
+    object SignatureThresholdWithNone :
+        ValidationError("signatureConfig.threshold must be null when entryLocation is NONE")
+
     // Refund mode validation errors
     object InvalidRefundMode : ValidationError("Refund must be either referenced or non-referenced, not both")
     

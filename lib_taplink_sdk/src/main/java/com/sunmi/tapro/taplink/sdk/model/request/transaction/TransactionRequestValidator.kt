@@ -1,6 +1,8 @@
 package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
+import com.sunmi.tapro.taplink.sdk.enums.SignatureEntryLocation
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
+import com.sunmi.tapro.taplink.sdk.model.common.SignatureConfig
 import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 import java.math.BigDecimal
 
@@ -116,9 +118,10 @@ object TransactionRequestValidator {
      * Validate tip configuration and tip amount.
      * - tipAmount must be non-negative when present
      * - tipConfig is only valid when tipAmount is null
+     * - request fields are only validated when tipConfig.useHostConfig is false
      *
      * @param tipAmount Tip amount from AmountInfo
-        * @param tipConfig Tip configuration from the transaction request
+     * @param tipConfig Tip configuration from the transaction request
      * @return ValidationResult validation result
      */
     fun validateTipConfig(tipAmount: BigDecimal?, tipConfig: TipConfig?): ValidationResult {
@@ -129,9 +132,14 @@ object TransactionRequestValidator {
         if (tipConfig == null) {
             return ValidationResult.success()
         }
+
         // tipConfig and tipAmount are mutually exclusive
         if (tipAmount != null) {
             return ValidationResult.failure(ValidationError.TipConfigConflict)
+        }
+        // The host configuration is used as a whole; other request fields are ignored.
+        if (tipConfig.useHostConfig) {
+            return ValidationResult.success()
         }
         val suggestions = tipConfig.suggestions
         if (suggestions != null) {
@@ -141,6 +149,35 @@ object TransactionRequestValidator {
             if (suggestions.values.any { it < 0 }) {
                 return ValidationResult.failure(ValidationError.TipConfigNegativeSuggestionValues)
             }
+        }
+        return ValidationResult.success()
+    }
+
+    /**
+     * Validate per-transaction signature configuration.
+     *
+     * Request fields are only validated when the request configuration is the effective source
+     * (see [SignatureConfig.resolvedUseHostConfig]); `entryLocation` is then mandatory, because a
+     * missing field must not be interpreted as "no signature".
+     */
+    fun validateSignatureConfig(signatureConfig: SignatureConfig?): ValidationResult {
+        if (signatureConfig == null) {
+            return ValidationResult.success()
+        }
+        if (signatureConfig.resolvedUseHostConfig) {
+            return ValidationResult.success()
+        }
+        val entryLocation = signatureConfig.entryLocation
+            ?: return ValidationResult.failure(ValidationError.MissingSignatureEntryLocation)
+        val threshold = signatureConfig.threshold
+        if (entryLocation == SignatureEntryLocation.NONE && threshold != null) {
+            return ValidationResult.failure(ValidationError.SignatureThresholdWithNone)
+        }
+        if (threshold != null && threshold < BigDecimal.ZERO) {
+            return ValidationResult.failure(ValidationError.InvalidSignatureThreshold)
+        }
+        if (threshold != null && threshold.stripTrailingZeros().scale() > 0) {
+            return ValidationResult.failure(ValidationError.NonIntegerSignatureThreshold)
         }
         return ValidationResult.success()
     }

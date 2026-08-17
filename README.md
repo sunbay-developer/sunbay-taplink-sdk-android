@@ -125,7 +125,7 @@ private fun processPayment() {
         .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setAmount(amount)
         .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
-        .setSignatureEntryLocation(Signature.ON_SCREEN)
+        .setSignatureConfig(SignatureConfig.onScreen())
         .setDescription("Product Purchase")
         .build()
     
@@ -275,11 +275,18 @@ if (error.code == "306") client.query(QueryRequest().setTransactionRequestId(id)
 ```
 
 ## TipConfig
+
 ```kotlin
 TipConfig(
-    onScreenTip = true,
-    tipMode = TipMode.ON_SALE,        // or AFTER_SALE
-    suggestions = TipSuggestions(FeeMode.RATE, listOf(15, 18, 20))  // 15%, 18%, 20%
+    useHostConfig = false,                    // Use request config (default)
+    onScreenTip = true,                       // Show tip prompt on terminal
+    tipMode = TipMode.ON_SALE,                // or AFTER_SALE
+    tipWithTax = false,                       // Include tax in tip base
+    suggestions = TipSuggestions(
+        feeMode = FeeMode.RATE,               // or AMOUNT
+        values = listOf(15, 18, 20),          // 15%, 18%, 20%
+        names = null                          // Optional labels
+    )
 )
 // Do NOT set AmountInfo.tipAmount when using top-level tipConfig
 ```
@@ -712,27 +719,56 @@ client.sale(request, paymentCallback)
 
 ### Signature Configuration (Sale/Auth only)
 
-Use `signatureEntryLocation` to choose per-transaction signature routing. It controls **two** independent behaviors on Tapro: whether the on-screen e-signature page is shown, and whether a signature line is printed on the receipt (also reflected as `printSignatureLine` in `receiptJson`).
+*Since v1.0.8,* use `SignatureConfig` to choose per-transaction signature routing. It controls **two** independent behaviors on Tapro: whether the on-screen e-signature page is shown, and whether a signature line is printed on the receipt (also reflected as `printSignatureLine` in `receiptJson`).
 
-- **`Signature.ON_SCREEN`** — force the on-screen e-signature flow.
+#### Quick start with factory methods:
+
+```kotlin
+// Always capture on terminal screen
+val config = SignatureConfig.onScreen()
+
+// Capture on screen only for amounts > $50.00
+val config = SignatureConfig.onScreenAbove(BigDecimal("5000"))
+
+// Always print signature line on receipt
+val config = SignatureConfig.onReceipt()
+
+// Print signature line on receipt only for amounts > $50.00
+val config = SignatureConfig.onReceiptAbove(BigDecimal("5000"))
+
+// Never collect signature
+val config = SignatureConfig.none()
+
+// Use the terminal's configured signature settings (default)
+val config = SignatureConfig.useHostConfig()
+```
+
+#### SignatureConfig behavior:
+
+- **`SignatureEntryLocation.ON_SCREEN`** — force the on-screen e-signature flow.
   - E-signature page: **always shown**.
   - Receipt signature line: printed **only when a signature was actually captured**.
-- **`Signature.ON_RECEIPT`** — skip the on-screen e-signature flow.
+- **`SignatureEntryLocation.ON_RECEIPT`** — skip the on-screen e-signature flow.
   - E-signature page: **never shown**.
   - Receipt signature line: **always printed** for handwriting.
-- **Not set (`null`)** — fall back to the terminal's signature settings:
+- **`SignatureEntryLocation.NONE`** — never collect a signature.
+  - E-signature page: **never shown**.
+  - Receipt signature line: **never printed**.
+- **Not set / `useHostConfig()` (default)** — fall back to the terminal's signature settings:
   - Only applies when the transaction is approved and is **not** an EBT transaction.
   - If the terminal capture method is `ON_SCREEN`: show the e-signature page when the terminal is set to *always require signature*, otherwise only when the CVM result is `SIGNATURE`.
   - If the terminal capture method is `ON_RECEIPT`: print the receipt signature line when *always require signature* is set, otherwise only when the CVM result is `SIGNATURE`.
 
-> **Note:** `signatureEntryLocation` **overrides** the terminal's signature settings for that single transaction. `ON_SCREEN` / `ON_RECEIPT` take effect regardless of the CVM result; the CVM-result fallback only applies when the field is left unset. EBT transactions never collect a signature.
+> **Note:** When `signatureConfig` is set (with a non-`null` `entryLocation`), it **overrides** the terminal's signature settings for that single transaction. The CVM-result fallback only applies when `signatureConfig` is not set or `useHostConfig()` is used. EBT transactions never collect a signature.
+
+#### Usage examples:
 
 ```kotlin
 val sale = SaleRequest.builder()
     .setReferenceOrderId("ORDER_1001")
     .setTransactionRequestId("TXN_1001")
     .setAmount(AmountInfo.of(1000L, "USD"))
-    .setSignatureEntryLocation(Signature.ON_RECEIPT)
+    .setSignatureConfig(SignatureConfig.onReceipt())
     .build()
 
 val auth = AuthRequest.builder()
@@ -743,7 +779,15 @@ val auth = AuthRequest.builder()
             .setAuthAmount(BigDecimal("5000"))
             .setPricingCurrency("USD")
     )
-    .setSignatureEntryLocation(Signature.ON_SCREEN)
+    .setSignatureConfig(SignatureConfig.onScreen())
+    .build()
+
+// Require signature only for transactions > $100
+val premiumSale = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_2001")
+    .setTransactionRequestId("TXN_2001")
+    .setAmount(AmountInfo.of(15000L, "USD"))
+    .setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("10000")))
     .build()
 ```
 
@@ -778,16 +822,19 @@ val request = SaleRequest(
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `onScreenTip` | `Boolean` | ❌ | `false` | Whether to show a tip input screen on the terminal. Set to `true` to prompt the customer for a tip. |
-| `tipMode` | `TipMode` | ❌ | `ON_SALE` | When the tip is collected. `ON_SALE` — collected during the sale; `AFTER_SALE` — collected after the sale completes. |
-| `suggestions` | `TipSuggestions?` | ❌ | `null` | Predefined tip options displayed on the terminal for the customer to choose from. Omit to allow free-form tip entry only. |
+| `useHostConfig` | `Boolean` | ❌ | `false` | Whether to use the terminal's tip configuration (true) or the request configuration (false). When `true`, all other TipConfig fields are ignored and the terminal settings are used as-is. |
+| `onScreenTip` | `Boolean` | ❌ | `false` | Whether to enable on-screen tip prompt. `true` → show terminal tip screen; `false` → customer writes tip on receipt. |
+| `tipMode` | `TipMode` | ❌ | `ON_SALE` | When the tip is collected. `ON_SALE` — collected during the sale; `AFTER_SALE` — collected after the sale completes via `TipAdjust` transaction. |
+| `tipWithTax` | `Boolean` | ❌ | `false` | Whether tip percentage is calculated on amount including tax. Only applies when `feeMode=RATE`. |
+| `suggestions` | `TipSuggestions?` | ❌ | `null` | Predefined tip options displayed to the customer. When provided and `onScreenTip=true`, shown as selectable buttons on screen; when `onScreenTip=false`, printed on receipt. |
 
 **`TipSuggestions`**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `feeMode` | `FeeMode` | ✅ | How the `values` are interpreted. `RATE` — percentage (e.g., `15` = 15%); `AMOUNT` — fixed amount in smallest currency unit (e.g., `100` = $1.00). |
-| `values` | `List<Int>` | ✅ | List of suggested tip options shown on screen. Typically 3–4 values, e.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts. |
+| `values` | `List<Int>` | ✅ | List of suggested tip options. E.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts (cents). |
+| `names` | `List<String>?` | ❌ | Optional labels for each suggestion value, e.g., `["Acceptable", "Good", "Great"]`. Position must correspond to entries in `values`. |
 
 **`TipMode` Enum**
 
@@ -937,6 +984,7 @@ End-of-day settlement to close the current batch.
 val request = BatchCloseRequest.builder()
     .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setDescription("Batch Close")
+    .setPrintReceipt(PrintReceipt.BOTH)
     .build()
 
 client.batchClose(request, object : PaymentCallback {
@@ -955,6 +1003,18 @@ client.batchClose(request, object : PaymentCallback {
     }
 })
 ```
+
+`BatchCloseRequest.printReceipt` is optional and defaults to `AUTO`.
+
+| Value | Batch Close behavior |
+|---|---|
+| `AUTO` | Use the current Tapro batch report setting |
+| `BOTH` | Print both total and detail reports |
+| `TOTAL` | Print the total report only |
+| `DETAIL` | Print the transaction detail report only |
+| `NONE` | Do not print a batch report |
+
+`MERCHANT` and `CUSTOMER` apply to transaction receipts and are rejected for Batch Close.
 
 ### Abort Transaction
 
