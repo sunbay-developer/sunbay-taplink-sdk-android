@@ -31,7 +31,6 @@ taplink-sdk-android/
 // Step 1: Initialize in Application.onCreate()
 TaplinkSDK.init(context, TaplinkConfig(
     appId = BuildConfig.TAPLINK_APP_ID,
-    merchantId = BuildConfig.TAPLINK_MERCHANT_ID,
     secretKey = BuildConfig.TAPLINK_SECRET_KEY
 ))
 
@@ -406,6 +405,20 @@ val amount = AmountInfo(
 
 ---
 
+## Release Sync Rule (MANDATORY)
+
+Any release that changes public API/behavior is **incomplete** until the public docs site repo `sunbay-open-docs` is updated in the same release flow:
+
+**AAR packaging and Maven publishing are performed manually by the maintainer.** AI agents must NOT run publish Gradle tasks — stop at that step, ask the maintainer to publish, and wait for the confirmed version number before syncing docs or bumping downstream dependencies.
+
+- Update **both** `src/content/en/sdk/client-side/android.mdx` and `src/content/zh/sdk/client-side/android.mdx`: dependency version, "Version History" entry (`### vX.Y.Z (Current)`, remove old `(Current)`), migration guide for breaking changes.
+- Sync new error codes to `resources/reference/error-codes.mdx` (en + zh), new dependencies to Technical Stack.
+- Add a docs-update entry to `resources/changelog.mdx` (en + zh).
+
+See `AGENT.md` §8.1 and `sunbay-open-docs/AGENT.md` §3 for the full checklist.
+
+---
+
 ## SDK Version
 
-Current: **1.0.7.19** | Min SDK: **Android API 25 (7.1)** | Language: **Kotlin 1.7.10**
+Version is defined solely in the `SdkVersion` object in `lib_taplink_sdk/build.gradle.kts` (do not hardcode elsewhere). Check `RELEASE-NOTES.md` for the latest released version. Min SDK: **Android API 25 (7.1)**.

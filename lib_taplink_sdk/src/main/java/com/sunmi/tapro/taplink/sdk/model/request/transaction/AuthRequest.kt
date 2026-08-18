@@ -2,6 +2,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
 
 import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
+import com.sunmi.tapro.taplink.sdk.model.common.SignatureConfig
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 
 /**
@@ -18,6 +19,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param notifyUrl Notification URL (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
+ * @param signatureConfig Per-transaction signature configuration (optional)
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -32,14 +34,16 @@ data class AuthRequest(
     val notifyUrl: String? = null,
     val requestTimeout: Long? = null,
     val staffInfo: StaffInfo? = null,
-    val printReceipt: PrintReceipt? = PrintReceipt.AUTO
+    val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
+    val signatureConfig: SignatureConfig? = null
 ) : BaseTransactionRequest() {
 
     override fun validate(): ValidationResult {
         return TransactionRequestValidator.combineResults(
             TransactionRequestValidator.validateReferenceOrderId(referenceOrderId),
             TransactionRequestValidator.validateTransactionRequestId(transactionRequestId),
-            validateAuthAmount(amount)
+            validateAuthAmount(amount),
+            TransactionRequestValidator.validateSignatureConfig(signatureConfig),
         )
     }
 
@@ -72,6 +76,7 @@ data class AuthRequest(
         private var requestTimeout: Long? = null
         private var staffInfo: StaffInfo? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
+        private var signatureConfig: SignatureConfig? = null
 
         /**
          * Set reference order ID
@@ -154,6 +159,14 @@ data class AuthRequest(
         }
 
         /**
+         * Set per-transaction signature configuration.
+         */
+        fun setSignatureConfig(signatureConfig: SignatureConfig): Builder {
+            this.signatureConfig = signatureConfig
+            return this
+        }
+
+        /**
          * Build AuthRequest instance
          * 
          * @throws TransactionRequestValidationException If validation fails
@@ -169,7 +182,8 @@ data class AuthRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 staffInfo = staffInfo,
-                printReceipt = printReceipt
+                printReceipt = printReceipt,
+                signatureConfig = signatureConfig
             )
 
             val validationResult = request.validate()

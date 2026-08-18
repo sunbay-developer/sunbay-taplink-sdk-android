@@ -34,6 +34,7 @@ object PaymentRequestAdapter {
             requestTimeout = request.requestTimeout,
             tipConfig = request.tipConfig,
             printReceipt = request.printReceipt,
+            signatureConfig = request.signatureConfig,
         )
     }
 
@@ -57,7 +58,8 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            printReceipt = request.printReceipt,
+            signatureConfig = request.signatureConfig,
         )
     }
 
@@ -81,7 +83,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            printReceipt = request.printReceipt,
         )
     }
 
@@ -102,7 +104,8 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            printReceipt = request.printReceipt,
+            signatureConfig = request.signatureConfig,
         )
     }
 
@@ -161,7 +164,7 @@ object PaymentRequestAdapter {
             attach = request.attach,
             notifyUrl = request.notifyUrl,
             requestTimeout = request.requestTimeout,
-            printReceipt = request.printReceipt
+            printReceipt = request.printReceipt,
         )
     }
 
@@ -201,7 +204,9 @@ object PaymentRequestAdapter {
             action = TransactionAction.BATCH_CLOSE.value,
             transactionRequestId = request.transactionRequestId,
             description = request.description ?: "Batch Close",
-            requestTimeout = request.requestTimeout
+            requestTimeout = request.requestTimeout,
+            // MERCHANT/CUSTOMER are receipt copies, not batch report types — normalise to AUTO.
+            printReceipt = request.resolvedPrintReceipt
         )
     }
 }

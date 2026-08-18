@@ -27,6 +27,14 @@ object ProtocolConstants {
     const val LAN_PROTOCOL_PREFIX = "wss://"
 
     /**
+     * LAN QR code protocol prefix (non-TLS WebSocket)
+     * Used by Tapro QR code for ECR scanning.
+     * Format: lan://host/port
+     * Example: lan://192.168.1.100/8443
+     */
+    const val LAN_QR_PROTOCOL_PREFIX = "lan://"
+
+    /**
      * LAN protocol prefix (WebSocket)
      * Format: ws://host:port
      * Example: ws://192.168.1.100:8080
@@ -197,6 +205,7 @@ object ProtocolConstants {
     fun detectProtocolType(protocol: String): ProtocolType {
         return when {
             protocol.startsWith(LOCAL_PROTOCOL_PREFIX) -> ProtocolType.LOCAL
+            protocol.startsWith(LAN_QR_PROTOCOL_PREFIX) -> ProtocolType.LAN_WS
             protocol.startsWith(LAN_PROTOCOL_PREFIX) -> ProtocolType.LAN_WSS
             protocol.startsWith(LAN_WS_PROTOCOL_PREFIX) -> ProtocolType.LAN_WS
             protocol.startsWith(USB_PROTOCOL_PREFIX) -> ProtocolType.USB

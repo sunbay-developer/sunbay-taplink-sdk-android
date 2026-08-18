@@ -9,6 +9,7 @@
 - [Response Models](#response-models)
 - [Error Models](#error-models)
 - [Data Models](#data-models)
+- [LAN Discovery & Scan](#lan-discovery--scan)
 - [Enums](#enums)
 
 ---
@@ -66,6 +67,37 @@ client.sale(request, object : PaymentCallbackAdapter() {
 
 ---
 
+### DiscoveryListener
+
+*Since v1.0.8.* Result callback for LAN address acquisition APIs — `TaplinkSDK.discoverLanServices(...)` (mDNS) and `TaplinkSDK.scanLanQrCode(...)` (QR scan). These APIs **return** the resolved address; they do not open a connection.
+
+```kotlin
+interface DiscoveryListener {
+    fun onDiscovered(services: List<DiscoveredService>)
+    fun onError(error: ConnectionError)
+}
+```
+
+| Callback | When it fires | Meaning |
+|----------|---------------|---------|
+| `onDiscovered` | Discovery/scan finished successfully | `discoverLanServices`: all resolved services (may be empty). `scanLanQrCode`: a single-element list with the scanned service. |
+| `onError` | Discovery/scan could not complete | SDK not initialized, operation already in progress, no camera, permission denied, or user cancel. See [Discovery / Scan error codes](#discovery--scan-error-codes). |
+
+```kotlin
+TaplinkSDK.discoverLanServices(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val target = services.firstOrNull() ?: return
+        // auto-fill address fields, then connect via the standard LAN flow
+        connectLan(target.host, target.port)
+    }
+    override fun onError(error: ConnectionError) {
+        showError(error.message)
+    }
+})
+```
+
+---
+
 ## Request Models
 
 ### AmountInfo
@@ -88,6 +120,47 @@ val amount = AmountInfo.of(1000L, "USD") // $10.00
 
 ---
 
+### TipConfig
+
+Per-transaction tip configuration for interactive terminal tip collection. Controls where and how tip is captured, and the suggested tip options shown to the customer.
+
+| Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `useHostConfig` | Boolean | `false` | Whether to use the terminal's tip configuration (true) or the request configuration (false). When `true`, all other fields are ignored and the terminal settings are used as-is. |
+| `onScreenTip` | Boolean | `false` | Whether to enable on-screen tip prompt. `true` → show terminal tip screen; `false` → customer writes tip on receipt. |
+| `tipMode` | TipMode | `ON_SALE` | When the tip is collected. `ON_SALE` — during sale; `AFTER_SALE` — via `TipAdjust` transaction after sale. |
+| `tipWithTax` | Boolean | `false` | Whether tip percentage is calculated on amount including tax. Only applies when `feeMode=RATE`. |
+| `suggestions` | TipSuggestions? | `null` | Predefined tip options shown to the customer. When `onScreenTip=true`, shown on screen; when `onScreenTip=false`, printed on receipt. |
+
+**Example:**
+```kotlin
+val tipConfig = TipConfig(
+    useHostConfig = false,
+    onScreenTip = true,
+    tipMode = TipMode.ON_SALE,
+    tipWithTax = false,
+    suggestions = TipSuggestions(
+        feeMode = FeeMode.RATE,
+        values = listOf(15, 18, 20),
+        names = listOf("Acceptable", "Good", "Great")
+    )
+)
+```
+
+---
+
+### TipSuggestions
+
+Tip suggestion configuration for predefined tip options shown to the customer.
+
+| Field | Type | Required | Description |
+|------|------|----------|-------------|
+| `feeMode` | FeeMode | ✅ | How `values` are interpreted. `RATE` — percentage (e.g., `15` = 15%); `AMOUNT` — fixed amount in smallest currency unit (e.g., `100` = $1.00). |
+| `values` | List<Int> | ✅ | Suggested tip amounts/percentages, e.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts (cents). |
+| `names` | List<String>? | ❌ | Optional descriptive labels for each suggestion, e.g., `["Acceptable", "Good", "Great"]`. Length should match `values` length. |
+
+---
+
 ### SaleRequest
 
 | Field | Type | Required | Description |
@@ -104,6 +177,7 @@ val amount = AmountInfo.of(1000L, "USD") // $10.00
 | `staffInfo` | StaffInfo | No | Staff information |
 | `tipConfig` | TipConfig | No | Tip configuration, mutually exclusive with `amount.tipAmount` |
 | `printReceipt` | PrintReceipt | No | Receipt print mode, defaults to AUTO |
+| `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (optional) |
 
 ```kotlin
 val request = SaleRequest.builder()
@@ -130,6 +204,7 @@ val request = SaleRequest.builder()
 | `requestTimeout` | Long | No | Timeout in seconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
+| `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (optional) |
 
 ---
 
@@ -213,6 +288,7 @@ Supports two refund modes:
 | `requestTimeout` | Long | No | Timeout in seconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
+| `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (non-referenced refund only) |
 
 ```kotlin
 val request = RefundRequest.referencedBuilder()
@@ -276,6 +352,52 @@ val queryByRequestId = QueryRequest.byTransactionRequestId("req_abcdef")
 
 ---
 
+### SignatureConfig
+
+Per-transaction signature configuration for `SaleRequest` and `AuthRequest`. Controls where (or whether) a signature is captured for the transaction, and can override terminal signature settings.
+
+| Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `useHostConfig` | Boolean | `true` | Whether to use the terminal's signature configuration. When `true`, `entryLocation` and `threshold` are ignored. |
+| `entryLocation` | SignatureEntryLocation? | `null` | Where to capture the signature: `ON_SCREEN`, `ON_RECEIPT`, or `NONE`. Required when using request configuration. |
+| `threshold` | BigDecimal? | `null` | Minimum amount (in smallest currency unit) above which a signature is required. Comparison is strictly greater than; `null` means signature required for all amounts. Invalid when `entryLocation` is `NONE`. |
+
+**Static factory methods for common scenarios:**
+
+```kotlin
+// Use terminal settings (default)
+SignatureConfig.useHostConfig()
+
+// Always capture on terminal screen
+SignatureConfig.onScreen()
+
+// Capture on screen only for amounts > $50.00
+SignatureConfig.onScreenAbove(BigDecimal("5000"))
+
+// Always print signature line on receipt
+SignatureConfig.onReceipt()
+
+// Print signature line on receipt only for amounts > $50.00
+SignatureConfig.onReceiptAbove(BigDecimal("5000"))
+
+// Never collect signature
+SignatureConfig.none()
+```
+
+**Example usage:**
+
+```kotlin
+// Require on-screen signature for amounts > $100.00
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER-001")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo.of(15000L, "USD"))
+    .setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("10000")))
+    .build()
+```
+
+---
+
 ### BatchCloseRequest
 
 | Field | Type | Required | Description |
@@ -283,6 +405,17 @@ val queryByRequestId = QueryRequest.byTransactionRequestId("req_abcdef")
 | `transactionRequestId` | String | Yes | Request ID |
 | `description` | String | No | Batch close description, max 128 characters |
 | `requestTimeout` | Long | No | Timeout in seconds |
+| `printReceipt` | PrintReceipt | No | Batch report print mode. Defaults to `AUTO`; supports `AUTO`, `BOTH`, `TOTAL`, `DETAIL`, and `NONE` |
+
+For Batch Close, `printReceipt` controls batch reports rather than merchant/customer transaction copies:
+
+- `AUTO`: Use the current Tapro batch report setting.
+- `BOTH`: Print both the batch total and transaction detail reports.
+- `TOTAL`: Print only the batch total report.
+- `DETAIL`: Print only the batch transaction detail report.
+- `NONE`: Do not print a batch report.
+
+`MERCHANT` and `CUSTOMER` are transaction-receipt modes and are not valid for `BatchCloseRequest`.
 
 ---
 
@@ -313,6 +446,8 @@ All transaction operations return this object through `onSuccess`.
 | Field | Type | Description |
 |------|------|-------------|
 | `transactionStatus` | String? | `SUCCESS`, `PROCESSING`, or `FAILED` |
+| `transactionBatchStatus` | String? | Transaction batch status: `N` (No need batch), `U` (Unfinished batch), `C` (Completed batch). Only returned in query responses. |
+| `relatedTransactionStatus` | String? | Related transaction status indicating follow-up actions on the original transaction: `VOIDED`, `INCREMENTAL`, `REFUNDED`, `CAPTURE`, `PART_REFUNDED`. Only returned in query responses. |
 | `transactionType` | String? | Transaction type, such as SALE, AUTH, REFUND, VOID, etc. |
 
 #### Amount and time
@@ -526,6 +661,52 @@ Present only for CONTACT and CONTACTLESS entry modes. **Required by Visa/Masterc
 
 ---
 
+## LAN Discovery & Scan
+
+### DiscoveredService
+
+*Since v1.0.8.* A LAN Taplink service resolved via mDNS or read from a `lan://host/port` QR code. Returned through [DiscoveryListener](#discoverylistener).
+
+| Field | Type | Description |
+|------|------|-------------|
+| `name` | String | mDNS service instance name (for QR scan results this is a placeholder such as `"QR"`) |
+| `host` | String | Resolved host / IP address (e.g. `"192.168.1.100"`) |
+| `port` | Int | Service port (e.g. `8443`) |
+
+```kotlin
+data class DiscoveredService(
+    val name: String,
+    val host: String,
+    val port: Int
+)
+```
+
+### ConnectionError
+
+Delivered to `DiscoveryListener.onError` (LAN discovery/scan) and `ConnectionListener.onError` (connection lifecycle).
+
+| Field | Type | Description |
+|------|------|-------------|
+| `code` | String | Error code (see below) |
+| `message` | String | Human-readable error message |
+| `deviceId` | String? | Related device ID, if known |
+| `suggestion` | String? | Suggested resolution, if available |
+
+### Discovery / Scan error codes
+
+| Code | Meaning | Applies to |
+|------|---------|------------|
+| `E501` | No services found / discovery failed | `discoverLanServices`, `autoDiscoverAndConnect` |
+| `E502` | All discovered services failed to connect | `autoDiscoverAndConnect` |
+| `E503` | Another discovery/scan operation is already in progress | Discovery & Scan |
+| `E504` | Scan cancelled by the user | `scanLanQrCode`, `scanAndConnect` |
+| `E505` | Camera permission denied | `scanLanQrCode`, `scanAndConnect` |
+| `E506` | No usable camera available on this device | `scanLanQrCode`, `scanAndConnect` |
+
+> **Tip:** Treat `E504` (user cancel) as a silent no-op; surface the real message for `E505` / `E506` instead of a generic "cancelled or invalid" message.
+
+---
+
 ## Error Models
 
 ### PaymentError
@@ -592,6 +773,68 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `MERCHANT` | Print merchant copy only |
 | `CUSTOMER` | Print customer copy only |
 | `BOTH` | Print both copies |
+| `TOTAL` | Print the batch total report only (`BatchCloseRequest` only) |
+| `DETAIL` | Print the batch transaction detail report only (`BatchCloseRequest` only) |
+
+### Signature Configuration
+
+*Since v1.0.8.* Per-transaction signature configuration is managed through the `SignatureConfig` object, which offers flexible control over signature capture behavior and can be applied to `SaleRequest` and `AuthRequest` via the `signatureConfig` field.
+
+#### SignatureConfig
+
+| Field | Type | Description |
+|------|------|-------------|
+| `useHostConfig` | Boolean | Whether to use the host terminal's signature configuration (default: `true`). When `true`, the terminal's configured signature settings are used and `entryLocation`/`threshold` are ignored. |
+| `entryLocation` | SignatureEntryLocation? | Where the signature is captured (required when request configuration is used). Valid values: `ON_SCREEN`, `ON_RECEIPT`, `NONE`. |
+| `threshold` | BigDecimal? | Amount threshold above which a signature is captured, in the smallest currency unit (cents). The comparison is strictly greater than: with `threshold = 5000` ($50.00), a $50.00 transaction captures **no** signature, while $50.01 does. Must be `null` when `entryLocation` is `NONE`. |
+| `resolvedUseHostConfig` | Boolean (read-only) | The configuration source actually applied to the transaction. |
+
+**Factory methods:**
+- `SignatureConfig.useHostConfig()`: Uses host terminal settings (default behavior)
+- `SignatureConfig.onScreen()`: Always capture on terminal screen
+- `SignatureConfig.onScreenAbove(threshold)`: Capture on screen only above threshold
+- `SignatureConfig.onReceipt()`: Always print signature line on receipt
+- `SignatureConfig.onReceiptAbove(threshold)`: Print signature line on receipt only above threshold
+- `SignatureConfig.none()`: Never collect signature
+
+**Example:**
+```kotlin
+// Always require on-screen signature
+val config = SignatureConfig.onScreen()
+
+// Require signature only for amounts > $50.00
+val config = SignatureConfig.onScreenAbove(BigDecimal("5000"))
+
+// Never collect signature
+val config = SignatureConfig.none()
+
+// Use host terminal settings
+val config = SignatureConfig.useHostConfig()
+
+// Include in request
+val request = SaleRequest.builder()
+    .setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("5000")))
+    .build()
+```
+
+#### SignatureEntryLocation
+
+Per-transaction signature routing for Sale/Auth (field `signatureConfig.entryLocation`). It controls both the on-screen e-signature page and the receipt signature line (`printSignatureLine` in `receiptJson`), and **overrides** the terminal signature settings for that transaction.
+
+| Value | E-signature page | Receipt signature line |
+|------|------------------|------------------------|
+| `ON_SCREEN` | Always shown | Printed only when a signature was captured |
+| `ON_RECEIPT` | Never shown | Always printed for handwriting |
+| `NONE` | Never shown | Never printed |
+
+When `signatureConfig` is **not set** (or `useHostConfig` is `true`), Tapro falls back to the terminal's signature settings (approved, non-EBT transactions only):
+
+- Terminal capture method `ON_SCREEN`: show the e-signature page when *always require signature* is enabled, otherwise only when the CVM result is `SIGNATURE`.
+- Terminal capture method `ON_RECEIPT`: print the receipt signature line when *always require signature* is enabled, otherwise only when the CVM result is `SIGNATURE`.
+
+> EBT transactions never collect a signature regardless of this setting.
+
+> **Backward compatibility (v1.0.7 → v1.0.8):** The deprecated `signatureEntryLocation` field is no longer supported. Use `SignatureConfig` instead. `SignatureConfig(entryLocation = SignatureEntryLocation.ON_SCREEN)` provides equivalent behavior to the old `signatureEntryLocation = Signature.ON_SCREEN`.
 
 ### Transaction status values
 
@@ -600,6 +843,28 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `SUCCESS` | Transaction approved |
 | `PROCESSING` | Transaction still in progress |
 | `FAILED` | Transaction declined, cancelled, or aborted |
+
+### Transaction batch status values
+
+Indicates the settlement batch status of a transaction. Returned in query responses only.
+
+| Value | Meaning |
+|------|---------|
+| `N` | No need batch |
+| `U` | Unfinished batch |
+| `C` | Completed batch |
+
+### Related transaction status values
+
+Indicates the status after follow-up actions on the original transaction. Returned in query responses only.
+
+| Value | Meaning |
+|------|---------|
+| `VOIDED` | Voided |
+| `INCREMENTAL` | Incremental authorization applied |
+| `REFUNDED` | Fully refunded |
+| `CAPTURE` | Captured (post-authorization completed) |
+| `PART_REFUNDED` | Partially refunded |
 
 ---
 
@@ -611,4 +876,4 @@ Returned only from `onFailure`, which represents communication or technical erro
 
 ---
 
-*SDK version: 1.0.7*
+*SDK version: 1.0.8*

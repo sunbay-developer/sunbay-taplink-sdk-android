@@ -147,6 +147,8 @@ class ConnectionPersistence(context: Context) {
             }
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to retrieve connection config: ${e.message}")
+            prefs.edit().remove(KEY_LAST_CONNECTION_CONFIG).apply()
+            LogUtil.w(TAG, "Removed invalid cached connection config")
             null
         }
     }

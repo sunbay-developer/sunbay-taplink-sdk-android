@@ -1,7 +1,7 @@
 # Taplink SDK for Android — AI Integration Reference
 
 **Taplink SDK** is a semi-integrated payment SDK for Android POS applications provided by SUNBAY.
-Latest public release target: **1.0.7**.
+Latest public release target: **1.0.8**.
 It supports three connection modes: App-to-App (Local), LAN (WLAN), and Cable (USB/Serial).
 
 ## Current Callback Semantics
@@ -120,6 +120,47 @@ val config = ConnectionConfig.createCableMode(CableProtocol.USB_VSP)
 ```kotlin
 val config = ConnectionConfig.createDefault()  // tries APP_TO_APP → Cable → LAN
 ```
+
+---
+
+## LAN Address Acquisition (since v1.0.8)
+
+Get the LAN terminal host/port automatically instead of typing it. These APIs RETURN the address via `DiscoveryListener` (they do NOT connect) — auto-fill your input fields, then connect with `ConnectionConfig.createLanMode(host, port)`.
+
+```kotlin
+// mDNS discovery (_taplink._tcp, 15s timeout) — no extra dependency needed
+TaplinkSDK.discoverLanServices(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val t = services.firstOrNull() ?: return          // (name, host, port)
+        connectLan(t.host, t.port)                          // your standard LAN connect
+    }
+    override fun onError(error: ConnectionError) { showError(error.message) }
+})
+
+// QR scan of a lan://host/port code (built-in camera; returns single-element list)
+TaplinkSDK.scanLanQrCode(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        val t = services.firstOrNull() ?: return
+        connectLan(t.host, t.port)
+    }
+    override fun onError(error: ConnectionError) {
+        when (error.code) {
+            "E504" -> {}                                    // user cancel — silent
+            "E505" -> showError("Camera permission denied")
+            "E506" -> showError("No usable camera available on this device")
+            else   -> showError(error.message)
+        }
+    }
+})
+
+// One-step variants that discover/scan AND connect (report via ConnectionListener):
+TaplinkSDK.autoDiscoverAndConnect(connectionListener)
+TaplinkSDK.scanAndConnect(connectionListener)
+```
+
+- `DiscoveredService(name: String, host: String, port: Int)`.
+- QR scan requires the host app to add CameraX 1.3.4 (camera-core/camera2/lifecycle/view) + ZXing 3.5.3 — they are not transitive through the AAR. mDNS discovery needs no extra dependency.
+- Error codes: `E501` no services, `E502` all failed, `E503` operation in progress, `E504` user cancel, `E505` camera permission denied, `E506` no usable camera.
 
 ---
 
@@ -247,47 +288,89 @@ If `surchargeAmount` is present and the customer pays with a **Debit Card**, Tap
 ## TipConfig — On-Screen Tip
 
 Use `tipConfig` when the terminal should collect tip interactively.
-Set it on `SaleRequest` or `PostAuthRequest` as a top-level field.
+Set it on `SaleRequest`, `AuthRequest`, or `PostAuthRequest` as a top-level field.
 `tipConfig` and `amount.tipAmount` are **mutually exclusive**.
 
 ```kotlin
-val request = SaleRequest(
-    referenceOrderId = "ORDER001",
-    transactionRequestId = "TXN001",
-    amount = AmountInfo(BigDecimal("1000"), "USD"),
-    tipConfig = TipConfig(
-        onScreenTip = true,
-        tipMode     = TipMode.ON_SALE,
-        tipWithTax  = false,
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER001")
+    .setTransactionRequestId("TXN001")
+    .setAmount(AmountInfo(BigDecimal("1000"), "USD"))
+    .setTipConfig(TipConfig(
+        useHostConfig = false,           // Use request config (default)
+        onScreenTip = true,              // Show tip prompt on terminal
+        tipMode = TipMode.ON_SALE,       // Collect during sale
+        tipWithTax = false,              // Don't include tax in tip base
         suggestions = TipSuggestions(
-            feeMode = FeeMode.RATE,
-            values  = listOf(15, 18, 20)
+            feeMode = FeeMode.RATE,      // Percentages
+            values = listOf(15, 18, 20), // 15%, 18%, 20%
+            names = null                 // Optional labels
         )
-    )
-)
+    ))
+    .build()
 ```
+
+**`TipConfig` fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `useHostConfig` | Boolean | `false` | Whether to use the terminal's tip configuration (true) or the request configuration (false). When `true`, all other fields are ignored and the terminal settings are used as-is. |
+| `onScreenTip` | Boolean | `false` | Whether to enable on-screen tip prompt. `true` → show terminal tip screen; `false` → customer writes tip on receipt. |
+| `tipMode` | TipMode | `ON_SALE` | When the tip is collected. `ON_SALE` — during sale; `AFTER_SALE` — via `TipAdjust` transaction after sale. |
+| `tipWithTax` | Boolean | `false` | Whether tip percentage is calculated on amount including tax. When `true` and `feeMode=RATE`, the tip % applies to total with tax. |
+| `suggestions` | TipSuggestions? | `null` | Predefined tip options. When provided, shown as selectable buttons on screen (if `onScreenTip=true`) or printed on receipt (if `onScreenTip=false`). |
+
+**`TipSuggestions` fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `feeMode` | FeeMode | ✅ | How values are interpreted: `RATE` (percentage) or `AMOUNT` (fixed cents). |
+| `values` | List<Int> | ✅ | Suggested tip amounts/percentages, e.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts (cents). |
+| `names` | List<String>? | ❌ | Optional labels for each suggestion, e.g., `["Acceptable", "Good", "Great"]`. Position must match `values`. |
+
+---
+
+## Signature Configuration (Sale/Auth only)
+
+*Since v1.0.8,* use `SignatureConfig` to control per-transaction signature capture.
+Set it on `SaleRequest`, `AuthRequest`, or `RefundRequest.nonReferencedBuilder()`.
 
 ```kotlin
-val tipConfig = TipConfig(
-    onScreenTip = true,              // Required: show tip prompt on terminal
-    tipMode     = TipMode.ON_SALE,   // Required: ON_SALE or AFTER_SALE
-    tipWithTax  = false,             // Optional (default false): include tax in tip base
-    suggestions = TipSuggestions(
-        feeMode = FeeMode.RATE,              // RATE (%) or AMOUNT (fixed cents)
-        values  = listOf(15, 18, 20)         // 15%, 18%, 20%
-    )
-)
+// Always capture on terminal screen
+val config = SignatureConfig.onScreen()
+
+// Capture on screen only for amounts > $50.00
+val config = SignatureConfig.onScreenAbove(BigDecimal("5000"))
+
+// Always print signature line on receipt
+val config = SignatureConfig.onReceipt()
+
+// Print signature line on receipt only for amounts > $50.00
+val config = SignatureConfig.onReceiptAbove(BigDecimal("5000"))
+
+// Never collect signature
+val config = SignatureConfig.none()
+
+// Use the terminal's configured signature settings (default)
+val config = SignatureConfig.useHostConfig()
+
+// Apply to request
+val request = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_001")
+    .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
+    .setAmount(AmountInfo.of(15000L, "USD"))  // $150.00
+    .setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("10000")))  // Require signature only > $100
+    .build()
 ```
 
-| TipMode | Description |
-|---------|-------------|
-| `ON_SALE` | Tip collected during sale; included in card charge |
-| `AFTER_SALE` | Tip adjusted after sale via `TipAdjust` transaction |
-
-| FeeMode | Description |
-|---------|-------------|
-| `RATE` | Percentage (e.g., `15` = 15%) |
-| `AMOUNT` | Fixed amount in smallest unit (e.g., `100` = $1.00) |
+| Factory Method | Behavior |
+|---|---|
+| `useHostConfig()` | Use terminal signature settings (default) |
+| `onScreen()` | Always show e-signature page on terminal |
+| `onScreenAbove(threshold)` | Show e-signature page only for amounts > threshold |
+| `onReceipt()` | Always print signature line on receipt |
+| `onReceiptAbove(threshold)` | Print signature line on receipt only for amounts > threshold |
+| `none()` | Never collect signature |
 
 ---
 
@@ -408,6 +491,7 @@ fun pollStatus(txnRequestId: String, attempt: Int = 1) {
 10. **Debit surcharge handling**: If `surchargeAmount` is sent and the card used is a Debit Card, Tapro removes the surcharge amount before completion.
 11. **Abort prerequisites**: Abort only works before gateway authorization (during card detection/PIN entry stages). For authorized transactions, use Void (same-day) or Refund (cross-day).
 12. **INIT is automatic**: Do not call INIT manually. It runs on the first transaction after connect.
+13. **signatureConfig**: Use factory methods (`onScreen()`, `onReceipt()`, `onScreenAbove()`, `none()`, `useHostConfig()`) to configure per-transaction signature behavior. Can be combined with Sale, Auth, and non-referenced Refund.
 
 ---
 

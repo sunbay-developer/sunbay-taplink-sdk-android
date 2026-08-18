@@ -1,6 +1,6 @@
 # Taplink SDK for Android
 
-[![Version](https://img.shields.io/badge/version-1.0.7-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
+[![Version](https://img.shields.io/badge/version-1.0.8-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
 [![Min SDK](https://img.shields.io/badge/minSdk-25-green.svg)](https://developer.android.com/about/versions/android-7.1)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.7.10-purple.svg)](https://kotlinlang.org/)
 
@@ -17,6 +17,7 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - Support for various transaction types (Sale, Refund, Void, Auth, etc.)
   - Card network routing: specify CREDIT or DEBIT for card payment routing (auto-detection when not specified)
   - Receipt print control: specify NONE, MERCHANT, CUSTOMER, BOTH, or AUTO (determined by Tapro app when not specified)
+  - Signature routing control (Sale/Auth): ON_SCREEN or ON_RECEIPT
   - Synchronous and asynchronous calling methods
   - Comprehensive transaction query functionality
 
@@ -39,7 +40,7 @@ Add the following dependency to your app module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.7")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.8")
 }
 ```
 
@@ -124,6 +125,7 @@ private fun processPayment() {
         .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
         .setAmount(amount)
         .setPaymentMethod(PaymentMethodInfo(PaymentCategory.CARD))
+        .setSignatureConfig(SignatureConfig.onScreen())
         .setDescription("Product Purchase")
         .build()
     
@@ -273,11 +275,18 @@ if (error.code == "306") client.query(QueryRequest().setTransactionRequestId(id)
 ```
 
 ## TipConfig
+
 ```kotlin
 TipConfig(
-    onScreenTip = true,
-    tipMode = TipMode.ON_SALE,        // or AFTER_SALE
-    suggestions = TipSuggestions(FeeMode.RATE, listOf(15, 18, 20))  // 15%, 18%, 20%
+    useHostConfig = false,                    // Use request config (default)
+    onScreenTip = true,                       // Show tip prompt on terminal
+    tipMode = TipMode.ON_SALE,                // or AFTER_SALE
+    tipWithTax = false,                       // Include tax in tip base
+    suggestions = TipSuggestions(
+        feeMode = FeeMode.RATE,               // or AMOUNT
+        values = listOf(15, 18, 20),          // 15%, 18%, 20%
+        names = null                          // Optional labels
+    )
 )
 // Do NOT set AmountInfo.tipAmount when using top-level tipConfig
 ```
@@ -518,6 +527,124 @@ connectLan()
 - During runtime, when mDNS reports that the same terminal moved to a new host/port (for example 8443 -> 8444), the SDK can reconnect automatically.
 - For address-change auto reconnect, you must both call `TaplinkSDK.setConnectionListener(listener)` and pass a listener in `TaplinkSDK.connect(config, listener)`.
 
+## LAN Address Acquisition (Discovery & QR Scan)
+
+*New in v1.0.8.* Instead of asking the user to type an IP address and port, the SDK can obtain the LAN terminal address for you in two ways:
+
+- **mDNS auto-discovery** — scan the local network for Taplink terminals and list them.
+- **QR code scan** — open the built-in camera scanner and read a `lan://host/port` QR code shown by the terminal (Tapro).
+
+> **Design principle — return, don't connect:** These two APIs **return the resolved `host`/`port`** through a `DiscoveryListener`; they do **not** open a connection themselves. This lets you auto-fill your address input fields (and persist them), then establish the connection with the **standard LAN flow** shown above. This keeps a single, predictable connection code path.
+
+### Option 1 — mDNS Discovery (`discoverLanServices`)
+
+Runs a one-shot mDNS (Android NSD) discovery of `_taplink._tcp` services and returns all resolved services. Discovery times out automatically after 15 seconds.
+
+```kotlin
+TaplinkSDK.discoverLanServices(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        runOnUiThread {
+            if (services.isEmpty()) {
+                showMessage("No Taplink terminals found on the network")
+                return@runOnUiThread
+            }
+            // Pick one (e.g. let the user choose, or take the first)
+            val target = services.first()   // DiscoveredService(name, host, port)
+
+            // 1) Auto-fill your address input fields
+            hostInput.setText(target.host)
+            portInput.setText(target.port.toString())
+
+            // 2) Persist if needed, then connect with the standard LAN flow
+            connectLan(manualHost = target.host, manualPort = target.port)
+        }
+    }
+
+    override fun onError(error: ConnectionError) {
+        runOnUiThread { showMessage(error.message) }
+    }
+})
+```
+
+### Option 2 — QR Code Scan (`scanLanQrCode`)
+
+Opens the SDK's built-in full-screen camera scanner and reads a `lan://host/port` QR code (displayed by Tapro on the terminal). The scanned address is returned as a **single-element list**. The SDK requests the `CAMERA` permission and manages the scanner Activity for you.
+
+```kotlin
+TaplinkSDK.scanLanQrCode(object : DiscoveryListener {
+    override fun onDiscovered(services: List<DiscoveredService>) {
+        runOnUiThread {
+            val target = services.firstOrNull() ?: return@runOnUiThread
+            hostInput.setText(target.host)
+            portInput.setText(target.port.toString())
+            connectLan(manualHost = target.host, manualPort = target.port)
+        }
+    }
+
+    override fun onError(error: ConnectionError) {
+        runOnUiThread {
+            when (error.code) {
+                "E504" -> { /* user cancelled the scan — no message needed */ }
+                "E505" -> showMessage("Camera permission denied")
+                "E506" -> showMessage("No usable camera available on this device")
+                else   -> showMessage(error.message)
+            }
+        }
+    }
+})
+```
+
+> **Show the real error:** Distinguish a genuine user cancel (`E504`) from a real failure (permission denied, no camera). Do not collapse every error into a single "cancelled or invalid" message.
+
+### One-call variants (discover/scan AND connect)
+
+If you prefer the SDK to connect immediately without backfilling your own fields, use the connect-in-one-step variants. They report the outcome through a `ConnectionListener` instead:
+
+```kotlin
+// mDNS discover, then connect to the first service that succeeds
+TaplinkSDK.autoDiscoverAndConnect(connectionListener)
+
+// Scan a lan:// QR code, then connect to it
+TaplinkSDK.scanAndConnect(connectionListener)
+```
+
+Call `TaplinkSDK.disconnect()` to cancel an in-progress discovery or scan session.
+
+### Required host-app dependencies for QR scan
+
+The QR scanner is built on **CameraX** and **ZXing**. These are `implementation` dependencies inside the SDK and are **not** exposed transitively through the published AAR. To use `scanLanQrCode` / `scanAndConnect`, add them to your app module's `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    // Taplink SDK
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.8")
+
+    // Required only if you use the QR scan APIs
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+    implementation("com.google.zxing:core:3.5.3")
+}
+```
+
+> **Notes:**
+> - The `CAMERA` permission and the scanner Activity are already declared in the SDK's manifest — no manifest changes are required in your app.
+> - mDNS discovery (`discoverLanServices` / `autoDiscoverAndConnect`) needs **no extra dependency** — it uses Android's built-in NSD.
+> - The scanner selects a back camera when available, then a front camera, then the first available camera. If the device reports no usable camera, `onError` returns code `E506`.
+
+### Discovery / Scan error codes
+
+| Code | Meaning | Applies to |
+|------|---------|------------|
+| `E501` | No services found / discovery failed | Discovery |
+| `E502` | All discovered services failed to connect | `autoDiscoverAndConnect` |
+| `E503` | Another discovery/scan operation is already in progress | Discovery & Scan |
+| `E504` | Scan cancelled by the user | QR Scan |
+| `E505` | Camera permission denied | QR Scan |
+| `E506` | No usable camera available on this device | QR Scan |
+
 ## Determining Transaction Result
 
 The SDK uses a clear callback separation:
@@ -590,6 +717,80 @@ val request = SaleRequest.builder()
 client.sale(request, paymentCallback)
 ```
 
+### Signature Configuration (Sale/Auth only)
+
+*Since v1.0.8,* use `SignatureConfig` to choose per-transaction signature routing. It controls **two** independent behaviors on Tapro: whether the on-screen e-signature page is shown, and whether a signature line is printed on the receipt (also reflected as `printSignatureLine` in `receiptJson`).
+
+#### Quick start with factory methods:
+
+```kotlin
+// Always capture on terminal screen
+val config = SignatureConfig.onScreen()
+
+// Capture on screen only for amounts > $50.00
+val config = SignatureConfig.onScreenAbove(BigDecimal("5000"))
+
+// Always print signature line on receipt
+val config = SignatureConfig.onReceipt()
+
+// Print signature line on receipt only for amounts > $50.00
+val config = SignatureConfig.onReceiptAbove(BigDecimal("5000"))
+
+// Never collect signature
+val config = SignatureConfig.none()
+
+// Use the terminal's configured signature settings (default)
+val config = SignatureConfig.useHostConfig()
+```
+
+#### SignatureConfig behavior:
+
+- **`SignatureEntryLocation.ON_SCREEN`** — force the on-screen e-signature flow.
+  - E-signature page: **always shown**.
+  - Receipt signature line: printed **only when a signature was actually captured**.
+- **`SignatureEntryLocation.ON_RECEIPT`** — skip the on-screen e-signature flow.
+  - E-signature page: **never shown**.
+  - Receipt signature line: **always printed** for handwriting.
+- **`SignatureEntryLocation.NONE`** — never collect a signature.
+  - E-signature page: **never shown**.
+  - Receipt signature line: **never printed**.
+- **Not set / `useHostConfig()` (default)** — fall back to the terminal's signature settings:
+  - Only applies when the transaction is approved and is **not** an EBT transaction.
+  - If the terminal capture method is `ON_SCREEN`: show the e-signature page when the terminal is set to *always require signature*, otherwise only when the CVM result is `SIGNATURE`.
+  - If the terminal capture method is `ON_RECEIPT`: print the receipt signature line when *always require signature* is set, otherwise only when the CVM result is `SIGNATURE`.
+
+> **Note:** When `signatureConfig` is set (with a non-`null` `entryLocation`), it **overrides** the terminal's signature settings for that single transaction. The CVM-result fallback only applies when `signatureConfig` is not set or `useHostConfig()` is used. EBT transactions never collect a signature.
+
+#### Usage examples:
+
+```kotlin
+val sale = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_1001")
+    .setTransactionRequestId("TXN_1001")
+    .setAmount(AmountInfo.of(1000L, "USD"))
+    .setSignatureConfig(SignatureConfig.onReceipt())
+    .build()
+
+val auth = AuthRequest.builder()
+    .setReferenceOrderId("AUTH_1001")
+    .setTransactionRequestId("TXN_AUTH_1001")
+    .setAmount(
+        AuthAmountInfo()
+            .setAuthAmount(BigDecimal("5000"))
+            .setPricingCurrency("USD")
+    )
+    .setSignatureConfig(SignatureConfig.onScreen())
+    .build()
+
+// Require signature only for transactions > $100
+val premiumSale = SaleRequest.builder()
+    .setReferenceOrderId("ORDER_2001")
+    .setTransactionRequestId("TXN_2001")
+    .setAmount(AmountInfo.of(15000L, "USD"))
+    .setSignatureConfig(SignatureConfig.onScreenAbove(BigDecimal("10000")))
+    .build()
+```
+
 ### Tip Configuration
 
 When you want the terminal to collect tip interactively, set top-level `tipConfig` on `SaleRequest` or `PostAuthRequest`. `tipConfig` and `amount.tipAmount` are mutually exclusive, so `tipAmount` must be `null`.
@@ -621,16 +822,19 @@ val request = SaleRequest(
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `onScreenTip` | `Boolean` | ❌ | `false` | Whether to show a tip input screen on the terminal. Set to `true` to prompt the customer for a tip. |
-| `tipMode` | `TipMode` | ❌ | `ON_SALE` | When the tip is collected. `ON_SALE` — collected during the sale; `AFTER_SALE` — collected after the sale completes. |
-| `suggestions` | `TipSuggestions?` | ❌ | `null` | Predefined tip options displayed on the terminal for the customer to choose from. Omit to allow free-form tip entry only. |
+| `useHostConfig` | `Boolean` | ❌ | `false` | Whether to use the terminal's tip configuration (true) or the request configuration (false). When `true`, all other TipConfig fields are ignored and the terminal settings are used as-is. |
+| `onScreenTip` | `Boolean` | ❌ | `false` | Whether to enable on-screen tip prompt. `true` → show terminal tip screen; `false` → customer writes tip on receipt. |
+| `tipMode` | `TipMode` | ❌ | `ON_SALE` | When the tip is collected. `ON_SALE` — collected during the sale; `AFTER_SALE` — collected after the sale completes via `TipAdjust` transaction. |
+| `tipWithTax` | `Boolean` | ❌ | `false` | Whether tip percentage is calculated on amount including tax. Only applies when `feeMode=RATE`. |
+| `suggestions` | `TipSuggestions?` | ❌ | `null` | Predefined tip options displayed to the customer. When provided and `onScreenTip=true`, shown as selectable buttons on screen; when `onScreenTip=false`, printed on receipt. |
 
 **`TipSuggestions`**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `feeMode` | `FeeMode` | ✅ | How the `values` are interpreted. `RATE` — percentage (e.g., `15` = 15%); `AMOUNT` — fixed amount in smallest currency unit (e.g., `100` = $1.00). |
-| `values` | `List<Int>` | ✅ | List of suggested tip options shown on screen. Typically 3–4 values, e.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts. |
+| `values` | `List<Int>` | ✅ | List of suggested tip options. E.g., `[15, 18, 20]` for percentages or `[100, 200, 500]` for fixed amounts (cents). |
+| `names` | `List<String>?` | ❌ | Optional labels for each suggestion value, e.g., `["Acceptable", "Good", "Great"]`. Position must correspond to entries in `values`. |
 
 **`TipMode` Enum**
 
@@ -780,6 +984,7 @@ End-of-day settlement to close the current batch.
 val request = BatchCloseRequest.builder()
     .setTransactionRequestId("TXN_${System.currentTimeMillis()}")
     .setDescription("Batch Close")
+    .setPrintReceipt(PrintReceipt.BOTH)
     .build()
 
 client.batchClose(request, object : PaymentCallback {
@@ -798,6 +1003,18 @@ client.batchClose(request, object : PaymentCallback {
     }
 })
 ```
+
+`BatchCloseRequest.printReceipt` is optional and defaults to `AUTO`.
+
+| Value | Batch Close behavior |
+|---|---|
+| `AUTO` | Use the current Tapro batch report setting |
+| `BOTH` | Print both total and detail reports |
+| `TOTAL` | Print the total report only |
+| `DETAIL` | Print the transaction detail report only |
+| `NONE` | Do not print a batch report |
+
+`MERCHANT` and `CUSTOMER` apply to transaction receipts and are rejected for Batch Close.
 
 ### Abort Transaction
 
@@ -1342,6 +1559,14 @@ TaplinkSDK.connect(config: ConnectionConfig?, listener: ConnectionListener)
 TaplinkSDK.disconnect()
 TaplinkSDK.isConnected(): Boolean
 
+// LAN address acquisition (return host/port, do NOT connect) — since v1.0.8
+TaplinkSDK.discoverLanServices(listener: DiscoveryListener)   // mDNS discover-only
+TaplinkSDK.scanLanQrCode(listener: DiscoveryListener)         // QR scan-only
+
+// LAN discover/scan AND connect in one step — since v1.0.8
+TaplinkSDK.autoDiscoverAndConnect(listener: ConnectionListener)
+TaplinkSDK.scanAndConnect(listener: ConnectionListener)
+
 // Device information
 TaplinkSDK.getConnectedDeviceId(): String?
 TaplinkSDK.getConnectionMode(): String?
@@ -1378,9 +1603,17 @@ client.query(request: QueryRequest, callback: PaymentCallback)
 
 ## Version Information
 
-- **Current Version**: 1.0.7
+- **Current Version**: 1.0.8
 
 ### Changelog
+
+#### v1.0.8
+- **New — LAN service discovery**: `TaplinkSDK.discoverLanServices(DiscoveryListener)` runs a one-shot mDNS (`_taplink._tcp`) discovery and returns the resolved `host`/`port` list **without connecting**.
+- **New — LAN QR scan**: `TaplinkSDK.scanLanQrCode(DiscoveryListener)` opens the built-in camera scanner, reads a `lan://host/port` QR code, and returns the address **without connecting**. Lets the app auto-fill its address fields and then connect via the standard LAN flow.
+- **New — one-call variants**: `TaplinkSDK.autoDiscoverAndConnect(ConnectionListener)` and `TaplinkSDK.scanAndConnect(ConnectionListener)` discover/scan and connect in a single step.
+- Added `DiscoveredService(name, host, port)` model and `DiscoveryListener` callback.
+- Added discovery/scan error codes `E501`–`E506` (see LAN Address Acquisition section).
+- QR scan requires the host app to add CameraX (1.3.4) + ZXing (3.5.3) dependencies; mDNS discovery needs no extra dependency.
 
 #### v1.0.7
 - **Breaking change**: Declined transactions are now delivered via `onSuccess(result)` with `result.isFailed() == true`. In v1.0.6 and earlier they were routed to `onFailure(PaymentError)`.

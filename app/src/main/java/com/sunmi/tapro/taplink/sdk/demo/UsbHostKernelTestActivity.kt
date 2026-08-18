@@ -9,6 +9,7 @@ import com.sunmi.tapro.taplink.communication.cable.aoa.host.CableAoaHostKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
+import com.sunmi.tapro.taplink.demo.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

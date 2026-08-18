@@ -2,6 +2,7 @@ package com.sunmi.tapro.taplink.sdk.api
 
 import android.content.Context
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
+import com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
@@ -68,6 +69,65 @@ interface TaplinkApi {
      * @param listener Connection listener
      */
     fun connect(config: ConnectionConfig?, listener: ConnectionListener)
+
+    /**
+     * Discover LAN Taplink services via mDNS WITHOUT connecting.
+     *
+     * Runs a one-shot mDNS (Android NSD) discovery of _taplink._tcp services and
+     * returns the resolved host/port list. The caller decides which service to connect
+     * to (e.g. auto-fill the address and call [connect] with a LAN config).
+     *
+     * @param listener Discovery result callback:
+     *   - onDiscovered: list of resolved services (may be empty)
+     *   - onError: SDK not initialized / internal error
+     *
+     * Call disconnect() to cancel an in-progress discovery.
+     */
+    fun discoverLanServices(listener: DiscoveryListener)
+
+    /**
+     * Auto-discover LAN Taplink services and connect to the first available.
+     *
+     * Uses mDNS (Android NSD) to discover _taplink._tcp services on the local network,
+     * then tries connecting to each in discovery order until one succeeds.
+     *
+     * @param listener Connection result callback:
+     *   - onConnected: discovered and connected to a Taplink service
+     *   - onError: no services found / all candidates failed / SDK not initialized
+     *
+     * Call disconnect() to cancel an in-progress discovery.
+     */
+    fun autoDiscoverAndConnect(listener: ConnectionListener)
+
+    /**
+     * Launch QR scanner and connect using scanned Taplink QR code.
+     *
+     * SDK opens its built-in camera scanner Activity and handles CAMERA permission.
+     * Only lan://host/port format QR codes are accepted.
+     *
+     * @param listener Connection result callback:
+     *   - onConnected: scanned valid QR and connected
+     *   - onError: user cancelled / permission denied / SDK not initialized
+     *
+     * Call disconnect() to cancel an in-progress scan session.
+     */
+    fun scanAndConnect(listener: ConnectionListener)
+
+    /**
+     * Launch QR scanner and return the scanned lan:// host/port WITHOUT connecting.
+     *
+     * SDK opens its built-in camera scanner Activity and handles CAMERA permission.
+     * Only lan://host/port format QR codes are accepted. The resolved host/port is
+     * delivered via [DiscoveryListener] as a single-element list, so the caller can
+     * auto-fill the address and call [connect] with a LAN config.
+     *
+     * @param listener Scan result callback:
+     *   - onDiscovered: single-element list with the scanned service (host/port)
+     *   - onError: user cancelled / permission denied / SDK not initialized
+     *
+     * Call disconnect() to cancel an in-progress scan session.
+     */
+    fun scanLanQrCode(listener: DiscoveryListener)
 
     /**
      * Disconnect

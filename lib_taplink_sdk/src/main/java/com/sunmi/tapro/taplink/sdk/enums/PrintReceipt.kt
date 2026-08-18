@@ -29,7 +29,7 @@ enum class PrintReceipt(val value: String) {
 
     /**
      * Both copies.
-     * Both merchant and customer copies of the receipt will be printed.
+     * Both merchant and customer copies, or both batch total and detail reports, will be printed.
      */
     BOTH("BOTH"),
 
@@ -37,7 +37,19 @@ enum class PrintReceipt(val value: String) {
      * Auto mode.
      * The receipt printing behavior is automatically determined by the Tapro application.
      */
-    AUTO("AUTO");
+    AUTO("AUTO"),
+
+    /**
+     * Batch total report.
+     * Only the batch total report will be printed.
+     */
+    TOTAL("TOTAL"),
+
+    /**
+     * Batch detail report.
+     * Only the batch detail report will be printed.
+     */
+    DETAIL("DETAIL");
 
     companion object {
         /**

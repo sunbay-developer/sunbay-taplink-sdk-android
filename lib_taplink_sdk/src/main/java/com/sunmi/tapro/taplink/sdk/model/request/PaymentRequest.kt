@@ -7,6 +7,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.common.DeviceInfo
 import com.sunmi.tapro.taplink.sdk.model.common.GoodsDetail
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
+import com.sunmi.tapro.taplink.sdk.model.common.SignatureConfig
 import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
 import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
 import java.math.BigDecimal
@@ -213,8 +214,16 @@ data class PaymentRequest(
      * - MERCHANT: Only the merchant copy will be printed
      * - CUSTOMER: Only the customer copy will be printed
      * - BOTH: Both merchant and customer copies will be printed
+     * - TOTAL: Only the batch total report will be printed (batch close only)
+     * - DETAIL: Only the batch detail report will be printed (batch close only)
      */
     val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
+
+    /**
+     * Per-transaction signature configuration for SALE and AUTH.
+     * If not set, Tapro uses its terminal-side default signature policy.
+     */
+    val signatureConfig: SignatureConfig? = null,
 
     // ========== Tip configuration ==========
 
@@ -359,6 +368,12 @@ data class PaymentRequest(
      */
     fun setPrintReceipt(printReceipt: PrintReceipt): PaymentRequest = copy(printReceipt = printReceipt)
 
+    /**
+     * Chain call: Set per-transaction signature configuration.
+     */
+    fun setSignatureConfig(signatureConfig: SignatureConfig): PaymentRequest =
+        copy(signatureConfig = signatureConfig)
+
     // ========== Chain call methods for tip configuration ==========
 
     /**
@@ -419,6 +434,7 @@ data class PaymentRequest(
         private var notifyUrl: String? = null
         private var requestTimeout: Long? = null
         private var printReceipt: PrintReceipt? = PrintReceipt.AUTO
+        private var signatureConfig: SignatureConfig? = null
         private var tipConfig: TipConfig? = null
 
         /**
@@ -454,6 +470,8 @@ data class PaymentRequest(
         fun setNotifyUrl(notifyUrl: String) = apply { this.notifyUrl = notifyUrl }
         fun setRequestTimeout(requestTimeout: Long) = apply { this.requestTimeout = requestTimeout }
         fun setPrintReceipt(printReceipt: PrintReceipt) = apply { this.printReceipt = printReceipt }
+        fun setSignatureConfig(signatureConfig: SignatureConfig) =
+            apply { this.signatureConfig = signatureConfig }
         fun setTipConfig(tipConfig: TipConfig) = apply { this.tipConfig = tipConfig }
 
         /**
@@ -495,9 +513,9 @@ data class PaymentRequest(
                 notifyUrl = notifyUrl,
                 requestTimeout = requestTimeout,
                 printReceipt = printReceipt,
+                signatureConfig = signatureConfig,
                 tipConfig = tipConfig,
             )
         }
     }
 }
-

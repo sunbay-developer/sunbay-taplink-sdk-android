@@ -2,6 +2,7 @@ package com.sunmi.tapro.taplink.sdk.manager
 
 import android.content.Context
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
+import com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
@@ -9,6 +10,7 @@ import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
+import com.sunmi.tapro.taplink.sdk.model.DiscoveredService
 import com.sunmi.tapro.taplink.sdk.persistence.ConnectionPersistence
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolConfigResolver
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
@@ -18,6 +20,10 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback as ServiceConnectionCallback
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.lan.LanClientKernel
+import com.sunmi.tapro.taplink.communication.lan.discovery.ServiceDiscoveryManager
+import com.sunmi.tapro.taplink.sdk.scanner.QrScanCoordinator
+import kotlinx.coroutines.*
+import kotlin.coroutines.resume
 
 /**
  * Connection management class
@@ -46,6 +52,26 @@ class ConnectionManager(
      * Connection listener
      */
     private var connectionListener: ConnectionListener? = null
+
+    /**
+     * Internal fallback listener for reconnection flows.
+     *
+     * Used when app does not keep a persistent ConnectionListener reference.
+     * This keeps transport reconnection functional without forcing SDK user callbacks.
+     */
+    private val internalReconnectListener = object : ConnectionListener {
+        override fun onConnected(deviceId: String, taproVersion: String) {
+            // no-op
+        }
+
+        override fun onDisconnected(reason: String) {
+            // no-op
+        }
+
+        override fun onError(error: ConnectionError) {
+            // no-op
+        }
+    }
 
     /**
      * Current connection mode
@@ -115,6 +141,17 @@ class ConnectionManager(
      * Used when user calls connect() while connection is already in progress
      */
     private val pendingConnectionListeners = mutableListOf<ConnectionListener>()
+
+    /**
+     * Coroutine job for auto-discovery operation.
+     * Cancelled on disconnect() to abort discovery.
+     */
+    private var discoveryJob: Job? = null
+
+    /**
+     * Coroutine scope for auto-discover and scan-and-connect operations.
+     */
+    private val sdkScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     init {
         LogUtil.d(TAG, "ConnectionManager initialized")
@@ -544,6 +581,11 @@ class ConnectionManager(
      */
     fun disconnect() {
         LogUtil.d(TAG, "Manual disconnect")
+
+        // Cancel any in-progress discovery or scan-and-connect
+        discoveryJob?.cancel()
+        discoveryJob = null
+        QrScanCoordinator.cancelSession()
 
         // Notify reconnect manager of manual disconnect
         reconnectManager?.disconnect()
@@ -1332,11 +1374,14 @@ class ConnectionManager(
                 setPort(newPort)
             }
 
-            LogUtil.d(TAG, "Executing reconnection to $newHost:$newPort,$connectionListener")
-            connectionListener?.let {
-                reconnectManager?.onAddressChanged(newConnectionConfig, it)
-            }
-
+            val reconnectListener =
+                connectionListener ?: reconnectManager?.getLastConnectionListener()
+                    ?: internalReconnectListener
+            LogUtil.d(
+                TAG,
+                "Executing reconnection to $newHost:$newPort, listener=$reconnectListener"
+            )
+            reconnectManager?.onAddressChanged(newConnectionConfig, reconnectListener)
             true
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to execute reconnection: ${e.message}")
@@ -1535,5 +1580,236 @@ class ConnectionManager(
         }
 
         return true
+    }
+
+    // ==================== Auto-Discover & Scan-and-Connect ====================
+
+    companion object {
+        private const val NSD_SERVICE_TYPE = "_taplink._tcp"
+        private const val DISCOVERY_TIMEOUT_MS = 15_000L
+
+        // Error codes for discovery and scan
+        const val ERROR_NO_SERVICES = "E501"
+        const val ERROR_ALL_FAILED = "E502"
+        const val ERROR_OPERATION_IN_PROGRESS = "E503"
+        const val ERROR_SCAN_CANCELLED = "E504"
+        const val ERROR_CAMERA_PERMISSION_DENIED = "E505"
+        const val ERROR_CAMERA_UNAVAILABLE = "E506"
+    }
+
+    /**
+     * Discover LAN Taplink services via mDNS WITHOUT connecting.
+     *
+     * Runs a one-shot mDNS discovery and returns the resolved host/port list so the
+     * caller can present or auto-fill the address and then call connect() with a LAN
+     * config. Does not change connection status and does not connect.
+     *
+     * Call disconnect() to cancel an in-progress discovery.
+     */
+    fun discoverLanServices(listener: DiscoveryListener) {
+        LogUtil.d(TAG, "discoverLanServices called")
+
+        discoveryJob = sdkScope.launch {
+            try {
+                LogUtil.d(TAG, "Starting mDNS service discovery (discover-only)...")
+                val discoveryManager = ServiceDiscoveryManager(context)
+                val services = discoveryManager.discoverServicesIsolated(
+                    NSD_SERVICE_TYPE, DISCOVERY_TIMEOUT_MS
+                )
+
+                val result = services
+                    .filter { it.host.isNotEmpty() && it.port > 0 }
+                    .map { DiscoveredService(it.name, it.host, it.port) }
+
+                LogUtil.d(TAG, "discoverLanServices found ${result.size} valid services")
+                listener.onDiscovered(result)
+            } catch (e: CancellationException) {
+                LogUtil.d(TAG, "discoverLanServices cancelled")
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "discoverLanServices error: ${e.message}")
+                listener.onError(
+                    ConnectionError(ERROR_NO_SERVICES, "Discovery failed: ${e.message}")
+                )
+            } finally {
+                discoveryJob = null
+            }
+        }
+    }
+
+    /**
+     * Launch the QR scanner to read a lan:// code and return the parsed host/port
+     * WITHOUT connecting.
+     *
+     * SDK opens its built-in camera scanner Activity and handles CAMERA permission.
+     * Only lan://host/port QR codes are accepted. The resolved host/port is delivered
+     * via [DiscoveryListener] (a single-element list) so the caller can auto-fill the
+     * address and then call connect() with a LAN config.
+     *
+     * Call disconnect() to cancel an in-progress scan session.
+     */
+    fun scanLanQrCode(listener: DiscoveryListener) {
+        LogUtil.d(TAG, "scanLanQrCode called")
+
+        val started = QrScanCoordinator.startScanOnlySession(
+            context = context,
+            onResult = { service -> listener.onDiscovered(listOf(service)) },
+            onError = { error -> listener.onError(error) }
+        )
+
+        if (!started) {
+            listener.onError(
+                ConnectionError(ERROR_OPERATION_IN_PROGRESS, "A scan session is already active")
+            )
+        }
+    }
+
+    /**
+     * Auto-discover LAN services and connect to the first available one.
+     *
+     * Uses mDNS (Android NSD) to discover _taplink._tcp services, then tries
+     * connecting to each in discovery order until one succeeds.
+     *
+     * Call disconnect() to cancel an in-progress discovery.
+     */
+    fun autoDiscoverAndConnect(listener: ConnectionListener) {
+        LogUtil.d(TAG, "autoDiscoverAndConnect called")
+
+        // Check if another operation is in progress
+        if (connectionStatus == ConnectionStatus.CONNECTING ||
+            connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
+            connectionStatus == ConnectionStatus.CONNECTED
+        ) {
+            LogUtil.w(TAG, "autoDiscoverAndConnect rejected: status=$connectionStatus")
+            listener.onError(
+                ConnectionError(ERROR_OPERATION_IN_PROGRESS, "Another connection operation is in progress")
+            )
+            return
+        }
+
+        updateConnectionStatus(ConnectionStatus.CONNECTING, listener = listener)
+        connectionListener = listener
+
+        discoveryJob = sdkScope.launch {
+            try {
+                LogUtil.d(TAG, "Starting mDNS service discovery...")
+                val discoveryManager = ServiceDiscoveryManager(context)
+                val services = discoveryManager.discoverServicesIsolated(
+                    NSD_SERVICE_TYPE, DISCOVERY_TIMEOUT_MS
+                )
+
+                // Filter valid services
+                val validServices = services.filter { it.host.isNotEmpty() && it.port > 0 }
+                if (validServices.isEmpty()) {
+                    LogUtil.w(TAG, "No valid services discovered")
+                    updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
+                    listener.onError(
+                        ConnectionError(ERROR_NO_SERVICES, "No Taplink services found on the network")
+                    )
+                    return@launch
+                }
+
+                LogUtil.d(TAG, "Found ${validServices.size} valid services, trying sequentially")
+
+                // Try each service sequentially
+                for ((index, service) in validServices.withIndex()) {
+                    ensureActive()
+                    LogUtil.d(TAG, "Trying service ${index + 1}/${validServices.size}: ${service.host}:${service.port}")
+
+                    val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        val config = ConnectionConfig.createLanMode(service.host, service.port)
+                        val proxy = object : ConnectionListener {
+                            override fun onConnected(deviceId: String, taproVersion: String) {
+                                // Success — forward to original listener
+                                listener.onConnected(deviceId, taproVersion)
+                                if (cont.isActive) cont.resume(true)
+                            }
+
+                            override fun onDisconnected(reason: String) {
+                                // Treat as failure for this candidate
+                                if (cont.isActive) cont.resume(false)
+                            }
+
+                            override fun onError(error: ConnectionError) {
+                                // This candidate failed, don't forward
+                                LogUtil.w(TAG, "Candidate ${service.host}:${service.port} failed: ${error.message}")
+                                if (cont.isActive) cont.resume(false)
+                            }
+
+                            override fun onReconnecting(attempt: Int, maxRetries: Int) {
+                                // Ignore reconnection during discovery
+                            }
+                        }
+
+                        // Reset status so connect() doesn't reject
+                        connectionStatus = ConnectionStatus.DISCONNECTED
+                        connect(config, proxy)
+                    }
+
+                    if (success) {
+                        LogUtil.d(TAG, "Successfully connected to ${service.host}:${service.port}")
+                        return@launch
+                    }
+                }
+
+                // All candidates failed
+                ensureActive()
+                LogUtil.w(TAG, "All ${validServices.size} discovered services failed")
+                updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
+                listener.onError(
+                    ConnectionError(ERROR_ALL_FAILED, "All discovered services failed to connect")
+                )
+
+            } catch (e: CancellationException) {
+                LogUtil.d(TAG, "autoDiscoverAndConnect cancelled")
+                // No callback on cancellation (disconnect() was called)
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "autoDiscoverAndConnect error: ${e.message}")
+                updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
+                listener.onError(
+                    ConnectionError(ERROR_NO_SERVICES, "Discovery failed: ${e.message}")
+                )
+            } finally {
+                discoveryJob = null
+            }
+        }
+    }
+
+    /**
+     * Launch QR scanner and connect using scanned lan:// QR code.
+     *
+     * SDK opens its built-in camera scanner Activity. Only lan://host/port
+     * QR codes are accepted. Invalid codes trigger a toast and continue scanning.
+     *
+     * Call disconnect() to cancel an in-progress scan session.
+     */
+    fun scanAndConnect(listener: ConnectionListener) {
+        LogUtil.d(TAG, "scanAndConnect called")
+
+        // Check if another operation is in progress
+        if (connectionStatus == ConnectionStatus.CONNECTING ||
+            connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
+            connectionStatus == ConnectionStatus.CONNECTED
+        ) {
+            LogUtil.w(TAG, "scanAndConnect rejected: status=$connectionStatus")
+            listener.onError(
+                ConnectionError(ERROR_OPERATION_IN_PROGRESS, "Another connection operation is in progress")
+            )
+            return
+        }
+
+        // Delegate to QrScanCoordinator which manages the scanner Activity lifecycle
+        val started = QrScanCoordinator.startSession(
+            context = context,
+            listener = listener,
+            connectAction = { config, proxyListener ->
+                connect(config, proxyListener)
+            }
+        )
+
+        if (!started) {
+            listener.onError(
+                ConnectionError(ERROR_OPERATION_IN_PROGRESS, "A scan session is already active")
+            )
+        }
     }
 }

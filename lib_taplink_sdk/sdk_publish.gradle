@@ -169,10 +169,25 @@ afterEvaluate {
             sign publishing.publications.release
         }
     }
+    tasks.withType(Sign) { task ->
+        // Ensure sign tasks depend on copyReleaseAar / copyDebugAar to avoid task dependency validation errors
+        if (task.name == 'signReleasePublication') {
+            task.dependsOn('copyReleaseAar')
+        } else if (task.name == 'signDebugPublication') {
+            task.dependsOn('copyDebugAar')
+        }
+    }
+
     tasks.withType(PublishToMavenRepository) { task ->
         if (task.publication.hasProperty('repo') && task.publication.repo != task.repository.name) {
             task.enabled = false
             task.group = null
+        }
+        // 确保发布前先重新构建并复制最新 AAR，避免发布 ../build 下的旧包
+        if (task.publication.name == 'debug') {
+            task.dependsOn('copyDebugAar')
+        } else if (task.publication.name == 'release') {
+            task.dependsOn('copyReleaseAar')
         }
         task.doLast {
             def username = getRepositoryUsername()

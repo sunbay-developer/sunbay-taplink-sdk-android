@@ -117,8 +117,8 @@ class ConnectionConfig {
      * @param protocol the cable protocol type
      * @return the current configuration instance for method chaining
      */
-    fun setCableProtocol(protocol: CableProtocol): ConnectionConfig {
-        this.cableProtocol = protocol
+    fun setCableProtocol(protocol: CableProtocol?): ConnectionConfig {
+        this.cableProtocol = protocol ?: CableProtocol.AUTO
         return this
     }
 
@@ -278,13 +278,10 @@ class ConnectionConfig {
          * @param protocol the cable protocol type (optional)
          * @return the Cable mode configuration
          */
-        fun createCableMode(protocol: CableProtocol? = null): ConnectionConfig {
-            val config = ConnectionConfig().setConnectionMode(ConnectionMode.CABLE)
-            return if (protocol != null) {
-                config.setCableProtocol(protocol)
-            } else {
-                config
-            }
+        fun createCableMode(protocol: CableProtocol = CableProtocol.AUTO): ConnectionConfig {
+            return ConnectionConfig()
+                .setConnectionMode(ConnectionMode.CABLE)
+                .setCableProtocol(protocol)
         }
 
         /**
@@ -333,7 +330,6 @@ class ConnectionConfig {
         }
     }
 }
-
 
 
 

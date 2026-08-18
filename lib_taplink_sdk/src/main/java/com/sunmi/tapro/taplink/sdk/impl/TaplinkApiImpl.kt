@@ -109,6 +109,66 @@ class TaplinkApiImpl : TaplinkApi {
         connectionMgr.connect(config, listener)
     }
 
+    override fun discoverLanServices(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+        val connectionMgr = connectionManager
+        if (connectionMgr == null) {
+            LogUtil.e(TAG, "SDK not initialized, please call init() first")
+            listener.onError(
+                com.sunmi.tapro.taplink.sdk.error.ConnectionError(
+                    "T01",
+                    "SDK not initialized, please call init() first"
+                )
+            )
+            return
+        }
+        connectionMgr.discoverLanServices(listener)
+    }
+
+    override fun autoDiscoverAndConnect(listener: ConnectionListener) {
+        val connectionMgr = connectionManager
+        if (connectionMgr == null) {
+            LogUtil.e(TAG, "SDK not initialized, please call init() first")
+            listener.onError(
+                com.sunmi.tapro.taplink.sdk.error.ConnectionError(
+                    "T01",
+                    "SDK not initialized, please call init() first"
+                )
+            )
+            return
+        }
+        connectionMgr.autoDiscoverAndConnect(listener)
+    }
+
+    override fun scanAndConnect(listener: ConnectionListener) {
+        val connectionMgr = connectionManager
+        if (connectionMgr == null) {
+            LogUtil.e(TAG, "SDK not initialized, please call init() first")
+            listener.onError(
+                com.sunmi.tapro.taplink.sdk.error.ConnectionError(
+                    "T01",
+                    "SDK not initialized, please call init() first"
+                )
+            )
+            return
+        }
+        connectionMgr.scanAndConnect(listener)
+    }
+
+    override fun scanLanQrCode(listener: com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener) {
+        val connectionMgr = connectionManager
+        if (connectionMgr == null) {
+            LogUtil.e(TAG, "SDK not initialized, please call init() first")
+            listener.onError(
+                com.sunmi.tapro.taplink.sdk.error.ConnectionError(
+                    "T01",
+                    "SDK not initialized, please call init() first"
+                )
+            )
+            return
+        }
+        connectionMgr.scanLanQrCode(listener)
+    }
+
     override fun disconnect() {
         LogUtil.d(TAG, "Manual disconnect")
         connectionManager?.disconnect()
