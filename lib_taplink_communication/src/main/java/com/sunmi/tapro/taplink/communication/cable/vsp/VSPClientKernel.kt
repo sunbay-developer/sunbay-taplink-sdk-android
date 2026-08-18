@@ -510,12 +510,18 @@ class VSPClientKernel(
      * USB port is open: start receive loop and block until application-layer handshake completes
      * (service sends [VspHandshake.REQ], we send [VspHandshake.ACK]), same window as
      * [VspHandshake.DEFAULT_TIMEOUT_MS].
+     *
+     * The waiter is passed explicitly into [startDataReceive] so each receive-loop coroutine holds
+     * a reference to its own handshake waiter (captured at launch time) rather than reading the
+     * shared [handshakeWaiter] field at runtime. This prevents a stale receive loop from a
+     * previous connection attempt from accidentally completing/failing the new handshake waiter
+     * when its blocked [UsbSerialPort.read] throws IOException after the old port is closed.
      */
     private suspend fun awaitVspHandshake(): Boolean {
         val waiter = CompletableDeferred<Unit>()
         handshakeWaiter = waiter
         return try {
-            startDataReceive()
+            startDataReceive(waiter)
             withTimeoutOrNull(VspHandshake.DEFAULT_TIMEOUT_MS) {
                 waiter.await()
             } != null
@@ -535,13 +541,6 @@ class VSPClientKernel(
         }
     }
 
-    private fun signalHandshakeSuccess() {
-        val w = handshakeWaiter ?: return
-        if (w.complete(Unit)) {
-            LogUtil.i(TAG, "VSP client handshake verified with server")
-        }
-    }
-
     private fun cleanupAfterHandshakeFailure() {
         dataReceiveJob?.cancel()
         dataReceiveJob = null
@@ -554,8 +553,13 @@ class VSPClientKernel(
      * 握手：服务端发 [VspHandshake.REQ]，客户端回 [VspHandshake.ACK]。
      * 非握手数据追加到 [receiveBuffer]，由 [extractNextJsonObject] 按大括号深度
      * 提取完整 JSON 后再交给 [dataReceiver]，解决 USB CDC-ACM 分包导致的 JSON 残缺问题。
+     *
+     * @param handshakeWaiter The waiter for this specific connection attempt, captured by the
+     *   coroutine closure at launch time. Using a parameter (rather than the shared field) prevents
+     *   a stale receive loop from a previous connection from accidentally completing or failing the
+     *   new connection's handshake waiter after its USB port is closed and an IOException fires.
      */
-    private fun startDataReceive() {
+    private fun startDataReceive(handshakeWaiter: CompletableDeferred<Unit>?) {
         dataReceiveJob?.cancel()
         dataReceiveJob = scope.launch {
             receiveBuffer.clear()
@@ -575,10 +579,14 @@ class VSPClientKernel(
                         if (VspHandshake.isHandshakeMessage(dataString)) {
                             if (VspHandshake.containsReq(dataString)) {
                                 if (sendHandshakeAck()) {
-                                    signalHandshakeSuccess()
+                                    if (handshakeWaiter?.complete(Unit) == true) {
+                                        LogUtil.i(TAG, "VSP client handshake verified with server")
+                                    }
                                 }
                             } else if (VspHandshake.containsAck(dataString)) {
-                                signalHandshakeSuccess()
+                                if (handshakeWaiter?.complete(Unit) == true) {
+                                    LogUtil.i(TAG, "VSP client handshake verified with server")
+                                }
                             }
                             // 握手包可能携带后续 payload（对端合并发送）
                             val remaining = VspHandshake.stripHandshakeMarkers(dataString)
