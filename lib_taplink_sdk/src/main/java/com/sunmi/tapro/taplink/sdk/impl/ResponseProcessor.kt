@@ -30,6 +30,13 @@ class ResponseProcessor {
         const val SUCCESS_CODE = "100"
     }
 
+    /**
+     * Listener for device info extracted from transaction responses.
+     * Called when a response contains taproVersion/deviceId (typically from the first
+     * transaction after INIT on the TaPro side).
+     */
+    var onDeviceInfoReceived: ((deviceId: String, taproVersion: String) -> Unit)? = null
+
     private val mapper: ObjectMapper = ObjectMapper()
         .registerKotlinModule()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -144,6 +151,7 @@ class ResponseProcessor {
                         "[TAPLINK-TX] TraceId=${paymentResult.traceId} | Cancel: " +
                                 "code=${paymentResult.code}, status=${paymentResult.transactionStatus}"
                     )
+                    notifyDeviceInfoIfPresent(paymentResult)
                     callback.onSuccess(paymentResult)
                 }
                 is PaymentEvent.Completed -> {
@@ -152,6 +160,7 @@ class ResponseProcessor {
                         "[TAPLINK-TX] TraceId=${paymentResult.traceId} | Completed: " +
                                 "code=${paymentResult.code}, status=${paymentResult.transactionStatus}"
                     )
+                    notifyDeviceInfoIfPresent(paymentResult)
                     callback.onSuccess(paymentResult)
                 }
                 else -> {
@@ -323,6 +332,23 @@ class ResponseProcessor {
         synchronized(processedTerminalEvents) {
             processedTerminalEvents.clear()
             LogUtil.d(TAG, "Cleared processed terminal events tracking")
+        }
+    }
+
+    /**
+     * If the payment result contains TaPro device info (taproVersion / deviceId),
+     * notify the registered listener. This typically happens on the first transaction
+     * response after INIT is performed by TaPro.
+     */
+    private fun notifyDeviceInfoIfPresent(result: PaymentResult) {
+        val taproVersion = result.taproVersion
+        val deviceId = result.deviceId
+        if (!taproVersion.isNullOrBlank() || !deviceId.isNullOrBlank()) {
+            LogUtil.d(TAG, "Device info found in response: taproVersion=$taproVersion, deviceId=$deviceId")
+            onDeviceInfoReceived?.invoke(
+                deviceId ?: "unknown",
+                taproVersion ?: "unknown"
+            )
         }
     }
 }

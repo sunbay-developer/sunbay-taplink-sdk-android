@@ -78,7 +78,17 @@ data class TaplinkConfig(
      * Specifies the width ratio that the TaPro app occupies on the screen.
      * Value should be between 0.0 and 1.0 (e.g., 0.5 means 50% of screen width).
      */
-    val taproAppWidthRatio: Float? = null
+    val taproAppWidthRatio: Float? = null,
+
+    /**
+     * Automatically open the TaPro USB secondary-screen player right after the transport
+     * is established, before [ConnectionListener.onConnected] is delivered (default: false).
+     *
+     * Enable this on terminals that drive a USB customer-facing display, so the screen
+     * player is already running by the time the integrator app starts its first transaction.
+     * If TaPro does not answer within a few seconds, `onConnected` is delivered anyway.
+     */
+    val autoOpenUsbScreenPlayer: Boolean = false
 ) {
     init {
         validateOptionalMerchantId(merchantId)
@@ -163,6 +173,14 @@ data class TaplinkConfig(
      * @return the updated configuration instance for method chaining
      */
     fun setTaproAppWidthRatio(taproAppWidthRatio: Float?): TaplinkConfig = copy(taproAppWidthRatio = taproAppWidthRatio)
+
+    /**
+     * Enables or disables automatically opening the TaPro USB secondary-screen player on connect.
+     *
+     * @param enabled whether the screen player is opened before `onConnected` is delivered
+     * @return the updated configuration instance for method chaining
+     */
+    fun setAutoOpenUsbScreenPlayer(enabled: Boolean): TaplinkConfig = copy(autoOpenUsbScreenPlayer = enabled)
 
     companion object {
         private const val MAX_MERCHANT_ID_LENGTH = 32

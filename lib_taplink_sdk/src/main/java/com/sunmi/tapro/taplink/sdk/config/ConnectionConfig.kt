@@ -303,6 +303,21 @@ class ConnectionConfig {
         }
 
         /**
+         * Creates a Secondary Display mode configuration.
+         *
+         * Connects via USB Virtual Serial Port (VSP) to a remote TaPro terminal and
+         * automatically opens the USB customer-facing screen player. The connection
+         * is only considered successful when both the VSP link is up AND the screen
+         * player launches on the remote TaPro device.
+         *
+         * @return the Secondary Display mode configuration
+         */
+        fun createSecondaryDisplayMode(): ConnectionConfig {
+            return ConnectionConfig()
+                .setConnectionMode(ConnectionMode.SECONDARY_DISPLAY)
+        }
+
+        /**
          * Creates a high-reliability configuration.
          *
          * Enables automatic reconnection and increases retry attempts and delays.

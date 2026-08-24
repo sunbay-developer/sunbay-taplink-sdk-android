@@ -25,6 +25,7 @@ import com.hoho.android.usbserial.driver.UsbSerialProber
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -95,13 +96,13 @@ class VSPClientKernel(
     private var targetDeviceName: String? = null
 
     /**
-     * 接收数据缓冲区：USB CDC-ACM 分包到达时暂存不完整的 JSON，
-     * 由 [extractNextJsonObject] 按大括号深度提取完整对象后再交给 [dataReceiver]。
-     * 仅在 dataReceiveJob 协程内访问，无并发争用。
+     * Receive data buffer: temporarily stores incomplete JSON when USB CDC-ACM receives fragmented packets.
+     * Complete JSON objects are extracted by [extractNextJsonObject] based on brace depth before passing to [dataReceiver].
+     * It is only accessed within the dataReceiveJob coroutine, with no concurrent contention.
      */
     private val receiveBuffer = StringBuilder()
 
-    /** 缓冲区上限：超限清空，防止异常数据导致内存持续增长 */
+    /** Buffer size limit: clear when exceeded to prevent memory growth from abnormal data. */
     private val MAX_RECEIVE_BUFFER_SIZE = 512 * 1024 // 512 KB
 
     // Permission request broadcast receiver
@@ -248,7 +249,7 @@ class VSPClientKernel(
             dataReceiveJob?.cancel()
             dataReceiveJob = null
 
-            // 清空接收缓冲，避免重连后读到上次的残留数据
+            // Clear receive buffer to avoid reading residual data from the previous connection after reconnecting
             receiveBuffer.clear()
 
             usbSerialPort?.close()
@@ -287,8 +288,8 @@ class VSPClientKernel(
     }
 
     /**
-     * 判断 USB 设备是否为商米 VSP 设备。
-     * 识别依据：存在 interfaceClass=10 且名称为 "CDC ACM Data" 的接口。
+     * Determine if the USB device is a Sunmi VSP device.
+     * Identification basis: interface with interfaceClass=10 and name "CDC ACM Data".
      */
     private fun isVspDevice(device: UsbDevice): Boolean {
         for (i in 0 until device.interfaceCount) {
@@ -303,7 +304,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 在已连接的 USB 设备中找到第一个商米 VSP 设备（按接口名识别，不依赖 VID/PID）。
+     * Find the first Sunmi VSP device from connected USB devices (identify by interface name, not VID/PID).
      */
     private fun findVspUsbDevice(): UsbDevice? {
         for (device in usbManager.deviceList.values) {
@@ -322,23 +323,23 @@ class VSPClientKernel(
     }
 
     /**
-     * 构建自定义探针。
+     * Build a custom prober.
      *
-     * 根本原因：商米 VSP 设备 VID/PID 不在默认 ProbeTable 中，
-     * [UsbSerialProber.getDefaultProber] 的 findAllDrivers 始终返回空列表。
+     * Root cause: Sunmi VSP device VID/PID is not in the default ProbeTable;
+     * [UsbSerialProber.getDefaultProber].findAllDrivers always returns an empty list.
      *
-     * 修复策略：
-     * - 注册已知商米 VID/PID 作为兜底（使用标准 CdcAcmSerialDriver）
-     * - 对运行时检测到的设备注册 [VSPSerialDriver]：
-     *   该驱动按接口名 "CDC ACM Data" 选择正确的数据接口，
-     *   标准 CdcAcmSerialDriver 按顺序选接口，在多接口设备上会选错导致无法收发数据
+     * Fix strategy:
+     * - Register known Sunmi VID/PID as fallback (using standard CdcAcmSerialDriver)
+     * - For runtime-detected devices, register [VSPSerialDriver]:
+     *   This driver selects the correct data interface by name "CDC ACM Data",
+     *   while standard CdcAcmSerialDriver selects interfaces sequentially, which may fail on multi-interface devices.
      */
     private fun buildCustomProber(targetDevice: UsbDevice? = null): UsbSerialProber {
         val table = ProbeTable()
-        // 已知商米 VSP VID/PID 兜底
+        // Known Sunmi VSP VID/PID fallback
         table.addProduct(0x16d0, 0x087e, CdcAcmSerialDriver::class.java)
         table.addProduct(0x067b, 0x23c3, CdcAcmSerialDriver::class.java)
-        // 运行时设备使用 VSPSerialDriver，确保选到正确的 "CDC ACM Data" 接口
+        // Runtime devices use VSPSerialDriver to ensure selecting the correct "CDC ACM Data" interface
         if (targetDevice != null) {
             table.addProduct(targetDevice.vendorId, targetDevice.productId, VSPSerialDriver::class.java)
             LogUtil.d(
@@ -350,10 +351,10 @@ class VSPClientKernel(
     }
 
     /**
-     * 连接到 VSP 设备。
+     * Connect to the VSP device.
      *
-     * 修复：原实现用 getDefaultProber() 找不到商米设备。
-     * 改为按接口名枚举设备，再用自定义探针（含 VSPSerialDriver）打开正确接口。
+     * Fix: Original implementation cannot find Sunmi devices using getDefaultProber().
+     * Changed to enumerate devices by interface name, then open the correct interface using custom prober (with VSPSerialDriver).
      */
     private suspend fun connectToVspDevice(): Boolean {
         return try {
@@ -381,7 +382,7 @@ class VSPClientKernel(
                     synchronized(this@VSPClientKernel) { pendingDevice = null }
                     return false
                 }
-                // 等待权限广播，由 continueConnection() 继续后续流程
+                // Wait for permission broadcast; continueConnection() will continue the subsequent flow
                 return false
             }
 
@@ -393,9 +394,9 @@ class VSPClientKernel(
     }
 
     /**
-     * 权限授予后继续建立连接。
+     * Continue establishing connection after permission is granted.
      *
-     * 修复：原实现同样使用 getDefaultProber()，此处同样改为自定义探针。
+     * Fix: Original implementation also uses getDefaultProber(); changed to custom prober here as well.
      */
     private suspend fun continueConnection(device: UsbDevice, connectionCallback: ConnectionCallback) {
         try {
@@ -484,7 +485,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 获取当前可用的 VSP 设备列表（使用自定义探针，避免默认探针遗漏商米设备）。
+     * Get the current list of available VSP devices (using custom prober to avoid default prober missing Sunmi devices).
      */
     fun getAvailableDevices(): List<Map<String, String>> {
         return try {
@@ -507,9 +508,8 @@ class VSPClientKernel(
     }
 
     /**
-     * USB port is open: start receive loop and block until application-layer handshake completes
-     * (service sends [VspHandshake.REQ], we send [VspHandshake.ACK]), same window as
-     * [VspHandshake.DEFAULT_TIMEOUT_MS].
+     * USB port is open: start the receive loop, actively drive [VspHandshake.REQ] and block until
+     * the application-layer handshake completes, within [VspHandshake.DEFAULT_TIMEOUT_MS].
      *
      * The waiter is passed explicitly into [startDataReceive] so each receive-loop coroutine holds
      * a reference to its own handshake waiter (captured at launch time) rather than reading the
@@ -520,8 +520,10 @@ class VSPClientKernel(
     private suspend fun awaitVspHandshake(): Boolean {
         val waiter = CompletableDeferred<Unit>()
         handshakeWaiter = waiter
+        var handshakeReqJob: Job? = null
         return try {
             startDataReceive(waiter)
+            handshakeReqJob = startHandshakeRequests(waiter)
             withTimeoutOrNull(VspHandshake.DEFAULT_TIMEOUT_MS) {
                 waiter.await()
             } != null
@@ -534,12 +536,29 @@ class VSPClientKernel(
             LogUtil.w(TAG, "VSP handshake await failed: ${e.message}")
             false
         } finally {
+            handshakeReqJob?.cancel()
             handshakeWaiter = null
             if (!waiter.isCompleted) {
                 waiter.cancel(CancellationException("VSP handshake abandoned"))
             }
         }
     }
+
+    /**
+     * Actively drive the handshake instead of only waiting for the service side.
+     *
+     * TaPro only periodically sends [VspHandshake.REQ] in its own connect flow; when the cable is not physically disconnected
+     * and TaPro is still CONNECTED (e.g., the integration app reconnects on its own), it won't send REQ again.
+     * If the client only waits passively, handshake will timeout. TaPro immediately replies with ACK upon receiving REQ during the data phase,
+     * so the client can periodically initiate REQ to cover both initial connection and reconnection scenarios.
+     */
+    private fun startHandshakeRequests(waiter: CompletableDeferred<Unit>): Job =
+        scope.launch {
+            while (isActive && !waiter.isCompleted) {
+                sendHandshakeReq()
+                delay(VspHandshake.DEFAULT_INTERVAL_MS)
+            }
+        }
 
     private fun cleanupAfterHandshakeFailure() {
         dataReceiveJob?.cancel()
@@ -550,9 +569,9 @@ class VSPClientKernel(
     /**
      * Start data reception loop.
      *
-     * 握手：服务端发 [VspHandshake.REQ]，客户端回 [VspHandshake.ACK]。
-     * 非握手数据追加到 [receiveBuffer]，由 [extractNextJsonObject] 按大括号深度
-     * 提取完整 JSON 后再交给 [dataReceiver]，解决 USB CDC-ACM 分包导致的 JSON 残缺问题。
+     * Handshake: service side sends [VspHandshake.REQ], client replies [VspHandshake.ACK].
+     * Non-handshake data is appended to [receiveBuffer]; [extractNextJsonObject] extracts complete JSON objects
+     * based on brace depth and passes them to [dataReceiver], solving the JSON incompleteness problem caused by USB CDC-ACM fragmentation.
      *
      * @param handshakeWaiter The waiter for this specific connection attempt, captured by the
      *   coroutine closure at launch time. Using a parameter (rather than the shared field) prevents
@@ -588,7 +607,7 @@ class VSPClientKernel(
                                     LogUtil.i(TAG, "VSP client handshake verified with server")
                                 }
                             }
-                            // 握手包可能携带后续 payload（对端合并发送）
+                            // Handshake packet may carry subsequent payload (sent merged by the remote end)
                             val remaining = VspHandshake.stripHandshakeMarkers(dataString)
                             if (remaining != null) {
                                 processIncomingPayload(remaining.toByteArray(Charsets.UTF_8))
@@ -624,7 +643,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 将新到字节追加到 [receiveBuffer]，触发 JSON 对象提取。
+     * Append newly arrived bytes to [receiveBuffer] and trigger JSON object extraction.
      */
     private fun processIncomingPayload(data: ByteArray) {
         if (data.isNotEmpty()) {
@@ -638,11 +657,11 @@ class VSPClientKernel(
     }
 
     /**
-     * 按大括号深度从 [receiveBuffer] 提取完整 JSON 对象，分发给 [dataReceiver]，
-     * 然后递归处理剩余内容（应对单次 read 包含多条消息的情况）。
+     * Extract complete JSON objects from [receiveBuffer] based on brace depth, dispatch to [dataReceiver],
+     * then recursively process remaining content (to handle multiple messages in a single read).
      *
-     * 与 Tapro VSPServiceKernel.unwrapVspFramedUartPayload 算法一致：
-     * '{' 深度+1，'}' 深度-1，归零即为完整 JSON。
+     * Algorithm matches Tapro VSPServiceKernel.unwrapVspFramedUartPayload:
+     * '{' increments depth, '}' decrements depth; depth reaching zero indicates a complete JSON object.
      */
     private fun extractNextJsonObject() {
         val startIdx = receiveBuffer.indexOf('{')
@@ -654,7 +673,7 @@ class VSPClientKernel(
             return
         }
         if (startIdx > 0) {
-            // 丢弃 '{' 之前的非 JSON 前缀（如 UART 帧头字节）
+            // Discard non-JSON prefix before '{' (e.g., UART frame header bytes)
             receiveBuffer.delete(0, startIdx)
         }
 
@@ -692,6 +711,19 @@ class VSPClientKernel(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send handshake ACK: ${e.message}")
             false
+        }
+    }
+
+    /**
+     * Send a handshake [VspHandshake.REQ] to the service side.
+     */
+    private fun sendHandshakeReq() {
+        try {
+            val reqBytes = VspHandshake.REQ.toByteArray(Charsets.UTF_8)
+            usbSerialPort?.write(reqBytes, 1000)
+            LogUtil.d(TAG, "Handshake REQ sent (client initiated)")
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Failed to send handshake REQ: ${e.message}")
         }
     }
 

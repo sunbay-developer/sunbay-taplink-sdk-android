@@ -12,6 +12,7 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - App-to-App Mode: Inter-application communication on the same device
   - Cable Mode: USB/Serial cable connection
   - LAN Mode: Network connection (wired/wireless)
+  - Secondary Display Mode: USB VSP connection with automatic secondary screen activation
 
 - **Complete Payment Functions**
   - Support for various transaction types (Sale, Refund, Void, Auth, etc.)
@@ -20,6 +21,12 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - Signature routing control (Sale/Auth): ON_SCREEN or ON_RECEIPT
   - Synchronous and asynchronous calling methods
   - Comprehensive transaction query functionality
+
+- **Secondary Display (USB Customer-Facing Screen)** *(since v1.0.9)*
+  - Open TaPro USB screen player via SDK or auto-open on connect
+  - Drive ad carousel, order list, and tip selection on external display
+  - `ConnectionConfig.createSecondaryDisplayMode()` — dedicated mode that combines VSP connection + auto screen player launch (failure = connection error)
+  - See [SECONDARY_DISPLAY_INTEGRATION.md](./SECONDARY_DISPLAY_INTEGRATION.md) for full guide
 
 - **Developer Friendly**
   - Clean and intuitive API design
@@ -106,6 +113,28 @@ class MainActivity : AppCompatActivity() {
         })
     }
 }
+```
+
+```kotlin
+// Secondary Display mode — connects via USB VSP and opens customer-facing screen
+val connectionConfig = ConnectionConfig.createSecondaryDisplayMode()
+
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        // Both VSP transport AND secondary display are ready.
+        // You can now show content on the customer-facing screen
+        // AND perform payment transactions.
+    }
+
+    override fun onDisconnected(reason: String) {
+        // Connection lost
+    }
+
+    override fun onError(error: ConnectionError) {
+        // Connection failed. If error.code == "351", the VSP link was
+        // established but the secondary display could not be opened.
+    }
+})
 ```
 
 #### Step 3: Process Payment

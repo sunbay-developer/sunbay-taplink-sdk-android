@@ -327,17 +327,27 @@ class ConnectionManager(
                     // Register data receiver
                     registerDataReceiver()
 
-                    // Physical connection established. INIT is deferred to first transaction execution.
-                    connectedDeviceId = "unknown"
-                    connectedTaproVersion = "unknown"
+                    // Extract TaPro version and device ID from extraInfoMap if available.
+                    // In APP_TO_APP mode, TaPro returns these via getExtraInfos() AIDL method
+                    // at connection time. For LAN/Cable modes, extraInfoMap does not contain
+                    // version info — it will be populated later from the first INIT response.
+                    val deviceId = extraInfoMap?.get(EXTRA_KEY_DEVICE_ID) ?: "unknown"
+                    val taproVersion = extraInfoMap?.get(EXTRA_KEY_TAPRO_VERSION) ?: "unknown"
+
+                    connectedDeviceId = deviceId
+                    connectedTaproVersion = taproVersion
                     currentConnectionConfig = connectionConfig
 
-                    LogUtil.d(TAG, "Physical connection established, INIT will be performed on first transaction")
+                    if (taproVersion != "unknown") {
+                        LogUtil.d(TAG, "TaPro version obtained at connect: $taproVersion, deviceId: $deviceId")
+                    } else {
+                        LogUtil.d(TAG, "Physical connection established, TaPro version will be obtained on first transaction (INIT)")
+                    }
 
                     updateConnectionStatus(
                         ConnectionStatus.CONNECTED,
-                        deviceId = "unknown",
-                        taproVersion = "unknown",
+                        deviceId = deviceId,
+                        taproVersion = taproVersion,
                         listener = listener
                     )
                 }
@@ -508,14 +518,23 @@ class ConnectionManager(
                         syncStatusFromKernel()
                         registerDataReceiver()
 
-                        connectedDeviceId = "unknown"
-                        connectedTaproVersion = "unknown"
+                        // Extract TaPro version and device ID if provided (typically not
+                        // available in Cable mode, but handle it consistently).
+                        val deviceId = extraInfoMap?.get(EXTRA_KEY_DEVICE_ID) ?: "unknown"
+                        val taproVersion = extraInfoMap?.get(EXTRA_KEY_TAPRO_VERSION) ?: "unknown"
+
+                        connectedDeviceId = deviceId
+                        connectedTaproVersion = taproVersion
                         currentConnectionConfig = connectionConfig
+
+                        if (taproVersion != "unknown") {
+                            LogUtil.d(TAG, "TaPro version obtained at connect ($mode): $taproVersion, deviceId: $deviceId")
+                        }
 
                         updateConnectionStatus(
                             ConnectionStatus.CONNECTED,
-                            deviceId = "unknown",
-                            taproVersion = "unknown",
+                            deviceId = deviceId,
+                            taproVersion = taproVersion,
                             listener = listener
                         )
                     }
@@ -1595,6 +1614,10 @@ class ConnectionManager(
         const val ERROR_SCAN_CANCELLED = "E504"
         const val ERROR_CAMERA_PERMISSION_DENIED = "E505"
         const val ERROR_CAMERA_UNAVAILABLE = "E506"
+
+        // Keys used by TaPro in extraInfoMap (returned via getExtraInfos in APP_TO_APP mode)
+        private const val EXTRA_KEY_TAPRO_VERSION = "taproVersion"
+        private const val EXTRA_KEY_DEVICE_ID = "deviceId"
     }
 
     /**

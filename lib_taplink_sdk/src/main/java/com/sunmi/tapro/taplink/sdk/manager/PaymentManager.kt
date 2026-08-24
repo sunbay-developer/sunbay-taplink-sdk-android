@@ -94,6 +94,13 @@ class PaymentManager(
         connectionManager.setConnectionDisconnectedListener {
             onPhysicalDisconnected()
         }
+
+        // When TaPro returns device info (taproVersion/deviceId) in a transaction response
+        // (typically from the first transaction after INIT), update ConnectionManager so
+        // getTaproVersion() / getConnectedDeviceId() return the real values.
+        responseProcessor.onDeviceInfoReceived = { deviceId, taproVersion ->
+            connectionManager.updateDeviceInfo(deviceId, taproVersion)
+        }
     }
 
     /**

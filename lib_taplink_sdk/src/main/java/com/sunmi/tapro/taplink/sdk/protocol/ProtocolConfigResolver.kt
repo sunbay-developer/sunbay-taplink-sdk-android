@@ -35,6 +35,11 @@ object ProtocolConfigResolver {
             return buildProtocolFromConnectionMode(null, context)
         }
 
+        // Secondary Display mode: always use VSP protocol
+        if (connectionConfig.connectionMode == ConnectionMode.SECONDARY_DISPLAY) {
+            return Pair(ProtocolManager.buildVspProtocol(), ConnectionMode.SECONDARY_DISPLAY.name)
+        }
+
         // Cable mode with specific protocol
         connectionConfig.cableProtocol?.let { protocol ->
             return buildProtocolFromCableProtocol(protocol, context)
@@ -123,6 +128,9 @@ object ProtocolConfigResolver {
     ): List<Pair<String, String>>? {
         if (context == null) return null
 
+        // Secondary Display mode uses VSP directly, no try-order needed
+        if (connectionConfig?.connectionMode == ConnectionMode.SECONDARY_DISPLAY) return null
+
         // Use try-order when we would have used detection (cable mode with AUTO or unspecified protocol)
         val isCableTryOrder = when {
             connectionConfig == null -> false
@@ -153,10 +161,11 @@ object ProtocolConfigResolver {
     }
 
     /**
-     * Check if ConnectionConfig is empty
+     * Check if ConnectionConfig is empty (no meaningful parameters set)
      */
     private fun isEmptyConnectionConfig(config: ConnectionConfig): Boolean {
-        return config.cableProtocol == null &&
+        return config.connectionMode == null &&
+                config.cableProtocol == null &&
                 config.host.isNullOrBlank() &&
                 config.port == null
     }

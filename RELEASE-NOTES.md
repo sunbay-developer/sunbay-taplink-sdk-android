@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [v1.0.9](#v109) — Secondary Display connection mode; auto-open USB customer display; cable/USB VSP reconnect fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
 - [v1.0.6](#v106) — Tip config moves to the transaction request
@@ -20,6 +21,76 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## v1.0.9
+
+### 🚀 New Features
+
+- **`SECONDARY_DISPLAY` connection mode (recommended for cross-device secondary display)** — A dedicated connection mode that combines USB Virtual Serial Port (VSP) transport with mandatory secondary display activation. Use `ConnectionConfig.createSecondaryDisplayMode()` or `ConnectionConfig().setConnectionMode(ConnectionMode.SECONDARY_DISPLAY)` to connect.
+
+  This mode **treats screen player failure as a connection failure**: `onConnected` is only delivered when both the VSP link AND the USB customer-facing display are confirmed ready. If the screen player cannot be opened, `onError` is delivered with the new error code **351** and the connection is torn down.
+
+  ```kotlin
+  // Recommended: one-step connection for cross-device secondary display
+  val config = ConnectionConfig.createSecondaryDisplayMode()
+
+  TaplinkSDK.connect(config, object : ConnectionListener {
+      override fun onConnected(deviceId: String, taproVersion: String) {
+          // Both VSP transport AND secondary display are ready.
+          // Full transaction API is available (sale, refund, void, etc.).
+      }
+
+      override fun onDisconnected(reason: String) { /* ... */ }
+
+      override fun onError(error: ConnectionError) {
+          if (error.code == "351") {
+              // VSP connected, but secondary display failed to open.
+              // Check: TaPro v1.0.5+ running? USB display connected?
+          }
+      }
+  })
+  ```
+
+- **Error code 351 — Secondary Display Open Failed** — Returned in `ConnectionListener.onError` when using `SECONDARY_DISPLAY` mode and the remote TaPro fails to open the USB screen player within the timeout window.
+
+- **`TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` (optional, best-effort)** — Makes the SDK open the TaPro USB customer-display player as part of `connect()`, **before** `ConnectionListener.onConnected` is delivered. Unlike `SECONDARY_DISPLAY` mode, this is **non-blocking**: `onConnected` is still delivered even if TaPro fails to answer or does not respond within 3 seconds. Disabled by default. Applies to `connect()`, `autoDiscoverAndConnect()` and `scanAndConnect()`.
+
+  ```kotlin
+  // Optional screen player (non-blocking, best-effort — for same-device or nice-to-have scenarios)
+  TaplinkSDK.init(
+      context,
+      TaplinkConfig.create(appId, secretKey)
+          .setAutoOpenUsbScreenPlayer(true)
+  )
+  ```
+
+  **When to use which:**
+
+  | Scenario | Recommended Approach |
+  |----------|---------------------|
+  | Cross-device secondary display (USB cable between POS and terminal with customer screen) | `ConnectionConfig.createSecondaryDisplayMode()` |
+  | Same-device optional screen (App-to-App or LAN, screen is nice-to-have) | `TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` |
+
+  For a complete guide on integrating the secondary display — including display detection, Compose rendering inside `Presentation`, lifecycle management, and common use cases (ad carousel, order list, tip selection) — see **[SECONDARY_DISPLAY_INTEGRATION.md](./SECONDARY_DISPLAY_INTEGRATION.md)**.
+
+### �🐛 Fixed
+
+- **`openUsbScreenPlayer()` no longer fails with `T06`.** The internally generated `transactionRequestId` was built from the action name plus a millisecond timestamp (`OPEN_USB_SCREEN_PLAYER_<13 digits>` = 36 characters), exceeding the terminal's 32-character limit. It now uses a short `USP_<timestamp>` prefix (17 characters). Integrators could not work around this because the API takes no request-id parameter.
+- **Cable / `USB_VSP` reconnect no longer times out.** The VSP client waited passively for TaPro to send the application-layer handshake request. TaPro only sends that request during its own connect flow, so when the cable was never physically unplugged — TaPro still reporting the USB link as connected — a reconnect initiated by the POS app alone never received a handshake and `onConnected` was never delivered, leaving the app unable to send further requests. The VSP client now actively sends `##TAPLINK_HSK_REQ##` every second until the peer answers, matching the behaviour already used by the `RS232` and `USB_AOA` transports. No API change is required; `connect()` after a `disconnect()` now succeeds on an already-open cable.
+
+### 🧭 Migration
+
+- No code changes required. Update the dependency version:
+
+  ```kotlin
+  dependencies {
+      implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.9")
+  }
+  ```
+
+- When reconnecting, still wait until `TaplinkSDK.getConnectionStatus()` reports `DISCONNECTED` before calling `connect()` again — `disconnect()` returns before the underlying serial handle is fully released.
 
 ---
 
