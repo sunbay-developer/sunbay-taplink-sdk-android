@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.sdk.protocol
 
 import android.content.Context
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.communication.util.LogUtil
@@ -55,8 +56,13 @@ object InsertedCableClassifier {
         }.getOrNull() ?: return null
 
         // 1) USB-to-serial bridge chip -> RS232 (strongest, concrete vendor-id signal).
+        //    A Sunmi VSP virtual serial device may enumerate under a bridge vendor id (e.g. Prolific
+        //    0x067B) while actually being a CDC-ACM VSP endpoint; such devices must NOT be treated as
+        //    RS232, so exclude anything exposing the VSP "CDC ACM Data" interface.
         val serialBridge = runCatching {
-            usbManager.deviceList?.values?.firstOrNull { it.vendorId in USB_SERIAL_BRIDGE_VENDOR_IDS }
+            usbManager.deviceList?.values?.firstOrNull {
+                it.vendorId in USB_SERIAL_BRIDGE_VENDOR_IDS && !isVspCdcAcmDevice(it)
+            }
         }.getOrNull()
         if (serialBridge != null) {
             LogUtil.d(
@@ -80,5 +86,23 @@ object InsertedCableClassifier {
         // 3) No external USB cable -> VSP on-board UART fallback (reported as null).
         LogUtil.d(TAG, "No external USB cable detected; VSP on-board fallback will be tried first")
         return null
+    }
+
+    /**
+     * A Sunmi VSP virtual serial endpoint exposes a CDC-ACM data interface named "CDC ACM Data"
+     * (interfaceClass 10). Matches the identification used by the VSP client kernel so the two stay
+     * consistent, and prevents a VSP device from being mistaken for an RS232 USB-serial bridge when
+     * their vendor ids collide (e.g. Prolific 0x067B).
+     */
+    private fun isVspCdcAcmDevice(device: UsbDevice): Boolean {
+        return runCatching {
+            for (i in 0 until device.interfaceCount) {
+                val iface = device.getInterface(i)
+                if (iface.interfaceClass == 10 && "CDC ACM Data".equals(iface.name, ignoreCase = true)) {
+                    return true
+                }
+            }
+            false
+        }.getOrDefault(false)
     }
 }

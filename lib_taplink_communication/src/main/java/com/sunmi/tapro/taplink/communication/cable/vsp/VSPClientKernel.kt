@@ -323,6 +323,30 @@ class VSPClientKernel(
     }
 
     /**
+     * Find the VSP USB device, waiting up to [VSP_DEVICE_WAIT_TIMEOUT_MS] for it to enumerate.
+     *
+     * Fixes the "cannot connect" case where `connect()` is called right after the cable is plugged
+     * in and the CDC-ACM interface has not finished enumerating yet. The poll is fully cancellable:
+     * [delay] throws [CancellationException] when [disconnect] cancels the scope's children (manual
+     * disconnect or a cable AUTO protocol switch), so it never blocks a teardown.
+     */
+    private suspend fun awaitVspUsbDevice(): UsbDevice? {
+        findVspUsbDevice()?.let { return it }
+
+        val deadline = System.currentTimeMillis() + VSP_DEVICE_WAIT_TIMEOUT_MS
+        LogUtil.d(TAG, "VSP device not enumerated yet, waiting up to ${VSP_DEVICE_WAIT_TIMEOUT_MS}ms...")
+        while (System.currentTimeMillis() < deadline) {
+            delay(VSP_DEVICE_POLL_INTERVAL_MS)
+            findVspUsbDevice()?.let {
+                LogUtil.i(TAG, "VSP device appeared after wait: ${it.deviceName}")
+                return it
+            }
+        }
+        LogUtil.e(TAG, "No VSP device after waiting ${VSP_DEVICE_WAIT_TIMEOUT_MS}ms")
+        return null
+    }
+
+    /**
      * Build a custom prober.
      *
      * Root cause: Sunmi VSP device VID/PID is not in the default ProbeTable;
@@ -358,7 +382,7 @@ class VSPClientKernel(
      */
     private suspend fun connectToVspDevice(): Boolean {
         return try {
-            val vspDevice = findVspUsbDevice()
+            val vspDevice = awaitVspUsbDevice()
             if (vspDevice == null) {
                 LogUtil.e(TAG, "No VSP device found (no device with 'CDC ACM Data' interface)")
                 return false
@@ -387,6 +411,9 @@ class VSPClientKernel(
             }
 
             continueConnectionInternal(targetDriver)
+        } catch (e: CancellationException) {
+            // Disconnect / AUTO protocol switch cancelled the device wait — propagate, do not report error.
+            throw e
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to connect to VSP device: ${e.message}")
             false
@@ -930,6 +957,20 @@ class VSPClientKernel(
     }
 
     companion object {
+        /**
+         * Max time to wait for the VSP USB (CDC-ACM) device to appear/enumerate before giving up.
+         *
+         * A common "cannot connect" report is caused by calling `connect()` right after plugging the
+         * cable: the Sunmi VSP CDC-ACM interface has not finished enumerating yet, so a single
+         * [findVspUsbDevice] lookup returns null and the attempt fails immediately. Polling for a
+         * bounded window makes the connection plug-and-play while still allowing cable AUTO mode to
+         * fall through to the next protocol within an acceptable time.
+         */
+        private const val VSP_DEVICE_WAIT_TIMEOUT_MS = 6_000L
+
+        /** Poll interval while waiting for the VSP USB device to enumerate. */
+        private const val VSP_DEVICE_POLL_INTERVAL_MS = 500L
+
         /**
          * Check if system supports USB Host mode
          */
