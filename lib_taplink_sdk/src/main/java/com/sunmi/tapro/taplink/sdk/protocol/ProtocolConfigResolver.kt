@@ -11,7 +11,8 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
  * Protocol Config Resolver
  *
  * Responsible for parsing and selecting appropriate protocol based on ConnectionConfig.
- * Cable AUTO mode uses try-order (VSP -> RS232 -> AOA) in ConnectionManager, not detection.
+ * Cable AUTO mode tries the inserted cable's protocol first (via [InsertedCableClassifier]), then
+ * retries the remaining protocols in base order (VSP -> RS232 -> AOA) in ConnectionManager.
  *
  * @author TaPro Team
  * @since 2025-12-17
@@ -115,8 +116,17 @@ object ProtocolConfigResolver {
 
     /**
      * Get cable protocols to try in order for connect-by-attempt strategy.
-     * Returns protocols in priority order: VSP, RS232, AOA.
-     * More accurate than device detection - tries actual connection.
+     *
+     * AUTO mode ordering (plug-and-play):
+     * 1. **Inserted-cable first** — [InsertedCableClassifier] inspects the USB subsystem; if a real
+     *    cable is plugged in (USB-serial bridge -> RS232, USB accessory -> AOA), that protocol is
+     *    tried first so the matching cable connects immediately.
+     * 2. **Cached protocol** — when no external cable signal is present (e.g. on-board VSP UART),
+     *    the last-successful protocol is used as a hint to order the base list.
+     * 3. **Base order** — VSP -> RS232 -> AOA for the remaining protocols.
+     *
+     * Trying an actual connection per protocol is more reliable than pure device detection, so the
+     * classifier only reorders the try-list; every protocol is still retried until one succeeds.
      *
      * @param connectionConfig Connection configuration
      * @param context Android context
@@ -150,11 +160,22 @@ object ProtocolConfigResolver {
             Pair(ProtocolManager.buildRs232Protocol(), CableProtocol.RS232.name),
             Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
         )
-        val cached = ConnectionPersistence(context).getDetectedCableProtocol()
-        if (cached != null && cached != CableProtocol.AUTO) {
-            val cachedPair = baseOrder.find { it.second == cached.name }
-            if (cachedPair != null) {
-                return listOf(cachedPair) + baseOrder.filter { it != cachedPair }
+
+        // 1) Prioritize the physically-inserted cable's protocol (plug-and-play).
+        val preferredName = when (InsertedCableClassifier.classify(context)) {
+            CableProtocol.RS232 -> CableProtocol.RS232.name
+            CableProtocol.USB_AOA -> CableProtocol.USB_AOA.name
+            else -> {
+                // 2) No external cable signal: fall back to last-successful cached protocol as a hint.
+                val cached = ConnectionPersistence(context).getDetectedCableProtocol()
+                if (cached != null && cached != CableProtocol.AUTO) cached.name else null
+            }
+        }
+
+        if (preferredName != null) {
+            val preferredPair = baseOrder.find { it.second == preferredName }
+            if (preferredPair != null) {
+                return listOf(preferredPair) + baseOrder.filter { it != preferredPair }
             }
         }
         return baseOrder
