@@ -8,7 +8,6 @@ import android.util.Log;
 import com.hoho.android.usbserial.driver.CommonUsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
-import com.hoho.android.usbserial.driver.UsbSerialPort.ControlLine;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -16,14 +15,17 @@ import java.util.EnumSet;
 import java.util.List;
 
 /**
- * 商米 VSP 专用串口驱动，移植自 sunmi-ecr-service VSPSerialDriver。
+ * Sunmi-specific VSP serial driver, ported from sunmi-ecr-service VSPSerialDriver.
  *
- * <p>商米 VSP 设备为多接口 CDC-ACM 设备，标准 CdcAcmSerialDriver 按接口顺序选择，
- * 会选到错误的接口，导致连接成功但无法收发数据。
- * 本驱动在构造时通过接口名 "CDC ACM Data" 定位正确的数据接口，保证打开正确端口。
+ * <p>Sunmi VSP devices are multi-interface CDC-ACM devices. The standard
+ * CdcAcmSerialDriver selects interfaces by order, which can select the wrong
+ * interface and result in a connected port that cannot send or receive data.
+ * This driver locates the correct data interface by the name "CDC ACM Data"
+ * during construction to ensure that the correct port is opened.
  *
- * <p>openInt() 使用 usb-serial-for-android 3.7.0 的无参签名，
- * 父类 open() 在调用本方法前已将 UsbDeviceConnection 赋值到 mConnection。
+ * <p>openInt() uses the no-argument signature from usb-serial-for-android 3.7.0.
+ * The parent open() method assigns the UsbDeviceConnection to mConnection
+ * before calling this method.
  */
 public class VSPSerialDriver implements UsbSerialDriver {
 
@@ -38,7 +40,8 @@ public class VSPSerialDriver implements UsbSerialDriver {
 
         int controlInterfaceCount = 0;
         int dataInterfaceCount = 0;
-        // 名称为 "CDC ACM Data" 的数据接口排序位置（从 1 开始，0 表示未找到）
+        // Ordered position of the data interface named "CDC ACM Data"
+        // (starts at 1; 0 means not found).
         int vspDataInterfaceIndex = 0;
 
         for (int i = 0; i < device.getInterfaceCount(); i++) {
@@ -56,14 +59,14 @@ public class VSPSerialDriver implements UsbSerialDriver {
 
         for (int i = 0; i < Math.min(controlInterfaceCount, dataInterfaceCount); i++) {
             if (vspDataInterfaceIndex != 0) {
-                // 有明确命名的接口，固定指向该数据接口
+                // An explicitly named interface was found; always use this data interface.
                 mPorts.add(new CdcAcmSerialPort(mDevice, vspDataInterfaceIndex, controlInterfaceCount));
             } else {
                 mPorts.add(new CdcAcmSerialPort(mDevice, i));
             }
         }
 
-        // 保底：未识别到接口对时退回单接口模式
+        // Fallback to single-interface mode when no interface pair is recognized.
         if (mPorts.isEmpty()) {
             Log.w(TAG, "No interface pair found, falling back to single-interface mode");
             mPorts.add(new CdcAcmSerialPort(mDevice, -1));
@@ -93,7 +96,7 @@ public class VSPSerialDriver implements UsbSerialDriver {
         private UsbEndpoint mControlEndpoint;
         private int mControlIndex;
 
-        /** controlPortNumber < 0 表示单接口模式 */
+        /** A controlPortNumber less than 0 indicates single-interface mode. */
         private final int controlPortNumber;
 
         private boolean mRts = false;
@@ -120,8 +123,9 @@ public class VSPSerialDriver implements UsbSerialDriver {
         }
 
         /**
-         * usb-serial-for-android 3.7.0 无参签名。
-         * 父类 open() 调用本方法前已将连接赋值到 mConnection。
+         * Uses the no-argument signature from usb-serial-for-android 3.7.0.
+         * The parent open() method assigns the connection to mConnection before
+         * calling this method.
          */
         @Override
         protected void openInt() throws IOException {
@@ -135,7 +139,7 @@ public class VSPSerialDriver implements UsbSerialDriver {
             }
         }
 
-        /** 单接口模式：控制和数据共享同一接口 */
+        /** Single-interface mode: control and data share the same interface. */
         private void openSingleInterface() throws IOException {
             mControlIndex     = 0;
             mControlInterface = mDevice.getInterface(0);
@@ -158,8 +162,10 @@ public class VSPSerialDriver implements UsbSerialDriver {
         }
 
         /**
-         * 多接口模式：按 portNumber / controlPortNumber 匹配控制接口和数据接口。
-         * portNumber 是数据接口排序位置（从 1 开始），在构造函数中由接口名确定。
+         * Multi-interface mode: match the control and data interfaces using
+         * portNumber and controlPortNumber.
+         * portNumber is the ordered position of the data interface (starting at 1),
+         * determined by its name during construction.
          */
         private void openInterface() throws IOException {
             Log.d(TAG, "Claiming interfaces, total=" + mDevice.getInterfaceCount());

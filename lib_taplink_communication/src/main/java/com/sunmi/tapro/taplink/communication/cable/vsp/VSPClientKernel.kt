@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 import kotlin.text.Charsets
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * VSP client kernel class
@@ -551,7 +552,7 @@ class VSPClientKernel(
         return try {
             startDataReceive(waiter)
             handshakeReqJob = startHandshakeRequests(waiter)
-            withTimeoutOrNull(VspHandshake.DEFAULT_TIMEOUT_MS) {
+            withTimeoutOrNull(VspHandshake.DEFAULT_TIMEOUT_MS.milliseconds) {
                 waiter.await()
             } != null
         } catch (e: CancellationException) {

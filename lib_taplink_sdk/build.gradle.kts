@@ -8,7 +8,7 @@ plugins {
 object SdkVersion {
     const val CODE = 15
 
-    const val NAME = "1.0.8.5"
+    const val NAME = "1.0.8.11"
 }
 
 object BuildConfig {
@@ -60,6 +60,12 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    testOptions {
+        // ProtocolRequestBuilder 单测走纯 JVM；SDK 依赖链里 android.util.Log 未实现，
+        // 用 returnDefaultValues 避免偶发的 "Method ... not mocked" 崩溃。
+        unitTests.isReturnDefaultValues = true
     }
 }
 

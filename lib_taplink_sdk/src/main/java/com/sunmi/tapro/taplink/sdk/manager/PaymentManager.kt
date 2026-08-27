@@ -289,22 +289,42 @@ class PaymentManager(
     }
 
     /**
-     * Resolves App-to-App mode attached to outgoing bizData.
+     * Resolves the connection-mode tag written into outgoing bizData (bizData.appToAppMode).
      *
-     * The mode is only attached for APP_TO_APP connection.
-     * If caller did not explicitly set it in ConnectionConfig, default to CUSTOM.
+     * Tapro reads this tag to decide the per-connection processing flow. Two connection modes
+     * attach a tag:
+     * - APP_TO_APP: attaches the configured [AppToAppMode] (CUSTOM by default) so Tapro chooses
+     *   the foreground (CUSTOM) or headless (HEADLESS) flow.
+     * - SECONDARY_DISPLAY (VSP transport): VSP frames carry no mode by default, so we explicitly
+     *   tag "SECONDARY_DISPLAY". This lets Tapro route the transaction straight into the engine
+     *   without showing the Taplink full-screen page and present the result on the secondary
+     *   display.
+     *
+     * All other connection modes (LAN / CABLE / NONE) attach no tag (returns null), preserving the
+     * default report shape. The tag is written before HMAC signing, so it participates in the
+     * signature and stays verifiable on Tapro.
+     *
+     * NOTE: the field name (appToAppMode) and the SECONDARY_DISPLAY value must stay in sync with
+     * Tapro's HeadlessModeConfig (KEY_APP_TO_APP_MODE / MODE_SECONDARY_DISPLAY).
      */
     private fun resolveAppToAppModeForRequest(): String? {
-        val isAppToApp = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
-        if (!isAppToApp) {
-            return null
+        return when (connectionManager.getConnectionMode()) {
+            ConnectionMode.APP_TO_APP.name -> {
+                val configuredMode = connectionManager.getAppToAppMode()
+                val resolvedMode = configuredMode ?: AppToAppMode.CUSTOM
+                if (configuredMode == null) {
+                    LogUtil.d(TAG, "App-to-App mode not configured, using default: ${resolvedMode.name}")
+                }
+                resolvedMode.name
+            }
+
+            ConnectionMode.SECONDARY_DISPLAY.name -> {
+                LogUtil.d(TAG, "Secondary display mode, tagging bizData.appToAppMode=SECONDARY_DISPLAY")
+                ConnectionMode.SECONDARY_DISPLAY.name
+            }
+
+            else -> null
         }
-        val configuredMode = connectionManager.getAppToAppMode()
-        val resolvedMode = configuredMode ?: AppToAppMode.CUSTOM
-        if (configuredMode == null) {
-            LogUtil.d(TAG, "App-to-App mode not configured, using default: ${resolvedMode.name}")
-        }
-        return resolvedMode.name
     }
 
     /**
