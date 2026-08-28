@@ -33,7 +33,7 @@ processing payments through TapLink SDK.
 
 **Key points:**
 - Secondary display rendering is **your app's responsibility**, not a TapLink protocol feature
-- The SDK provides `openUsbScreenPlayer()` to request TaPro to launch the display driver
+- The SDK provides `openUsbScreenPlayer()` to request Tapro to launch the display driver
 - Your app uses standard Android `Presentation` API to render on the detected display
 - Works on SUNMI terminals with USB customer-facing displays (e.g., T3 series)
 
@@ -64,7 +64,7 @@ processing payments through TapLink SDK.
            │ Presentation API             │ TapLink Protocol
            ▼                              ▼
     ┌──────────────┐            ┌──────────────────┐
-    │ USB Display  │            │ TaPro Terminal    │
+    │ USB Display  │            │ Tapro Terminal    │
     │ (Hardware)   │            │ (Payment Host)    │
     └──────────────┘            └──────────────────┘
 ```
@@ -74,7 +74,7 @@ processing payments through TapLink SDK.
 | Detecting the secondary `Display` | Your app (Android `DisplayManager`) |
 | Rendering content on it | Your app (Android `Presentation` + Compose) |
 | Launching the USB screen player | Your app (local `Intent`) or SDK (`openUsbScreenPlayer`) |
-| Payment transactions | TapLink SDK ↔ TaPro |
+| Payment transactions | TapLink SDK ↔ Tapro |
 
 > **Critical constraint:** Android `Presentation` can only render to a `Display`
 > registered in the **calling process's own** `DisplayManager`. The USB customer
@@ -105,7 +105,7 @@ You have two options to launch it:
 
 ### Option A: Automatic (Recommended for App-to-App mode)
 
-Configure the SDK to automatically open the screen player when connecting to TaPro:
+Configure the SDK to automatically open the screen player when connecting to Tapro:
 
 ```kotlin
 val config = TaplinkConfig.create(appId, secretKey)
@@ -116,7 +116,7 @@ TaplinkSDK.init(context, config)
 
 When enabled:
 - The player is launched right after the transport connects, **before** `onConnected` fires
-- If TaPro doesn't respond within 3 seconds, `onConnected` is delivered anyway
+- If Tapro doesn't respond within 3 seconds, `onConnected` is delivered anyway
 - If the launch fails, `onConnected` is still delivered (non-blocking)
 
 ### Option B: Manual
@@ -126,7 +126,7 @@ Call `openUsbScreenPlayer()` at any point after connecting:
 ```kotlin
 TaplinkSDK.openUsbScreenPlayer(object : PaymentCallback {
     override fun onSuccess(result: PaymentResult) {
-        // TaPro launched the USB screen player successfully.
+        // Tapro launched the USB screen player successfully.
         // NOTE: This does NOT mean your Display is ready — see Step 2.
     }
 
@@ -154,7 +154,7 @@ private fun launchLocalUsbScreenPlayer(context: Context) {
 ```
 
 > **⚠️ Important:** `openUsbScreenPlayer()` callback does NOT mean the display is ready.
-> It only confirms TaPro received the command. Always use `DisplayManager` to detect
+> It only confirms Tapro received the command. Always use `DisplayManager` to detect
 > when the display becomes available (Step 2).
 
 ---
@@ -412,7 +412,7 @@ class MyComposePresentation(
 | App launch / SDK connected | Launch USB screen player → show idle content (ads) |
 | Idle state | Show ad carousel (optionally with order summary) |
 | Order items change | **Update state only** — do not rebuild Presentation |
-| Payment initiated | Dismiss secondary content (TaPro takes over the display) |
+| Payment initiated | Dismiss secondary content (Tapro takes over the display) |
 | Transaction complete | Re-launch player → restore idle content |
 | Screen/Activity destroyed | Dismiss Presentation to prevent window leaks |
 | Settings toggle off | Dismiss all secondary content |
@@ -435,7 +435,7 @@ class AdCarouselPresentation(context: Context, display: Display) : Presentation(
 ```
 
 2. **Dismiss before transaction:** When a payment starts, dismiss your Presentation.
-   TaPro may take over the display for PIN entry or card prompts.
+   Tapro may take over the display for PIN entry or card prompts.
 
 3. **Guard against display loss:** Always catch `WindowManager.InvalidDisplayException`
    when calling `show()` — the display may disconnect between detection and rendering.
@@ -738,7 +738,7 @@ class PaymentViewModel : ViewModel() {
     }
 
     private fun startPayment(amount: BigDecimal, tipAmount: BigDecimal) {
-        secondaryController.dismiss()  // TaPro takes over the display
+        secondaryController.dismiss()  // Tapro takes over the display
 
         val request = PaymentRequest.sale(
             transactionRequestId = UUID.randomUUID().toString(),
@@ -777,7 +777,7 @@ class MyApplication : Application() {
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `findSecondaryDisplay()` always returns `null` | Queried before the player registered the display | Wait via `DisplayListener` with timeout (see Step 2) |
-| Display never appears even after waiting | Display is attached to the TaPro device, not to this device | `Presentation` cannot be used across devices; display must be on *your* device |
+| Display never appears even after waiting | Display is attached to the Tapro device, not to this device | `Presentation` cannot be used across devices; display must be on *your* device |
 | `sunmi.intent.action.SunmiUsbScreenPlayer` not resolved | USB screen player app not installed | Skip silently; treat the secondary display as unavailable |
 | `ViewTreeLifecycleOwner not found` crash | Compose used inside `Presentation` without owners | Set the three `ViewTree*Owner`s manually (see Step 4) |
 | Ad carousel restarts on every order change | Presentation rebuilt instead of updated | Push updates into a `MutableState`, not a new Presentation |
@@ -793,15 +793,15 @@ class MyApplication : Application() {
 
 | API | Description |
 |-----|-------------|
-| `TaplinkSDK.openUsbScreenPlayer(callback: PaymentCallback)` | Request TaPro to launch the USB screen player app. Only relevant in App-to-App mode where TaPro runs on the same device. |
+| `TaplinkSDK.openUsbScreenPlayer(callback: PaymentCallback)` | Request Tapro to launch the USB screen player app. Only relevant in App-to-App mode where Tapro runs on the same device. |
 | `TaplinkConfig.setAutoOpenUsbScreenPlayer(enabled: Boolean)` | Automatically launch the player on connect, before `onConnected` fires. 3-second timeout, non-blocking. Default: `false`. |
 
 ### Callback Semantics for `openUsbScreenPlayer()`
 
 | Callback | Meaning |
 |----------|---------|
-| `onSuccess` | TaPro successfully launched the screen player |
-| `onFailure(E303)` | Not connected to TaPro |
+| `onSuccess` | Tapro successfully launched the screen player |
+| `onFailure(E303)` | Not connected to Tapro |
 | `onFailure(E304)` | Failed to send command |
 | `onProgress` | Not used for this API |
 

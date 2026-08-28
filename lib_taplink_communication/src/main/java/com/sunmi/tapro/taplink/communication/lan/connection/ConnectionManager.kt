@@ -76,9 +76,6 @@ class ConnectionManager {
     private val isConnected = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    // Network connectivity checker
-    private val connectivityChecker = NetworkConnectivityChecker()
-
     suspend fun connect(uri: URI): ConnectionResult {
         return withContext(Dispatchers.IO) {
             try {
@@ -225,90 +222,6 @@ class ConnectionManager {
         }
     }
     
-    /**
-     * Simplified heartbeat send method
-     * 
-     * Removes additional network connectivity checks to reduce send delay
-     * Network issues will be detected through WebSocket's onError/onClose callbacks
-     * 
-     * @param message Heartbeat message
-     * @return true if sent successfully, false otherwise
-     */
-    suspend fun sendHeartbeat(message: String): Boolean {
-        return try {
-            val client = this.client
-            if (client == null || client.isClosed || client.isClosing) {
-                LogUtil.w(TAG, "Cannot send heartbeat: WebSocket not available")
-                isConnected.set(false)
-                return false
-            }
-
-            // Send heartbeat directly, no additional checks
-            client.send(message)
-            LogUtil.d(TAG, "Heartbeat sent: $message")
-            true
-            
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to send heartbeat: ${e.message}")
-            isConnected.set(false)
-            false
-        }
-    }
-    
-    /**
-     * Send heartbeat message (with network connectivity check)
-     * 
-     * Note: Network connectivity check only uses ping, does not create TCP connection,
-     * this avoids interfering with existing WebSocket connection (especially when server only supports single client connection)
-     * 
-     * @param message Heartbeat message
-     * @return true if sent successfully, false otherwise
-     */
-    suspend fun sendHeartbeatWithConnectivityCheck(message: String): Boolean {
-        return try {
-            if (!isConnected()) {
-                LogUtil.w(TAG, "Cannot send heartbeat: not connected")
-                return false
-            }
-
-            // Check WebSocket connection actual status
-            val client = this.client
-            if (client == null || client.isClosed || client.isClosing) {
-                LogUtil.w(TAG, "Cannot send heartbeat: WebSocket client is closed or closing")
-                isConnected.set(false)
-                return false
-            }
-
-            // Check network connectivity (only additional check for heartbeat)
-            val uri = currentUri
-            if (uri != null) {
-                val isReachable = connectivityChecker.isHostReachable(
-                    host = uri.host,
-                    port = uri.port,
-                    timeoutMs = 2000 // 2 second timeout
-                )
-                
-                if (!isReachable) {
-                    LogUtil.w(TAG, "Cannot send heartbeat: host ${uri.host}:${uri.port} is not reachable")
-                    // When network is unreachable, update connection status but don't immediately disconnect WebSocket
-                    // Let WebSocket detect network issues itself and trigger onError or onClose
-                    return false
-                }
-            }
-
-            // Send heartbeat message
-            client.send(message)
-            LogUtil.d(TAG, "Heartbeat message sent with connectivity check: $message")
-            true
-            
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to send heartbeat message: ${e.message}")
-            // Update connection status when send fails
-            isConnected.set(false)
-            false
-        }
-    }
-
     fun setMessageListener(listener: MessageListener?) {
         this.messageListener = listener
         LogUtil.d(TAG, "Message listener ${if (listener != null) "set" else "removed"}")
