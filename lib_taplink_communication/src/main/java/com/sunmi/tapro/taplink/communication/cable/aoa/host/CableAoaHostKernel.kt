@@ -168,6 +168,14 @@ class CableAoaHostKernel(
     ) {
         LogUtil.i(TAG, "=== Connect requested, current state: $state ===")
 
+        // Fail fast when no USB device is physically attached, so AOA doesn't start switching /
+        // polling for a device that isn't there (avoids phantom UART activity / blocked switch).
+        if (usbManager.deviceList.isEmpty()) {
+            LogUtil.w(TAG, "performConnect aborted: no USB device attached")
+            notifyConnectionError("No USB device attached", InnerErrorCode.E251)
+            return
+        }
+
         synchronized(stateLock) {
             when (state) {
                 ConnectionState.CONNECTED -> {

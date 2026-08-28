@@ -1,9 +1,12 @@
+@file:Suppress("DEPRECATION")
+
 package com.sunmi.tapro.taplink.sdk.protocol
 
 import android.content.Context
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
+import com.sunmi.tapro.taplink.sdk.enums.PinpadStrategy
 import com.sunmi.tapro.taplink.sdk.persistence.ConnectionPersistence
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 
@@ -154,6 +157,15 @@ object ProtocolConfigResolver {
 
         if (!isCableTryOrder) return null
 
+        return buildCableTryOrder(context)
+    }
+
+    /**
+     * Builds the reordered cable protocol try-list (VSP -> RS232 -> AOA base order, with the
+     * physically-inserted cable's protocol — or the last-successful cached protocol — moved first).
+     * Shared by [getCableProtocolsToTry] and [getPinpadAutoCandidates].
+     */
+    private fun buildCableTryOrder(context: Context): List<Pair<String, String>> {
         // Base order: VSP, RS232, AOA. Prefer serial when peer enumerates as CDC; AOA last for stale-enum cases.
         val baseOrder = listOf(
             Pair(ProtocolManager.buildVspProtocol(), CableProtocol.USB_VSP.name),
@@ -179,6 +191,53 @@ object ProtocolConfigResolver {
             }
         }
         return baseOrder
+    }
+
+    /**
+     * Get the ordered transport candidates for a PinPad AUTO session.
+     *
+     * Only applies when [ConnectionConfig.pinpadAuto] is true. Iterates
+     * [ConnectionConfig.autoPriority] and expands each strategy into concrete attempts:
+     * - [PinpadStrategy.LAN] → a single LAN candidate (requires a non-blank host)
+     * - [PinpadStrategy.CABLE] → the cable try-order (VSP/RS232/AOA, reordered by inserted cable)
+     *
+     * The connection layer ([com.sunmi.tapro.taplink.sdk.manager.ConnectionManager]) tries the
+     * returned candidates in order, falling back to the next on connection failure/timeout.
+     *
+     * @return ordered (protocol, connectionMode) candidates, or null when not a PINPAD AUTO session
+     */
+    fun getPinpadAutoCandidates(
+        connectionConfig: ConnectionConfig?,
+        context: Context?
+    ): List<Pair<String, String>>? {
+        if (connectionConfig == null || !connectionConfig.pinpadAuto) return null
+
+        val candidates = mutableListOf<Pair<String, String>>()
+        for (strategy in connectionConfig.autoPriority) {
+            when (strategy) {
+                PinpadStrategy.LAN -> {
+                    val host = connectionConfig.host
+                    if (!host.isNullOrBlank()) {
+                        val port = connectionConfig.port ?: 8443
+                        candidates.add(
+                            Pair(
+                                ProtocolManager.buildLanProtocol(host, port, secure = false),
+                                ConnectionMode.LAN.name
+                            )
+                        )
+                    }
+                }
+                PinpadStrategy.CABLE -> {
+                    if (context != null) {
+                        candidates.addAll(buildCableTryOrder(context))
+                    }
+                }
+                PinpadStrategy.AUTO -> {
+                    // AUTO is not a concrete transport within a priority list; ignore.
+                }
+            }
+        }
+        return candidates.distinct().ifEmpty { null }
     }
 
     /**

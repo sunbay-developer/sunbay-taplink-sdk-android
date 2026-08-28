@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [Unreleased](#unreleased) — PINPAD / ON_DEVICE integration modes, PinpadStrategy config, AUTO transport fallback
 - [v1.0.9](#v109) — Secondary Display connection mode; auto-open USB customer display; cable/USB VSP reconnect fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
@@ -21,6 +22,59 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## Unreleased
+
+> **100% additive & backward-compatible.** All classic APIs (`ConnectionMode.APP_TO_APP` / `LAN` / `CABLE`, `CableProtocol.*`, the `createAppMode/createLanMode/createCableMode` factories) remain **fully supported with no removal planned**. They are marked `@Deprecated` only to *guide new integrations* toward the new integration-mode API — existing integrations require **no changes** and behave exactly as before.
+
+### 🚀 New Features
+
+- **Integration modes decoupled from transport.** `ConnectionMode` gains two business-level values:
+  - **`ON_DEVICE`** — the business app and TaPro run on the same terminal (currently implemented via App-to-App). Normalizes internally onto `APP_TO_APP`.
+  - **`PINPAD`** — TaPro acts as a standalone PIN Pad reached over a connection channel. The concrete channel is chosen via the new **`PinpadStrategy`** config (mirroring how `CableProtocol` configures `CABLE`), not by a separate top-level mode.
+
+  ```kotlin
+  // On-device (same terminal)
+  val onDevice = ConnectionConfig.createOnDeviceMode()
+
+  // PinPad over LAN
+  val lan = ConnectionConfig.createPinpadMode(PinpadStrategy.LAN, host = "192.168.1.20", port = 8443)
+
+  // PinPad over cable (defaults to cable AUTO try-order: VSP → RS232 → AOA)
+  val cable = ConnectionConfig.createPinpadMode(PinpadStrategy.CABLE)
+
+  // PinPad AUTO — pick a transport and fall back if it becomes unusable
+  val auto = ConnectionConfig.createPinpadMode(
+      PinpadStrategy.AUTO,
+      host = "192.168.1.20", port = 8443,
+      autoPriority = listOf(PinpadStrategy.LAN, PinpadStrategy.CABLE) // default; configurable
+  )
+  ```
+
+- **`PinpadStrategy { AUTO, LAN, CABLE }`** — new config enum selecting the PINPAD connection strategy. Set via `ConnectionConfig.setPinpadStrategy(...)`. `PINPAD` defaults to `AUTO` when no strategy is given.
+
+- **Configurable AUTO priority.** `ConnectionConfig.setAutoPriority(...)` (list or single-preferred overload) controls the LAN vs CABLE try order. Default is `[LAN, CABLE]` (`ConnectionConfig.DEFAULT_AUTO_PRIORITY`) — never hard-coded in call sites.
+
+- **AUTO transport fallback.** Under `PinpadStrategy.AUTO`, connection establishment tries each candidate transport in priority order. At runtime, if the active transport becomes blocked (a payment request times out — inner code **306** — while the socket appears connected), the SDK rotates to the next candidate and reconnects. This only affects the **connection layer**; the single-transaction rule (a 306 timeout must be resolved via `query()` first, never blindly retried) is unchanged.
+
+### 🔧 Improved
+
+- **Cable → LAN switching.** Requesting a *different* configuration while a previous attempt is stuck in `CONNECTING` now cancels the stuck attempt and starts fresh, instead of silently queueing behind it.
+- **Cable connection reliability.** USB cable kernels (VSP / RS232-Serial / AOA) now fail fast when **no USB device is attached**, avoiding phantom on-board UART polling and freed-up transport switching. AOA control-transfer timeouts were raised (100 ms → 1000 ms) with added diagnostics so the accessory hand-off no longer silently fails.
+
+### 🧭 Migration
+
+| Classic API (still supported) | New integration-mode API (recommended) |
+|---|---|
+| `ConnectionMode.APP_TO_APP` / `createAppMode()` | `ConnectionMode.ON_DEVICE` / `createOnDeviceMode()` |
+| `ConnectionMode.LAN` / `createLanMode(host, port)` | `createPinpadMode(PinpadStrategy.LAN, host, port)` |
+| `ConnectionMode.CABLE` / `createCableMode(protocol)` | `createPinpadMode(PinpadStrategy.CABLE, cableProtocol = protocol)` |
+| `CableProtocol.AUTO` (cable-only VSP/RS232/AOA) | `createPinpadMode(PinpadStrategy.AUTO)` (spans LAN **and** cable) |
+| `ConnectionMode.SECONDARY_DISPLAY` | *unchanged* (independent integration mode) |
+
+> **AUTO semantics note:** Classic `ConnectionMode.CABLE` + `CableProtocol.AUTO` behavior is **unchanged** — it still only selects among cable protocols (VSP/RS232/AOA) and never switches to LAN. The new cross-transport AUTO fallback (LAN ⇄ CABLE) applies **only** when you opt in via `PinpadStrategy.AUTO`.
 
 ---
 

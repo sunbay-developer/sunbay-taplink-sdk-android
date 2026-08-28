@@ -240,6 +240,14 @@ open class SerialServiceKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
+        // Fail fast when no USB device is physically attached, so we don't register receivers or
+        // start polling for a device that isn't there (avoids phantom UART activity / blocked switch).
+        if (usbManager.deviceList.isEmpty()) {
+            LogUtil.w(TAG, "performConnect aborted: no USB device attached")
+            notifyConnectionError("No USB device attached", InnerErrorCode.E251)
+            return
+        }
+
         // After disconnect, kernel may be reused; cleanup unregisters USB permission receiver — re-register each connect
         registerPermissionReceiver()
 

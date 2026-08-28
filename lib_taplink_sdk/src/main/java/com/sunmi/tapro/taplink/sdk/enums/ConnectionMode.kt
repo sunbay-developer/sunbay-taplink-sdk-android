@@ -9,16 +9,58 @@ package com.sunmi.tapro.taplink.sdk.enums
 enum class ConnectionMode {
     /** Not enabled */
     NONE,
-    
+
+    /**
+     * On-device integration mode.
+     *
+     * The business app and TaPro run on the SAME terminal; the business app invokes
+     * TaPro locally to complete the payment. This is the business-facing integration
+     * mode; its current underlying implementation is App-to-App.
+     *
+     * Prefer this over the deprecated [APP_TO_APP] value: [ON_DEVICE] is normalized
+     * onto the same App-to-App behavior internally, but future local mechanisms
+     * (e.g. AIDL/Binder) can be added without changing the public mode.
+     */
+    ON_DEVICE,
+
+    /**
+     * PinPad integration mode.
+     *
+     * TaPro acts as a standalone payment PIN Pad driven by an external business system
+     * over a connection channel. The concrete connection strategy (AUTO / LAN / CABLE)
+     * is NOT expressed as separate enum values; it is configured as a detail via
+     * [com.sunmi.tapro.taplink.sdk.config.ConnectionConfig.setPinpadStrategy], exactly
+     * like [CABLE] configures its protocol via
+     * [com.sunmi.tapro.taplink.sdk.config.ConnectionConfig.setCableProtocol].
+     *
+     * PINPAD is normalized internally onto classic LAN/CABLE behavior (or, for the AUTO
+     * strategy, a cross-transport auto-selection with fallback), so existing resolver /
+     * manager logic is reused unchanged.
+     */
+    PINPAD,
+
     /** Same device Intent */
+    @Deprecated(
+        message = "Use ON_DEVICE instead. APP_TO_APP is retained for backward compatibility " +
+            "and is normalized onto the same on-device behavior.",
+        replaceWith = ReplaceWith("ON_DEVICE")
+    )
     APP_TO_APP,
 
     /**
      * Cable mode
      */
+    @Deprecated(
+        message = "Use PINPAD with ConnectionConfig.setPinpadStrategy(PinpadStrategy.CABLE) instead. " +
+            "CABLE is retained for backward compatibility and remains fully functional."
+    )
     CABLE,
-    
+
     /** WebSocket (LAN/WLAN) */
+    @Deprecated(
+        message = "Use PINPAD with ConnectionConfig.setPinpadStrategy(PinpadStrategy.LAN) instead. " +
+            "LAN is retained for backward compatibility and remains fully functional."
+    )
     LAN,
 
     /**

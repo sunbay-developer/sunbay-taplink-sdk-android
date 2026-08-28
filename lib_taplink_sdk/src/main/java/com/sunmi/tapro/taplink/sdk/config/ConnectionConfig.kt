@@ -1,7 +1,10 @@
+@file:Suppress("DEPRECATION")
+
 package com.sunmi.tapro.taplink.sdk.config
 
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
+import com.sunmi.tapro.taplink.sdk.enums.PinpadStrategy
 import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 
 /**
@@ -38,6 +41,36 @@ class ConnectionConfig {
      */
     var cableProtocol: CableProtocol? = null
         private set
+
+    /**
+     * PinPad connection strategy (optional).
+     *
+     * Only meaningful when the public mode is [ConnectionMode.PINPAD]. Analogous to
+     * [cableProtocol] for [ConnectionMode.CABLE]: it configures HOW the PinPad connects
+     * (AUTO / LAN / CABLE) without exposing separate top-level [ConnectionMode] values.
+     */
+    var pinpadStrategy: PinpadStrategy? = null
+        private set
+
+    /**
+     * Whether this configuration resolves to the PinPad AUTO strategy (cross-transport
+     * auto-selection with fallback). Derived internally from [ConnectionMode.PINPAD] +
+     * [PinpadStrategy.AUTO]; when true, [connectionMode] is left null and the connection
+     * layer selects a transport according to [autoPriority].
+     */
+    var pinpadAuto: Boolean = false
+        private set
+
+    /**
+     * Priority order used by the PinPad AUTO strategy to decide which transport to try
+     * first when multiple are viable. Only [PinpadStrategy.LAN] / [PinpadStrategy.CABLE]
+     * are meaningful here. Defaults to [DEFAULT_AUTO_PRIORITY] (LAN first, then CABLE).
+     */
+    var autoPriority: List<PinpadStrategy> = DEFAULT_AUTO_PRIORITY
+        private set
+
+    /** Internal flag: the public mode selected was [ConnectionMode.PINPAD]. */
+    private var isPinpadMode: Boolean = false
 
     /**
      * Host address (optional).
@@ -90,12 +123,102 @@ class ConnectionConfig {
     /**
      * Sets the connection mode.
      *
+     * New business-facing modes are normalized onto classic behavior so existing
+     * resolver/manager logic is reused unchanged:
+     * - [ConnectionMode.ON_DEVICE] → [ConnectionMode.APP_TO_APP]
+     * - [ConnectionMode.PINPAD] → LAN / CABLE / AUTO depending on [pinpadStrategy]
+     *   (defaults to [PinpadStrategy.AUTO] when unset), via [applyPinpadNormalization].
+     *
      * @param mode the connection mode
      * @return the current configuration instance for method chaining
      */
     fun setConnectionMode(mode: ConnectionMode): ConnectionConfig {
-        this.connectionMode = mode
+        when (mode) {
+            ConnectionMode.PINPAD -> {
+                isPinpadMode = true
+                if (pinpadStrategy == null) pinpadStrategy = PinpadStrategy.AUTO
+                applyPinpadNormalization()
+            }
+            ConnectionMode.ON_DEVICE -> {
+                clearPinpadState()
+                this.connectionMode = ConnectionMode.APP_TO_APP
+            }
+            else -> {
+                clearPinpadState()
+                this.connectionMode = mode
+            }
+        }
         return this
+    }
+
+    /**
+     * Sets the PinPad connection strategy (only meaningful together with
+     * [ConnectionMode.PINPAD]). Can be called before or after [setConnectionMode];
+     * normalization is re-applied when the mode is PINPAD.
+     *
+     * @param strategy the PinPad connection strategy
+     * @return the current configuration instance for method chaining
+     */
+    fun setPinpadStrategy(strategy: PinpadStrategy): ConnectionConfig {
+        this.pinpadStrategy = strategy
+        if (isPinpadMode) applyPinpadNormalization()
+        return this
+    }
+
+    /**
+     * Sets the PinPad AUTO priority order. Only [PinpadStrategy.LAN]/[PinpadStrategy.CABLE]
+     * entries are honored; an empty/invalid list falls back to [DEFAULT_AUTO_PRIORITY].
+     *
+     * @param priority ordered transports to try first under AUTO
+     * @return the current configuration instance for method chaining
+     */
+    fun setAutoPriority(priority: List<PinpadStrategy>): ConnectionConfig {
+        val filtered = priority.filter { it == PinpadStrategy.LAN || it == PinpadStrategy.CABLE }
+        this.autoPriority = filtered.distinct().ifEmpty { DEFAULT_AUTO_PRIORITY }
+        return this
+    }
+
+    /**
+     * Convenience overload: sets [preferred] first and the other transport as fallback.
+     *
+     * @param preferred the transport to try first ([PinpadStrategy.LAN] or [PinpadStrategy.CABLE])
+     * @return the current configuration instance for method chaining
+     */
+    fun setAutoPriority(preferred: PinpadStrategy): ConnectionConfig {
+        val other = if (preferred == PinpadStrategy.CABLE) PinpadStrategy.LAN else PinpadStrategy.CABLE
+        return setAutoPriority(listOf(preferred, other))
+    }
+
+    /**
+     * Normalizes a PINPAD selection onto classic connection behavior based on
+     * [pinpadStrategy]. Idempotent and call-order independent.
+     */
+    private fun applyPinpadNormalization() {
+        when (pinpadStrategy ?: PinpadStrategy.AUTO) {
+            PinpadStrategy.LAN -> {
+                this.connectionMode = ConnectionMode.LAN
+                this.pinpadAuto = false
+            }
+            PinpadStrategy.CABLE -> {
+                this.connectionMode = ConnectionMode.CABLE
+                this.pinpadAuto = false
+                // PINPAD + CABLE defaults to cable AUTO try-order (VSP/RS232/AOA) unless
+                // an explicit protocol was chosen — no need to pin a specific protocol.
+                if (this.cableProtocol == null) this.cableProtocol = CableProtocol.AUTO
+            }
+            PinpadStrategy.AUTO -> {
+                // AUTO selects a transport at the connection layer; leave connectionMode null.
+                this.connectionMode = null
+                this.pinpadAuto = true
+            }
+        }
+    }
+
+    /** Clears any PinPad-derived state when a non-PINPAD mode is selected. */
+    private fun clearPinpadState() {
+        isPinpadMode = false
+        pinpadStrategy = null
+        pinpadAuto = false
     }
 
     /**
@@ -219,6 +342,9 @@ class ConnectionConfig {
         return this.connectionMode == other.connectionMode &&
                 this.appToAppMode == other.appToAppMode &&
                this.cableProtocol == other.cableProtocol &&
+               this.pinpadAuto == other.pinpadAuto &&
+               this.pinpadStrategy == other.pinpadStrategy &&
+               this.autoPriority == other.autoPriority &&
                this.host == other.host &&
                this.port == other.port &&
                this.connectionTimeout == other.connectionTimeout &&
@@ -237,6 +363,9 @@ class ConnectionConfig {
                 "connectionMode=$connectionMode, " +
                 "appToAppMode=$appToAppMode, " +
                 "cableProtocol=$cableProtocol, " +
+                "pinpadStrategy=$pinpadStrategy, " +
+                "pinpadAuto=$pinpadAuto, " +
+                "autoPriority=$autoPriority, " +
                 "host=$host, " +
                 "port=$port, " +
                 "connectionTimeout=${connectionTimeout}s, " +
@@ -247,6 +376,10 @@ class ConnectionConfig {
     }
     
     companion object {
+
+        /** Default PinPad AUTO priority: try LAN first, then CABLE. */
+        val DEFAULT_AUTO_PRIORITY: List<PinpadStrategy> =
+            listOf(PinpadStrategy.LAN, PinpadStrategy.CABLE)
 
         /**
          * Creates a default connection configuration.
@@ -266,10 +399,29 @@ class ConnectionConfig {
          *
          * @return the App-to-App mode configuration
          */
+        @Deprecated(
+            message = "Use createOnDeviceMode() instead. App-to-App is the current underlying " +
+                "implementation of the ON_DEVICE integration mode.",
+            replaceWith = ReplaceWith("ConnectionConfig.createOnDeviceMode()")
+        )
         fun createAppMode(mode: AppToAppMode = AppToAppMode.CUSTOM): ConnectionConfig {
             return ConnectionConfig()
                 .setConnectionMode(ConnectionMode.APP_TO_APP)
                 .setAppToAppMode(mode)
+        }
+
+        /**
+         * Creates an on-device (ON_DEVICE) integration mode configuration.
+         *
+         * The business app and TaPro run on the same terminal. Normalized internally onto
+         * the App-to-App implementation.
+         *
+         * @return the on-device mode configuration
+         */
+        fun createOnDeviceMode(mode: AppToAppMode = AppToAppMode.CUSTOM): ConnectionConfig {
+            return ConnectionConfig()
+                .setAppToAppMode(mode)
+                .setConnectionMode(ConnectionMode.ON_DEVICE)
         }
 
         /**
@@ -278,6 +430,10 @@ class ConnectionConfig {
          * @param protocol the cable protocol type (optional)
          * @return the Cable mode configuration
          */
+        @Deprecated(
+            message = "Use createPinpadMode(PinpadStrategy.CABLE) instead. CABLE remains fully functional.",
+            replaceWith = ReplaceWith("ConnectionConfig.createPinpadMode(PinpadStrategy.CABLE, cableProtocol = protocol)")
+        )
         fun createCableMode(protocol: CableProtocol = CableProtocol.AUTO): ConnectionConfig {
             return ConnectionConfig()
                 .setConnectionMode(ConnectionMode.CABLE)
@@ -291,6 +447,10 @@ class ConnectionConfig {
          * @param port the port number (optional)
          * @return the LAN mode configuration
          */
+        @Deprecated(
+            message = "Use createPinpadMode(PinpadStrategy.LAN, host, port) instead. LAN remains fully functional.",
+            replaceWith = ReplaceWith("ConnectionConfig.createPinpadMode(PinpadStrategy.LAN, host, port)")
+        )
         fun createLanMode(host: String? = null, port: Int? = null): ConnectionConfig {
             val config = ConnectionConfig().setConnectionMode(ConnectionMode.LAN)
             if (host != null) {
@@ -299,6 +459,38 @@ class ConnectionConfig {
             if (port != null) {
                 config.setPort(port)
             }
+            return config
+        }
+
+        /**
+         * Creates a PinPad integration mode configuration.
+         *
+         * The concrete connection is configured via [strategy] (AUTO / LAN / CABLE), mirroring
+         * how [createCableMode] configures its protocol. AUTO selects a transport per
+         * [autoPriority] with runtime fallback; CABLE defaults to the cable AUTO try-order
+         * (VSP/RS232/AOA) unless [cableProtocol] is given; LAN requires [host] (+ optional [port]).
+         *
+         * @param strategy PinPad connection strategy (default [PinpadStrategy.AUTO])
+         * @param host LAN host (for LAN / AUTO)
+         * @param port LAN port (for LAN / AUTO)
+         * @param cableProtocol explicit cable protocol (for CABLE); defaults to AUTO try-order when null
+         * @param autoPriority optional AUTO priority override
+         * @return the PinPad mode configuration
+         */
+        fun createPinpadMode(
+            strategy: PinpadStrategy = PinpadStrategy.AUTO,
+            host: String? = null,
+            port: Int? = null,
+            cableProtocol: CableProtocol? = null,
+            autoPriority: List<PinpadStrategy>? = null
+        ): ConnectionConfig {
+            val config = ConnectionConfig()
+            if (host != null) config.setHost(host)
+            if (port != null) config.setPort(port)
+            if (cableProtocol != null) config.setCableProtocol(cableProtocol)
+            if (autoPriority != null) config.setAutoPriority(autoPriority)
+            config.setPinpadStrategy(strategy)
+            config.setConnectionMode(ConnectionMode.PINPAD)
             return config
         }
 

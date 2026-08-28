@@ -836,6 +836,124 @@ enum class CableProtocol {
 
 
 ```
+
+#### Android USB 插拔稳定性验证与调试
+
+本节用于验证 `USB_VSP`、USB 转串口 `RS232` 和 `USB_AOA` 的反复插拔可靠性。测试应在
+目标 ROM 和目标线缆上分别执行；系统 USB Tag 与内核驱动日志会因 Android 版本、SoC 和 OEM
+实现而有所不同。
+
+**通过标准：** 每个协议至少执行 100 次“连接成功 → 发送/接收一帧非敏感测试数据 → 物理拔出 →
+收到一次断开 → 再插入 → 重连成功”循环。每轮只允许一个有效连接和一个接收循环；断开后不得继续
+收发旧会话数据，也不得出现 FD、线程或广播接收器持续增长。AOA 一次握手包含普通 USB 枚举和
+Accessory 枚举两阶段，不能把前一次 `USB_DEVICE_DETACHED` 误判为最终断开。
+
+**1. USB 事件、枚举和 SDK 日志**
+
+先清空旧日志，再在主机侧启动实时过滤。将 `<app-pid>` 替换为集成 App 的 PID；SDK 内部日志
+通常包含 `VSPClientKernel`、`SerialServiceKernel`、`CableAoaHostKernel`、
+`CableAoaAccessoryKernel`、`UsbStandardProtocol` 或项目封装的 `LogUtil` Tag。
+
+```bash
+adb logcat -c
+adb logcat -v threadtime | grep -Ei \
+  'UsbHostManager|UsbDeviceManager|UsbService|UsbSettingsManager|UsbPermissionManager|UsbAlsaManager|UsbPortManager|AccessoryService|UsbAccessory|USB_(DEVICE|ACCESSORY)_(ATTACHED|DETACHED)|CableAoa|UsbStandardProtocol|VSP|Serial(Service)?Kernel|usb-serial|cdc_acm|usbserial|disconnect|enumerat|permission'
+
+# 仅查看集成 App；PID 会在进程重启后变化，需重新执行。
+adb logcat --pid="$(adb shell pidof -s <package-name>)" -v threadtime
+
+# 有 kernel buffer 的工程版可直接过滤；若提示 unknown buffer，请改用下一条。
+adb logcat -b kernel -v threadtime | grep -Ei 'usb|cdc_acm|usbserial|ch34|pl2303|ftdi|disconnect|descriptor'
+adb shell dmesg -w | grep -Ei 'usb|cdc_acm|usbserial|ch34|pl2303|ftdi|disconnect|descriptor'
+```
+
+重点系统 Tag 包括 `UsbHostManager`（Host 枚举）、`UsbDeviceManager`（设备/gadget 状态）、
+`UsbService`、`UsbSettingsManager`、`UsbPermissionManager`、`UsbAlsaManager`、`UsbPortManager`
+和部分 ROM 的 `AccessoryService`。后者及 kernel buffer 不是所有量产 ROM 都会开放，缺失不代表
+AOA 失败。每一轮应按时间看到 attach/enumerate、权限结果、端口/Accessory 打开、TapLink
+握手成功，以及拔出后的 detach、I/O 结束和资源关闭。
+
+可在设备上保存枚举快照以对比 VID/PID、接口类和权限状态：
+
+```bash
+adb shell dumpsys usb
+adb shell lsusb 2>/dev/null || true
+adb shell 'for i in $(seq 1 120); do date "+%H:%M:%S.%3N"; dumpsys usb | grep -Ei "Device|Accessory|vendor|product|permission"; sleep 1; done'
+```
+
+**2. VSP 与 USB 转串口验证**
+
+应用不应把 `/dev/ttyUSB*` 作为 USB Host 成功的唯一依据。标准 Android 应用通过
+`UsbManager.deviceList`、`UsbManager.openDevice()` 和 `UsbSerialPort.open()` 访问设备；
+`/dev/ttyUSB*` 是否存在取决于内核驱动、SELinux 和厂商实现，许多设备只暴露
+`/dev/bus/usb/<bus>/<device>`，普通应用也通常无权直接打开。Tapro 的板载 UART VSP 不会随
+USB 插拔创建 `/dev/ttyUSB*`，应以 `UartManager` 打开和协议握手日志为准。
+
+```bash
+# 插拔前后分别执行，或持续轮询观察节点创建/销毁。
+adb shell 'while true; do date "+%H:%M:%S"; ls -l /dev/ttyUSB* /dev/ttyACM* /dev/bus/usb/*/* 2>/dev/null; sleep 1; done'
+
+# 观察 USB 框架可见设备；比设备节点更适合非 root 的量产设备。
+adb shell 'while true; do date "+%H:%M:%S"; dumpsys usb | grep -Ei "Device|Accessory|vendor|product|interface|permission"; sleep 1; done'
+```
+
+`UsbSerialDriver` 已取得可用端口句柄的代码级判定必须同时满足：`UsbManager.hasPermission(device)`
+为真、`openDevice(device)` 返回非空 `UsbDeviceConnection`、`driver.ports` 非空、
+`port.open(connection)` 和 `port.setParameters(...)` 未抛出异常，且首个协议握手 ACK/业务帧
+已收到。仅 `probeDevice()` 成功或 `usbSerialPort != null` 不足以证明链路可用。断开路径必须先
+停止读循环/`SerialInputOutputManager`，再 `port.close()`、`connection.close()`、清空端点和
+接收缓冲区，并使迟到回调无法作用于新会话。
+
+**3. AOA 重枚举与握手验证**
+
+AOA Host 对普通设备执行请求 `51` (`GET_PROTOCOL`)、六个请求 `52` (`SEND_STRING`) 和请求
+`53` (`START`)。`GET_PROTOCOL` 必须返回恰好 2 字节、小端协议版本且版本至少为 1；每个
+`SEND_STRING` 的 `controlTransfer()` 返回值应等于发送字节数。`START` 是无数据的 OUT
+control transfer，成功返回值通常为 `0`，**没有可读取的“START 响应”**；其正确性应由设备从
+普通模式消失、随后以 Google VID `0x18d1` 和 AOA PID `0x2d00`–`0x2d05` 重新枚举，以及
+`ACTION_USB_ACCESSORY_ATTACHED`/`accessoryList` 或新 bulk 端点可打开来确认。
+
+```bash
+adb logcat -v threadtime | grep -Ei \
+  'GET_PROTOCOL|SEND_STRING|AOA_START|Start Accessory|Sending AOA protocol|AOA protocol sequence sent|SWITCHING_AOA|USB_DEVICE_DETACHED|USB_ACCESSORY_ATTACHED|0x18d1|0x2d0[0-5]|openAccessory|claimInterface|bulkTransfer'
+
+# 在 AOA 切换窗口连续采样；应先看到普通设备，再看到 AOA VID/PID 或 Accessory。
+adb shell 'while true; do date "+%H:%M:%S.%3N"; dumpsys usb; sleep 0.2; done'
+```
+
+建议在 Debug 构建中为每个 `controlTransfer` 记录请求号、返回长度、协议版本、切换前后
+VID/PID 和会话 token（不得记录交易数据、密钥或卡数据）。Host 必须在发送 `START` 后关闭旧
+`UsbDeviceConnection`，等待重枚举；Accessory 端则校验 attach 广播、权限结果和
+`UsbManager.openAccessory()` 返回的 `ParcelFileDescriptor`。使用 `START` 返回 `0` 立即宣告
+连接成功是错误的。
+
+**4. 资源释放、异常与代码检查点**
+
+先获取进程 PID，再在连接、拔出和重连后分别检查 FD 数量及 USB 目标。`/proc/<pid>/fd` 在
+user build 上可能受限；无权限时使用 `adb shell dumpsys meminfo <package-name>` 观察持续增长，
+或在 userdebug/eng 构建上由 shell/root 执行完整检查。
+
+```bash
+adb shell pidof -s <package-name>
+adb shell 'pid=$(pidof -s <package-name>); ls -l /proc/$pid/fd 2>/dev/null | grep -Ei "/dev/bus/usb|ttyUSB|ttyACM|usb"'
+adb shell 'pid=$(pidof -s <package-name>); ls /proc/$pid/fd 2>/dev/null | wc -l'
+adb shell dumpsys meminfo <package-name>
+```
+
+快速检索异常时使用：
+
+```bash
+adb logcat -v threadtime | grep -Ei \
+  'USB disconnect|device descriptor read error|descriptor.*error|permission denied|Permission Denial|EACCES|EPERM|openDevice.*fail|openAccessory.*fail|claimInterface.*fail|bulkTransfer.*fail|Broken pipe|ENODEV|EPIPE|IOException|Serial.*(error|fail)|VSP.*(timeout|error)|AOA.*(fail|timeout)'
+```
+
+代码审查时确认：USB attach/detach、Accessory attach/detach 和权限广播均已注册且成对注销；
+权限回调关联当前设备/Accessory 与本次连接 token，过期回调不得重开旧端口；所有
+`UsbSerialPort`/`UsbDeviceConnection`/`ParcelFileDescriptor`、读任务和协议缓冲区都在
+`disconnect()` 中幂等关闭/取消；detach、读写 `IOException` 和握手超时统一进入一次断开状态
+转换；重连只在旧会话完全释放后创建新会话。插拔过程中通信/系统失败应通过连接错误回调报告，
+不能伪装成支付批准或支付拒绝结果。
+
 ---
 
 ### 4.3 局域网模式

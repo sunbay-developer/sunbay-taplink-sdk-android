@@ -1,5 +1,7 @@
 package com.sunmi.tapro.taplink.communication.protocol
 
+import com.sunmi.tapro.taplink.communication.util.LogUtil
+
 
 /**
  * USB AOA (Android Open Accessory) protocol constants
@@ -10,6 +12,16 @@ package com.sunmi.tapro.taplink.communication.protocol
  * @since 2025-01-01
  */
 object UsbStandardProtocol {
+
+    private const val TAG = "UsbStandardProtocol"
+
+    /**
+     * Default timeout (ms) for AOA control transfers. The AOA_START control transfer previously
+     * used only 100ms which was too short for some accessories to acknowledge the switch, causing
+     * the accessory hand-off to silently fail (device never re-enumerates in accessory mode).
+     */
+    const val CONTROL_TRANSFER_TIMEOUT_MS = 1000
+
     /**
      * AOA protocol version
      */
@@ -150,15 +162,17 @@ object UsbStandardProtocol {
                 0,
                 buffer,
                 buffer.size,
-                1000
+                CONTROL_TRANSFER_TIMEOUT_MS
             )
 
             if (result == 2) {
                 (buffer[0].toInt() and 0xFF) or ((buffer[1].toInt() and 0xFF) shl 8)
             } else {
+                LogUtil.w(TAG, "AOA GET_PROTOCOL failed: controlTransfer returned $result")
                 0
             }
         } catch (e: Exception) {
+            LogUtil.e(TAG, "AOA GET_PROTOCOL exception: ${e.message}")
             0
         }
     }
@@ -176,10 +190,14 @@ object UsbStandardProtocol {
                 index,
                 data,
                 data.size,
-                1000
+                CONTROL_TRANSFER_TIMEOUT_MS
             )
+            if (result != data.size) {
+                LogUtil.w(TAG, "AOA SEND_STRING[$index] failed: returned $result, expected ${data.size}")
+            }
             result == data.size
         } catch (e: Exception) {
+            LogUtil.e(TAG, "AOA SEND_STRING[$index] exception: ${e.message}")
             false
         }
     }
@@ -196,10 +214,14 @@ object UsbStandardProtocol {
                 0,
                 null,
                 0,
-                100
+                CONTROL_TRANSFER_TIMEOUT_MS
             )
+            if (result < 0) {
+                LogUtil.w(TAG, "AOA START failed: controlTransfer returned $result")
+            }
             result >= 0
         } catch (e: Exception) {
+            LogUtil.e(TAG, "AOA START exception: ${e.message}")
             false
         }
     }

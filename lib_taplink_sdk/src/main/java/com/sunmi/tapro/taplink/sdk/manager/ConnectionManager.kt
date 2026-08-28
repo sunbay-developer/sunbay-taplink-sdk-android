@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.sunmi.tapro.taplink.sdk.manager
 
 import android.content.Context
@@ -143,6 +145,19 @@ class ConnectionManager(
     private val pendingConnectionListeners = mutableListOf<ConnectionListener>()
 
     /**
+     * PINPAD AUTO fallback state.
+     *
+     * [isAutoSession] is true only when the current connection was established from a PINPAD
+     * AUTO session (config.pinpadAuto). [autoCandidates] holds the ordered transport candidates
+     * so that runtime fallback can rotate to the next transport when the active one becomes
+     * unusable (repeated request timeouts / blocked transport). [autoTimeoutCount] counts
+     * consecutive request timeouts since the last successful response.
+     */
+    private var isAutoSession: Boolean = false
+    private var autoCandidates: List<Pair<String, String>>? = null
+    private var autoTimeoutCount: Int = 0
+
+    /**
      * Coroutine job for auto-discovery operation.
      * Cancelled on disconnect() to abort discovery.
      */
@@ -200,10 +215,24 @@ class ConnectionManager(
             if (connectionStatus == ConnectionStatus.CONNECTING ||
                 connectionStatus == ConnectionStatus.WAIT_CONNECTING
             ) {
-                LogUtil.w(TAG, "Connection already in progress, adding listener to queue")
-                pendingConnectionListeners.add(listener)
-                LogUtil.d(TAG, "Added listener to pending connection queue, total: ${pendingConnectionListeners.size}")
-                return
+                val inProgressConfig = reconnectManager?.getLastConnectionConfig()
+                if (inProgressConfig == null || actualConfig.isEquivalentTo(inProgressConfig)) {
+                    // Same connection request already in flight: queue this listener.
+                    LogUtil.w(TAG, "Connection already in progress (same config), adding listener to queue")
+                    pendingConnectionListeners.add(listener)
+                    LogUtil.d(TAG, "Added listener to pending connection queue, total: ${pendingConnectionListeners.size}")
+                    return
+                } else {
+                    // A DIFFERENT config was requested (e.g. switching Cable -> LAN) while the
+                    // previous attempt is still stuck in CONNECTING. Cancel the stuck attempt and
+                    // start fresh; otherwise the new request would be queued behind an attempt that
+                    // may never complete, and the mode switch would silently fail.
+                    LogUtil.w(TAG, "Different config requested while a connection is in progress — cancelling stuck attempt and reconnecting")
+                    disconnect()
+                    reconnectManager?.prepareConnect(actualConfig, listener)
+                    connectInternal(actualConfig, listener)
+                    return
+                }
             }
 
             // Check if already connected with same config
@@ -263,6 +292,24 @@ class ConnectionManager(
                 )
             )
             return
+        }
+
+        // PINPAD AUTO mode: try an ordered list of transports (per config.autoPriority), spanning
+        // LAN and CABLE. Reuses the same connect-by-attempt framework as Cable AUTO. Marks the
+        // session as an AUTO session so runtime request-timeout fallback can rotate transports.
+        val autoCandidateList = ProtocolConfigResolver.getPinpadAutoCandidates(
+            config,
+            reconnectManager?.getContext()
+        )
+        if (!autoCandidateList.isNullOrEmpty()) {
+            isAutoSession = true
+            autoCandidates = autoCandidateList
+            autoTimeoutCount = 0
+            tryConnectWithProtocolList(autoCandidateList, connectionConfig, listener)
+            return
+        } else {
+            // Not a PINPAD AUTO session (or AUTO with no resolvable candidate): clear AUTO state.
+            clearAutoFallbackState()
         }
 
         // Cable AUTO mode: try connect in protocol order (VSP -> RS232 -> AOA)
@@ -625,6 +672,7 @@ class ConnectionManager(
         currentConnectionMode = null
         currentAppToAppMode = null
         currentConnectionConfig = null
+        clearAutoFallbackState()
 
         // Clear service address change listener (clear when disconnecting)
         clearServiceAddressChangeListener()
@@ -733,6 +781,82 @@ class ConnectionManager(
      */
     fun getConnectionMode(): String? {
         return currentConnectionMode
+    }
+
+    /**
+     * Called by PaymentManager when a transaction request receives any response from the peer.
+     * Resets the PINPAD AUTO consecutive-timeout counter (the active transport is proven healthy).
+     */
+    fun onRequestResponded() {
+        if (!isAutoSession) return
+        if (autoTimeoutCount != 0) {
+            LogUtil.d(TAG, "AUTO: request responded, resetting timeout counter")
+        }
+        autoTimeoutCount = 0
+    }
+
+    /**
+     * Called by PaymentManager when a transaction request times out (no response from peer).
+     *
+     * For a PINPAD AUTO session, a request timeout means the active transport may be connected at
+     * the socket level but blocked at the application level. After [AUTO_FALLBACK_TIMEOUT_THRESHOLD]
+     * consecutive timeouts, rotate to the next transport candidate ([maybeTriggerAutoFallback]).
+     *
+     * This only affects the CONNECTION layer; the single-transaction timeout semantics (E306 must
+     * be resolved via query-first, never blind retry) are handled independently by PaymentManager.
+     *
+     * @param errorCode the inner error code of the timed-out request (e.g. E306)
+     */
+    fun onRequestTimedOut(errorCode: String?) {
+        if (!isAutoSession) return
+        autoTimeoutCount++
+        LogUtil.w(TAG, "AUTO: request timed out (code=$errorCode), consecutive=$autoTimeoutCount")
+        if (autoTimeoutCount >= AUTO_FALLBACK_TIMEOUT_THRESHOLD) {
+            maybeTriggerAutoFallback()
+        }
+    }
+
+    /**
+     * Rotates the active PINPAD AUTO transport to the next candidate and reconnects.
+     * No-op when there are fewer than two candidates.
+     */
+    private fun maybeTriggerAutoFallback() {
+        val candidates = autoCandidates
+        if (candidates == null || candidates.size < 2) {
+            LogUtil.d(TAG, "AUTO fallback skipped: not enough candidates")
+            return
+        }
+
+        val current = currentConnectionMode
+        val idx = candidates.indexOfFirst { it.second == current }
+        // Move current transport (and everything before it) to the end, so the next candidate is first.
+        val rotated = if (idx >= 0) {
+            candidates.drop(idx + 1) + candidates.take(idx + 1)
+        } else {
+            candidates
+        }
+
+        val listener = connectionListener
+            ?: reconnectManager?.getLastConnectionListener()
+            ?: internalReconnectListener
+        val config = currentConnectionConfig ?: reconnectManager?.getLastConnectionConfig()
+
+        LogUtil.w(TAG, "AUTO fallback: '$current' appears blocked, rotating transports and reconnecting")
+        autoTimeoutCount = 0
+        autoCandidates = rotated
+
+        // Tear down the blocked transport, then re-attempt over the rotated candidate list.
+        TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
+        tryConnectWithProtocolList(rotated, config, listener)
+    }
+
+    /**
+     * Clears all PINPAD AUTO fallback state.
+     */
+    private fun clearAutoFallbackState() {
+        isAutoSession = false
+        autoCandidates = null
+        autoTimeoutCount = 0
     }
 
     /**
@@ -1014,15 +1138,24 @@ class ConnectionManager(
             "T01", "T02", "T04", "T05", "T06", "T07", "T08", "T09", "T10", "T11", "T12", "T17",
             // Other error codes
             "-1", // BaseServiceKernel default error code
-            "1006", "1002", "1015", // WebSocket connection error codes
+            "1002", "1015", // WebSocket connection error codes
             "CONNECTION_FAILED", "WEBSOCKET_NULL", "SEND_FAILED", // Custom error codes
             "SERVICE_UNAVAILABLE", "PARSE_ERROR", "PREPARE_ERROR" // INIT related error codes
         )
 
-        // Normal disconnect error codes
+        // Normal disconnect error codes. These represent a real, already-established
+        // connection going away (network drop, remote reset, manual disconnect), and
+        // should go through the DISCONNECTED + auto-reconnect path rather than being
+        // treated as a permanent connection ERROR with no recovery attempt.
+        // Note: "1006" (abnormal WebSocket closure, e.g. TCP reset / network drop) is
+        // intentionally included here — it is the most common real-world disconnect
+        // code once a LAN connection has already been established, and previously being
+        // classified as a connection error meant the SDK would give up without ever
+        // attempting to reconnect, leaving it stuck until a manual reconnect.
         val normalDisconnectCodes = setOf(
             "1000", // WebSocket normal close
             "1001", // WebSocket endpoint leaving
+            "1006", // WebSocket abnormal close (no close frame received, e.g. network drop)
             "MANUAL_DISCONNECT", // Manual disconnect
             "HEARTBEAT_TIMEOUT" // Heartbeat timeout (may be network issue, but not connection error)
         )
@@ -1606,6 +1739,12 @@ class ConnectionManager(
     companion object {
         private const val NSD_SERVICE_TYPE = "_taplink._tcp"
         private const val DISCOVERY_TIMEOUT_MS = 15_000L
+
+        /**
+         * Consecutive request-timeout threshold before a PINPAD AUTO session rotates to the next
+         * transport candidate. Set to 1 so a single blocked request triggers fallback quickly.
+         */
+        private const val AUTO_FALLBACK_TIMEOUT_THRESHOLD = 1
 
         // Error codes for discovery and scan
         const val ERROR_NO_SERVICES = "E501"

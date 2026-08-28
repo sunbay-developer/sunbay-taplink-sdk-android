@@ -161,6 +161,15 @@ class VSPClientKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
+        // Fail fast when no USB device is physically attached. Without this gate the kernel would
+        // register receivers and start polling for a device that will never appear, producing
+        // phantom UART activity and blocking transport switch (e.g. Cable -> LAN).
+        if (usbManager.deviceList.isEmpty()) {
+            LogUtil.w(TAG, "performConnect aborted: no USB device attached")
+            notifyConnectionError("No USB device attached", InnerErrorCode.E251)
+            return
+        }
+
         registerUsbPermissionReceiverIfNeeded()
 
         val vspProtocol = parseResult as ProtocolParseResult.VspProtocol
