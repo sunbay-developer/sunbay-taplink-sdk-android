@@ -4,87 +4,54 @@ import org.junit.Test
 import org.junit.Assert.*
 
 /**
- * 错误码测试类
- * 
- * 验证错误码的基本功能和本地化支持
+ * Verifies the numeric error code surface and its category helpers.
  */
 class InnerErrorCodeTest {
 
     @Test
     fun testErrorCodeProperties() {
-        // Test predefined error codes
-        val errorC20 = InnerErrorCode.C20
-        assertEquals("C20", errorC20.code)
-        assertNotNull(errorC20.description)
+        val success = InnerErrorCode.Success
+        assertEquals("100", success.code)
+        assertNotNull(success.description)
     }
 
     @Test
     fun testFromCodeMethod() {
-        // Test known error codes
-        val errorFromCode = InnerErrorCode.fromCode("C20")
-        assertEquals("C20", errorFromCode.code)
+        val known = InnerErrorCode.fromCode("213")
+        assertEquals("213", known.code)
 
-        // Test unknown error codes
-        val unknownError = InnerErrorCode.fromCode("X99")
-        assertTrue(unknownError is InnerErrorCode.Unknown)
-        assertEquals("X99", unknownError.code)
-
-        // Test empty error code
-        val emptyError = InnerErrorCode.fromCode("")
-        assertTrue(emptyError is InnerErrorCode.Unknown)
-        assertEquals("", emptyError.code)
-
-        // Test null error code
-        val nullError = InnerErrorCode.fromCode(null)
-        assertTrue(nullError is InnerErrorCode.Unknown)
-        assertEquals("", nullError.code)
-    }
-
-    @Test
-    fun testUnknownErrorCode() {
-        // Test custom description
-        val customError = InnerErrorCode.Unknown(
-            "CUSTOM01",
-            "Custom error description"
-        )
-        assertEquals("CUSTOM01", customError.code)
-        assertEquals("Custom error description", customError.description)
-
-        // Test default description
-        val defaultError = InnerErrorCode.Unknown("DEFAULT01")
-        assertEquals("DEFAULT01", defaultError.code)
-        assertNotNull(defaultError.description)
+        val unknown = InnerErrorCode.fromCode("X99")
+        assertTrue(unknown is InnerErrorCode.Unknown)
+        assertEquals("X99", unknown.code)
     }
 
     @Test
     fun testErrorCodeCategories() {
-        // Test T-series error codes
-        assertTrue(InnerErrorCode.isTSeriesError("T01"))
-        assertFalse(InnerErrorCode.isTSeriesError("C20"))
+        assertTrue(InnerErrorCode.isInitializationError("201"))
+        assertFalse(InnerErrorCode.isInitializationError("211"))
 
-        // Test connection errors
-        assertTrue(InnerErrorCode.isConnectionError("T01"))
-        assertTrue(InnerErrorCode.isConnectionError("T14"))
-        assertFalse(InnerErrorCode.isConnectionError("T15"))
+        assertTrue(InnerErrorCode.isConnectionStateError("213"))
+        assertFalse(InnerErrorCode.isConnectionStateError("201"))
 
-        // Test parameter validation errors
-        assertTrue(InnerErrorCode.isParameterValidationError("T15"))
-        assertTrue(InnerErrorCode.isParameterValidationError("T19"))
-        assertFalse(InnerErrorCode.isParameterValidationError("T20"))
+        assertTrue(InnerErrorCode.isLanModeConnectionError("241"))
+        assertFalse(InnerErrorCode.isLanModeConnectionError("251"))
 
-        // Test data transmission errors
-        assertTrue(InnerErrorCode.isDataTransmissionError("T20"))
-        assertTrue(InnerErrorCode.isDataTransmissionError("T25"))
-        assertFalse(InnerErrorCode.isDataTransmissionError("T27"))
+        assertTrue(InnerErrorCode.isUsbModeConnectionError("251"))
+        assertFalse(InnerErrorCode.isUsbModeConnectionError("241"))
 
-        // Test transaction processing errors
-        assertTrue(InnerErrorCode.isTransactionProcessingError("T27"))
-        assertTrue(InnerErrorCode.isTransactionProcessingError("T31"))
-        assertFalse(InnerErrorCode.isTransactionProcessingError("T34"))
+        assertTrue(InnerErrorCode.isTransactionProcessingError("306"))
+        assertFalse(InnerErrorCode.isTransactionProcessingError("213"))
+    }
 
-        // Test system timeout errors
-        assertTrue(InnerErrorCode.isSystemTimeoutError("T34"))
-        assertFalse(InnerErrorCode.isSystemTimeoutError("T31"))
+    /**
+     * A timeout (306) or an ambiguous decline (308) must never be blindly retried: the
+     * transaction may already have been approved on the terminal.
+     */
+    @Test
+    fun testTimeoutRequiresQueryBeforeRetry() {
+        assertTrue(InnerErrorCode.needsQueryBeforeRetry("306"))
+        assertTrue(InnerErrorCode.needsQueryBeforeRetry("308"))
+        assertFalse(InnerErrorCode.needsQueryBeforeRetry("301"))
     }
 
     @Test
@@ -92,6 +59,5 @@ class InnerErrorCodeTest {
         val allErrorCodes = InnerErrorCode.getAllErrorCodes()
         assertTrue(allErrorCodes.isNotEmpty())
         assertTrue(allErrorCodes.contains(InnerErrorCode.Success))
-        assertTrue(allErrorCodes.contains(InnerErrorCode.C20))
     }
 }

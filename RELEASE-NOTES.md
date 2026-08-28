@@ -10,7 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
-- [Unreleased](#unreleased) — PINPAD / ON_DEVICE integration modes, PinpadStrategy config, AUTO transport fallback
+- [Unreleased](#unreleased) — PINPAD / ON_DEVICE integration modes, PinpadStrategy config, AUTO transport fallback, LAN half-open connection & mDNS discovery fixes
 - [v1.0.9](#v109) — Secondary Display connection mode; auto-open USB customer display; cable/USB VSP reconnect fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
@@ -129,7 +129,16 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
   For a complete guide on integrating the secondary display — including display detection, Compose rendering inside `Presentation`, lifecycle management, and common use cases (ad carousel, order list, tip selection) — see **[SECONDARY_DISPLAY_INTEGRATION.md](./SECONDARY_DISPLAY_INTEGRATION.md)**.
 
-### �🐛 Fixed
+### 🐛 Fixed
+
+- **LAN connection no longer hangs forever after TaPro restarts.** When the TaPro terminal restarted (or its WebSocket server was recreated) without a graceful close, the client socket was left *half-open*: the local endpoint still reported `ESTABLISHED`, so no close callback ever arrived and the SDK kept reporting `CONNECTED` while every request silently disappeared with no error, no timeout and no reconnect. Three defects combined to produce this:
+  - The LAN client did not enable WebSocket protocol-level ping/pong (RFC 6455), so a vanished peer was never detected. Keepalive is now enabled with a 60-second timeout. This is transport-level liveness detection only — no business message is exchanged and TaPro answers pings automatically in the WebSocket layer — so it does not reintroduce an application heartbeat. The interval is deliberately generous: during a transaction TaPro is busy driving the card reader, PIN pad and online authorization, and its automatic pong can legitimately stall for several seconds, so a tighter value risks tearing down the socket mid card-read and losing an in-flight payment result.
+  - TaPro re-registers its mDNS service under a **new instance name at the same `host:port`** when it restarts. That is neither an address change (the endpoint is identical) nor a socket event, so it was ignored entirely. The SDK now recognises this pattern as a peer restart and invalidates the stale link so the existing reconnect path can run.
+  - Every LAN close was reported upward as a generic `E213`, discarding the real WebSocket close code. Close code `1006` (abnormal closure) was consequently classified as a permanent connection error that skipped auto-reconnect, so a routine network drop left the SDK stuck until a manual reconnect. The real close code is now propagated and `1006` is treated as a recoverable disconnect that triggers auto-reconnect.
+
+- **mDNS discovery no longer floods with `Resolve failed ... error: 3`.** Every TaPro terminal advertising on the subnet was resolved concurrently, but Android's `NsdManager` permits only one in-flight `resolveService()` call and rejects the rest with `FAILURE_ALREADY_ACTIVE` (error 3) — including the resolve for the terminal actually being connected to. Discovery now resolves only the bound terminal and serialises resolve requests, with a watchdog that releases the resolve slot if `NsdManager` never invokes either callback.
+
+### 🐛 Fixed
 
 - **`openUsbScreenPlayer()` no longer fails with `T06`.** The internally generated `transactionRequestId` was built from the action name plus a millisecond timestamp (`OPEN_USB_SCREEN_PLAYER_<13 digits>` = 36 characters), exceeding the terminal's 32-character limit. It now uses a short `USP_<timestamp>` prefix (17 characters). Integrators could not work around this because the API takes no request-id parameter.
 - **Cable / `USB_VSP` reconnect no longer times out.** The VSP client waited passively for TaPro to send the application-layer handshake request. TaPro only sends that request during its own connect flow, so when the cable was never physically unplugged — TaPro still reporting the USB link as connected — a reconnect initiated by the POS app alone never received a handshake and `onConnected` was never delivered, leaving the app unable to send further requests. The VSP client now actively sends `##TAPLINK_HSK_REQ##` every second until the peer answers, matching the behaviour already used by the `RS232` and `USB_AOA` transports. No API change is required; `connect()` after a `disconnect()` now succeeds on an already-open cable.

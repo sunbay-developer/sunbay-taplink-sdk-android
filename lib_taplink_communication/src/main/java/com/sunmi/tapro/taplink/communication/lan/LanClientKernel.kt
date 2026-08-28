@@ -52,6 +52,26 @@ class LanClientKernel(
         private const val SERVICE_DISCOVERY_MAX_RETRIES = 3  // Maximum retry count
         private const val SERVICE_DISCOVERY_RETRY_DELAY_MS = 1000L  // Initial retry delay (milliseconds)
         private const val SERVICE_DISCOVERY_RETRY_DELAY_MULTIPLIER = 2  // Retry delay multiplier (incremental delay)
+
+        /**
+         * Decide whether a newly advertised service represents a restart of the peer we are
+         * already connected to.
+         *
+         * Tapro embeds a fresh timestamp in its mDNS instance name on every registration, so a
+         * restart appears as a *different* instance name advertising the *same* endpoint. A
+         * changed endpoint is an ordinary address change and is handled elsewhere.
+         */
+        internal fun isPeerRestart(
+            previousName: String,
+            previousHost: String,
+            previousPort: Int,
+            newName: String,
+            newHost: String,
+            newPort: Int
+        ): Boolean {
+            if (previousName == newName) return false
+            return previousHost == newHost && previousPort == newPort
+        }
     }
 
     override fun getTag(): String = TAG
@@ -707,11 +727,15 @@ class LanClientKernel(
                         "LAN connection closed: code=$code, reason=$reason, remote=$remote, isManual=$isManualDisconnect"
                     )
 
-                    // Build disconnect information
+                    // Build disconnect information. Preserve the real underlying WebSocket close
+                    // code so ConnectionManager can correctly distinguish manual disconnect /
+                    // normal close / abnormal network close (e.g. 1006) instead of always
+                    // reporting a generic E213, which previously masked the real disconnect
+                    // reason and broke auto-reconnect classification.
                     val disconnectCode = if (isManualDisconnect) {
-                        InnerErrorCode.E213.code
+                        "MANUAL_DISCONNECT"
                     } else {
-                        InnerErrorCode.E213.code
+                        code.toString()
                     }
                     val disconnectMessage = if (isManualDisconnect) {
                         "${InnerErrorCode.E213.description}:Manual disconnect, $reason($code)"
@@ -799,6 +823,66 @@ class LanClientKernel(
     // ==================== Service Discovery Functionality ====================
 
     /**
+     * Detect that the target Tapro restarted its LAN server and force the stale socket closed.
+     *
+     * Tapro embeds a fresh timestamp in its mDNS instance name every time it registers, so a
+     * restart shows up as: old instance lost -> new instance found at the *same* host:port.
+     * That case is invisible to [handleServiceAddressChange] (the address did not change) and
+     * invisible to the WebSocket layer (a peer that restarts without a graceful close leaves the
+     * client socket half-open, so no close frame ever arrives). The result is a connection that
+     * reports CONNECTED forever while every request silently disappears.
+     *
+     * Closing the socket here converts the situation into an ordinary disconnect, letting the
+     * existing reconnect machinery re-establish the link against the restarted peer.
+     *
+     * @return true when a restart was detected and handled, false otherwise.
+     */
+    private fun handleServiceInstanceRestart(service: ServiceInfo): Boolean {
+        val previous = currentService ?: return false
+
+        if (!isPeerRestart(
+                previousName = previous.name,
+                previousHost = previous.host,
+                previousPort = previous.port,
+                newName = service.name,
+                newHost = service.host,
+                newPort = service.port
+            )
+        ) {
+            // Either the same instance, or a genuine address change that the regular
+            // address-change path already handles.
+            return false
+        }
+
+        LogUtil.w(
+            TAG,
+            "Target Tapro re-registered at the same address (${previous.name} -> ${service.name} " +
+                    "at ${service.getAddress()}); treating existing link as stale"
+        )
+
+        // Adopt the new instance identity so subsequent lost/found events compare correctly.
+        currentService = service
+        rememberTargetService(service)
+
+        if (!isWebSocketConnected()) {
+            LogUtil.d(TAG, "No live WebSocket to invalidate after peer restart")
+            return false
+        }
+
+        return try {
+            // Not a user-initiated disconnect: the close must surface as a passive disconnect so
+            // the SDK layer runs its auto-reconnect logic.
+            isManualDisconnect = false
+            connectionManager.invalidate("Peer re-registered mDNS service: ${service.name}")
+            LogUtil.i(TAG, "Closed stale LAN socket after peer restart, awaiting reconnect")
+            true
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to close stale LAN socket after peer restart: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Common method to handle service address changes
      *
      * @param service New service information
@@ -874,6 +958,7 @@ class LanClientKernel(
      * Stop service discovery
      */
     private fun stopServiceDiscovery() {
+        serviceDiscoveryManager.setServiceNameFilter(null)
         serviceDiscoveryManager.stopServiceMonitoring()
         isServiceMonitoring = false
         LogUtil.d(TAG, "Service discovery stopped")
@@ -903,6 +988,17 @@ class LanClientKernel(
                         rememberTargetService(service)
                         currentService = service
                     }
+
+                    // Tapro re-registers its mDNS service with a fresh instance name on restart.
+                    // If the target device now advertises a *different* instance name at the same
+                    // address we were connected to, the peer restarted and our socket is half-open:
+                    // the local endpoint still reports ESTABLISHED, so no close callback will ever
+                    // fire and the address-change path below would be skipped as "same address".
+                    // Force the socket closed so the normal disconnect/reconnect flow can run.
+                    if (handleServiceInstanceRestart(service)) {
+                        return
+                    }
+
                     // Use current service as old address
                     handleServiceAddressChange(
                         service = service,
@@ -913,9 +1009,14 @@ class LanClientKernel(
                 }
 
                 override fun onServiceLost(service: ServiceInfo) {
+                    if (!isTargetService(service)) {
+                        LogUtil.d(TAG, "Ignoring lost event for unrelated Tapro service: ${service.name}")
+                        return
+                    }
+
                     LogUtil.w(TAG, "Service lost: ${service.name} at ${service.getAddress()}")
 
-                    // A lost service is followed by the WebSocket close/error callback.
+                    // A lost service is normally followed by the WebSocket close/error callback.
                     if (currentService != null && service.name == currentService?.name) {
                         LogUtil.w(TAG, "Current connected service is lost, waiting for WebSocket disconnect")
                     }
@@ -962,6 +1063,14 @@ class LanClientKernel(
                     LogUtil.e(TAG, "Service monitoring failed: $error")
                     isServiceMonitoring = false
                 }
+            }
+
+            serviceDiscoveryManager.setServiceNameFilter { serviceName ->
+                // Only resolve the terminal we are bound to. NsdManager allows a single in-flight
+                // resolve, so resolving every Tapro on the subnet makes the calls we actually
+                // need fail with FAILURE_ALREADY_ACTIVE (error 3).
+                val target = targetServiceSerial
+                target == null || serviceSerial(serviceName) == target
             }
 
             serviceDiscoveryManager.startServiceMonitoring(NSD_SERVICE_TYPE, listener)
