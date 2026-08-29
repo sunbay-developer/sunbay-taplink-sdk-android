@@ -89,6 +89,13 @@ class VSPClientKernel(
     @Volatile
     private var handshakeWaiter: CompletableDeferred<Unit>? = null
 
+    /**
+     * Set while an active liveness probe ([checkLinkAlive]) is in flight. Completed by the receive
+     * loop as soon as *any* inbound bytes arrive from the server, proving the peer is responsive.
+     */
+    @Volatile
+    private var livenessWaiter: CompletableDeferred<Boolean>? = null
+
     // VSP configuration parameters
     private var baudRate: Int = 115200
     private var dataBits: Int = 8
@@ -249,11 +256,59 @@ class VSPClientKernel(
         }
     }
 
+    /**
+     * Active VSP liveness probe.
+     *
+     * A successful [usbSerialPort]?.write only proves the local USB port accepted the bytes, not
+     * that TaPro (the server) is still processing them — if its UART receive loop is stuck
+     * ("port timeout"), transactions would silently hang until the full request timeout. To fail
+     * fast, we send a lightweight handshake REQ and wait for TaPro to reply (it answers REQ with an
+     * ACK even during the data phase). Any inbound bytes complete [livenessWaiter].
+     */
+    override suspend fun checkLinkAlive(timeoutMs: Long): Boolean {
+        if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTED || usbSerialPort == null) {
+            LogUtil.w(TAG, "checkLinkAlive: not connected (status=$currentInnerConnectionStatus)")
+            return false
+        }
+
+        val waiter = CompletableDeferred<Boolean>()
+        livenessWaiter = waiter
+        return try {
+            val sent = withSendLock {
+                try {
+                    usbSerialPort?.write(VspHandshake.REQ.toByteArray(Charsets.UTF_8), 1000)
+                    true
+                } catch (e: Exception) {
+                    LogUtil.e(TAG, "checkLinkAlive: failed to send probe: ${e.message}")
+                    false
+                }
+            }
+            if (!sent) {
+                return false
+            }
+            val alive = withTimeoutOrNull(timeoutMs) { waiter.await() } ?: false
+            if (!alive) {
+                LogUtil.w(TAG, "checkLinkAlive: no response within ${timeoutMs}ms, link presumed dead")
+                // Tear down the dead link so upstream reconnect logic can re-establish it, instead
+                // of every subsequent transaction paying the full probe timeout again.
+                handleConnectionError()
+            }
+            alive
+        } finally {
+            if (livenessWaiter === waiter) {
+                livenessWaiter = null
+            }
+        }
+    }
+
     override fun performDisconnect() {
         LogUtil.d(TAG, "=== VSP Client Disconnect Started ===")
 
         handshakeWaiter?.cancel(CancellationException("VSP client disconnect"))
         handshakeWaiter = null
+
+        livenessWaiter?.complete(false)
+        livenessWaiter = null
 
         try {
             dataReceiveJob?.cancel()
@@ -628,6 +683,8 @@ class VSPClientKernel(
                     val bytesRead = usbSerialPort?.read(buffer, 1000) ?: 0
 
                     if (bytesRead > 0) {
+                        // Any inbound byte proves the server is alive; unblock a pending liveness probe.
+                        livenessWaiter?.complete(true)
                         val data = buffer.copyOf(bytesRead)
                         val dataString = String(data, Charsets.UTF_8)
                         LogUtil.d(TAG, "VSP client raw received: ${data.size} bytes")

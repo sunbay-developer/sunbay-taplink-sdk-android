@@ -730,6 +730,45 @@ class ConnectionManager(
     fun getConnectionStatus(): ConnectionStatus = connectionStatus
 
     /**
+     * Actively probe whether the current link is alive.
+     *
+     * Unlike [isConnected] (which only reflects the cached kernel status), this performs a
+     * best-effort round-trip check on the underlying transport. It lets callers fail fast when the
+     * peer (TaPro) has stopped responding — e.g. a stuck cable/UART port — instead of waiting for a
+     * full transaction timeout.
+     *
+     * Runs the (potentially blocking) probe on [Dispatchers.IO].
+     *
+     * @param timeoutMs Maximum time to wait for the peer to acknowledge the probe.
+     * @return `true` if the link is confirmed alive, `false` otherwise.
+     */
+    suspend fun checkLinkAlive(timeoutMs: Long): Boolean {
+        if (!isConnected()) {
+            return false
+        }
+        val serviceKernel = TaplinkServiceKernel.getInstance() ?: return false
+        return withContext(Dispatchers.IO) {
+            serviceKernel.checkLinkAlive(timeoutMs)
+        }
+    }
+
+    /**
+     * Fire-and-forget variant of [checkLinkAlive] for non-suspend callers (e.g. PaymentManager).
+     * [onResult] is delivered on the main thread.
+     */
+    fun checkLinkAliveAsync(timeoutMs: Long, onResult: (Boolean) -> Unit) {
+        sdkScope.launch {
+            val alive = try {
+                checkLinkAlive(timeoutMs)
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "checkLinkAliveAsync failed: ${e.message}")
+                false
+            }
+            onResult(alive)
+        }
+    }
+
+    /**
      * Update device info when INIT succeeds.
      * Called by PaymentManager when INIT command completes successfully.
      *

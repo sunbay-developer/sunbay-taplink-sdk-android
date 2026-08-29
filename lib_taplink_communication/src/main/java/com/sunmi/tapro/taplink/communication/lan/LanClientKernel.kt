@@ -155,12 +155,32 @@ class LanClientKernel(
     private fun isTargetService(service: ServiceInfo): Boolean {
         val serial = serviceSerial(service.name)
         val target = targetServiceSerial
+
+        // The endpoint our live socket is actually connected to is authoritative: a service that
+        // advertises that exact host:port defines our bound identity, even if a stale serial is
+        // still remembered. This is what lets a manual reconnect to a *different* device (new
+        // ip/port that advertises a new serial) rebind discovery to the new serial, while never
+        // allowing an unrelated device at some other address to preempt an established binding.
+        if (isConnectedEndpoint(service)) return true
+
         if (target != null) return serial == target
 
         // For a direct first connection, bind identity to the service advertising
         // the endpoint that actually connected instead of selecting another device.
         val uri = currentUri
         return uri != null && service.host == uri.host && service.port == uri.port
+    }
+
+    /**
+     * Whether [service] describes the exact endpoint our live WebSocket is currently connected to.
+     *
+     * Only the endpoint we truly connected to may (re)bind the discovery identity, so a manual
+     * switch to another Tapro adopts the new serial while other devices on the subnet can never
+     * hijack the connection.
+     */
+    private fun isConnectedEndpoint(service: ServiceInfo): Boolean {
+        val uri = currentUri ?: return false
+        return isWebSocketConnected() && service.host == uri.host && service.port == uri.port
     }
 
     private fun rememberTargetService(service: ServiceInfo) {
@@ -682,6 +702,28 @@ class LanClientKernel(
                 launchInScope {
                     LogUtil.d(TAG, "LAN connection established")
 
+                    // If the endpoint we just connected to is a *different* address than the one we
+                    // previously bound our discovery identity to, the user reconnected to another
+                    // Tapro (manual ip/port change). Forget the stale serial so the connected
+                    // endpoint rebinds discovery to whatever serial it advertises. For an ordinary
+                    // reconnect/ip-follow to the same device the endpoint re-advertises the same
+                    // serial, so this rebind is a harmless no-op; an unrelated device can never
+                    // rebind because only the address we actually connected to is honored.
+                    val connectedHost = currentUri?.host
+                    val connectedPort = currentUri?.port ?: -1
+                    val bound = currentService
+                    if (bound != null && connectedHost != null &&
+                        (bound.host != connectedHost || bound.port != connectedPort)
+                    ) {
+                        LogUtil.i(
+                            TAG,
+                            "Connected endpoint changed (${bound.host}:${bound.port} -> $connectedHost:$connectedPort); " +
+                                    "forgetting stale serial ($targetServiceSerial) so discovery rebinds to the connected device"
+                        )
+                        targetServiceSerial = null
+                        currentService = null
+                    }
+
                     // Create service information (if needed)
                     if (currentService == null && currentUri != null) {
                         try {
@@ -987,6 +1029,20 @@ class LanClientKernel(
                     if (targetServiceSerial == null) {
                         rememberTargetService(service)
                         currentService = service
+                    } else {
+                        val serial = serviceSerial(service.name)
+                        if (serial != null && serial != targetServiceSerial && isConnectedEndpoint(service)) {
+                            // The user manually reconnected to a *different* Tapro (new ip/port that
+                            // now advertises a new serial at the endpoint we are connected to).
+                            // Adopt the new serial as the discovery identity so subsequent ip
+                            // changes follow this device instead of the previously bound one.
+                            LogUtil.i(
+                                TAG,
+                                "Connected endpoint advertises a new serial ($targetServiceSerial -> $serial); rebinding LAN discovery"
+                            )
+                            rememberTargetService(service)
+                            currentService = service
+                        }
                     }
 
                     // Tapro re-registers its mDNS service with a fresh instance name on restart.

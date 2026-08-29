@@ -63,6 +63,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 - **Cable → LAN switching.** Requesting a *different* configuration while a previous attempt is stuck in `CONNECTING` now cancels the stuck attempt and starts fresh, instead of silently queueing behind it.
 - **Cable connection reliability.** USB cable kernels (VSP / RS232-Serial / AOA) now fail fast when **no USB device is attached**, avoiding phantom on-board UART polling and freed-up transport switching. AOA control-transfer timeouts were raised (100 ms → 1000 ms) with added diagnostics so the accessory hand-off no longer silently fails.
+- **Fail-fast on an unresponsive cable link.** Before every transaction/query the SDK now runs a lightweight liveness probe on the active transport (for VSP cable, a handshake round-trip). If the peer (TaPro) has stopped responding — e.g. its UART receive loop is stuck with a *"port timeout"* after a prior transaction — the call now returns error **`213` (connection disconnected)** within ~3 s instead of hanging until the full transaction timeout. The dead link is torn down so the next call can reconnect. Integrators should treat `213` like other connection errors (reconnect and retry).
 
 ### 🧭 Migration
 

@@ -50,6 +50,22 @@ interface IServiceKernel {
      * Disconnect
      */
     fun disconnect()
+
+    /**
+     * Actively probe whether the underlying link is still alive.
+     *
+     * Unlike [getConnectionStatus], which only reports the last known state, this performs a
+     * best-effort round-trip check so callers can fail fast when the peer has become
+     * unresponsive (e.g. a stuck UART port) instead of waiting for a transaction timeout.
+     *
+     * The default implementation is passive (reports the cached CONNECTED state). Transports that
+     * support a lightweight application-level ping (e.g. VSP handshake) override this with an
+     * active probe.
+     *
+     * @param timeoutMs Maximum time to wait for the peer to acknowledge the probe.
+     * @return `true` if the link is confirmed alive, `false` otherwise.
+     */
+    suspend fun checkLinkAlive(timeoutMs: Long): Boolean
     
     /**
      * Get current connection status

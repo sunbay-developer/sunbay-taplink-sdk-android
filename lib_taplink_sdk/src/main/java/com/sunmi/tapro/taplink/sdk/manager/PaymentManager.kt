@@ -49,6 +49,14 @@ class PaymentManager(
 ) {
     private val TAG = "PaymentManager"
 
+    /**
+     * Timeout for the pre-transaction liveness probe (ms).
+     *
+     * A healthy peer replies within a few milliseconds; when the link is dead we wait at most this
+     * long before failing fast instead of blocking for the full transaction timeout.
+     */
+    private val linkAliveTimeoutMs = 3000L
+
     private val mapper: ObjectMapper = ObjectMapper()
         .registerKotlinModule()
         .setSerializationInclusion(JsonInclude.Include.NON_NULL)
@@ -125,8 +133,8 @@ class PaymentManager(
 
         // Check connection status
         if (connectionManager.isConnected()) {
-            // Already connected, ensure init then execute
-            ensureInitAndExecute(request, callback)
+            // Already connected, verify the link is alive then execute
+            ensureLinkAliveThenExecute(request, callback)
         } else if (connectionManager.isConnecting()) {
             // Connection in progress
             if (hasPendingAutoConnectTransaction) {
@@ -163,8 +171,8 @@ class PaymentManager(
 
             // Check connection status
             if (connectionManager.isConnected()) {
-                // Already connected, ensure init then execute
-                ensureInitAndExecute(paymentRequest, callback)
+                // Already connected, verify the link is alive then execute
+                ensureLinkAliveThenExecute(paymentRequest, callback)
             } else if (connectionManager.isConnecting()) {
                 // Connection in progress
                 if (hasPendingAutoConnectTransaction) {
@@ -686,6 +694,28 @@ class PaymentManager(
      */
     private fun ensureInitAndExecute(request: PaymentRequest, callback: PaymentCallback) {
         sendPaymentRequest(request, callback)
+    }
+
+    /**
+     * Actively verify the link is alive before executing, so a stuck/dead connection fails fast
+     * (E213) instead of hanging until the transaction timeout.
+     *
+     * Only probes transports that report CONNECTED; the probe itself is a lightweight round-trip
+     * (VSP handshake for cable, passive check otherwise).
+     */
+    private fun ensureLinkAliveThenExecute(request: PaymentRequest, callback: PaymentCallback) {
+        connectionManager.checkLinkAliveAsync(linkAliveTimeoutMs) { alive ->
+            if (alive) {
+                ensureInitAndExecute(request, callback)
+            } else {
+                LogUtil.e(TAG, "Link not alive before send, failing fast: action=${request.action}")
+                callback.onFailure(
+                    errorCode = InnerErrorCode.E213,
+                    errorMessage = "${InnerErrorCode.E213.description}(link unresponsive, connection lost)",
+                    transactionRequestId = request.transactionRequestId
+                )
+            }
+        }
     }
 
     /**
