@@ -44,6 +44,18 @@ object ProtocolConfigResolver {
             return Pair(ProtocolManager.buildVspProtocol(), ConnectionMode.SECONDARY_DISPLAY.name)
         }
 
+        // LAN mode takes precedence over any cableProtocol still present on the config: an
+        // explicitly selected LAN transport must never be resolved to a cable protocol.
+        if (connectionConfig.connectionMode == ConnectionMode.LAN &&
+            !connectionConfig.host.isNullOrBlank()
+        ) {
+            val port = connectionConfig.port ?: 8443
+            return Pair(
+                ProtocolManager.buildLanProtocol(connectionConfig.host!!, port, secure = false),
+                ConnectionMode.LAN.name
+            )
+        }
+
         // Cable mode with specific protocol
         connectionConfig.cableProtocol?.let { protocol ->
             return buildProtocolFromCableProtocol(protocol, context)
@@ -147,6 +159,7 @@ object ProtocolConfigResolver {
         // Use try-order when we would have used detection (cable mode with AUTO or unspecified protocol)
         val isCableTryOrder = when {
             connectionConfig == null -> false
+            connectionConfig.connectionMode == ConnectionMode.LAN -> false  // LAN never falls back to cable
             connectionConfig.host?.isNotBlank() == true -> false  // LAN mode
             connectionConfig.connectionMode == ConnectionMode.CABLE -> {
                 connectionConfig.cableProtocol == null || connectionConfig.cableProtocol == CableProtocol.AUTO

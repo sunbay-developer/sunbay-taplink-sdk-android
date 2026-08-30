@@ -30,6 +30,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.text.Charsets
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -88,6 +89,15 @@ class VSPClientKernel(
      */
     @Volatile
     private var handshakeWaiter: CompletableDeferred<Unit>? = null
+
+    /**
+     * True once this connection attempt has written its first [VspHandshake.REQ] to the port.
+     *
+     * The receive loop uses it to reject handshake frames that cannot be a reply to us — i.e.
+     * bytes left over in the link FIFO by a previous session. Reset per connection attempt in
+     * [awaitVspHandshake] and cleared in [performDisconnect].
+     */
+    private val hasSentHandshakeReq = AtomicBoolean(false)
 
     /**
      * Set while an active liveness probe ([checkLinkAlive]) is in flight. Completed by the receive
@@ -306,6 +316,7 @@ class VSPClientKernel(
 
         handshakeWaiter?.cancel(CancellationException("VSP client disconnect"))
         handshakeWaiter = null
+        hasSentHandshakeReq.set(false)
 
         livenessWaiter?.complete(false)
         livenessWaiter = null
@@ -566,6 +577,14 @@ class VSPClientKernel(
             usbSerialPort = port
             usbSerialDriver = targetDriver
 
+            // Discard bytes the peer left in the link FIFO during its previous session (typically
+            // ##TAPLINK_HSK_REQ## re-sent every second by TaPro and never read). Handshake markers
+            // carry no session id, so without this the receive loop would immediately read a stale
+            // REQ and declare the handshake verified while the peer's port may still be closed —
+            // the first business frame sent afterwards is then lost on the wire (TaPro shows
+            // "connected" while the SDK reports 351 three seconds later).
+            drainStaleRxBytes()
+
             LogUtil.d(TAG, "VSP client connected to: ${usbDevice.deviceName}")
             LogUtil.d(TAG, "Serial parameters: baudRate=$baudRate, dataBits=$dataBits, parity=$parity, stopBits=$stopBits")
 
@@ -612,6 +631,8 @@ class VSPClientKernel(
     private suspend fun awaitVspHandshake(): Boolean {
         val waiter = CompletableDeferred<Unit>()
         handshakeWaiter = waiter
+        // Re-evaluate causality for every attempt; never inherit the previous connection's flag.
+        hasSentHandshakeReq.set(false)
         var handshakeReqJob: Job? = null
         return try {
             startDataReceive(waiter)
@@ -690,15 +711,26 @@ class VSPClientKernel(
                         LogUtil.d(TAG, "VSP client raw received: ${data.size} bytes")
 
                         if (VspHandshake.isHandshakeMessage(dataString)) {
+                            // Only handshake frames that arrive *after* we sent our own REQ count:
+                            // that proves the peer has its port open and answered within this
+                            // session, ruling out stale REQ/ACK left in the link. An inbound REQ is
+                            // still always ACKed, preserving peer-initiated handshake compatibility.
                             if (VspHandshake.containsReq(dataString)) {
-                                if (sendHandshakeAck()) {
+                                val acked = sendHandshakeAck()
+                                if (acked && hasSentHandshakeReq.get()) {
                                     if (handshakeWaiter?.complete(Unit) == true) {
                                         LogUtil.i(TAG, "VSP client handshake verified with server")
                                     }
+                                } else if (!hasSentHandshakeReq.get()) {
+                                    LogUtil.d(TAG, "Ignoring handshake REQ received before our first REQ was sent")
                                 }
                             } else if (VspHandshake.containsAck(dataString)) {
-                                if (handshakeWaiter?.complete(Unit) == true) {
-                                    LogUtil.i(TAG, "VSP client handshake verified with server")
+                                if (hasSentHandshakeReq.get()) {
+                                    if (handshakeWaiter?.complete(Unit) == true) {
+                                        LogUtil.i(TAG, "VSP client handshake verified with server")
+                                    }
+                                } else {
+                                    LogUtil.d(TAG, "Ignoring handshake ACK received before our first REQ was sent")
                                 }
                             }
                             // Handshake packet may carry subsequent payload (sent merged by the remote end)
@@ -793,6 +825,42 @@ class VSPClientKernel(
     }
 
     /**
+     * Discard bytes left in the link FIFO by the peer's previous session.
+     *
+     * The VSP handshake markers carry no session identifier, so a stale
+     * [VspHandshake.REQ] is indistinguishable from a fresh one. Reading one before the peer has
+     * reopened its port makes the client declare the handshake verified too early and lose the
+     * first business frame it sends afterwards.
+     *
+     * Called once right after the port is opened and configured, before the receive loop starts.
+     * Draining is safe: a live peer re-sends REQ every [VspHandshake.DEFAULT_INTERVAL_MS], and the
+     * client drives its own REQ as well, so at most one round is delayed.
+     */
+    private fun drainStaleRxBytes() {
+        val port = usbSerialPort ?: return
+        val buffer = ByteArray(DRAIN_BUFFER_SIZE)
+        var discarded = 0
+        var rounds = 0
+        try {
+            while (rounds < MAX_DRAIN_ROUNDS) {
+                rounds++
+                val read = port.read(buffer, DRAIN_READ_TIMEOUT_MS)
+                if (read <= 0) break
+                discarded += read
+            }
+            if (rounds >= MAX_DRAIN_ROUNDS) {
+                LogUtil.w(TAG, "Stale RX drain hit the round limit ($MAX_DRAIN_ROUNDS), discarded $discarded byte(s)")
+            } else if (discarded > 0) {
+                LogUtil.w(TAG, "Discarded $discarded stale RX byte(s) left by a previous VSP session")
+            }
+        } catch (e: IOException) {
+            LogUtil.w(TAG, "Failed to drain stale RX bytes: ${e.message}")
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Unexpected error draining stale RX bytes: ${e.message}")
+        }
+    }
+
+    /**
      * Reply to handshake [VspHandshake.REQ] from server.
      * @return false if ACK could not be sent (handshake cannot complete).
      */
@@ -815,6 +883,9 @@ class VSPClientKernel(
         try {
             val reqBytes = VspHandshake.REQ.toByteArray(Charsets.UTF_8)
             usbSerialPort?.write(reqBytes, 1000)
+            // Set only after a successful write: an inbound handshake frame can be a reply to us
+            // only if a REQ actually left this port.
+            hasSentHandshakeReq.set(true)
             LogUtil.d(TAG, "Handshake REQ sent (client initiated)")
         } catch (e: Exception) {
             LogUtil.w(TAG, "Failed to send handshake REQ: ${e.message}")
@@ -1037,6 +1108,18 @@ class VSPClientKernel(
 
         /** Poll interval while waiting for the VSP USB device to enumerate. */
         private const val VSP_DEVICE_POLL_INTERVAL_MS = 500L
+
+        /** Scratch buffer size for [drainStaleRxBytes]. */
+        private const val DRAIN_BUFFER_SIZE = 4096
+
+        /**
+         * Read timeout while draining stale RX bytes. Kept short: the FIFO either already holds
+         * leftover bytes or it is empty, so a long wait would only delay the handshake.
+         */
+        private const val DRAIN_READ_TIMEOUT_MS = 50
+
+        /** Round limit for [drainStaleRxBytes], guarding against a peer that keeps flooding data. */
+        private const val MAX_DRAIN_ROUNDS = 32
 
         /**
          * Check if system supports USB Host mode

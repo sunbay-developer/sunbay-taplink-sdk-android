@@ -198,6 +198,10 @@ class ConnectionConfig {
             PinpadStrategy.LAN -> {
                 this.connectionMode = ConnectionMode.LAN
                 this.pinpadAuto = false
+                // A cable protocol is meaningless for a LAN-only PinPad session; clearing it
+                // prevents a residual value (callers commonly pass a non-null cableProtocol
+                // regardless of strategy) from steering protocol resolution to a cable transport.
+                this.cableProtocol = null
             }
             PinpadStrategy.CABLE -> {
                 this.connectionMode = ConnectionMode.CABLE
@@ -473,7 +477,8 @@ class ConnectionConfig {
          * @param strategy PinPad connection strategy (default [PinpadStrategy.AUTO])
          * @param host LAN host (for LAN / AUTO)
          * @param port LAN port (for LAN / AUTO)
-         * @param cableProtocol explicit cable protocol (for CABLE); defaults to AUTO try-order when null
+         * @param cableProtocol explicit cable protocol (for CABLE); defaults to AUTO try-order when null.
+         *   Ignored when [strategy] is [PinpadStrategy.LAN].
          * @param autoPriority optional AUTO priority override
          * @return the PinPad mode configuration
          */
