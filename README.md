@@ -1,7 +1,7 @@
 # Taplink SDK for Android
 
 [![Version](https://img.shields.io/badge/version-1.0.8-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
-[![Min SDK](https://img.shields.io/badge/minSdk-25-green.svg)](https://developer.android.com/about/versions/android-7.1)
+[![Min SDK](https://img.shields.io/badge/minSdk-24-green.svg)](https://developer.android.com/about/versions/android-7.0)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.7.10-purple.svg)](https://kotlinlang.org/)
 
 Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS applications. It enables developers to quickly integrate payment capabilities with support for multiple connection modes and comprehensive transaction APIs.
@@ -23,10 +23,10 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - Comprehensive transaction query functionality
 
 - **Secondary Display (USB Customer-Facing Screen)** *(since v1.0.9)*
-  - Open TaPro USB screen player via SDK or auto-open on connect
+  - `ConnectionConfig.createSecondaryDisplayMode()` — dedicated mode that connects over USB VSP to a **remote** TaPro terminal and automatically launches ("拉起") TaPro's screen player as part of `connect()` (failure = connection error, code `351`)
+  - Open TaPro USB screen player via SDK or auto-open on connect (same-device scenarios)
   - Drive ad carousel, order list, and tip selection on external display
-  - `ConnectionConfig.createSecondaryDisplayMode()` — dedicated mode that combines VSP connection + auto screen player launch (failure = connection error)
-  - See [SECONDARY_DISPLAY_INTEGRATION.md](./SECONDARY_DISPLAY_INTEGRATION.md) for full guide
+  - See [SECONDARY_DISPLAY_INTEGRATION.md](./SECONDARY_DISPLAY_INTEGRATION.md) — Part A covers `createSecondaryDisplayMode()` / launching TaPro, Part B covers rendering your own UI with `Presentation`
 
 - **Developer Friendly**
   - Clean and intuitive API design
@@ -37,7 +37,7 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
 
 ### Requirements
 
-- Android 7.1 (API 25) or higher
+- Android 7.0 (API 24) or higher
 - Android Studio Hedgehog or later
 - JDK 11 or higher
 
@@ -1696,7 +1696,7 @@ client.sale(request, object : PaymentCallbackAdapter() {
 - **Language**: Kotlin 1.7.10
 - **Build Tool**: Gradle with Kotlin DSL
 - **Android Gradle Plugin**: 8.13.1
-- **Min SDK**: Android 7.1 (API 25)
+- **Min SDK**: Android 7.0 (API 24)
 - **Target SDK**: Android API 35
 - **Java Version**: Java 11
 

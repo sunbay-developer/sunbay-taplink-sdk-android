@@ -421,4 +421,4 @@ See `AGENT.md` §8.1 and `sunbay-open-docs/AGENT.md` §3 for the full checklist.
 
 ## SDK Version
 
-Version is defined solely in the `SdkVersion` object in `lib_taplink_sdk/build.gradle.kts` (do not hardcode elsewhere). Check `RELEASE-NOTES.md` for the latest released version. Min SDK: **Android API 25 (7.1)**.
+Version is defined solely in the `SdkVersion` object in `lib_taplink_sdk/build.gradle.kts` (do not hardcode elsewhere). Check `RELEASE-NOTES.md` for the latest released version. Min SDK: **Android API 24 (7.0)**.

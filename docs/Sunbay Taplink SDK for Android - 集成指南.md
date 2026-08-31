@@ -425,7 +425,7 @@ android {
     compileSdk = 34
     
     defaultConfig {
-        minSdk = 25  // 最低支持 Android 7.1
+        minSdk = 24  // 最低支持 Android 7.0
         targetSdk = 34
     }
     

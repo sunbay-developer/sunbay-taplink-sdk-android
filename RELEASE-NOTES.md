@@ -6,7 +6,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 > **Legend:** 🚀 New &nbsp;·&nbsp; 💥 Breaking &nbsp;·&nbsp; 🔧 Improved &nbsp;·&nbsp; 🐛 Fixed &nbsp;·&nbsp; 📦 Dependencies &nbsp;·&nbsp; 🧭 Migration
 
-**Compatibility:** Min SDK Android API 25 (7.1) · Kotlin 1.7.10 · Java 8+
+**Compatibility:** Min SDK Android API 24 (7.0) · Kotlin 1.7.10 · Java 8+
 
 ## Contents
 

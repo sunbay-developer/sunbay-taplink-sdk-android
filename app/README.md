@@ -1,106 +1,106 @@
 # Taplink SDK Demo App
 
-USB AOA (Android Open Accessory) 协议测试应用，包含 Host 和 Accessory 两种模式的测试 Demo。
+USB AOA (Android Open Accessory) protocol test application with Host and Accessory mode demos.
 
-## 功能说明
+## Features
 
-### 主界面 (MainActivity)
-- 选择 USB Host 模式测试
-- 选择 USB Accessory 模式测试
+### Main Screen (MainActivity)
+- Select USB Host mode testing
+- Select USB Accessory mode testing
 
-### USB Host 模式 (UsbHostDemoActivity)
-作为 USB Host 端，主动连接 USB Accessory 设备。
+### USB Host Mode (UsbHostDemoActivity)
+Acts as the USB Host and actively connects to a USB Accessory device.
 
-**实现方式：** 使用 `TaplinkSDK` (TaplinkClient)
+**Implementation:** Uses `TaplinkSDK` (`TaplinkClient`)
 
-**功能：**
-- 连接到 USB Accessory 设备
-- 发送测试数据
-- 接收数据
-- 断开连接
-- 实时日志显示
+**Features:**
+- Connect to a USB Accessory device
+- Send test data
+- Receive data
+- Disconnect
+- Display real-time logs
 
-**使用场景：**
-- Android 设备作为主机（Host）
-- 连接到其他 Android 设备（Accessory 模式）
-- 或连接到支持 AOA 协议的硬件设备
+**Use cases:**
+- Use an Android device as the Host
+- Connect to another Android device in Accessory mode
+- Connect to hardware that supports the AOA protocol
 
-### USB Accessory 模式 (UsbAccessoryDemoActivity)
-作为 USB Accessory 端，等待 USB Host 设备连接。
+### USB Accessory Mode (UsbAccessoryDemoActivity)
+Acts as the USB Accessory and waits for a USB Host device to connect.
 
-**实现方式：** 直接使用 `UsbStandardAccessoryKernel`
+**Implementation:** Uses `UsbStandardAccessoryKernel` directly
 
-**功能：**
-- 等待 Host 设备连接
-- 发送测试数据
-- 接收数据
-- 断开连接
-- 实时日志显示
+**Features:**
+- Wait for a Host device to connect
+- Send test data
+- Receive data
+- Disconnect
+- Display real-time logs
 
-**使用场景：**
-- Android 设备作为配件（Accessory）
-- 等待其他 Android 设备（Host 模式）连接
-- 或等待支持 AOA 协议的主机设备连接
+**Use cases:**
+- Use an Android device as the Accessory
+- Wait for another Android device in Host mode to connect
+- Wait for a Host device that supports the AOA protocol to connect
 
-## 测试步骤
+## Test Procedure
 
-### 准备工作
-1. 准备两台 Android 设备（或一台 Android 设备 + 一台支持 AOA 的主机）
-2. 准备 USB OTG 线缆
-3. 在两台设备上分别安装此 Demo 应用
+### Prerequisites
+1. Prepare two Android devices, or one Android device and one AOA-compatible Host
+2. Prepare a USB OTG cable
+3. Install this demo application on both devices
 
-### Host 端测试
-1. 在设备 A 上启动应用
-2. 选择 "USB Host 模式测试"
-3. 连接 USB 线缆到 Accessory 设备
-4. 点击 "连接" 按钮
-5. 授权 USB 权限
-6. 连接成功后可以发送测试数据
+### Host Testing
+1. Launch the application on device A
+2. Select "USB Host Mode Test"
+3. Connect the USB cable to the Accessory device
+4. Tap the "Connect" button
+5. Grant USB permission
+6. Send test data after the connection succeeds
 
-### Accessory 端测试
-1. 在设备 B 上启动应用
-2. 选择 "USB Accessory 模式测试"
-3. 点击 "连接" 按钮（开始监听）
-4. 连接 USB 线缆到 Host 设备
-5. 授权 USB 权限
-6. 连接成功后可以发送测试数据
+### Accessory Testing
+1. Launch the application on device B
+2. Select "USB Accessory Mode Test"
+3. Tap the "Connect" button to start listening
+4. Connect the USB cable to the Host device
+5. Grant USB permission
+6. Send test data after the connection succeeds
 
-## 配置说明
+## Configuration
 
-### Host 模式初始化（使用 TaplinkSDK）
+### Host Mode Initialization (Using TaplinkSDK)
 ```kotlin
-// 创建 TaplinkConfig
+// Create TaplinkConfig
 val config = TaplinkConfig.create(
     context = this,
     appId = "demo_app_id",
     appSecretKey = "demo_secret_key"
 )
 
-// 创建 TaplinkClient
+// Create TaplinkClient
 val taplinkClient = TaplinkClient(config)
 
-// 设置连接监听器
+// Set the connection listener
 taplinkClient.setConnectionListener(object : ConnectionListener {
     override fun onStatusChanged(status: ConnectionStatus) {
-        // 处理连接状态变化
+        // Handle connection status changes
     }
     override fun onError(errorCode: String, errorMessage: String) {
-        // 处理连接错误
+        // Handle connection errors
     }
 })
 
-// 设置数据接收回调
+// Set the data receiver
 taplinkClient.setDataReceiver { data ->
-    // 处理接收到的数据
+    // Handle received data
 }
 ```
 
-### Accessory 模式初始化
+### Accessory Mode Initialization
 ```kotlin
-// 创建 PendingIntent
+// Create PendingIntent
 val pendingIntent = UsbStandardAccessoryKernel.createRequestPermissionPendingIntent(this)
 
-// 创建 USB 标准信息
+// Create standard USB information
 val usbStandardInfo = UsbStandardProtocol.UsbStandardInfo(
     manufacturer = "SUNMI",
     model = "TAPLINK_SDK",
@@ -110,7 +110,7 @@ val usbStandardInfo = UsbStandardProtocol.UsbStandardInfo(
     serial = "12345"
 )
 
-// 创建 Accessory Kernel
+// Create the Accessory Kernel
 val accessoryKernel = UsbStandardAccessoryKernel(
     context = this,
     usbStandardInfo = usbStandardInfo,
@@ -118,79 +118,79 @@ val accessoryKernel = UsbStandardAccessoryKernel(
     permissionPendingIntent = pendingIntent
 )
 
-// 设置数据接收回调
+// Set the data receiver
 accessoryKernel.setDataReceiver { data ->
-    // 处理接收到的数据
+    // Handle received data
 }
 ```
 
-### 连接和数据传输
+### Connection and Data Transfer
 
-#### Host 模式（使用 TaplinkSDK）
+#### Host Mode (Using TaplinkSDK)
 ```kotlin
-// 创建连接配置
+// Create the connection configuration
 val connectionConfig = ConnectionConfig(
     cableProtocol = CableProtocol.USB_AOA
 )
 
-// 开始连接
+// Connect
 taplinkClient.connect(connectionConfig)
 
-// 发送数据
+// Send data
 taplinkClient.sendRawData(data) { success, errorCode, errorMessage ->
     if (success) {
-        // 发送成功
+        // Send succeeded
     } else {
-        // 发送失败
+        // Send failed
     }
 }
 
-// 断开连接
+// Disconnect
 taplinkClient.disconnect()
 
-// 释放资源
+// Release resources
 taplinkClient.release()
 ```
 
-#### Accessory 模式（使用 Kernel）
+#### Accessory Mode (Using the Kernel)
 ```kotlin
-// 创建协议解析结果
+// Create the protocol parsing result
 val parseResult = ProtocolParseResult.UsbProtocol()
 
-// 创建连接回调
+// Create the connection callback
 val connectionCallback = object : ConnectionCallback {
     override fun onConnected(extraInfoMap: Map<String, String?>?) {
-        // 连接成功
+        // Connected
     }
     override fun onWaitingConnect() {
-        // 等待连接
+        // Waiting for a connection
     }
     override fun onDisconnected(code: String, msg: String) {
-        // 连接断开
+        // Disconnected
     }
 }
 
-// 开始连接
+// Connect
 accessoryKernel.connect(parseResult, connectionCallback)
 
-// 发送数据
+// Send data
 accessoryKernel.sendData(data, callback)
 
-// 断开连接
+// Disconnect
 accessoryKernel.disconnect()
 ```
 
-**注意：** 
-- Host 和 Accessory 的 USB 标准信息必须匹配
-- Host 端发送的 AOA 协议信息必须与 Accessory 端配置一致
+**Note:**
+- The standard USB information on the Host and Accessory must match
+- The AOA protocol information sent by the Host must match the Accessory configuration
 
-### AndroidManifest 配置
-- USB 权限：`android.permission.USB_PERMISSION`
-- USB 特性：`android.hardware.usb.accessory`
-- Accessory 模式需要响应 `USB_ACCESSORY_ATTACHED` Intent
+### AndroidManifest Configuration
+- USB permission: `android.permission.USB_PERMISSION`
+- USB feature: `android.hardware.usb.accessory`
+- Accessory mode must respond to the `USB_ACCESSORY_ATTACHED` Intent
 
-### USB Accessory 过滤器
-位置：`app/src/main/res/xml/accessory_filter.xml`
+### USB Accessory Filter
+Location: `app/src/main/res/xml/accessory_filter.xml`
 
 ```xml
 <usb-accessory
@@ -199,144 +199,144 @@ accessoryKernel.disconnect()
     version="1.0" />
 ```
 
-**注意：** Host 端发送的 AOA 协议信息必须与此配置匹配。
+**Note:** The AOA protocol information sent by the Host must match this configuration.
 
-## 日志说明
+## Logging
 
-Demo 应用会实时显示以下日志：
-- 连接状态变化
-- 权限请求和授权
-- 数据发送和接收
-- 错误信息
-- 断开连接事件
+The demo application displays the following logs in real time:
+- Connection status changes
+- Permission requests and grants
+- Data sent and received
+- Error messages
+- Disconnection events
 
-日志格式：`[HH:mm:ss.SSS] 日志内容`
+Log format: `[HH:mm:ss.SSS] log message`
 
-## 常见问题
+## Frequently Asked Questions
 
-### 1. 连接失败
-- 检查 USB 线缆是否正常
-- 检查是否授权了 USB 权限
-- 检查 Accessory 过滤器配置是否匹配
-- 查看日志中的错误码和错误信息
+### 1. Connection failed
+- Check that the USB cable is working properly
+- Check that USB permission was granted
+- Check that the Accessory filter configuration matches
+- Check the error code and message in the logs
 
-### 2. 权限被拒绝
-- 重新连接并授权
-- 检查系统设置中的 USB 权限
+### 2. Permission denied
+- Reconnect and grant permission
+- Check USB permissions in the system settings
 
-### 3. 设备未检测到
-- 确认设备支持 USB OTG
-- 尝试更换 USB 线缆
-- 重启应用或设备
+### 3. Device not detected
+- Confirm that the device supports USB OTG
+- Try a different USB cable
+- Restart the application or device
 
-## 错误码参考
+## Error Code Reference
 
-- E251: 未找到 USB 设备
-- E252: USB 权限被拒绝
-- E253: 设备在权限请求期间断开
-- E213: 连接超时（Accessory 模式）
-- E304: 数据发送失败
+- E251: USB device not found
+- E252: USB permission denied
+- E253: Device disconnected while requesting permission
+- E213: Connection timed out (Accessory mode)
+- E304: Data transmission failed
 
-## 技术架构
+## Technical Architecture
 
-### 依赖模块
-- `lib_taplink_sdk`: SDK 模块（Host 模式使用）
-- `lib_taplink_communication`: 通信层模块（Accessory 模式使用）
-- `lib_log`: 日志模块
+### Modules
+- `lib_taplink_sdk`: SDK module (used in Host mode)
+- `lib_taplink_communication`: Communication layer module (used in Accessory mode)
+- `lib_log`: Logging module
 
-### 核心类
+### Core Classes
 
-#### Host 模式（SDK 层）
-- `TaplinkClient`: SDK 客户端
-- `TaplinkConfig`: SDK 配置
-- `ConnectionConfig`: 连接配置
-- `ConnectionListener`: 连接状态监听器
-- `CableProtocol`: 线缆协议枚举
+#### Host Mode (SDK Layer)
+- `TaplinkClient`: SDK client
+- `TaplinkConfig`: SDK configuration
+- `ConnectionConfig`: Connection configuration
+- `ConnectionListener`: Connection status listener
+- `CableProtocol`: Cable protocol enum
 
-#### Accessory 模式（Kernel 层）
-- `UsbStandardAccessoryKernel`: USB Accessory 模式内核
-- `UsbStandardProtocol`: USB 协议工具类
-- `ConnectionCallback`: 连接状态回调接口
-- `InnerCallback`: 数据发送回调接口
+#### Accessory Mode (Kernel Layer)
+- `UsbStandardAccessoryKernel`: USB Accessory mode kernel
+- `UsbStandardProtocol`: USB protocol utility
+- `ConnectionCallback`: Connection status callback interface
+- `InnerCallback`: Data transmission callback interface
 
-### 使用流程
+### Usage Flow
 
-#### Host 模式（SDK 层）
+#### Host Mode (SDK Layer)
 ```kotlin
-// 1. 创建 TaplinkClient
+// 1. Create TaplinkClient
 val config = TaplinkConfig.create(context, appId, appSecretKey)
 val taplinkClient = TaplinkClient(config)
 
-// 2. 设置监听器
+// 2. Set listeners
 taplinkClient.setConnectionListener(...)
 taplinkClient.setDataReceiver { data -> ... }
 
-// 3. 连接
+// 3. Connect
 val connectionConfig = ConnectionConfig(cableProtocol = CableProtocol.USB_AOA)
 taplinkClient.connect(connectionConfig)
 
-// 4. 发送数据
+// 4. Send data
 taplinkClient.sendRawData(data) { success, errorCode, errorMessage -> ... }
 
-// 5. 断开连接
+// 5. Disconnect
 taplinkClient.disconnect()
 
-// 6. 释放资源
+// 6. Release resources
 taplinkClient.release()
 ```
 
-#### Accessory 模式（Kernel 层）
+#### Accessory Mode (Kernel Layer)
 ```kotlin
-// 1. 创建 Kernel 实例
+// 1. Create a Kernel instance
 val kernel = UsbStandardAccessoryKernel(...)
 
-// 2. 设置数据接收回调
+// 2. Set the data receiver
 kernel.registerDataReceiver { data -> ... }
 
-// 3. 创建协议解析结果和连接回调
+// 3. Create the protocol parsing result and connection callback
 val parseResult = ProtocolParseResult.UsbProtocol()
 val connectionCallback = object : ConnectionCallback { ... }
 
-// 4. 开始连接
+// 4. Connect
 kernel.connect(parseResult, connectionCallback)
 
-// 5. 发送数据
+// 5. Send data
 kernel.sendData(data, callback)
 
-// 6. 断开连接
+// 6. Disconnect
 kernel.disconnect()
 
-// 7. 释放资源
+// 7. Release resources
 kernel.release()
 ```
 
-### 关键特性
-- **Host 模式使用 SDK 层**：通过 TaplinkClient 进行连接和数据传输
-- **Accessory 模式使用 Kernel 层**：直接使用底层 Kernel 进行测试
-- **完整的生命周期管理**：Session、Token、Mutex 等机制
-- **实时数据传输**：支持双向数据收发
-- **详细的日志输出**：便于调试和问题定位
+### Key Features
+- **Host mode uses the SDK layer:** Connect and transfer data through `TaplinkClient`
+- **Accessory mode uses the Kernel layer:** Test directly with the underlying Kernel
+- **Complete lifecycle management:** Includes Session, Token, Mutex, and related mechanisms
+- **Real-time data transfer:** Supports bidirectional data transmission
+- **Detailed logging:** Simplifies debugging and issue diagnosis
 
-## 开发说明
+## Development Notes
 
-### 添加新功能
-1. 在对应的 Activity 中添加 UI 控件
-2. 在布局文件中添加控件定义
-3. 实现业务逻辑
-4. 更新日志输出
+### Adding a New Feature
+1. Add UI controls to the corresponding Activity
+2. Define the controls in the layout file
+3. Implement the business logic
+4. Update log output
 
-### 调试建议
-- 使用 `adb logcat` 查看详细日志
-- 启用 USB 调试模式
-- 使用两台设备进行端到端测试
+### Debugging Tips
+- Use `adb logcat` to view detailed logs
+- Enable USB debugging
+- Perform end-to-end testing with two devices
 
-## 版本信息
+## Version Information
 
-- 版本：1.0
-- 最低 SDK：25 (Android 7.1)
-- 目标 SDK：36 (Android 14)
-- Kotlin 版本：1.9+
+- Version: 1.0
+- Minimum SDK: 24 (Android 7.0)
+- Target SDK: 36 (Android 14)
+- Kotlin version: 1.9+
 
-## 许可证
+## License
 
 Copyright © 2025 Sunmi TaPro Team

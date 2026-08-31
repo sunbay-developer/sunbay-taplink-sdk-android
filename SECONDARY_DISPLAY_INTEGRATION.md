@@ -1,8 +1,15 @@
-# Secondary Display (USB Customer-Facing Screen) Integration Guide
+# Secondary Display Integration Guide
 
-How to drive a USB customer-facing secondary display from your POS application — showing
-advertisements, order summaries, and tip selection to the customer while the cashier
-operates the primary screen.
+This guide covers **two distinct but related** TapLink features, both introduced in SDK
+v1.0.9 and both centered on driving a customer-facing screen from your POS application:
+
+| | **Part A: `SECONDARY_DISPLAY` connection mode** | **Part B: USB customer-facing screen (`Presentation`)** |
+|---|---|---|
+| What it is | A dedicated **connection mode** (`ConnectionConfig.createSecondaryDisplayMode()`) that connects over USB VSP to a **remote** TaPro terminal and automatically launches ("拉起") TaPro's screen player on that remote device as part of `connect()` | A **rendering technique** your app uses to draw its own ad/order/tip UI on a USB display attached to the **same** device your app runs on |
+| Devices involved | Two devices: your business app device ↔ a separate TaPro terminal, joined by a USB cable | One device: your app and TaPro (or just your app) share the same `DisplayManager` |
+| Who owns the on-screen content | TaPro (native screen player UI on the remote device) | Your app (Compose/`Presentation`) |
+| Typical use case | Headless controller / subscreen device that only needs to drive a TaPro terminal's customer display and process payments | POS terminal with its own attached USB customer display that your app fully controls |
+| Read this first if... | You call `ConnectionConfig.createSecondaryDisplayMode()` and need to understand how connecting "pulls up" TaPro | You need to render custom Compose/XML content (ads, tip selection) on a USB display |
 
 **SDK version:** v1.0.9+
 
@@ -10,6 +17,18 @@ operates the primary screen.
 
 ## Table of Contents
 
+**Part A — Secondary Display Connection Mode (launching TaPro over USB VSP)**
+- [A.1 Overview](#a1-overview)
+- [A.2 Architecture](#a2-architecture)
+- [A.3 Prerequisites](#a3-prerequisites)
+- [A.4 Quick Start](#a4-quick-start)
+- [A.5 Connection Flow & Timing](#a5-connection-flow--timing)
+- [A.6 Error Handling](#a6-error-handling)
+- [A.7 Transaction Behavior in SECONDARY_DISPLAY Mode](#a7-transaction-behavior-in-secondary_display-mode)
+- [A.8 Comparison with `autoOpenUsbScreenPlayer`](#a8-comparison-with-autoopenusbscreenplayer)
+- [A.9 Troubleshooting: TaPro Doesn't Launch](#a9-troubleshooting-tapro-doesnt-launch)
+
+**Part B — USB Customer-Facing Screen (rendering your own UI with `Presentation`)**
 - [Overview](#overview)
 - [Architecture & Ownership Model](#architecture--ownership-model)
 - [Prerequisites](#prerequisites)
@@ -25,6 +44,195 @@ operates the primary screen.
 
 ---
 
+# Part A — Secondary Display Connection Mode
+
+## A.1 Overview
+
+`ConnectionMode.SECONDARY_DISPLAY` (created via `ConnectionConfig.createSecondaryDisplayMode()`)
+is a **dedicated connection mode**, not a UI-rendering helper. It is the mode to use when your
+business app runs on a device whose only job is to drive a **remote** TaPro terminal — for
+example a headless controller or subscreen board wired to a TaPro terminal over USB — and you
+need `connect()` to guarantee that TaPro is not just reachable, but actually showing its
+customer-facing screen before you start taking payments.
+
+**What `connect()` does in this mode, in one call:**
+1. Establishes a transport connection to the remote TaPro over **USB Virtual Serial Port (VSP)**.
+2. Once the transport is up, the SDK automatically sends `OPEN_USB_SCREEN_PLAYER` to TaPro —
+   this is exactly what "拉起 TaPro" (launching/pulling up TaPro) means in this mode: TaPro
+   activates its USB screen player and is ready to present transaction UI on the customer
+   display attached to *its own* device.
+3. `onConnected(deviceId, taproVersion)` is delivered **only** when both steps succeed.
+4. If step 2 fails or times out, the SDK disconnects automatically and delivers `onError`
+   instead — a connection is never reported as "connected" with a non-functional customer
+   display in this mode.
+
+This is different from calling `TaplinkSDK.connect()` with `ConnectionMode.CABLE`/`PINPAD` and
+separately calling `openUsbScreenPlayer()`: in `SECONDARY_DISPLAY` mode the screen player step is
+**mandatory and part of the connection contract**, not an optional follow-up call.
+
+---
+
+## A.2 Architecture
+
+```
+┌────────────────────────────┐   USB cable (VSP)   ┌──────────────────────────────┐
+│   Your Business App         │◄────────────────────►│        TaPro Terminal        │
+│  (headless controller /     │                      │                              │
+│   subscreen device)         │                      │  ┌────────────────────────┐  │
+│                              │                      │  │ USB Screen Player       │  │
+│  ConnectionConfig            │  1. VSP connect      │  │ (native TaPro UI:       │  │
+│    .createSecondaryDisplay   │ ──────────────────►  │  │  ads / order / tip /    │  │
+│    Mode()                    │                      │  │  payment prompts)       │  │
+│                              │  2. OPEN_USB_SCREEN_  │  └───────────┬────────────┘  │
+│  TaplinkSDK.connect(config,  │     PLAYER (auto)     │              │               │
+│    listener)                 │ ──────────────────►  │              ▼               │
+│                              │  3. onConnected only  │      USB customer-facing     │
+│  TaplinkSDK.getClient()      │     after (1)+(2) OK  │      display (attached to    │
+│    .sale(...) / refund(...)  │ ◄──────────────────  │      the TaPro device)       │
+└────────────────────────────┘                      └──────────────────────────────┘
+```
+
+Subsequent transactions (`sale`, `refund`, `void`, `auth`, ...) are sent over the same VSP link
+using the full TapLink transaction API — no separate API is needed for payments once connected.
+
+---
+
+## A.3 Prerequisites
+
+1. **Hardware**: two devices joined by a USB cable — your business app device, and a TaPro
+   terminal with a USB customer-facing display attached to it (or an on-board/subscreen display
+   wired to TaPro over the same on-board UART/VSP transport).
+2. **Remote TaPro version**: `1.0.5` or later (`MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER`). Older
+   TaPro versions do not recognize `OPEN_USB_SCREEN_PLAYER` and the connection will fail with
+   error `351`.
+3. **SDK Version**: `com.sunmi:sunbay-taplink-sdk-android:1.0.9` or later (for the
+   `SECONDARY_DISPLAY` enum value and `createSecondaryDisplayMode()` factory).
+4. **TaPro service mode**: TaPro must be running with VSP/Cable service mode enabled so it can
+   accept the incoming VSP transport.
+5. **USB host permission**: same as other Cable-based modes — declare
+   `<uses-feature android:name="android.hardware.usb.host" />` in `AndroidManifest.xml`, and
+   handle the Android 12+ runtime USB permission flow.
+6. Do **not** set `host`/`port`/`cableProtocol` on the config — `createSecondaryDisplayMode()`
+   always resolves to the VSP protocol regardless of any other fields.
+
+---
+
+## A.4 Quick Start
+
+```kotlin
+// 1) Init once (Application.onCreate)
+TaplinkSDK.init(context, TaplinkConfig.create(BuildConfig.TAPLINK_APP_ID, BuildConfig.TAPLINK_SECRET_KEY))
+
+// 2) Connect using the dedicated Secondary Display mode
+val config = ConnectionConfig.createSecondaryDisplayMode()
+
+TaplinkSDK.connect(config, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        // VSP link is up AND TaPro's screen player is confirmed open.
+        // TaPro is now "拉起" (launched) and ready — safe to start taking payments.
+        runOnUiThread { showReadyState() }
+    }
+
+    override fun onDisconnected(reason: String) {
+        runOnUiThread { showDisconnectedState(reason) }
+    }
+
+    override fun onError(error: ConnectionError) {
+        runOnUiThread { handleSecondaryDisplayConnectError(error) }
+    }
+})
+
+// 3) Once onConnected fires, the full transaction API is available as usual
+val client = TaplinkSDK.getClient()
+client.sale(saleRequest, paymentCallback)
+
+// 4) Lifecycle cleanup (e.g. onDestroy)
+TaplinkSDK.removeConnectionListener()
+TaplinkSDK.disconnect()
+```
+
+---
+
+## A.5 Connection Flow & Timing
+
+| Step | What happens | Timing |
+|------|---------------|--------|
+| 1 | VSP transport connects to the remote TaPro | Governed by `ConnectionConfig.connectionTimeout` (default 60s) |
+| 2 | SDK sends `OPEN_USB_SCREEN_PLAYER` to TaPro | Immediately after step 1 succeeds |
+| 3a | TaPro confirms the screen player opened | `onConnected` delivered |
+| 3b | TaPro rejects, or does not answer within **3 seconds** | `disconnect()` is called automatically, then `onError(code = "351")` is delivered |
+
+Only one of 3a/3b ever fires — `onConnected`/`onError` for the screen-player step is delivered
+exactly once, the same guarantee the SDK gives for `autoOpenUsbScreenPlayer` (see A.8).
+
+---
+
+## A.6 Error Handling
+
+| Code | Meaning | Suggested action |
+|------|---------|-------------------|
+| `351` | VSP transport connected, but TaPro failed to open the USB screen player (or didn't respond within 3s) | Confirm the remote TaPro is `1.0.5`+, confirm a customer-facing display is attached to the TaPro device, then retry `connect()` |
+| *(any connection error)* | The underlying VSP transport itself failed (cable unplugged, USB permission denied, TaPro not in service mode, etc.) | Handle like any other Cable/VSP connection failure — check the cable and USB permission, confirm TaPro's service mode |
+
+```kotlin
+override fun onError(error: ConnectionError) {
+    when (error.code) {
+        "351" -> {
+            // Transport was fine, but TaPro's screen player didn't come up.
+            showError("Customer display on TaPro is unavailable: ${error.message}")
+        }
+        else -> {
+            // VSP transport itself failed — treat as a normal connection failure.
+            showError("Could not reach TaPro: ${error.message}")
+        }
+    }
+}
+```
+
+> `351` is only ever raised for `SECONDARY_DISPLAY` mode, where opening the screen player is a
+> hard requirement. Compare with `350`, which is raised by `openUsbScreenPlayer()`/
+> `autoOpenUsbScreenPlayer` when the remote TaPro version is too old to support the action at all
+> (see A.8) — `350` does not fail the connection in that softer path, but it **does** fail the
+> connection here.
+
+---
+
+## A.7 Transaction Behavior in SECONDARY_DISPLAY Mode
+
+Every transaction sent while connected in `SECONDARY_DISPLAY` mode is tagged internally so TaPro
+routes it straight into the payment engine and shows the result **on the secondary display**,
+instead of opening TaPro's normal full-screen TapLink page. You don't need to configure this —
+it's automatic for this mode. All other transaction semantics are unchanged: check
+`result.isSuccess()`/`isProcessing()`/`isFailed()`, use `query()` before retrying on error `306`,
+and use a new `transactionRequestId` for `307`/`308` retries.
+
+---
+
+## A.8 Comparison with `autoOpenUsbScreenPlayer`
+
+| | `SECONDARY_DISPLAY` mode | `TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` (Part B) |
+|---|---|---|
+| Connection type | USB VSP only, cross-device | Any connection mode (`ON_DEVICE`/`APP_TO_APP`, `LAN`, `CABLE`, `PINPAD`) |
+| Screen player failure | **Fatal** — connection fails with `onError(351)` | **Non-blocking** — `onConnected` still fires after a 3s timeout |
+| Who renders content | TaPro itself (native screen player UI) | Your app (`Presentation`), see Part B |
+| Typical use case | Dedicated device driving a remote TaPro's customer display | Optional customer screen on the same device as TaPro |
+
+---
+
+## A.9 Troubleshooting: TaPro Doesn't Launch
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `onError(code="351")` immediately | Remote TaPro version `< 1.0.5` doesn't support `OPEN_USB_SCREEN_PLAYER` | Upgrade TaPro; verify `taproVersion` reported in earlier successful connects, or check TaPro's about screen |
+| `onError(code="351")` after ~3s | TaPro received the request but didn't confirm (no customer display attached, or TaPro busy) | Verify a USB customer-facing display is physically attached to the TaPro device; retry once TaPro is idle |
+| `onConnected` never fires, no `onError` either | VSP transport itself never came up (cable/permission issue) | This indicates a transport-level failure, not a `351` — check the USB cable, `android.hardware.usb.host` permission, and that TaPro is in VSP/Cable service mode |
+| Connects fine with `CABLE`/`PINPAD` mode but fails with `SECONDARY_DISPLAY` | Screen player step failing while the transport is fine — narrow it down first | Try `ConnectionConfig.createCableMode()` + manual `TaplinkSDK.openUsbScreenPlayer()` (Part B, Step 1 Option B) against the same remote TaPro to isolate whether it's a transport or screen-player problem |
+| Works once, then fails after reconnect | TaPro's screen player was dismissed/closed after the first session | Each new `connect()` in this mode re-sends `OPEN_USB_SCREEN_PLAYER`; this is expected and requires no special handling |
+
+---
+
+# Part B — USB Customer-Facing Screen (Rendering with `Presentation`)
+
 ## Overview
 
 The secondary display feature enables POS applications to show customer-facing content
@@ -36,6 +244,8 @@ processing payments through TapLink SDK.
 - The SDK provides `openUsbScreenPlayer()` to request Tapro to launch the display driver
 - Your app uses standard Android `Presentation` API to render on the detected display
 - Works on SUNMI terminals with USB customer-facing displays (e.g., T3 series)
+- This section assumes your app and TaPro share the **same** device/`DisplayManager`. If your
+  app runs on a separate device connected over USB VSP, use Part A instead.
 
 ---
 
@@ -56,7 +266,7 @@ processing payments through TapLink SDK.
 │  ┌─────────────────────────────────────────────┐ │
 │  │ TapLink SDK                                  │ │
 │  │  • openUsbScreenPlayer(callback)             │ │
-│  │  • autoOpenUsbScreenPlayer config            │ │
+│  │  • autoOpenUsbScreenPlayer config             │ │
 │  │  • Payment transactions                      │ │
 │  └─────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────┘
@@ -86,7 +296,7 @@ processing payments through TapLink SDK.
 
 1. **Hardware**: SUNMI terminal with USB customer-facing display
 2. **SDK Version**: `com.sunmi:sunbay-taplink-sdk-android:1.0.9` or later
-3. **Min SDK**: Android API 25 (Android 7.1)
+3. **Min SDK**: Android API 24 (Android 7.0)
 4. **SUNMI USB Screen Player**: Pre-installed system app on supported terminals
 
 ### Version Support
@@ -795,6 +1005,7 @@ class MyApplication : Application() {
 |-----|-------------|
 | `TaplinkSDK.openUsbScreenPlayer(callback: PaymentCallback)` | Request Tapro to launch the USB screen player app. Only relevant in App-to-App mode where Tapro runs on the same device. |
 | `TaplinkConfig.setAutoOpenUsbScreenPlayer(enabled: Boolean)` | Automatically launch the player on connect, before `onConnected` fires. 3-second timeout, non-blocking. Default: `false`. |
+| `ConnectionConfig.createSecondaryDisplayMode()` | Cross-device connection mode over USB VSP that makes opening the screen player mandatory for a successful `connect()`. See [Part A](#part-a--secondary-display-connection-mode) instead of this section if you need this. |
 
 ### Callback Semantics for `openUsbScreenPlayer()`
 

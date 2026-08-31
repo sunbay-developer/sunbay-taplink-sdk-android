@@ -830,8 +830,16 @@ class LanClientKernel(
                     LogUtil.e(TAG, "LAN connection error: ${exception.message}")
 
                     if (isHandshakeFailure) {
-                        updateStatusSafely(InnerConnectionStatus.DISCONNECTED)
-                        LogUtil.d(TAG, "LAN handshake failed; allowing service discovery fallback without failing transactions")
+                        // A failed direct endpoint must be visible to the SDK caller even when
+                        // service discovery fallback is still allowed by performConnect().
+                        // The next close callback is suppressed separately to avoid delivering
+                        // a duplicate disconnect notification for this same failed handshake.
+                        updateStatusSafely(InnerConnectionStatus.ERROR)
+                        notifyConnectionError(
+                            "Connection error: ${exception.message}",
+                            InnerErrorCode.E241
+                        )
+                        LogUtil.d(TAG, "LAN handshake failed; notifying caller and allowing service discovery fallback")
                         return@launchInScope
                     }
 
