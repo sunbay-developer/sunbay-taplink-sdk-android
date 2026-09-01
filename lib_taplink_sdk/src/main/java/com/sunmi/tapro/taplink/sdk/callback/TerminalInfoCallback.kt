@@ -8,7 +8,8 @@ import com.sunmi.tapro.taplink.sdk.model.response.TerminalInfo
  *
  * GET_TERMINAL_INFO is a read-only control action, not a transaction — it never goes through
  * [PaymentCallback] and must not be confused with payment-success semantics:
- * - [onSuccess] fires once with the merchant/terminal info for the connected TaPro device.
+ * - [onSuccess] fires once with the merchant/terminal info for the connected TaPro device. The SDK
+ *   automatically establishes the configured connection before sending the request when necessary.
  * - [onFailure] fires for any communication/signature/technical error, including when an
  *   older TaPro does not support GET_TERMINAL_INFO.
  *

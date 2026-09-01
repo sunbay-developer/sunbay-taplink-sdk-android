@@ -628,18 +628,6 @@ class TaplinkApiImpl : TaplinkApi {
             return
         }
 
-        if (!isConnected()) {
-            LogUtil.e(TAG, "getTerminalInfo: Not connected")
-            callback.onFailure(
-                PaymentError.create(
-                    code = InnerErrorCode.E303.code,
-                    message = "Not connected to payment terminal",
-                    suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E303.code) ?: ""
-                )
-            )
-            return
-        }
-
         // Wrap callback to handle legacy TaPro versions that do not recognize the GET_TERMINAL_INFO
         // action. Older TaPro treats GET_TERMINAL_INFO as an unknown transaction request and returns
         // misleading errors (E307 "System is processing another transaction", E305

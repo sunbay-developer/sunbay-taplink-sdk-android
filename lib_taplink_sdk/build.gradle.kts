@@ -8,7 +8,7 @@ plugins {
 object SdkVersion {
     const val CODE = 15
 
-    const val NAME = "1.0.8.31"
+    const val NAME = "1.0.8.34"
 }
 
 object BuildConfig {
@@ -105,6 +105,7 @@ dependencies {
     }
 
     testImplementation(libs.junit)
+    testImplementation(project(":lib_taplink_communication"))
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
 }

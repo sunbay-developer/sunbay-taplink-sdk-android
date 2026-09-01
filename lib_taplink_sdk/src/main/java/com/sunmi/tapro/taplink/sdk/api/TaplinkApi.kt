@@ -284,10 +284,12 @@ interface TaplinkApi {
     fun openUsbScreenPlayer(callback: PaymentCallback)
 
     /**
-     * Get the merchant and terminal information for the currently connected TaPro device.
+     * Get the merchant and terminal information for the TaPro device selected by the current
+     * connection configuration.
      *
      * This is a read-only control action — it queries only the single TaPro device that is
-     * currently connected and being called. It is not a cloud merchant lookup and not a
+     * selected for the current connection. If the SDK is disconnected, it automatically connects
+     * before querying. It is not a cloud merchant lookup and not a
      * terminal-list query: it never returns other devices, is not paginated, and the
      * response has no `terminals` array or `nextToken`.
      *

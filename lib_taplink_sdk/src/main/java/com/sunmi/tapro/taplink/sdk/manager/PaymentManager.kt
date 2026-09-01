@@ -31,6 +31,7 @@ import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
 import java.math.BigDecimal
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Payment management class
@@ -171,20 +172,77 @@ class PaymentManager(
     fun getTerminalInfo(callback: TerminalInfoCallback) {
         LogUtil.d(TAG, "Executing GET_TERMINAL_INFO request")
 
-        if (!connectionManager.isConnected()) {
-            LogUtil.e(TAG, "GET_TERMINAL_INFO failed: not connected, please call connect() first")
-            callback.onFailure(
-                PaymentError.create(
-                    code = InnerErrorCode.E212.code,
-                    message = InnerErrorCode.E212.description,
-                    suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E212.code) ?: ""
-                )
-            )
-            return
+        if (connectionManager.isConnected()) {
+            ensureLinkAliveThenGetTerminalInfo(callback)
+        } else {
+            LogUtil.d(TAG, "Not connected, attempting auto-connect before getting terminal info")
+            autoConnectThenGetTerminalInfo(callback)
         }
+    }
 
-        val request = PaymentRequest(action = TransactionAction.GET_TERMINAL_INFO.value)
-        sendGetTerminalInfoRequest(request, callback)
+    /**
+     * Send GET_TERMINAL_INFO only after the current transport has responded to a liveness probe.
+     */
+    private fun ensureLinkAliveThenGetTerminalInfo(callback: TerminalInfoCallback) {
+        connectionManager.checkLinkAliveAsync(linkAliveTimeoutMs) { alive ->
+            if (alive) {
+                sendGetTerminalInfoRequest(
+                    PaymentRequest(action = TransactionAction.GET_TERMINAL_INFO.value),
+                    callback
+                )
+            } else {
+                LogUtil.e(TAG, "Link not alive before GET_TERMINAL_INFO request")
+                callback.onFailure(
+                    PaymentError.create(
+                        code = InnerErrorCode.E213.code,
+                        message = "${InnerErrorCode.E213.description}(link unresponsive, connection lost)",
+                        suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E213.code) ?: ""
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * Join an in-progress connection or establish one using the saved connection configuration
+     * before sending GET_TERMINAL_INFO.
+     */
+    private fun autoConnectThenGetTerminalInfo(callback: TerminalInfoCallback) {
+        val awaitingConnection = AtomicBoolean(true)
+        connectionManager.connect(
+            connectionManager.getAutoConnectConfig(),
+            object : ConnectionListener {
+                override fun onConnected(deviceId: String, taproVersion: String) {
+                    if (!awaitingConnection.compareAndSet(true, false)) return
+                    LogUtil.d(TAG, "Auto-connect successful, getting terminal info")
+                    ensureLinkAliveThenGetTerminalInfo(callback)
+                }
+
+                override fun onError(error: ConnectionError) {
+                    if (!awaitingConnection.compareAndSet(true, false)) return
+                    LogUtil.e(TAG, "Auto-connect for GET_TERMINAL_INFO failed: ${error.message}")
+                    callback.onFailure(
+                        PaymentError.create(
+                            code = InnerErrorCode.E214.code,
+                            message = InnerErrorCode.E214.description,
+                            suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E214.code) ?: ""
+                        )
+                    )
+                }
+
+                override fun onDisconnected(reason: String) {
+                    if (!awaitingConnection.compareAndSet(true, false)) return
+                    LogUtil.w(TAG, "Auto-connect for GET_TERMINAL_INFO disconnected: $reason")
+                    callback.onFailure(
+                        PaymentError.create(
+                            code = InnerErrorCode.E213.code,
+                            message = InnerErrorCode.E213.description,
+                            suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E213.code) ?: ""
+                        )
+                    )
+                }
+            }
+        )
     }
 
     /**

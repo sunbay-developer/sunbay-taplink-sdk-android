@@ -187,11 +187,12 @@ class TaplinkClient internal constructor(
     }
 
     /**
-     * Get the merchant and terminal information for the currently connected TaPro device.
+     * Get the merchant and terminal information for the TaPro device selected by the current
+     * connection configuration.
      *
      * Read-only control action — not a transaction, does not require a
-     * transactionRequestId. Queries only the currently connected TaPro device (not a cloud
-     * merchant lookup, not a terminal-list query).
+     * transactionRequestId. If the SDK is disconnected, it automatically connects before querying.
+     * Queries only one TaPro device (not a cloud merchant lookup, not a terminal-list query).
      *
      * @param callback Callback to receive the terminal info result
      */
