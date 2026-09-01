@@ -193,12 +193,14 @@ class PaymentManager(
     private fun sendGetTerminalInfoRequest(request: PaymentRequest, callback: TerminalInfoCallback) {
         try {
             val appToAppMode = resolveAppToAppModeForRequest()
+            val connectionMode = resolveConnectionModeTagForRequest()
             val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
                 request = request,
                 version = config.version,
                 config.appId,
                 secretKey = config.secretKey,
-                appToAppMode = appToAppMode
+                appToAppMode = appToAppMode,
+                connectionMode = connectionMode
             )
 
             val requestJson = mapper.writeValueAsString(basicRequest)
@@ -367,12 +369,14 @@ class PaymentManager(
 
             // Convert PaymentRequest to BasicRequest
             val appToAppMode = resolveAppToAppModeForRequest()
+            val connectionMode = resolveConnectionModeTagForRequest()
             val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
                 request = request,
                 version = config.version,
                 config.appId,
                 secretKey = config.secretKey,
-                appToAppMode = appToAppMode
+                appToAppMode = appToAppMode,
+                connectionMode = connectionMode
             )
 
             // Serialise BasicRequest to JSON string for transport
@@ -448,23 +452,17 @@ class PaymentManager(
     }
 
     /**
-     * Resolves the connection-mode tag written into outgoing bizData (bizData.appToAppMode).
+     * Resolves the App-to-App processing-mode tag written into outgoing bizData
+     * (bizData.appToAppMode).
      *
-     * Tapro reads this tag to decide the per-connection processing flow. Two connection modes
-     * attach a tag:
-     * - APP_TO_APP: attaches the configured [AppToAppMode] (CUSTOM by default) so Tapro chooses
-     *   the foreground (CUSTOM) or headless (HEADLESS) flow.
-     * - SUB_SCREEN (VSP transport): VSP frames carry no mode by default, so we explicitly
-     *   tag "SUB_SCREEN". This lets Tapro route the transaction straight into the engine
-     *   without showing the Taplink full-screen page and present the result on the secondary
-     *   display.
+     * Only the APP_TO_APP connection mode attaches this tag: it carries the configured
+     * [AppToAppMode] (CUSTOM by default) so Tapro chooses the foreground (CUSTOM) or headless
+     * (HEADLESS) flow. This field is exclusive to App-to-App and must NOT be used to carry any
+     * other connection-mode identity (e.g. SUB_SCREEN) — see [resolveConnectionModeTagForRequest].
      *
-     * All other connection modes (LAN / CABLE / NONE) attach no tag (returns null), preserving the
+     * All other connection modes attach no appToAppMode tag (returns null), preserving the
      * default report shape. The tag is written before HMAC signing, so it participates in the
      * signature and stays verifiable on Tapro.
-     *
-     * NOTE: the field name (appToAppMode) and the SUB_SCREEN value must stay in sync with
-     * Tapro's HeadlessModeConfig (KEY_APP_TO_APP_MODE / MODE_SUB_SCREEN).
      */
     private fun resolveAppToAppModeForRequest(): String? {
         return when (connectionManager.getConnectionMode()) {
@@ -477,13 +475,42 @@ class PaymentManager(
                 resolvedMode.name
             }
 
-            ConnectionMode.SUB_SCREEN.name -> {
-                LogUtil.d(TAG, "Sub_Screen mode, tagging bizData.appToAppMode=SUB_SCREEN")
-                ConnectionMode.SUB_SCREEN.name
-            }
-
             else -> null
         }
+    }
+
+    /**
+     * Resolves the standalone connection-mode tag written into outgoing bizData
+     * (bizData.connectionMode).
+     *
+     * The SDK now tags **every** request with the active connection mode token
+     * ([ConnectionManager.getConnectionMode] — e.g. `APP_TO_APP` / `LAN` / `CABLE` / `SUB_SCREEN`),
+     * so Tapro can display the connection mode authoritatively from the request itself instead of
+     * inferring it from the physical channel. This is especially important for SUB_SCREEN, which
+     * travels over the VSP transport (physically normalized to CABLE) and would otherwise be
+     * indistinguishable from a regular cable connection.
+     *
+     * Tapro treats this as the authoritative declaration when present, and falls back to
+     * channel-level inference only when it is absent (older SDKs / no request yet).
+     *
+     * This tag is decoupled from [resolveAppToAppModeForRequest]: the App-to-App processing mode
+     * (CUSTOM / HEADLESS) travels in its own bizData.appToAppMode field and is never conflated
+     * with the connection-mode identity here.
+     *
+     * The tag is written before HMAC signing, so it participates in the signature and stays
+     * verifiable on Tapro.
+     *
+     * NOTE: the field name (connectionMode) and the SUB_SCREEN value must stay in sync with
+     * Tapro's ConnectionModeResolver (KEY_CONNECTION_MODE / MODE_SUB_SCREEN).
+     */
+    private fun resolveConnectionModeTagForRequest(): String? {
+        val mode = connectionManager.getConnectionMode()
+        if (mode.isNullOrBlank()) {
+            LogUtil.d(TAG, "No active connection mode, bizData.connectionMode omitted")
+            return null
+        }
+        LogUtil.d(TAG, "Tagging bizData.connectionMode=$mode")
+        return mode
     }
 
     /**

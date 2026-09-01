@@ -134,6 +134,8 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 - **Error code 351 — Sub_Screen Open Failed** — Returned in `ConnectionListener.onError` when using `SUB_SCREEN` mode and the remote TaPro fails to open the USB screen player within the timeout window.
 
+  > **Protocol note (internal, no integrator action):** every request now carries the active connection mode in its own `bizData.connectionMode` field (e.g. `APP_TO_APP` / `LAN` / `CABLE` / `SUB_SCREEN`), so TaPro can display the connection mode authoritatively from the request rather than inferring it from the physical channel — important for `SUB_SCREEN`, which travels over VSP (physically normalized to CABLE). This tag is independent of the App-to-App processing mode (`bizData.appToAppMode`, values `CUSTOM`/`HEADLESS`) — the two never share a field. Integrators do not set either field; the SDK derives them from the active connection mode.
+
 - **`TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` (optional, best-effort)** — Makes the SDK open the TaPro USB customer-display player as part of `connect()`, **before** `ConnectionListener.onConnected` is delivered. Unlike `SUB_SCREEN` mode, this is **non-blocking**: `onConnected` is still delivered even if TaPro fails to answer or does not respond within 3 seconds. Disabled by default. Applies to `connect()`, `autoDiscoverAndConnect()` and `scanAndConnect()`.
 
   ```kotlin
