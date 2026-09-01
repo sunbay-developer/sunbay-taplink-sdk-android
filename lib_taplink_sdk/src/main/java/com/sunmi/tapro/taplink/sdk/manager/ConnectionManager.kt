@@ -145,10 +145,10 @@ class ConnectionManager(
     private val pendingConnectionListeners = mutableListOf<ConnectionListener>()
 
     /**
-     * PINPAD AUTO fallback state.
+     * CROSS_DEVICE AUTO fallback state.
      *
-     * [isAutoSession] is true only when the current connection was established from a PINPAD
-     * AUTO session (config.pinpadAuto). [autoCandidates] holds the ordered transport candidates
+     * [isAutoSession] is true only when the current connection was established from a CROSS_DEVICE
+     * AUTO session (config.crossDeviceAuto). [autoCandidates] holds the ordered transport candidates
      * so that runtime fallback can rotate to the next transport when the active one becomes
      * unusable (repeated request timeouts / blocked transport). [autoTimeoutCount] counts
      * consecutive request timeouts since the last successful response.
@@ -294,10 +294,10 @@ class ConnectionManager(
             return
         }
 
-        // PINPAD AUTO mode: try an ordered list of transports (per config.autoPriority), spanning
+        // CROSS_DEVICE AUTO mode: try an ordered list of transports (per config.autoPriority), spanning
         // LAN and CABLE. Reuses the same connect-by-attempt framework as Cable AUTO. Marks the
         // session as an AUTO session so runtime request-timeout fallback can rotate transports.
-        val autoCandidateList = ProtocolConfigResolver.getPinpadAutoCandidates(
+        val autoCandidateList = ProtocolConfigResolver.getCrossDeviceAutoCandidates(
             config,
             reconnectManager?.getContext()
         )
@@ -308,7 +308,7 @@ class ConnectionManager(
             tryConnectWithProtocolList(autoCandidateList, connectionConfig, listener)
             return
         } else {
-            // Not a PINPAD AUTO session (or AUTO with no resolvable candidate): clear AUTO state.
+            // Not a CROSS_DEVICE AUTO session (or AUTO with no resolvable candidate): clear AUTO state.
             clearAutoFallbackState()
         }
 
@@ -824,7 +824,7 @@ class ConnectionManager(
 
     /**
      * Called by PaymentManager when a transaction request receives any response from the peer.
-     * Resets the PINPAD AUTO consecutive-timeout counter (the active transport is proven healthy).
+     * Resets the CROSS_DEVICE AUTO consecutive-timeout counter (the active transport is proven healthy).
      */
     fun onRequestResponded() {
         if (!isAutoSession) return
@@ -837,7 +837,7 @@ class ConnectionManager(
     /**
      * Called by PaymentManager when a transaction request times out (no response from peer).
      *
-     * For a PINPAD AUTO session, a request timeout means the active transport may be connected at
+     * For a CROSS_DEVICE AUTO session, a request timeout means the active transport may be connected at
      * the socket level but blocked at the application level. After [AUTO_FALLBACK_TIMEOUT_THRESHOLD]
      * consecutive timeouts, rotate to the next transport candidate ([maybeTriggerAutoFallback]).
      *
@@ -856,7 +856,7 @@ class ConnectionManager(
     }
 
     /**
-     * Rotates the active PINPAD AUTO transport to the next candidate and reconnects.
+     * Rotates the active CROSS_DEVICE AUTO transport to the next candidate and reconnects.
      * No-op when there are fewer than two candidates.
      */
     private fun maybeTriggerAutoFallback() {
@@ -890,7 +890,7 @@ class ConnectionManager(
     }
 
     /**
-     * Clears all PINPAD AUTO fallback state.
+     * Clears all CROSS_DEVICE AUTO fallback state.
      */
     private fun clearAutoFallbackState() {
         isAutoSession = false
@@ -1780,7 +1780,7 @@ class ConnectionManager(
         private const val DISCOVERY_TIMEOUT_MS = 15_000L
 
         /**
-         * Consecutive request-timeout threshold before a PINPAD AUTO session rotates to the next
+         * Consecutive request-timeout threshold before a CROSS_DEVICE AUTO session rotates to the next
          * transport candidate. Set to 1 so a single blocked request triggers fallback quickly.
          */
         private const val AUTO_FALLBACK_TIMEOUT_THRESHOLD = 1

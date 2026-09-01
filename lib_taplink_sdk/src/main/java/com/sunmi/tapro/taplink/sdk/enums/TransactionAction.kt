@@ -93,7 +93,18 @@ enum class TransactionAction(val value: String) {
      * Control action used by POS demo before showing Android Presentation content
      * on a secondary display.
      */
-    OPEN_USB_SCREEN_PLAYER("OPEN_USB_SCREEN_PLAYER");
+    OPEN_USB_SCREEN_PLAYER("OPEN_USB_SCREEN_PLAYER"),
+
+    /**
+     * Get terminal info.
+     *
+     * Read-only control action that returns the merchant and terminal information for
+     * the currently connected TaPro device. Does not create a transaction, does not
+     * require a transactionRequestId, and is not affected by transactional API
+     * permission / service-plan gating (though it is still subject to request signature
+     * verification).
+     */
+    GET_TERMINAL_INFO("GET_TERMINAL_INFO");
 
     companion object {
         /**

@@ -6,7 +6,7 @@ import android.content.Context
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
-import com.sunmi.tapro.taplink.sdk.enums.PinpadStrategy
+import com.sunmi.tapro.taplink.sdk.enums.CrossDeviceStrategy
 import com.sunmi.tapro.taplink.sdk.persistence.ConnectionPersistence
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
 
@@ -39,9 +39,9 @@ object ProtocolConfigResolver {
             return buildProtocolFromConnectionMode(null, context)
         }
 
-        // Secondary Display mode: always use VSP protocol
-        if (connectionConfig.connectionMode == ConnectionMode.SECONDARY_DISPLAY) {
-            return Pair(ProtocolManager.buildVspProtocol(), ConnectionMode.SECONDARY_DISPLAY.name)
+        // Sub_Screen mode: always use VSP protocol
+        if (connectionConfig.connectionMode == ConnectionMode.SUB_SCREEN) {
+            return Pair(ProtocolManager.buildVspProtocol(), ConnectionMode.SUB_SCREEN.name)
         }
 
         // LAN mode takes precedence over any cableProtocol still present on the config: an
@@ -153,8 +153,8 @@ object ProtocolConfigResolver {
     ): List<Pair<String, String>>? {
         if (context == null) return null
 
-        // Secondary Display mode uses VSP directly, no try-order needed
-        if (connectionConfig?.connectionMode == ConnectionMode.SECONDARY_DISPLAY) return null
+        // Sub_Screen mode uses VSP directly, no try-order needed
+        if (connectionConfig?.connectionMode == ConnectionMode.SUB_SCREEN) return null
 
         // Use try-order when we would have used detection (cable mode with AUTO or unspecified protocol)
         val isCableTryOrder = when {
@@ -176,7 +176,7 @@ object ProtocolConfigResolver {
     /**
      * Builds the reordered cable protocol try-list (VSP -> RS232 -> AOA base order, with the
      * physically-inserted cable's protocol — or the last-successful cached protocol — moved first).
-     * Shared by [getCableProtocolsToTry] and [getPinpadAutoCandidates].
+     * Shared by [getCableProtocolsToTry] and [getCrossDeviceAutoCandidates].
      */
     private fun buildCableTryOrder(context: Context): List<Pair<String, String>> {
         // Base order: VSP, RS232, AOA. Prefer serial when peer enumerates as CDC; AOA last for stale-enum cases.
@@ -207,28 +207,28 @@ object ProtocolConfigResolver {
     }
 
     /**
-     * Get the ordered transport candidates for a PinPad AUTO session.
+     * Get the ordered transport candidates for a Cross-Device AUTO session.
      *
-     * Only applies when [ConnectionConfig.pinpadAuto] is true. Iterates
+     * Only applies when [ConnectionConfig.crossDeviceAuto] is true. Iterates
      * [ConnectionConfig.autoPriority] and expands each strategy into concrete attempts:
-     * - [PinpadStrategy.LAN] → a single LAN candidate (requires a non-blank host)
-     * - [PinpadStrategy.CABLE] → the cable try-order (VSP/RS232/AOA, reordered by inserted cable)
+     * - [CrossDeviceStrategy.LAN] → a single LAN candidate (requires a non-blank host)
+     * - [CrossDeviceStrategy.CABLE] → the cable try-order (VSP/RS232/AOA, reordered by inserted cable)
      *
      * The connection layer ([com.sunmi.tapro.taplink.sdk.manager.ConnectionManager]) tries the
      * returned candidates in order, falling back to the next on connection failure/timeout.
      *
-     * @return ordered (protocol, connectionMode) candidates, or null when not a PINPAD AUTO session
+     * @return ordered (protocol, connectionMode) candidates, or null when not a CROSS_DEVICE AUTO session
      */
-    fun getPinpadAutoCandidates(
+    fun getCrossDeviceAutoCandidates(
         connectionConfig: ConnectionConfig?,
         context: Context?
     ): List<Pair<String, String>>? {
-        if (connectionConfig == null || !connectionConfig.pinpadAuto) return null
+        if (connectionConfig == null || !connectionConfig.crossDeviceAuto) return null
 
         val candidates = mutableListOf<Pair<String, String>>()
         for (strategy in connectionConfig.autoPriority) {
             when (strategy) {
-                PinpadStrategy.LAN -> {
+                CrossDeviceStrategy.LAN -> {
                     val host = connectionConfig.host
                     if (!host.isNullOrBlank()) {
                         val port = connectionConfig.port ?: 8443
@@ -240,12 +240,12 @@ object ProtocolConfigResolver {
                         )
                     }
                 }
-                PinpadStrategy.CABLE -> {
+                CrossDeviceStrategy.CABLE -> {
                     if (context != null) {
                         candidates.addAll(buildCableTryOrder(context))
                     }
                 }
-                PinpadStrategy.AUTO -> {
+                CrossDeviceStrategy.AUTO -> {
                     // AUTO is not a concrete transport within a priority list; ignore.
                 }
             }

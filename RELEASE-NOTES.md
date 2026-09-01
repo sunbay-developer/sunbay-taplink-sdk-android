@@ -10,8 +10,8 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
-- [Unreleased](#unreleased) — PINPAD / ON_DEVICE integration modes, PinpadStrategy config, AUTO transport fallback, LAN half-open connection & mDNS discovery fixes
-- [v1.0.9](#v109) — Secondary Display connection mode; auto-open USB customer display; cable/USB VSP reconnect fixes
+- [Unreleased](#unreleased) — CROSS_DEVICE / ON_DEVICE integration modes, CrossDeviceStrategy config, AUTO transport fallback, LAN half-open connection & mDNS discovery fixes, `getTerminalInfo()` read-only terminal info query
+- [v1.0.9](#v109) — Sub_Screen connection mode; auto-open USB customer display; cable/USB VSP reconnect fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
 - [v1.0.6](#v106) — Tip config moves to the transaction request
@@ -27,37 +27,57 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Unreleased
 
-> **100% additive & backward-compatible.** All classic APIs (`ConnectionMode.APP_TO_APP` / `LAN` / `CABLE`, `CableProtocol.*`, the `createAppMode/createLanMode/createCableMode` factories) remain **fully supported with no removal planned**. They are marked `@Deprecated` only to *guide new integrations* toward the new integration-mode API — existing integrations require **no changes** and behave exactly as before.
-
 ### 🚀 New Features
 
 - **Integration modes decoupled from transport.** `ConnectionMode` gains two business-level values:
   - **`ON_DEVICE`** — the business app and TaPro run on the same terminal (currently implemented via App-to-App). Normalizes internally onto `APP_TO_APP`.
-  - **`PINPAD`** — TaPro acts as a standalone PIN Pad reached over a connection channel. The concrete channel is chosen via the new **`PinpadStrategy`** config (mirroring how `CableProtocol` configures `CABLE`), not by a separate top-level mode.
+  - **`CROSS_DEVICE`** — TaPro acts as a standalone PIN Pad reached over a connection channel. The concrete channel is chosen via the new **`CrossDeviceStrategy`** config (mirroring how `CableProtocol` configures `CABLE`), not by a separate top-level mode.
 
   ```kotlin
   // On-device (same terminal)
   val onDevice = ConnectionConfig.createOnDeviceMode()
 
-  // PinPad over LAN
-  val lan = ConnectionConfig.createPinpadMode(PinpadStrategy.LAN, host = "192.168.1.20", port = 8443)
+  // Cross-Device over LAN
+  val lan = ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host = "192.168.1.20", port = 8443)
 
-  // PinPad over cable (defaults to cable AUTO try-order: VSP → RS232 → AOA)
-  val cable = ConnectionConfig.createPinpadMode(PinpadStrategy.CABLE)
+  // Cross-Device over cable (defaults to cable AUTO try-order: VSP → RS232 → AOA)
+  val cable = ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE)
 
-  // PinPad AUTO — pick a transport and fall back if it becomes unusable
-  val auto = ConnectionConfig.createPinpadMode(
-      PinpadStrategy.AUTO,
+  // Cross-Device AUTO — pick a transport and fall back if it becomes unusable
+  val auto = ConnectionConfig.createCrossDeviceMode(
+      CrossDeviceStrategy.AUTO,
       host = "192.168.1.20", port = 8443,
-      autoPriority = listOf(PinpadStrategy.LAN, PinpadStrategy.CABLE) // default; configurable
+      autoPriority = listOf(CrossDeviceStrategy.LAN, CrossDeviceStrategy.CABLE) // default; configurable
   )
   ```
 
-- **`PinpadStrategy { AUTO, LAN, CABLE }`** — new config enum selecting the PINPAD connection strategy. Set via `ConnectionConfig.setPinpadStrategy(...)`. `PINPAD` defaults to `AUTO` when no strategy is given.
+- **`CrossDeviceStrategy { AUTO, LAN, CABLE }`** — new config enum selecting the CROSS_DEVICE connection strategy. Set via `ConnectionConfig.setCrossDeviceStrategy(...)`. `CROSS_DEVICE` defaults to `AUTO` when no strategy is given.
 
 - **Configurable AUTO priority.** `ConnectionConfig.setAutoPriority(...)` (list or single-preferred overload) controls the LAN vs CABLE try order. Default is `[LAN, CABLE]` (`ConnectionConfig.DEFAULT_AUTO_PRIORITY`) — never hard-coded in call sites.
 
-- **AUTO transport fallback.** Under `PinpadStrategy.AUTO`, connection establishment tries each candidate transport in priority order. At runtime, if the active transport becomes blocked (a payment request times out — inner code **306** — while the socket appears connected), the SDK rotates to the next candidate and reconnects. This only affects the **connection layer**; the single-transaction rule (a 306 timeout must be resolved via `query()` first, never blindly retried) is unchanged.
+- **`CrossDeviceStrategy` intentionally has no `CLOUD` value.** Cloud-dispatched orders are delivered to TaPro directly by the cloud backend; the SDK never establishes, authenticates, or drives a Cloud connection. TaPro may still display a `Cross-Device / Cloud` badge based on service-plan/sign-in permissions, but that is a TaPro-side display concern only — it is not selectable or resolvable through this SDK.
+
+- **AUTO transport fallback.** Under `CrossDeviceStrategy.AUTO`, connection establishment tries each candidate transport in priority order. At runtime, if the active transport becomes blocked (a payment request times out — inner code **306** — while the socket appears connected), the SDK rotates to the next candidate and reconnects. This only affects the **connection layer**; the single-transaction rule (a 306 timeout must be resolved via `query()` first, never blindly retried) is unchanged.
+
+- **`getTerminalInfo()` — read-only terminal info query.** The `GET_TERMINAL_INFO` control action lets integrators fetch the merchant and terminal information for **the single, currently connected TaPro device** — not a cloud merchant lookup, and not a terminal-list query (no pagination, no `terminals[]`, no `nextToken`).
+
+  ```kotlin
+  TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
+      override fun onSuccess(info: TerminalInfo) {
+          // info.merchantId, info.dbaName, info.midList, info.terminal.sn, info.terminal.model, ...
+      }
+
+      override fun onFailure(error: PaymentError) {
+          // error.code == "352" → TaPro does not support GET_TERMINAL_INFO, please upgrade TaPro
+      }
+  })
+  ```
+
+  - Public API surface: `TaplinkApi.getTerminalInfo(callback)`, `TaplinkSDK.getTerminalInfo(callback)` (static + instance), `TaplinkClient.getTerminalInfo(callback)`.
+  - New independent callback `TerminalInfoCallback` (`onSuccess(TerminalInfo)` / `onFailure(PaymentError)`) — **not** `PaymentCallback`. `GET_TERMINAL_INFO` is a read-only control action, not a transaction: it does not create a transaction, does not require a `transactionRequestId`, and its result must never be interpreted with payment-progress/success semantics.
+  - New public models: `TerminalInfo`, `MerchantMid`, `Terminal`, `TerminalTid`. Top-level merchant fields (`merchantId`, `dbaName`, `mcc`, `logo`, `country`, `stateName`, `cityName`, `street`, `detailAddress`, `zipCode`, `midList`) mirror the public "Retrieve merchant" API contract; `terminal` is nested (mirroring a single element of the "List merchant terminals" contract: `sn`, `vendor`, `model`, `tidList`). Never returns `secretKey`, `appId`, network addresses, card data, or transaction details. `smallLogo`, merchant `status`, and `createTime` (merchant and terminal level) are intentionally **not** part of the response — TaPro has no real, backend-provisioned source for them today, so they are omitted rather than fabricated or returned as `null` placeholders.
+  - `GET_TERMINAL_INFO` responds even while TaPro is processing a payment transaction, and is not affected by transactional API-permission / service-plan gating — though it still goes through the same request signature verification as every other action.
+  - Legacy TaPro versions that do not recognize `GET_TERMINAL_INFO` return a misleading busy/unsupported-action error (e.g. `303`); the SDK now converts this into a clear, dedicated error code **`352`** ("TaPro does not support GET_TERMINAL_INFO, please upgrade TaPro") so integrators are not confused by false "transaction in progress" reports.
 
 ### 🔧 Improved
 
@@ -67,19 +87,19 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ### 🐛 Fixed
 
-- **`PinpadStrategy.LAN` no longer attempts a USB/cable connection.** When a PinPad session explicitly selected the LAN strategy but the configuration also carried a `cableProtocol` value (common when callers pass a non-null protocol regardless of the chosen strategy), protocol resolution matched the cable branch before the LAN branch and connected over USB AOA instead of the configured host — triggering a USB permission prompt and failing with error **`212`**, while the configured `host`/`port` were never used. LAN now takes precedence during protocol resolution, `PinpadStrategy.LAN` clears any residual cable protocol, and a LAN session can no longer fall back to the cable try-order.
+- **`CrossDeviceStrategy.LAN` no longer attempts a USB/cable connection.** When a Cross-Device session explicitly selected the LAN strategy but the configuration also carried a `cableProtocol` value (common when callers pass a non-null protocol regardless of the chosen strategy), protocol resolution matched the cable branch before the LAN branch and connected over USB AOA instead of the configured host — triggering a USB permission prompt and failing with error **`212`**, while the configured `host`/`port` were never used. LAN now takes precedence during protocol resolution, `CrossDeviceStrategy.LAN` clears any residual cable protocol, and a LAN session can no longer fall back to the cable try-order.
 
 ### 🧭 Migration
 
 | Classic API (still supported) | New integration-mode API (recommended) |
 |---|---|
 | `ConnectionMode.APP_TO_APP` / `createAppMode()` | `ConnectionMode.ON_DEVICE` / `createOnDeviceMode()` |
-| `ConnectionMode.LAN` / `createLanMode(host, port)` | `createPinpadMode(PinpadStrategy.LAN, host, port)` |
-| `ConnectionMode.CABLE` / `createCableMode(protocol)` | `createPinpadMode(PinpadStrategy.CABLE, cableProtocol = protocol)` |
-| `CableProtocol.AUTO` (cable-only VSP/RS232/AOA) | `createPinpadMode(PinpadStrategy.AUTO)` (spans LAN **and** cable) |
-| `ConnectionMode.SECONDARY_DISPLAY` | *unchanged* (independent integration mode) |
+| `ConnectionMode.LAN` / `createLanMode(host, port)` | `createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)` |
+| `ConnectionMode.CABLE` / `createCableMode(protocol)` | `createCrossDeviceMode(CrossDeviceStrategy.CABLE, cableProtocol = protocol)` |
+| `CableProtocol.AUTO` (cable-only VSP/RS232/AOA) | `createCrossDeviceMode(CrossDeviceStrategy.AUTO)` (spans LAN **and** cable) |
+| `ConnectionMode.SUB_SCREEN` | *unchanged* (independent integration mode) |
 
-> **AUTO semantics note:** Classic `ConnectionMode.CABLE` + `CableProtocol.AUTO` behavior is **unchanged** — it still only selects among cable protocols (VSP/RS232/AOA) and never switches to LAN. The new cross-transport AUTO fallback (LAN ⇄ CABLE) applies **only** when you opt in via `PinpadStrategy.AUTO`.
+> **AUTO semantics note:** Classic `ConnectionMode.CABLE` + `CableProtocol.AUTO` behavior is **unchanged** — it still only selects among cable protocols (VSP/RS232/AOA) and never switches to LAN. The new cross-transport AUTO fallback (LAN ⇄ CABLE) applies **only** when you opt in via `CrossDeviceStrategy.AUTO`.
 
 ---
 
@@ -87,17 +107,17 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ### 🚀 New Features
 
-- **`SECONDARY_DISPLAY` connection mode (recommended for cross-device secondary display)** — A dedicated connection mode that combines USB Virtual Serial Port (VSP) transport with mandatory secondary display activation. Use `ConnectionConfig.createSecondaryDisplayMode()` or `ConnectionConfig().setConnectionMode(ConnectionMode.SECONDARY_DISPLAY)` to connect.
+- **`SUB_SCREEN` connection mode (recommended for cross-device secondary display)** — A dedicated connection mode that combines USB Virtual Serial Port (VSP) transport with mandatory sub-screen activation. Use `ConnectionConfig.createSubScreenMode()` or `ConnectionConfig().setConnectionMode(ConnectionMode.SUB_SCREEN)` to connect.
 
   This mode **treats screen player failure as a connection failure**: `onConnected` is only delivered when both the VSP link AND the USB customer-facing display are confirmed ready. If the screen player cannot be opened, `onError` is delivered with the new error code **351** and the connection is torn down.
 
   ```kotlin
-  // Recommended: one-step connection for cross-device secondary display
-  val config = ConnectionConfig.createSecondaryDisplayMode()
+  // Recommended: one-step connection for cross-device sub-screen
+  val config = ConnectionConfig.createSubScreenMode()
 
   TaplinkSDK.connect(config, object : ConnectionListener {
       override fun onConnected(deviceId: String, taproVersion: String) {
-          // Both VSP transport AND secondary display are ready.
+          // Both VSP transport AND the sub-screen are ready.
           // Full transaction API is available (sale, refund, void, etc.).
       }
 
@@ -105,16 +125,16 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
       override fun onError(error: ConnectionError) {
           if (error.code == "351") {
-              // VSP connected, but secondary display failed to open.
+              // VSP connected, but the sub-screen failed to open.
               // Check: TaPro v1.0.5+ running? USB display connected?
           }
       }
   })
   ```
 
-- **Error code 351 — Secondary Display Open Failed** — Returned in `ConnectionListener.onError` when using `SECONDARY_DISPLAY` mode and the remote TaPro fails to open the USB screen player within the timeout window.
+- **Error code 351 — Sub_Screen Open Failed** — Returned in `ConnectionListener.onError` when using `SUB_SCREEN` mode and the remote TaPro fails to open the USB screen player within the timeout window.
 
-- **`TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` (optional, best-effort)** — Makes the SDK open the TaPro USB customer-display player as part of `connect()`, **before** `ConnectionListener.onConnected` is delivered. Unlike `SECONDARY_DISPLAY` mode, this is **non-blocking**: `onConnected` is still delivered even if TaPro fails to answer or does not respond within 3 seconds. Disabled by default. Applies to `connect()`, `autoDiscoverAndConnect()` and `scanAndConnect()`.
+- **`TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` (optional, best-effort)** — Makes the SDK open the TaPro USB customer-display player as part of `connect()`, **before** `ConnectionListener.onConnected` is delivered. Unlike `SUB_SCREEN` mode, this is **non-blocking**: `onConnected` is still delivered even if TaPro fails to answer or does not respond within 3 seconds. Disabled by default. Applies to `connect()`, `autoDiscoverAndConnect()` and `scanAndConnect()`.
 
   ```kotlin
   // Optional screen player (non-blocking, best-effort — for same-device or nice-to-have scenarios)
@@ -129,10 +149,10 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
   | Scenario | Recommended Approach |
   |----------|---------------------|
-  | Cross-device secondary display (USB cable between POS and terminal with customer screen) | `ConnectionConfig.createSecondaryDisplayMode()` |
+  | Cross-device secondary display (USB cable between POS and terminal with customer screen) | `ConnectionConfig.createSubScreenMode()` |
   | Same-device optional screen (App-to-App or LAN, screen is nice-to-have) | `TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` |
 
-  For a complete guide on integrating the secondary display — including display detection, Compose rendering inside `Presentation`, lifecycle management, and common use cases (ad carousel, order list, tip selection) — see **[SECONDARY_DISPLAY_INTEGRATION.md](./SECONDARY_DISPLAY_INTEGRATION.md)**.
+  For a complete guide on integrating the secondary display — including display detection, Compose rendering inside `Presentation`, lifecycle management, and common use cases (ad carousel, order list, tip selection) — see **[SUB_SCREEN_INTEGRATION.md](./SUB_SCREEN_INTEGRATION.md)**.
 
 ### 🐛 Fixed
 

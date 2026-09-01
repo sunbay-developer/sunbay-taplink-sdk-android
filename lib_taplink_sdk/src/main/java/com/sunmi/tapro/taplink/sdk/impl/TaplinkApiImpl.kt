@@ -8,6 +8,8 @@ import com.sunmi.tapro.taplink.sdk.BuildConfig
 import com.sunmi.tapro.taplink.sdk.api.TaplinkApi
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
+import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
+import com.sunmi.tapro.taplink.sdk.model.response.TerminalInfo
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.LogLevel
@@ -43,7 +45,7 @@ class TaplinkApiImpl : TaplinkApi {
 
     private val TAG = "TaplinkApiImpl"
 
-    private companion object {
+    internal companion object {
         /** Longest delay of `onConnected` while waiting for the screen player to open. */
         const val SCREEN_PLAYER_TIMEOUT_MS = 3_000L
 
@@ -54,11 +56,18 @@ class TaplinkApiImpl : TaplinkApi {
         const val ERROR_CODE_USB_SCREEN_PLAYER_UNSUPPORTED = "350"
 
         /**
-         * Error code returned when Secondary Display mode fails to open the USB screen
+         * Error code returned when Sub_Screen mode fails to open the USB screen
          * player on the remote TaPro device. In this mode, the screen player is mandatory
          * — failure means the connection is aborted.
          */
-        const val ERROR_CODE_SECONDARY_DISPLAY_OPEN_FAILED = "351"
+        const val ERROR_CODE_SUB_SCREEN_OPEN_FAILED = "351"
+
+        /**
+         * Error code returned when TaPro does not support [getTerminalInfo] (GET_TERMINAL_INFO).
+         * This replaces misleading error codes from legacy TaPro versions with a clear,
+         * actionable "please upgrade TaPro" error.
+         */
+        const val ERROR_CODE_GET_TERMINAL_INFO_UNSUPPORTED = "352"
 
         /**
          * Minimum TaPro version that supports the OPEN_USB_SCREEN_PLAYER action.
@@ -191,10 +200,10 @@ class TaplinkApiImpl : TaplinkApi {
             return
         }
 
-        // Secondary Display mode uses its own stricter wrapper (screen player failure = connection failure).
+        // Sub_Screen mode uses its own stricter wrapper (screen player failure = connection failure).
         // Other modes may optionally use the softer autoOpenUsbScreenPlayer wrapper.
-        val wrappedListener = if (config?.connectionMode == ConnectionMode.SECONDARY_DISPLAY) {
-            wrapWithSecondaryDisplay(listener)
+        val wrappedListener = if (config?.connectionMode == ConnectionMode.SUB_SCREEN) {
+            wrapWithSubScreen(listener)
         } else {
             wrapWithUsbScreenPlayer(listener)
         }
@@ -287,37 +296,37 @@ class TaplinkApiImpl : TaplinkApi {
     }
 
     /**
-     * Wrap [listener] for Secondary Display mode.
+     * Wrap [listener] for Sub_Screen mode.
      *
      * After the VSP transport is established (onConnected from ConnectionManager),
      * this wrapper sends an OPEN_USB_SCREEN_PLAYER request to the remote TaPro.
      * Unlike [wrapWithUsbScreenPlayer], failure here is fatal:
      * - Success → deliver onConnected to the integrator.
-     * - Failure or timeout → disconnect and deliver onError with code [ERROR_CODE_SECONDARY_DISPLAY_OPEN_FAILED].
+     * - Failure or timeout → disconnect and deliver onError with code [ERROR_CODE_SUB_SCREEN_OPEN_FAILED].
      *
      * This ensures the integrator receives onConnected only when both the VSP link
-     * AND the secondary display are ready for use.
+     * AND the sub-screen are ready for use.
      */
-    private fun wrapWithSecondaryDisplay(listener: ConnectionListener): ConnectionListener {
+    private fun wrapWithSubScreen(listener: ConnectionListener): ConnectionListener {
         return object : ConnectionListener by listener {
             override fun onConnected(deviceId: String, taproVersion: String) {
                 val delivered = AtomicBoolean(false)
 
                 fun deliverSuccess(source: String) {
                     if (delivered.compareAndSet(false, true)) {
-                        LogUtil.d(TAG, "Secondary display ready ($source), delivering onConnected")
+                        LogUtil.d(TAG, "Sub_Screen ready ($source), delivering onConnected")
                         listener.onConnected(deviceId, taproVersion)
                     }
                 }
 
                 fun deliverFailure(source: String, detail: String) {
                     if (delivered.compareAndSet(false, true)) {
-                        LogUtil.e(TAG, "Secondary display open failed ($source): $detail — disconnecting")
+                        LogUtil.e(TAG, "Sub_Screen open failed ($source): $detail — disconnecting")
                         disconnect()
                         listener.onError(
                             ConnectionError(
-                                code = ERROR_CODE_SECONDARY_DISPLAY_OPEN_FAILED,
-                                message = "Failed to open secondary display: $detail",
+                                code = ERROR_CODE_SUB_SCREEN_OPEN_FAILED,
+                                message = "Failed to open sub-screen: $detail",
                                 suggestion = "Ensure the remote TaPro device supports USB screen player " +
                                     "(TaPro $MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER+) and that a " +
                                     "customer-facing display is connected to it."
@@ -600,5 +609,66 @@ class TaplinkApiImpl : TaplinkApi {
         }
 
         paymentManager?.execute(request, wrappedCallback)
+    }
+
+    override fun getTerminalInfo(callback: TerminalInfoCallback) {
+        LogUtil.d(TAG, "getTerminalInfo requested")
+
+        val paymentMgr = paymentManager
+        if (paymentMgr == null) {
+            val errorCode = InnerErrorCode.E201
+            LogUtil.e(TAG, "getTerminalInfo: SDK not initialized")
+            callback.onFailure(
+                PaymentError.create(
+                    code = errorCode.code,
+                    message = errorCode.description,
+                    suggestion = ErrorStringHelper.getSolution(errorCode.code) ?: ""
+                )
+            )
+            return
+        }
+
+        if (!isConnected()) {
+            LogUtil.e(TAG, "getTerminalInfo: Not connected")
+            callback.onFailure(
+                PaymentError.create(
+                    code = InnerErrorCode.E303.code,
+                    message = "Not connected to payment terminal",
+                    suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E303.code) ?: ""
+                )
+            )
+            return
+        }
+
+        // Wrap callback to handle legacy TaPro versions that do not recognize the GET_TERMINAL_INFO
+        // action. Older TaPro treats GET_TERMINAL_INFO as an unknown transaction request and returns
+        // misleading errors (E307 "System is processing another transaction", E305
+        // "Transaction in progress", or E303 "Unsupported transaction type"). We intercept
+        // these and convert them to a clear "please upgrade TaPro" error so integrators are
+        // not confused by false "transaction in progress" reports.
+        val wrappedCallback = object : TerminalInfoCallback {
+            override fun onSuccess(info: TerminalInfo) = callback.onSuccess(info)
+            override fun onFailure(error: PaymentError) {
+                if (isLegacyTaproUnsupportedError(error.code)) {
+                    LogUtil.w(
+                        TAG,
+                        "getTerminalInfo: TaPro does not support GET_TERMINAL_INFO " +
+                            "(received ${error.code}: ${error.message}). " +
+                            "This is expected on older TaPro versions."
+                    )
+                    callback.onFailure(
+                        PaymentError.create(
+                            code = ERROR_CODE_GET_TERMINAL_INFO_UNSUPPORTED,
+                            message = "TaPro does not support GET_TERMINAL_INFO, please upgrade TaPro",
+                            suggestion = "Upgrade TaPro to a version that supports the GET_TERMINAL_INFO action."
+                        )
+                    )
+                } else {
+                    callback.onFailure(error)
+                }
+            }
+        }
+
+        paymentMgr.getTerminalInfo(wrappedCallback)
     }
 }

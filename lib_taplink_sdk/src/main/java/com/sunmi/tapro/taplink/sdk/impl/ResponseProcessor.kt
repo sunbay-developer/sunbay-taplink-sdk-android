@@ -14,6 +14,8 @@ import com.sunmi.tapro.taplink.sdk.model.base.BasicResponseJacksonDeserializer
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
+import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
+import com.sunmi.tapro.taplink.sdk.model.response.TerminalInfo
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
@@ -199,6 +201,60 @@ class ResponseProcessor {
             )
         }
     }
+
+    /**
+     * Deserialize a GET_TERMINAL_INFO response using the standard response-handler contract.
+     *
+     * Its `bizData` is a [TerminalInfo] payload rather than a [PaymentResult], so completed
+     * and cancelled events dispatch through [TerminalInfoCallback]; non-final events are
+     * surfaced as technical failures because this control action has no progress callback.
+     */
+    fun handleResponse(
+        result: String,
+        callback: TerminalInfoCallback,
+        request: PaymentRequest
+    ) {
+        try {
+            val basicResponse = responseMapper.readValue(result, BasicResponse::class.java)
+            LogUtil.d(TAG, "Received BasicResponse: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}")
+
+            val bizData = basicResponse.bizData
+            if (bizData.isNullOrBlank()) {
+                throw IllegalArgumentException(
+                    "GET_TERMINAL_INFO response missing terminal info data" +
+                        (basicResponse.event.eventMsg?.let { ": $it" } ?: "")
+                )
+            }
+
+            val terminalInfo = mapper.readValue(bizData, TerminalInfo::class.java)
+            when (basicResponse.event) {
+                is PaymentEvent.Cancel,
+                is PaymentEvent.Completed -> callback.onSuccess(terminalInfo)
+                else -> {
+                    val errorCode = InnerErrorCode.E302
+                    callback.onFailure(
+                        PaymentError.create(
+                            code = errorCode.code,
+                            message = basicResponse.event.eventMsg ?: errorCode.description,
+                            suggestion = ErrorStringHelper.getSolution(errorCode.code) ?: "",
+                            traceId = basicResponse.traceId
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to parse response: action=${request.action}, error=${e.message}")
+            val errorCode = InnerErrorCode.E302
+            callback.onFailure(
+                PaymentError.create(
+                    code = errorCode.code,
+                    message = "${errorCode.description}(${e.message})",
+                    suggestion = ErrorStringHelper.getSolution(errorCode.code) ?: ""
+                )
+            )
+        }
+    }
+
     /**
      * Try to parse response as a Headless intermediate event.
      *

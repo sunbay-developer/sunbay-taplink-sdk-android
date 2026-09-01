@@ -12,7 +12,7 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - App-to-App Mode: Inter-application communication on the same device
   - Cable Mode: USB/Serial cable connection
   - LAN Mode: Network connection (wired/wireless)
-  - Secondary Display Mode: USB VSP connection with automatic secondary screen activation
+  - Sub_Screen Mode: USB VSP connection with automatic secondary screen activation
 
 - **Complete Payment Functions**
   - Support for various transaction types (Sale, Refund, Void, Auth, etc.)
@@ -22,11 +22,11 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - Synchronous and asynchronous calling methods
   - Comprehensive transaction query functionality
 
-- **Secondary Display (USB Customer-Facing Screen)** *(since v1.0.9)*
-  - `ConnectionConfig.createSecondaryDisplayMode()` — dedicated mode that connects over USB VSP to a **remote** TaPro terminal and automatically launches ("拉起") TaPro's screen player as part of `connect()` (failure = connection error, code `351`)
+- **Sub_Screen (USB Customer-Facing Screen)** *(since v1.0.9)*
+  - `ConnectionConfig.createSubScreenMode()` — dedicated mode that connects over USB VSP to a **remote** TaPro terminal and automatically launches ("拉起") TaPro's screen player as part of `connect()` (failure = connection error, code `351`)
   - Open TaPro USB screen player via SDK or auto-open on connect (same-device scenarios)
   - Drive ad carousel, order list, and tip selection on external display
-  - See [SECONDARY_DISPLAY_INTEGRATION.md](./SECONDARY_DISPLAY_INTEGRATION.md) — Part A covers `createSecondaryDisplayMode()` / launching TaPro, Part B covers rendering your own UI with `Presentation`
+  - See [SUB_SCREEN_INTEGRATION.md](./SUB_SCREEN_INTEGRATION.md) — Part A covers `createSubScreenMode()` / launching TaPro, Part B covers rendering your own UI with `Presentation`
 
 - **Developer Friendly**
   - Clean and intuitive API design
@@ -116,12 +116,12 @@ class MainActivity : AppCompatActivity() {
 ```
 
 ```kotlin
-// Secondary Display mode — connects via USB VSP and opens customer-facing screen
-val connectionConfig = ConnectionConfig.createSecondaryDisplayMode()
+// Sub_Screen mode — connects via USB VSP and opens customer-facing screen
+val connectionConfig = ConnectionConfig.createSubScreenMode()
 
 TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
     override fun onConnected(deviceId: String, taproVersion: String) {
-        // Both VSP transport AND secondary display are ready.
+        // Both VSP transport AND the sub-screen are ready.
         // You can now show content on the customer-facing screen
         // AND perform payment transactions.
     }
@@ -132,7 +132,7 @@ TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
 
     override fun onError(error: ConnectionError) {
         // Connection failed. If error.code == "351", the VSP link was
-        // established but the secondary display could not be opened.
+        // established but the sub-screen could not be opened.
     }
 })
 ```

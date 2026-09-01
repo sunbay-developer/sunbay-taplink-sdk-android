@@ -4,7 +4,7 @@ package com.sunmi.tapro.taplink.sdk.config
 
 import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
-import com.sunmi.tapro.taplink.sdk.enums.PinpadStrategy
+import com.sunmi.tapro.taplink.sdk.enums.CrossDeviceStrategy
 import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 
 /**
@@ -43,34 +43,34 @@ class ConnectionConfig {
         private set
 
     /**
-     * PinPad connection strategy (optional).
+     * Cross-Device connection strategy (optional).
      *
-     * Only meaningful when the public mode is [ConnectionMode.PINPAD]. Analogous to
-     * [cableProtocol] for [ConnectionMode.CABLE]: it configures HOW the PinPad connects
-     * (AUTO / LAN / CABLE) without exposing separate top-level [ConnectionMode] values.
+     * Only meaningful when the public mode is [ConnectionMode.CROSS_DEVICE]. Analogous to
+     * [cableProtocol] for [ConnectionMode.CABLE]: it configures HOW the Cross-Device peer
+     * connects (AUTO / LAN / CABLE) without exposing separate top-level [ConnectionMode] values.
      */
-    var pinpadStrategy: PinpadStrategy? = null
+    var crossDeviceStrategy: CrossDeviceStrategy? = null
         private set
 
     /**
-     * Whether this configuration resolves to the PinPad AUTO strategy (cross-transport
-     * auto-selection with fallback). Derived internally from [ConnectionMode.PINPAD] +
-     * [PinpadStrategy.AUTO]; when true, [connectionMode] is left null and the connection
+     * Whether this configuration resolves to the Cross-Device AUTO strategy (cross-transport
+     * auto-selection with fallback). Derived internally from [ConnectionMode.CROSS_DEVICE] +
+     * [CrossDeviceStrategy.AUTO]; when true, [connectionMode] is left null and the connection
      * layer selects a transport according to [autoPriority].
      */
-    var pinpadAuto: Boolean = false
+    var crossDeviceAuto: Boolean = false
         private set
 
     /**
-     * Priority order used by the PinPad AUTO strategy to decide which transport to try
-     * first when multiple are viable. Only [PinpadStrategy.LAN] / [PinpadStrategy.CABLE]
+     * Priority order used by the Cross-Device AUTO strategy to decide which transport to try
+     * first when multiple are viable. Only [CrossDeviceStrategy.LAN] / [CrossDeviceStrategy.CABLE]
      * are meaningful here. Defaults to [DEFAULT_AUTO_PRIORITY] (LAN first, then CABLE).
      */
-    var autoPriority: List<PinpadStrategy> = DEFAULT_AUTO_PRIORITY
+    var autoPriority: List<CrossDeviceStrategy> = DEFAULT_AUTO_PRIORITY
         private set
 
-    /** Internal flag: the public mode selected was [ConnectionMode.PINPAD]. */
-    private var isPinpadMode: Boolean = false
+    /** Internal flag: the public mode selected was [ConnectionMode.CROSS_DEVICE]. */
+    private var isCrossDeviceMode: Boolean = false
 
     /**
      * Host address (optional).
@@ -126,25 +126,25 @@ class ConnectionConfig {
      * New business-facing modes are normalized onto classic behavior so existing
      * resolver/manager logic is reused unchanged:
      * - [ConnectionMode.ON_DEVICE] → [ConnectionMode.APP_TO_APP]
-     * - [ConnectionMode.PINPAD] → LAN / CABLE / AUTO depending on [pinpadStrategy]
-     *   (defaults to [PinpadStrategy.AUTO] when unset), via [applyPinpadNormalization].
+     * - [ConnectionMode.CROSS_DEVICE] → LAN / CABLE / AUTO depending on [crossDeviceStrategy]
+     *   (defaults to [CrossDeviceStrategy.AUTO] when unset), via [applyCrossDeviceNormalization].
      *
      * @param mode the connection mode
      * @return the current configuration instance for method chaining
      */
     fun setConnectionMode(mode: ConnectionMode): ConnectionConfig {
         when (mode) {
-            ConnectionMode.PINPAD -> {
-                isPinpadMode = true
-                if (pinpadStrategy == null) pinpadStrategy = PinpadStrategy.AUTO
-                applyPinpadNormalization()
+            ConnectionMode.CROSS_DEVICE -> {
+                isCrossDeviceMode = true
+                if (crossDeviceStrategy == null) crossDeviceStrategy = CrossDeviceStrategy.AUTO
+                applyCrossDeviceNormalization()
             }
             ConnectionMode.ON_DEVICE -> {
-                clearPinpadState()
+                clearCrossDeviceState()
                 this.connectionMode = ConnectionMode.APP_TO_APP
             }
             else -> {
-                clearPinpadState()
+                clearCrossDeviceState()
                 this.connectionMode = mode
             }
         }
@@ -152,28 +152,28 @@ class ConnectionConfig {
     }
 
     /**
-     * Sets the PinPad connection strategy (only meaningful together with
-     * [ConnectionMode.PINPAD]). Can be called before or after [setConnectionMode];
-     * normalization is re-applied when the mode is PINPAD.
+     * Sets the Cross-Device connection strategy (only meaningful together with
+     * [ConnectionMode.CROSS_DEVICE]). Can be called before or after [setConnectionMode];
+     * normalization is re-applied when the mode is CROSS_DEVICE.
      *
-     * @param strategy the PinPad connection strategy
+     * @param strategy the Cross-Device connection strategy
      * @return the current configuration instance for method chaining
      */
-    fun setPinpadStrategy(strategy: PinpadStrategy): ConnectionConfig {
-        this.pinpadStrategy = strategy
-        if (isPinpadMode) applyPinpadNormalization()
+    fun setCrossDeviceStrategy(strategy: CrossDeviceStrategy): ConnectionConfig {
+        this.crossDeviceStrategy = strategy
+        if (isCrossDeviceMode) applyCrossDeviceNormalization()
         return this
     }
 
     /**
-     * Sets the PinPad AUTO priority order. Only [PinpadStrategy.LAN]/[PinpadStrategy.CABLE]
+     * Sets the Cross-Device AUTO priority order. Only [CrossDeviceStrategy.LAN]/[CrossDeviceStrategy.CABLE]
      * entries are honored; an empty/invalid list falls back to [DEFAULT_AUTO_PRIORITY].
      *
      * @param priority ordered transports to try first under AUTO
      * @return the current configuration instance for method chaining
      */
-    fun setAutoPriority(priority: List<PinpadStrategy>): ConnectionConfig {
-        val filtered = priority.filter { it == PinpadStrategy.LAN || it == PinpadStrategy.CABLE }
+    fun setAutoPriority(priority: List<CrossDeviceStrategy>): ConnectionConfig {
+        val filtered = priority.filter { it == CrossDeviceStrategy.LAN || it == CrossDeviceStrategy.CABLE }
         this.autoPriority = filtered.distinct().ifEmpty { DEFAULT_AUTO_PRIORITY }
         return this
     }
@@ -181,48 +181,48 @@ class ConnectionConfig {
     /**
      * Convenience overload: sets [preferred] first and the other transport as fallback.
      *
-     * @param preferred the transport to try first ([PinpadStrategy.LAN] or [PinpadStrategy.CABLE])
+     * @param preferred the transport to try first ([CrossDeviceStrategy.LAN] or [CrossDeviceStrategy.CABLE])
      * @return the current configuration instance for method chaining
      */
-    fun setAutoPriority(preferred: PinpadStrategy): ConnectionConfig {
-        val other = if (preferred == PinpadStrategy.CABLE) PinpadStrategy.LAN else PinpadStrategy.CABLE
+    fun setAutoPriority(preferred: CrossDeviceStrategy): ConnectionConfig {
+        val other = if (preferred == CrossDeviceStrategy.CABLE) CrossDeviceStrategy.LAN else CrossDeviceStrategy.CABLE
         return setAutoPriority(listOf(preferred, other))
     }
 
     /**
-     * Normalizes a PINPAD selection onto classic connection behavior based on
-     * [pinpadStrategy]. Idempotent and call-order independent.
+     * Normalizes a CROSS_DEVICE selection onto classic connection behavior based on
+     * [crossDeviceStrategy]. Idempotent and call-order independent.
      */
-    private fun applyPinpadNormalization() {
-        when (pinpadStrategy ?: PinpadStrategy.AUTO) {
-            PinpadStrategy.LAN -> {
+    private fun applyCrossDeviceNormalization() {
+        when (crossDeviceStrategy ?: CrossDeviceStrategy.AUTO) {
+            CrossDeviceStrategy.LAN -> {
                 this.connectionMode = ConnectionMode.LAN
-                this.pinpadAuto = false
-                // A cable protocol is meaningless for a LAN-only PinPad session; clearing it
+                this.crossDeviceAuto = false
+                // A cable protocol is meaningless for a LAN-only Cross-Device session; clearing it
                 // prevents a residual value (callers commonly pass a non-null cableProtocol
                 // regardless of strategy) from steering protocol resolution to a cable transport.
                 this.cableProtocol = null
             }
-            PinpadStrategy.CABLE -> {
+            CrossDeviceStrategy.CABLE -> {
                 this.connectionMode = ConnectionMode.CABLE
-                this.pinpadAuto = false
-                // PINPAD + CABLE defaults to cable AUTO try-order (VSP/RS232/AOA) unless
+                this.crossDeviceAuto = false
+                // CROSS_DEVICE + CABLE defaults to cable AUTO try-order (VSP/RS232/AOA) unless
                 // an explicit protocol was chosen — no need to pin a specific protocol.
                 if (this.cableProtocol == null) this.cableProtocol = CableProtocol.AUTO
             }
-            PinpadStrategy.AUTO -> {
+            CrossDeviceStrategy.AUTO -> {
                 // AUTO selects a transport at the connection layer; leave connectionMode null.
                 this.connectionMode = null
-                this.pinpadAuto = true
+                this.crossDeviceAuto = true
             }
         }
     }
 
-    /** Clears any PinPad-derived state when a non-PINPAD mode is selected. */
-    private fun clearPinpadState() {
-        isPinpadMode = false
-        pinpadStrategy = null
-        pinpadAuto = false
+    /** Clears any Cross-Device-derived state when a non-CROSS_DEVICE mode is selected. */
+    private fun clearCrossDeviceState() {
+        isCrossDeviceMode = false
+        crossDeviceStrategy = null
+        crossDeviceAuto = false
     }
 
     /**
@@ -346,8 +346,8 @@ class ConnectionConfig {
         return this.connectionMode == other.connectionMode &&
                 this.appToAppMode == other.appToAppMode &&
                this.cableProtocol == other.cableProtocol &&
-               this.pinpadAuto == other.pinpadAuto &&
-               this.pinpadStrategy == other.pinpadStrategy &&
+               this.crossDeviceAuto == other.crossDeviceAuto &&
+               this.crossDeviceStrategy == other.crossDeviceStrategy &&
                this.autoPriority == other.autoPriority &&
                this.host == other.host &&
                this.port == other.port &&
@@ -367,8 +367,8 @@ class ConnectionConfig {
                 "connectionMode=$connectionMode, " +
                 "appToAppMode=$appToAppMode, " +
                 "cableProtocol=$cableProtocol, " +
-                "pinpadStrategy=$pinpadStrategy, " +
-                "pinpadAuto=$pinpadAuto, " +
+                "crossDeviceStrategy=$crossDeviceStrategy, " +
+                "crossDeviceAuto=$crossDeviceAuto, " +
                 "autoPriority=$autoPriority, " +
                 "host=$host, " +
                 "port=$port, " +
@@ -381,9 +381,9 @@ class ConnectionConfig {
     
     companion object {
 
-        /** Default PinPad AUTO priority: try LAN first, then CABLE. */
-        val DEFAULT_AUTO_PRIORITY: List<PinpadStrategy> =
-            listOf(PinpadStrategy.LAN, PinpadStrategy.CABLE)
+        /** Default Cross-Device AUTO priority: try LAN first, then CABLE. */
+        val DEFAULT_AUTO_PRIORITY: List<CrossDeviceStrategy> =
+            listOf(CrossDeviceStrategy.LAN, CrossDeviceStrategy.CABLE)
 
         /**
          * Creates a default connection configuration.
@@ -435,8 +435,8 @@ class ConnectionConfig {
          * @return the Cable mode configuration
          */
         @Deprecated(
-            message = "Use createPinpadMode(PinpadStrategy.CABLE) instead. CABLE remains fully functional.",
-            replaceWith = ReplaceWith("ConnectionConfig.createPinpadMode(PinpadStrategy.CABLE, cableProtocol = protocol)")
+            message = "Use createCrossDeviceMode(CrossDeviceStrategy.CABLE) instead. CABLE remains fully functional.",
+            replaceWith = ReplaceWith("ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE, cableProtocol = protocol)")
         )
         fun createCableMode(protocol: CableProtocol = CableProtocol.AUTO): ConnectionConfig {
             return ConnectionConfig()
@@ -452,8 +452,8 @@ class ConnectionConfig {
          * @return the LAN mode configuration
          */
         @Deprecated(
-            message = "Use createPinpadMode(PinpadStrategy.LAN, host, port) instead. LAN remains fully functional.",
-            replaceWith = ReplaceWith("ConnectionConfig.createPinpadMode(PinpadStrategy.LAN, host, port)")
+            message = "Use createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port) instead. LAN remains fully functional.",
+            replaceWith = ReplaceWith("ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)")
         )
         fun createLanMode(host: String? = null, port: Int? = null): ConnectionConfig {
             val config = ConnectionConfig().setConnectionMode(ConnectionMode.LAN)
@@ -467,51 +467,51 @@ class ConnectionConfig {
         }
 
         /**
-         * Creates a PinPad integration mode configuration.
+         * Creates a Cross-Device integration mode configuration.
          *
          * The concrete connection is configured via [strategy] (AUTO / LAN / CABLE), mirroring
          * how [createCableMode] configures its protocol. AUTO selects a transport per
          * [autoPriority] with runtime fallback; CABLE defaults to the cable AUTO try-order
          * (VSP/RS232/AOA) unless [cableProtocol] is given; LAN requires [host] (+ optional [port]).
          *
-         * @param strategy PinPad connection strategy (default [PinpadStrategy.AUTO])
+         * @param strategy Cross-Device connection strategy (default [CrossDeviceStrategy.AUTO])
          * @param host LAN host (for LAN / AUTO)
          * @param port LAN port (for LAN / AUTO)
          * @param cableProtocol explicit cable protocol (for CABLE); defaults to AUTO try-order when null.
-         *   Ignored when [strategy] is [PinpadStrategy.LAN].
+         *   Ignored when [strategy] is [CrossDeviceStrategy.LAN].
          * @param autoPriority optional AUTO priority override
-         * @return the PinPad mode configuration
+         * @return the Cross-Device mode configuration
          */
-        fun createPinpadMode(
-            strategy: PinpadStrategy = PinpadStrategy.AUTO,
+        fun createCrossDeviceMode(
+            strategy: CrossDeviceStrategy = CrossDeviceStrategy.AUTO,
             host: String? = null,
             port: Int? = null,
             cableProtocol: CableProtocol? = null,
-            autoPriority: List<PinpadStrategy>? = null
+            autoPriority: List<CrossDeviceStrategy>? = null
         ): ConnectionConfig {
             val config = ConnectionConfig()
             if (host != null) config.setHost(host)
             if (port != null) config.setPort(port)
             if (cableProtocol != null) config.setCableProtocol(cableProtocol)
             if (autoPriority != null) config.setAutoPriority(autoPriority)
-            config.setPinpadStrategy(strategy)
-            config.setConnectionMode(ConnectionMode.PINPAD)
+            config.setCrossDeviceStrategy(strategy)
+            config.setConnectionMode(ConnectionMode.CROSS_DEVICE)
             return config
         }
 
         /**
-         * Creates a Secondary Display mode configuration.
+         * Creates a Sub_Screen mode configuration.
          *
          * Connects via USB Virtual Serial Port (VSP) to a remote TaPro terminal and
          * automatically opens the USB customer-facing screen player. The connection
          * is only considered successful when both the VSP link is up AND the screen
          * player launches on the remote TaPro device.
          *
-         * @return the Secondary Display mode configuration
+         * @return the Sub_Screen mode configuration
          */
-        fun createSecondaryDisplayMode(): ConnectionConfig {
+        fun createSubScreenMode(): ConnectionConfig {
             return ConnectionConfig()
-                .setConnectionMode(ConnectionMode.SECONDARY_DISPLAY)
+                .setConnectionMode(ConnectionMode.SUB_SCREEN)
         }
 
         /**

@@ -9,7 +9,9 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.R
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
+import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
 import com.sunmi.tapro.taplink.sdk.callback.onFailure
+import com.sunmi.tapro.taplink.sdk.error.PaymentError
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.error.ConnectionError
@@ -19,6 +21,7 @@ import com.sunmi.tapro.taplink.sdk.protocol.ProtocolRequestBuilder
 import com.sunmi.tapro.taplink.communication.TaplinkServiceKernel
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
+import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
@@ -153,6 +156,152 @@ class PaymentManager(
             // Not connected, auto-connect first
             LogUtil.d(TAG, "Not connected, attempting auto-connect before executing transaction")
             autoConnectAndExecute(request, callback)
+        }
+    }
+
+    /**
+     * Get terminal info (GET_TERMINAL_INFO).
+     *
+     * GET_TERMINAL_INFO is a read-only control action, not a transaction: it does not require a
+     * transactionRequestId, is not amount/signature-config validated, does not participate
+     * in the auto-connect/pending-transaction queue used for payment requests, and its
+     * result is dispatched through [TerminalInfoCallback] rather than [PaymentCallback] so
+     * it can never be confused with payment-progress/success semantics.
+     */
+    fun getTerminalInfo(callback: TerminalInfoCallback) {
+        LogUtil.d(TAG, "Executing GET_TERMINAL_INFO request")
+
+        if (!connectionManager.isConnected()) {
+            LogUtil.e(TAG, "GET_TERMINAL_INFO failed: not connected, please call connect() first")
+            callback.onFailure(
+                PaymentError.create(
+                    code = InnerErrorCode.E212.code,
+                    message = InnerErrorCode.E212.description,
+                    suggestion = ErrorStringHelper.getSolution(InnerErrorCode.E212.code) ?: ""
+                )
+            )
+            return
+        }
+
+        val request = PaymentRequest(action = TransactionAction.GET_TERMINAL_INFO.value)
+        sendGetTerminalInfoRequest(request, callback)
+    }
+
+    /**
+     * Send GET_TERMINAL_INFO request
+     */
+    private fun sendGetTerminalInfoRequest(request: PaymentRequest, callback: TerminalInfoCallback) {
+        try {
+            val appToAppMode = resolveAppToAppModeForRequest()
+            val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
+                request = request,
+                version = config.version,
+                config.appId,
+                secretKey = config.secretKey,
+                appToAppMode = appToAppMode
+            )
+
+            val requestJson = mapper.writeValueAsString(basicRequest)
+            LogUtil.d(TAG, "Sending GET_TERMINAL_INFO BasicRequest: requestSize=${requestJson.length} bytes")
+
+            val internalCallback = createGetTerminalInfoInternalCallback(
+                callback,
+                request,
+                basicRequest.traceId
+            )
+
+            val isApp2App = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
+            val added = callbackManager.addTransactionCallback(
+                basicRequest.traceId,
+                internalCallback,
+                isApp2App,
+                request.requestTimeout
+            )
+            if (!added) {
+                LogUtil.w(TAG, "Failed to add GET_TERMINAL_INFO callback to manager for traceId: ${basicRequest.traceId}")
+            }
+
+            val serviceKernel = TaplinkServiceKernel.getInstance()
+            if (serviceKernel == null) {
+                LogUtil.e(TAG, "Service kernel not available")
+                callbackManager.removeCallbackByTraceId(basicRequest.traceId)
+                callback.onFailure(
+                    PaymentError.create(
+                        code = InnerErrorCode.E212.code,
+                        message = "${InnerErrorCode.E212.description}(Service kernel not available)",
+                        traceId = basicRequest.traceId
+                    )
+                )
+                return
+            }
+
+            try {
+                serviceKernel.sendData(
+                    basicRequest.traceId,
+                    requestJson.toByteArray(Charsets.UTF_8),
+                    internalCallback
+                )
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Failed to send GET_TERMINAL_INFO data: traceId=${basicRequest.traceId}, error=${e.message}")
+                callbackManager.removeCallbackByTraceId(basicRequest.traceId)
+                callback.onFailure(
+                    PaymentError.create(
+                        code = InnerErrorCode.E304.code,
+                        message = "${InnerErrorCode.E304.description}(Failed to send data(${e.message}))",
+                        traceId = basicRequest.traceId
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Error processing GET_TERMINAL_INFO request: error=${e.message}")
+            callback.onFailure(
+                PaymentError.create(
+                    code = InnerErrorCode.E304.code,
+                    message = "${InnerErrorCode.E304.description}(Failed to send data(${e.message}))"
+                )
+            )
+        }
+    }
+
+    /**
+     * Create internal callback object for GET_TERMINAL_INFO
+     */
+    private fun createGetTerminalInfoInternalCallback(
+        callback: TerminalInfoCallback,
+        request: PaymentRequest,
+        traceId: String
+    ): InnerCallback {
+        return object : InnerCallback {
+            override fun onError(code: String, msg: String) {
+                LogUtil.e(TAG, "[TAPLINK-GET_TERMINAL_INFO] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
+                if (code == InnerErrorCode.E306.code) {
+                    connectionManager.onRequestTimedOut(code)
+                } else {
+                    connectionManager.onRequestResponded()
+                }
+                callback.onFailure(
+                    PaymentError.create(
+                        code = code,
+                        message = msg,
+                        traceId = traceId
+                    )
+                )
+            }
+
+            override fun onResponse(responseData: String) {
+                // USB Accessory transport reports a local "SUCCESS" acknowledgement after
+                // writing bytes. The actual GET_TERMINAL_INFO response arrives later through
+                // processReceivedResponse() and is correlated by traceId.
+                if (!responseData.trim().startsWith("{")) {
+                    LogUtil.d(
+                        TAG,
+                        "[TAPLINK-GET_TERMINAL_INFO] Ignoring transport acknowledgement: $responseData"
+                    )
+                    return
+                }
+                connectionManager.onRequestResponded()
+                responseProcessor.handleResponse(responseData, callback, request)
+            }
         }
     }
 
@@ -305,8 +454,8 @@ class PaymentManager(
      * attach a tag:
      * - APP_TO_APP: attaches the configured [AppToAppMode] (CUSTOM by default) so Tapro chooses
      *   the foreground (CUSTOM) or headless (HEADLESS) flow.
-     * - SECONDARY_DISPLAY (VSP transport): VSP frames carry no mode by default, so we explicitly
-     *   tag "SECONDARY_DISPLAY". This lets Tapro route the transaction straight into the engine
+     * - SUB_SCREEN (VSP transport): VSP frames carry no mode by default, so we explicitly
+     *   tag "SUB_SCREEN". This lets Tapro route the transaction straight into the engine
      *   without showing the Taplink full-screen page and present the result on the secondary
      *   display.
      *
@@ -314,8 +463,8 @@ class PaymentManager(
      * default report shape. The tag is written before HMAC signing, so it participates in the
      * signature and stays verifiable on Tapro.
      *
-     * NOTE: the field name (appToAppMode) and the SECONDARY_DISPLAY value must stay in sync with
-     * Tapro's HeadlessModeConfig (KEY_APP_TO_APP_MODE / MODE_SECONDARY_DISPLAY).
+     * NOTE: the field name (appToAppMode) and the SUB_SCREEN value must stay in sync with
+     * Tapro's HeadlessModeConfig (KEY_APP_TO_APP_MODE / MODE_SUB_SCREEN).
      */
     private fun resolveAppToAppModeForRequest(): String? {
         return when (connectionManager.getConnectionMode()) {
@@ -328,9 +477,9 @@ class PaymentManager(
                 resolvedMode.name
             }
 
-            ConnectionMode.SECONDARY_DISPLAY.name -> {
-                LogUtil.d(TAG, "Secondary display mode, tagging bizData.appToAppMode=SECONDARY_DISPLAY")
-                ConnectionMode.SECONDARY_DISPLAY.name
+            ConnectionMode.SUB_SCREEN.name -> {
+                LogUtil.d(TAG, "Sub_Screen mode, tagging bizData.appToAppMode=SUB_SCREEN")
+                ConnectionMode.SUB_SCREEN.name
             }
 
             else -> null
@@ -380,7 +529,7 @@ class PaymentManager(
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
                 LogUtil.e(TAG, "[TAPLINK-TX] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
-                // Feed request health into ConnectionManager for PINPAD AUTO fallback.
+                // Feed request health into ConnectionManager for CROSS_DEVICE AUTO fallback.
                 // A timeout (E306) means the active transport may be blocked; other errors are a
                 // response from the peer and prove the transport is alive.
                 if (code == InnerErrorCode.E306.code) {

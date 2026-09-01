@@ -1,15 +1,15 @@
-# Secondary Display Integration Guide
+# Sub_Screen Integration Guide
 
 This guide covers **two distinct but related** TapLink features, both introduced in SDK
 v1.0.9 and both centered on driving a customer-facing screen from your POS application:
 
-| | **Part A: `SECONDARY_DISPLAY` connection mode** | **Part B: USB customer-facing screen (`Presentation`)** |
+| | **Part A: `SUB_SCREEN` connection mode** | **Part B: USB customer-facing screen (`Presentation`)** |
 |---|---|---|
-| What it is | A dedicated **connection mode** (`ConnectionConfig.createSecondaryDisplayMode()`) that connects over USB VSP to a **remote** TaPro terminal and automatically launches ("拉起") TaPro's screen player on that remote device as part of `connect()` | A **rendering technique** your app uses to draw its own ad/order/tip UI on a USB display attached to the **same** device your app runs on |
+| What it is | A dedicated **connection mode** (`ConnectionConfig.createSubScreenMode()`) that connects over USB VSP to a **remote** TaPro terminal and automatically launches ("拉起") TaPro's screen player on that remote device as part of `connect()` | A **rendering technique** your app uses to draw its own ad/order/tip UI on a USB display attached to the **same** device your app runs on |
 | Devices involved | Two devices: your business app device ↔ a separate TaPro terminal, joined by a USB cable | One device: your app and TaPro (or just your app) share the same `DisplayManager` |
 | Who owns the on-screen content | TaPro (native screen player UI on the remote device) | Your app (Compose/`Presentation`) |
 | Typical use case | Headless controller / subscreen device that only needs to drive a TaPro terminal's customer display and process payments | POS terminal with its own attached USB customer display that your app fully controls |
-| Read this first if... | You call `ConnectionConfig.createSecondaryDisplayMode()` and need to understand how connecting "pulls up" TaPro | You need to render custom Compose/XML content (ads, tip selection) on a USB display |
+| Read this first if... | You call `ConnectionConfig.createSubScreenMode()` and need to understand how connecting "pulls up" TaPro | You need to render custom Compose/XML content (ads, tip selection) on a USB display |
 
 **SDK version:** v1.0.9+
 
@@ -17,14 +17,14 @@ v1.0.9 and both centered on driving a customer-facing screen from your POS appli
 
 ## Table of Contents
 
-**Part A — Secondary Display Connection Mode (launching TaPro over USB VSP)**
+**Part A — Sub_Screen Connection Mode (launching TaPro over USB VSP)**
 - [A.1 Overview](#a1-overview)
 - [A.2 Architecture](#a2-architecture)
 - [A.3 Prerequisites](#a3-prerequisites)
 - [A.4 Quick Start](#a4-quick-start)
 - [A.5 Connection Flow & Timing](#a5-connection-flow--timing)
 - [A.6 Error Handling](#a6-error-handling)
-- [A.7 Transaction Behavior in SECONDARY_DISPLAY Mode](#a7-transaction-behavior-in-secondary_display-mode)
+- [A.7 Transaction Behavior in SUB_SCREEN Mode](#a7-transaction-behavior-in-sub_screen-mode)
 - [A.8 Comparison with `autoOpenUsbScreenPlayer`](#a8-comparison-with-autoopenusbscreenplayer)
 - [A.9 Troubleshooting: TaPro Doesn't Launch](#a9-troubleshooting-tapro-doesnt-launch)
 
@@ -44,11 +44,11 @@ v1.0.9 and both centered on driving a customer-facing screen from your POS appli
 
 ---
 
-# Part A — Secondary Display Connection Mode
+# Part A — Sub_Screen Connection Mode
 
 ## A.1 Overview
 
-`ConnectionMode.SECONDARY_DISPLAY` (created via `ConnectionConfig.createSecondaryDisplayMode()`)
+`ConnectionMode.SUB_SCREEN` (created via `ConnectionConfig.createSubScreenMode()`)
 is a **dedicated connection mode**, not a UI-rendering helper. It is the mode to use when your
 business app runs on a device whose only job is to drive a **remote** TaPro terminal — for
 example a headless controller or subscreen board wired to a TaPro terminal over USB — and you
@@ -66,8 +66,8 @@ customer-facing screen before you start taking payments.
    instead — a connection is never reported as "connected" with a non-functional customer
    display in this mode.
 
-This is different from calling `TaplinkSDK.connect()` with `ConnectionMode.CABLE`/`PINPAD` and
-separately calling `openUsbScreenPlayer()`: in `SECONDARY_DISPLAY` mode the screen player step is
+This is different from calling `TaplinkSDK.connect()` with `ConnectionMode.CABLE`/`CROSS_DEVICE` and
+separately calling `openUsbScreenPlayer()`: in `SUB_SCREEN` mode the screen player step is
 **mandatory and part of the connection contract**, not an optional follow-up call.
 
 ---
@@ -81,8 +81,8 @@ separately calling `openUsbScreenPlayer()`: in `SECONDARY_DISPLAY` mode the scre
 │   subscreen device)         │                      │  ┌────────────────────────┐  │
 │                              │                      │  │ USB Screen Player       │  │
 │  ConnectionConfig            │  1. VSP connect      │  │ (native TaPro UI:       │  │
-│    .createSecondaryDisplay   │ ──────────────────►  │  │  ads / order / tip /    │  │
-│    Mode()                    │                      │  │  payment prompts)       │  │
+│    .createSubScreenMode()    │ ──────────────────►  │  │  ads / order / tip /    │  │
+│                              │                      │  │  payment prompts)       │  │
 │                              │  2. OPEN_USB_SCREEN_  │  └───────────┬────────────┘  │
 │  TaplinkSDK.connect(config,  │     PLAYER (auto)     │              │               │
 │    listener)                 │ ──────────────────►  │              ▼               │
@@ -106,13 +106,13 @@ using the full TapLink transaction API — no separate API is needed for payment
    TaPro versions do not recognize `OPEN_USB_SCREEN_PLAYER` and the connection will fail with
    error `351`.
 3. **SDK Version**: `com.sunmi:sunbay-taplink-sdk-android:1.0.9` or later (for the
-   `SECONDARY_DISPLAY` enum value and `createSecondaryDisplayMode()` factory).
+   `SUB_SCREEN` enum value and `createSubScreenMode()` factory).
 4. **TaPro service mode**: TaPro must be running with VSP/Cable service mode enabled so it can
    accept the incoming VSP transport.
 5. **USB host permission**: same as other Cable-based modes — declare
    `<uses-feature android:name="android.hardware.usb.host" />` in `AndroidManifest.xml`, and
    handle the Android 12+ runtime USB permission flow.
-6. Do **not** set `host`/`port`/`cableProtocol` on the config — `createSecondaryDisplayMode()`
+6. Do **not** set `host`/`port`/`cableProtocol` on the config — `createSubScreenMode()`
    always resolves to the VSP protocol regardless of any other fields.
 
 ---
@@ -123,8 +123,8 @@ using the full TapLink transaction API — no separate API is needed for payment
 // 1) Init once (Application.onCreate)
 TaplinkSDK.init(context, TaplinkConfig.create(BuildConfig.TAPLINK_APP_ID, BuildConfig.TAPLINK_SECRET_KEY))
 
-// 2) Connect using the dedicated Secondary Display mode
-val config = ConnectionConfig.createSecondaryDisplayMode()
+// 2) Connect using the dedicated Sub_Screen mode
+val config = ConnectionConfig.createSubScreenMode()
 
 TaplinkSDK.connect(config, object : ConnectionListener {
     override fun onConnected(deviceId: String, taproVersion: String) {
@@ -138,7 +138,7 @@ TaplinkSDK.connect(config, object : ConnectionListener {
     }
 
     override fun onError(error: ConnectionError) {
-        runOnUiThread { handleSecondaryDisplayConnectError(error) }
+        runOnUiThread { handleSubScreenConnectError(error) }
     }
 })
 
@@ -189,7 +189,7 @@ override fun onError(error: ConnectionError) {
 }
 ```
 
-> `351` is only ever raised for `SECONDARY_DISPLAY` mode, where opening the screen player is a
+> `351` is only ever raised for `SUB_SCREEN` mode, where opening the screen player is a
 > hard requirement. Compare with `350`, which is raised by `openUsbScreenPlayer()`/
 > `autoOpenUsbScreenPlayer` when the remote TaPro version is too old to support the action at all
 > (see A.8) — `350` does not fail the connection in that softer path, but it **does** fail the
@@ -197,9 +197,9 @@ override fun onError(error: ConnectionError) {
 
 ---
 
-## A.7 Transaction Behavior in SECONDARY_DISPLAY Mode
+## A.7 Transaction Behavior in SUB_SCREEN Mode
 
-Every transaction sent while connected in `SECONDARY_DISPLAY` mode is tagged internally so TaPro
+Every transaction sent while connected in `SUB_SCREEN` mode is tagged internally so TaPro
 routes it straight into the payment engine and shows the result **on the secondary display**,
 instead of opening TaPro's normal full-screen TapLink page. You don't need to configure this —
 it's automatic for this mode. All other transaction semantics are unchanged: check
@@ -210,9 +210,9 @@ and use a new `transactionRequestId` for `307`/`308` retries.
 
 ## A.8 Comparison with `autoOpenUsbScreenPlayer`
 
-| | `SECONDARY_DISPLAY` mode | `TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` (Part B) |
+| | `SUB_SCREEN` mode | `TaplinkConfig.setAutoOpenUsbScreenPlayer(true)` (Part B) |
 |---|---|---|
-| Connection type | USB VSP only, cross-device | Any connection mode (`ON_DEVICE`/`APP_TO_APP`, `LAN`, `CABLE`, `PINPAD`) |
+| Connection type | USB VSP only, cross-device | Any connection mode (`ON_DEVICE`/`APP_TO_APP`, `LAN`, `CABLE`, `CROSS_DEVICE`) |
 | Screen player failure | **Fatal** — connection fails with `onError(351)` | **Non-blocking** — `onConnected` still fires after a 3s timeout |
 | Who renders content | TaPro itself (native screen player UI) | Your app (`Presentation`), see Part B |
 | Typical use case | Dedicated device driving a remote TaPro's customer display | Optional customer screen on the same device as TaPro |
@@ -226,7 +226,7 @@ and use a new `transactionRequestId` for `307`/`308` retries.
 | `onError(code="351")` immediately | Remote TaPro version `< 1.0.5` doesn't support `OPEN_USB_SCREEN_PLAYER` | Upgrade TaPro; verify `taproVersion` reported in earlier successful connects, or check TaPro's about screen |
 | `onError(code="351")` after ~3s | TaPro received the request but didn't confirm (no customer display attached, or TaPro busy) | Verify a USB customer-facing display is physically attached to the TaPro device; retry once TaPro is idle |
 | `onConnected` never fires, no `onError` either | VSP transport itself never came up (cable/permission issue) | This indicates a transport-level failure, not a `351` — check the USB cable, `android.hardware.usb.host` permission, and that TaPro is in VSP/Cable service mode |
-| Connects fine with `CABLE`/`PINPAD` mode but fails with `SECONDARY_DISPLAY` | Screen player step failing while the transport is fine — narrow it down first | Try `ConnectionConfig.createCableMode()` + manual `TaplinkSDK.openUsbScreenPlayer()` (Part B, Step 1 Option B) against the same remote TaPro to isolate whether it's a transport or screen-player problem |
+| Connects fine with `CABLE`/`CROSS_DEVICE` mode but fails with `SUB_SCREEN` | Screen player step failing while the transport is fine — narrow it down first | Try `ConnectionConfig.createCableMode()` + manual `TaplinkSDK.openUsbScreenPlayer()` (Part B, Step 1 Option B) against the same remote TaPro to isolate whether it's a transport or screen-player problem |
 | Works once, then fails after reconnect | TaPro's screen player was dismissed/closed after the first session | Each new `connect()` in this mode re-sends `OPEN_USB_SCREEN_PLAYER`; this is expected and requires no special handling |
 
 ---
@@ -1005,7 +1005,7 @@ class MyApplication : Application() {
 |-----|-------------|
 | `TaplinkSDK.openUsbScreenPlayer(callback: PaymentCallback)` | Request Tapro to launch the USB screen player app. Only relevant in App-to-App mode where Tapro runs on the same device. |
 | `TaplinkConfig.setAutoOpenUsbScreenPlayer(enabled: Boolean)` | Automatically launch the player on connect, before `onConnected` fires. 3-second timeout, non-blocking. Default: `false`. |
-| `ConnectionConfig.createSecondaryDisplayMode()` | Cross-device connection mode over USB VSP that makes opening the screen player mandatory for a successful `connect()`. See [Part A](#part-a--secondary-display-connection-mode) instead of this section if you need this. |
+| `ConnectionConfig.createSubScreenMode()` | Cross-device connection mode over USB VSP that makes opening the screen player mandatory for a successful `connect()`. See [Part A](#part-a--sub_screen-connection-mode) instead of this section if you need this. |
 
 ### Callback Semantics for `openUsbScreenPlayer()`
 
