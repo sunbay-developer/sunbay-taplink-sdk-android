@@ -74,4 +74,43 @@ class LanClientKernelPeerRestartTest {
             )
         )
     }
+
+    // ==================== parseServiceSerial ====================
+    // 锁定 LAN 设备身份识别的唯一 serial 解析入口：SDK 层用它把断开错误归因到正确设备，
+    // 并按 serial 精确判定「同设备重连」而非走保守策略（见 ConnectionManager.analyzeDeviceIdentity）。
+
+    @Test
+    fun `parseServiceSerial extracts trailing serial segment`() {
+        assertEquals(
+            "PD09251101944",
+            LanClientKernel.parseServiceSerial("Taplink-Server-1788244709643-PD09251101944")
+        )
+    }
+
+    @Test
+    fun `parseServiceSerial is case insensitive on prefix`() {
+        assertEquals(
+            "PA12P58T10075",
+            LanClientKernel.parseServiceSerial("taplink-server-1787900514782-PA12P58T10075")
+        )
+    }
+
+    @Test
+    fun `parseServiceSerial returns null for non-taplink service name`() {
+        assertNull(LanClientKernel.parseServiceSerial("SomeOther-Service-123-ABC"))
+    }
+
+    @Test
+    fun `parseServiceSerial returns null when serial segment empty`() {
+        assertNull(LanClientKernel.parseServiceSerial("Taplink-Server-1788244709643-"))
+    }
+
+    @Test
+    fun `two instances of same device share the same parsed serial`() {
+        // 对端重启会换实例名（时间戳变化）但 serial 不变——正是「同设备」判定的依据。
+        val a = LanClientKernel.parseServiceSerial("Taplink-Server-1788243774964-PD09251101944")
+        val b = LanClientKernel.parseServiceSerial("Taplink-Server-1788244709643-PD09251101944")
+        assertEquals(a, b)
+        assertEquals("PD09251101944", a)
+    }
 }

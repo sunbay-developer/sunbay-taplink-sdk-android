@@ -426,8 +426,17 @@ class ConnectionManager(
                         // Immediately trigger all pending transaction callbacks (when target process crashes)
                         paymentManager?.failAllPendingTransactions(code, msg)
 
+                        // Attribute the error to the best-known device identity. In LAN mode the
+                        // live/persisted device id is often absent, so fall back to the mDNS-bound
+                        // serial (getReliableDeviceId) — resolved BEFORE the cleanup below clears
+                        // connectedDeviceId — so integrators still learn which device dropped.
+                        val errorDeviceId = getReliableDeviceId(
+                            connectedDeviceId,
+                            reconnectManager?.getLastConnectedDeviceId()
+                        )
+
                         // Create connection error object
-                        val connectionError = ConnectionError(code, msg)
+                        val connectionError = ConnectionError(code, msg, deviceId = errorDeviceId)
                         updateConnectionStatus(
                             ConnectionStatus.ERROR,
                             errorCode = connectionError,
@@ -1354,6 +1363,20 @@ class ConnectionManager(
             )
         }
 
+        // mDNS serial-segment exact match: the LAN service name is "Taplink-Server-<ts>-<serial>",
+        // whose trailing '-'-delimited segment is the Tapro serial. Reuse LanClientKernel's
+        // canonical parse so this same-device check stays in lockstep with the discovery binding,
+        // and avoid false positives from a serial that merely appears as a substring elsewhere.
+        val serialSegmentMatch =
+            LanClientKernel.parseServiceSerial(newServiceName) == targetDeviceId
+        if (serialSegmentMatch) {
+            return DeviceMatchResult(
+                matchType = DeviceMatchType.SAME_DEVICE,
+                confidence = 1.0f,
+                reason = "mDNS serial segment exact match"
+            )
+        }
+
         val suffixMatch = newServiceName.endsWith("_$targetDeviceId") || newServiceName.endsWith(targetDeviceId)
         if (suffixMatch) {
             return DeviceMatchResult(
@@ -1381,7 +1404,14 @@ class ConnectionManager(
     }
 
     /**
-     * Get the most reliable device ID
+     * Get the most reliable device ID.
+     *
+     * Priority: live connected id > persisted last connected id > LAN bound serial.
+     *
+     * The LAN serial fallback matters because in LAN mode the AIDL/INIT device id is often absent
+     * or already cleared on a passive disconnect (e.g. peer mDNS re-register), yet the transport
+     * layer has bound a target serial parsed from the mDNS service name. Using it keeps device
+     * attribution and same-device reconnection decisions working across peer restarts.
      */
     private fun getReliableDeviceId(
         currentDeviceId: String?,
@@ -1399,9 +1429,29 @@ class ConnectionManager(
             }
 
             else -> {
-                LogUtil.w(TAG, "No reliable device ID available")
-                null
+                val lanSerial = resolveBoundLanSerial()
+                if (!lanSerial.isNullOrEmpty()) {
+                    LogUtil.d(TAG, "Using LAN bound serial as device ID: $lanSerial")
+                    lanSerial
+                } else {
+                    LogUtil.w(TAG, "No reliable device ID available")
+                    null
+                }
             }
+        }
+    }
+
+    /**
+     * The Tapro serial the active LAN kernel is bound to (parsed from the mDNS service name),
+     * or null when not in LAN mode / not yet bound.
+     */
+    private fun resolveBoundLanSerial(): String? {
+        return try {
+            val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
+            (kernel as? LanClientKernel)?.getTargetServiceSerial()
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Failed to resolve bound LAN serial: ${e.message}")
+            null
         }
     }
 

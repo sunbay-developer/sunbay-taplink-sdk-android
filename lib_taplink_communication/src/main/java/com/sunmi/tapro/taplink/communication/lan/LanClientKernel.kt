@@ -72,6 +72,22 @@ class LanClientKernel(
             if (previousName == newName) return false
             return previousHost == newHost && previousPort == newPort
         }
+
+        /**
+         * Parse the Tapro serial from a LAN mDNS service name.
+         *
+         * The service name is "Taplink-Server-<timestamp>-<serial>"; the serial is the trailing
+         * '-'-delimited segment. Returns null for names that don't match the expected prefix or
+         * carry no serial segment.
+         *
+         * Exposed so both the instance-level discovery binding and the SDK layer's device-identity
+         * match rely on one canonical parse and cannot drift apart. Kept public (not internal)
+         * because the SDK module (lib_taplink_sdk) is a separate Gradle module.
+         */
+        fun parseServiceSerial(serviceName: String): String? {
+            if (!serviceName.startsWith("Taplink-Server-", ignoreCase = true)) return null
+            return serviceName.substringAfterLast('-').takeIf { it.isNotEmpty() }
+        }
     }
 
     override fun getTag(): String = TAG
@@ -147,10 +163,18 @@ class LanClientKernel(
 
     fun getServiceAddressChangeListener(): ServiceAddressChangeListener? = serviceAddressChangeListener
 
-    private fun serviceSerial(serviceName: String): String? {
-        if (!serviceName.startsWith("Taplink-Server-", ignoreCase = true)) return null
-        return serviceName.substringAfterLast('-').takeIf { it.isNotEmpty() }
-    }
+    /**
+     * The Tapro serial this LAN discovery is currently bound to, parsed from the mDNS service name
+     * (e.g. "Taplink-Server-<ts>-<serial>" -> "<serial>"), or null if not yet bound.
+     *
+     * In LAN mode the serial is the only reliable device identity available at the transport layer
+     * (the AIDL device-id / INIT-response device-id may be absent or already cleared on a passive
+     * disconnect). The SDK layer uses it to attribute disconnect errors to the correct device and
+     * to make reconnection decisions by exact device identity instead of a conservative fallback.
+     */
+    fun getTargetServiceSerial(): String? = targetServiceSerial
+
+    private fun serviceSerial(serviceName: String): String? = parseServiceSerial(serviceName)
 
     private fun isTargetService(service: ServiceInfo): Boolean {
         val serial = serviceSerial(service.name)
