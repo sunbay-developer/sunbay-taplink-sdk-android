@@ -3,13 +3,13 @@ package com.sunmi.tapro.taplink.sdk.model.response
 /**
  * Result of [com.sunmi.tapro.taplink.sdk.api.TaplinkApi.getTerminalInfo].
  *
- * Merchant and terminal information for the **single TaPro device that is currently
+ * Merchant and terminal information for the **single Tapro device that is currently
  * connected and being called**. This is not a cloud merchant lookup and not a terminal
  * list query — it never returns other devices, is not paginated, and has no
  * `terminals` array or `nextToken`.
  *
  * Field names at the top level intentionally mirror the public "Retrieve merchant" API
- * contract (`merchantId`, `dbaName`, `mcc`, `logo`, `country`, `stateName`, `cityName`,
+ * contract (`merchantId`, `dbaName`, `mcc`, `country`, `stateName`, `cityName`,
  * `street`, `detailAddress`, `zipCode`, `midList`), and [terminal] mirrors a single
  * element of the "List merchant terminals" API contract (`sn`, `vendor`, `model`,
  * `tidList`).
@@ -17,13 +17,13 @@ package com.sunmi.tapro.taplink.sdk.model.response
  * Never contains `secretKey`, `appId`, network addresses, card data, or transaction
  * details.
  *
- * Note: `smallLogo`, merchant `status`, and `createTime` (merchant and terminal level)
- * are intentionally **not** part of this response. TaPro has no real, backend-provisioned
+ * Note: merchant `status` and `createTime` (merchant and terminal level) are
+ * intentionally **not** part of this response. Tapro has no real, backend-provisioned
  * source for them today, and this API must never fabricate values (e.g. `"Y"` or the
  * current time) to fill a field — so those fields are omitted entirely rather than
  * returned as `null`.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2026-08-31
  */
 data class TerminalInfo(
@@ -35,9 +35,6 @@ data class TerminalInfo(
 
     /** Merchant category code. */
     val mcc: String? = null,
-
-    /** Merchant logo URL. */
-    val logo: String? = null,
 
     /** Merchant country. */
     val country: String? = null,
@@ -60,14 +57,14 @@ data class TerminalInfo(
     /** Merchant MIDs by payment channel. Empty list when none are configured. */
     val midList: List<MerchantMid> = emptyList(),
 
-    /** The single TaPro terminal that answered this request. */
+    /** The single Tapro terminal that answered this request. */
     val terminal: Terminal
 )
 
 /**
  * A merchant ID (MID) assigned for a specific payment channel.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2026-08-31
  */
 data class MerchantMid(
@@ -82,11 +79,11 @@ data class MerchantMid(
 )
 
 /**
- * The single TaPro terminal that answered a [com.sunmi.tapro.taplink.sdk.api.TaplinkApi.getTerminalInfo]
+ * The single Tapro terminal that answered a [com.sunmi.tapro.taplink.sdk.api.TaplinkApi.getTerminalInfo]
  * request. This is device-specific information for the connected terminal only, not a
  * terminal-list entry.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2026-08-31
  */
 data class Terminal(
@@ -109,7 +106,7 @@ data class Terminal(
 /**
  * A terminal ID (TID) assigned for a specific payment channel.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2026-08-31
  */
 data class TerminalTid(

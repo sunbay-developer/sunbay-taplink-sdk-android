@@ -1415,7 +1415,7 @@ override fun onProgress(event: PaymentEvent) {
 > - `receiptJson` is returned for ALL completed transactions regardless of `printReceipt` setting
 > - When `printReceipt = NONE`, Tapro does not print — use `receiptJson` to self-print
 > - When `printReceipt = MERCHANT/CUSTOMER/BOTH`, Tapro prints AND returns `receiptJson`
-> - Merchant header (name, address, logo) is NOT included — integrators manage their own merchant info
+> - Merchant header (name and address) is NOT included — integrators manage their own merchant info
 > - Tip Section UI layout fields are NOT included — only confirmed `tipAmount` is returned when tip > $0
 > - All amounts are pre-formatted with currency symbol (e.g., `"$7.90"`) — print as-is
 
