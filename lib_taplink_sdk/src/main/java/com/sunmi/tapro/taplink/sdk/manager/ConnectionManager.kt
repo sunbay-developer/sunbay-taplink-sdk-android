@@ -158,6 +158,27 @@ class ConnectionManager(
     private var autoTimeoutCount: Int = 0
 
     /**
+     * Whether the current CROSS_DEVICE AUTO session enabled runtime hot-switch
+     * ([ConnectionConfig.autoHotSwitch]). When true, a [UsbAttachMonitor] is active while connected
+     * so a physically-attached higher-priority cable can take over the active transport.
+     */
+    private var autoHotSwitchEnabled: Boolean = false
+
+    /**
+     * USB attach monitor for the AUTO hot-switch feature. Non-null only while an AUTO session with
+     * hot-switch enabled is (or is becoming) connected. Started on successful connect, stopped on
+     * disconnect / AUTO state clear.
+     */
+    private var usbAttachMonitor: com.sunmi.tapro.taplink.sdk.protocol.UsbAttachMonitor? = null
+
+    /**
+     * Guards against re-entrant / rapidly-repeated hot-switch attempts. USB attach broadcasts can
+     * arrive in bursts (device + accessory) for a single physical insertion; while a switch is in
+     * flight further attach events are ignored.
+     */
+    private var hotSwitchInProgress: Boolean = false
+
+    /**
      * Coroutine job for auto-discovery operation.
      * Cancelled on disconnect() to abort discovery.
      */
@@ -305,6 +326,7 @@ class ConnectionManager(
             isAutoSession = true
             autoCandidates = autoCandidateList
             autoTimeoutCount = 0
+            autoHotSwitchEnabled = config?.autoHotSwitch == true
             tryConnectWithProtocolList(autoCandidateList, connectionConfig, listener)
             return
         } else {
@@ -522,9 +544,17 @@ class ConnectionManager(
          */
         var cableAttemptEpoch = 0
 
+        /**
+         * Set true once ANY protocol in this list has reached CONNECTED. Distinguishes a
+         * connection-establishment failure (try the next protocol) from a passive drop of an
+         * already-established transport (AUTO drop-fallback rotates to the next candidate).
+         */
+        var connectedOnce = false
+
         fun tryNextProtocol() {
             if (tryIndex >= protocols.size) {
                 LogUtil.w(TAG, "All cable protocols failed: VSP, RS232, AOA")
+                hotSwitchInProgress = false
                 updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
                 listener.onError(
                     ConnectionError(
@@ -563,6 +593,7 @@ class ConnectionManager(
 
                         val (_, mode) = protocols[tryIndex]
                         LogUtil.d(TAG, "Cable connection succeeded with $mode")
+                        connectedOnce = true
 
                         // Save successful protocol for future reconnects
                         runCatching {
@@ -623,6 +654,20 @@ class ConnectionManager(
                         val isConnectionError = isConnectionError(code, msg)
                         LogUtil.d(TAG, "Cable $connectionMode failed: code=$code, msg=$msg, isConnectionError=$isConnectionError")
 
+                        // Passive drop of an already-established AUTO transport: rotate to the next
+                        // candidate (cable dropped → LAN; LAN dropped → cable). Default behavior when
+                        // the AUTO session has 2+ candidates. Applies regardless of whether the drop
+                        // is classified as an error or a normal disconnect.
+                        if (connectedOnce && isAutoSession) {
+                            if (isConnectionError) {
+                                paymentManager?.failAllPendingTransactions(code, msg)
+                            }
+                            if (rotateAutoTransportAfterDrop()) {
+                                syncStatusFromKernel()
+                                return
+                            }
+                        }
+
                         if (isConnectionError && tryIndex < protocols.size - 1) {
                             tryIndex++
                             tryNextProtocol()
@@ -641,6 +686,9 @@ class ConnectionManager(
                             currentConnectionMode = null
                             currentAppToAppMode = null
                             currentConnectionConfig = null
+                            // A fallback/hot-switch reconnect that ended in ERROR must not leave the
+                            // guard set, or future drop-fallback / hot-switch attempts are blocked.
+                            hotSwitchInProgress = false
                         }
                         syncStatusFromKernel()
                     }
@@ -858,44 +906,248 @@ class ConnectionManager(
     fun onRequestTimedOut(errorCode: String?) {
         if (!isAutoSession) return
         autoTimeoutCount++
-        LogUtil.w(TAG, "AUTO: request timed out (code=$errorCode), consecutive=$autoTimeoutCount")
-        if (autoTimeoutCount >= AUTO_FALLBACK_TIMEOUT_THRESHOLD) {
-            maybeTriggerAutoFallback()
-        }
+        // Transport switching is now performed ONLY after the active connection actually drops
+        // (see rotateAutoTransportAfterDrop). A request timeout while the socket still appears
+        // connected no longer proactively tears down and rotates the transport — doing so risked
+        // interrupting an in-flight transaction and switching to a different device. The timeout is
+        // recorded for diagnostics only; the single-transaction timeout rule (E306 → query-first)
+        // is handled by PaymentManager.
+        LogUtil.w(TAG, "AUTO: request timed out (code=$errorCode), consecutive=$autoTimeoutCount (no transport switch; waiting for real disconnect)")
     }
 
     /**
-     * Rotates the active CROSS_DEVICE AUTO transport to the next candidate and reconnects.
-     * No-op when there are fewer than two candidates.
+     * Handles a passive drop of the active transport in a CROSS_DEVICE AUTO session by rotating to
+     * the next candidate and reconnecting — cable unplugged → try LAN; LAN dropped → try cable
+     * (if present in the candidate list). This is the DEFAULT behavior whenever the AUTO session has
+     * two or more candidates; no opt-in flag is required.
+     *
+     * The active transport has already gone away (this is called from the transport's onDisconnected),
+     * so the current kernel is not torn down again here.
+     *
+     * @return true if a fallback reconnect was initiated, false otherwise (caller then applies its
+     *   normal DISCONNECTED/ERROR handling).
      */
-    private fun maybeTriggerAutoFallback() {
+    private fun rotateAutoTransportAfterDrop(): Boolean {
+        if (!isAutoSession) return false
         val candidates = autoCandidates
-        if (candidates == null || candidates.size < 2) {
-            LogUtil.d(TAG, "AUTO fallback skipped: not enough candidates")
-            return
+        if (candidates == null) {
+            LogUtil.d(TAG, "AUTO drop-fallback skipped: no candidates")
+            return false
+        }
+        if (hotSwitchInProgress) {
+            LogUtil.d(TAG, "AUTO drop-fallback skipped: a switch is already in progress")
+            return false
         }
 
-        val current = currentConnectionMode
+        // Never switch transports while a transaction is in flight. Tearing the transport down
+        // mid-transaction drops the response callback and cannot recover the in-flight transaction;
+        // it also risks reconnecting to a DIFFERENT device. Let the normal disconnect path fail the
+        // pending transaction and notify the integrator instead.
+        if (paymentManager?.hasInFlightTransactions() == true) {
+            LogUtil.w(TAG, "AUTO drop-fallback skipped: a transaction is in flight; not switching transport")
+            return false
+        }
+
+        // Fallback is viable when there is more than one candidate to rotate through, OR when LAN is
+        // an allowed transport that can still be discovered+injected via mDNS even though no LAN
+        // candidate is currently in the list (e.g. cable-only candidates with no configured host).
+        val cfg = currentConnectionConfig ?: reconnectManager?.getLastConnectionConfig()
+        val lanInPriority = cfg?.autoPriority?.contains(
+            com.sunmi.tapro.taplink.sdk.enums.CrossDeviceStrategy.LAN
+        ) == true
+        val hasLanCandidate = candidates.any { it.second == ConnectionMode.LAN.name }
+        val canInjectLan = lanInPriority && !hasLanCandidate
+        if (candidates.size < 2 && !canInjectLan) {
+            LogUtil.d(TAG, "AUTO drop-fallback skipped: not enough candidates and no LAN to discover")
+            return false
+        }
+
+        // If the transport that just dropped is LAN, only fall back to cable when a cable is
+        // physically attached. Otherwise the only fallback target (cable) is guaranteed to fail
+        // with "no USB device attached", and — combined with the LAN kernel's own mDNS
+        // address-change reconnect churn — this produced a reconnect storm on LAN-only setups.
+        // A LAN drop with no cable present is left to the LAN kernel's own reconnect/self-healing.
+        val currentIsLan = currentConnectionMode == ConnectionMode.LAN.name
+        if (currentIsLan) {
+            val ctx = reconnectManager?.getContext() ?: context
+            val cablePresent =
+                com.sunmi.tapro.taplink.sdk.protocol.InsertedCableClassifier.classify(ctx) != null
+            if (!cablePresent) {
+                LogUtil.d(TAG, "AUTO drop-fallback skipped: LAN dropped and no physical cable attached; leaving LAN to self-reconnect")
+                return false
+            }
+        }
+
+        val rotated = rotateAfterCurrent(candidates, currentConnectionMode)
+        LogUtil.w(TAG, "AUTO drop-fallback: transport '$currentConnectionMode' dropped, rotating to next candidate")
+        autoTimeoutCount = 0
+        reconnectWithRotatedCandidates(rotated, tearDownCurrent = false)
+        return true
+    }
+
+    /**
+     * Rotates [candidates] so that the candidate AFTER [current] comes first (current and anything
+     * before it move to the end). When [current] is not found, the list is returned unchanged.
+     */
+    private fun rotateAfterCurrent(
+        candidates: List<Pair<String, String>>,
+        current: String?
+    ): List<Pair<String, String>> {
         val idx = candidates.indexOfFirst { it.second == current }
-        // Move current transport (and everything before it) to the end, so the next candidate is first.
-        val rotated = if (idx >= 0) {
+        return if (idx >= 0) {
             candidates.drop(idx + 1) + candidates.take(idx + 1)
         } else {
             candidates
         }
+    }
 
+    /**
+     * Shared reconnect path for AUTO transport rotation (timeout fallback, hot-switch, passive drop).
+     *
+     * Before reconnecting, any LAN candidate is resolved to the CURRENT service address of the SAME
+     * TaPro via mDNS (see [resolveLanCandidatesViaMdns]) so a LAN fallback still reaches the right
+     * device even if its IP changed; the configured host/port is used as a fallback when discovery
+     * finds no matching service.
+     *
+     * @param rotated the rotated candidate list (next transport first)
+     * @param tearDownCurrent whether to disconnect the current kernel before reconnecting (true for
+     *   an active-but-blocked transport, false when the transport already dropped)
+     */
+    private fun reconnectWithRotatedCandidates(
+        rotated: List<Pair<String, String>>,
+        tearDownCurrent: Boolean
+    ) {
         val listener = connectionListener
             ?: reconnectManager?.getLastConnectionListener()
             ?: internalReconnectListener
         val config = currentConnectionConfig ?: reconnectManager?.getLastConnectionConfig()
 
-        LogUtil.w(TAG, "AUTO fallback: '$current' appears blocked, rotating transports and reconnecting")
-        autoTimeoutCount = 0
+        hotSwitchInProgress = true
         autoCandidates = rotated
 
-        // Tear down the blocked transport, then re-attempt over the rotated candidate list.
-        TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
-        tryConnectWithProtocolList(rotated, config, listener)
+        // Move to CONNECTING immediately so integrators never observe a stale CONNECTED while the
+        // active transport is gone and we are (asynchronously) discovering + reconnecting the next
+        // candidate. Without this, a passive drop followed by a slow/empty mDNS discovery would
+        // leave the SDK reporting CONNECTED even though TaPro is no longer reachable.
+        updateConnectionStatus(ConnectionStatus.CONNECTING, listener = listener)
+
+        sdkScope.launch {
+            val resolved = resolveLanCandidatesViaMdns(rotated)
+            autoCandidates = resolved
+
+            // If nothing is connectable (e.g. LAN candidate could not be resolved and there is no
+            // usable fallback address, and no cable candidate remains), do not silently hang in
+            // CONNECTING — surface a disconnect so the integrator can react.
+            if (resolved.isEmpty()) {
+                LogUtil.w(TAG, "AUTO fallback: no connectable candidate after resolution; reporting disconnected")
+                hotSwitchInProgress = false
+                clearAutoFallbackState()
+                updateConnectionStatus(
+                    ConnectionStatus.DISCONNECTED,
+                    reason = "AUTO fallback: no reachable transport",
+                    listener = listener
+                )
+                return@launch
+            }
+
+            if (tearDownCurrent) {
+                TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
+            }
+            tryConnectWithProtocolList(resolved, config, listener)
+        }
+    }
+
+    /**
+     * Resolves the LAN transport of an AUTO session to the current mDNS-advertised address of the
+     * SAME TaPro device, so a LAN fallback reaches the right terminal even if its IP changed.
+     *
+     * Triggering: runs whenever the session's `autoPriority` includes LAN OR [candidates] already
+     * contains a LAN entry.
+     *
+     * Device matching (same TaPro): picks the discovered service whose parsed serial
+     * ([LanClientKernel.parseServiceSerial]) matches the reliable target device id
+     * ([getReliableDeviceId]). The target serial comes from the live/persisted device id or, most
+     * importantly, the serial persisted from a prior LAN connection to this device
+     * ([ConnectionPersistence.getLastConnectedSerial]) — this is why "connect once, then rediscover
+     * the SAME device by serial next time" works.
+     *
+     * No reliable serial: the SDK does NOT connect an arbitrary discovered service (on a shared
+     * network that is very likely a different terminal). Instead it keeps the configured LAN
+     * candidate — AUTO sessions are required to configure a LAN `host` as the fallback target — so
+     * the preconfigured address is used. If there is neither a serial match nor a configured LAN
+     * candidate, the fallback reports DISCONNECTED rather than connecting the wrong device.
+     *
+     * Result:
+     * - serial match found → the LAN candidate address is (re)built with the discovered host/port;
+     * - no match → the existing (configured-host) LAN candidate is preserved as the fallback target.
+     *
+     * Non-LAN candidates pass through unchanged.
+     */
+    private suspend fun resolveLanCandidatesViaMdns(
+        candidates: List<Pair<String, String>>
+    ): List<Pair<String, String>> {
+        val hasLanCandidate = candidates.any { it.second == ConnectionMode.LAN.name }
+        val cfg = currentConnectionConfig ?: reconnectManager?.getLastConnectionConfig()
+        val priority = cfg?.autoPriority ?: emptyList()
+        val lanInPriority = priority.contains(com.sunmi.tapro.taplink.sdk.enums.CrossDeviceStrategy.LAN)
+
+        // Only skip mDNS when LAN is neither a present candidate nor an allowed transport.
+        if (!hasLanCandidate && !lanInPriority) return candidates
+
+        val targetSerial = getReliableDeviceId(
+            connectedDeviceId,
+            reconnectManager?.getLastConnectedDeviceId()
+        )
+
+        val discovered: DiscoveredService? = try {
+            val ctx = reconnectManager?.getContext() ?: context
+            val discoveryManager = ServiceDiscoveryManager(ctx)
+            val services = discoveryManager.discoverServicesIsolated(
+                NSD_SERVICE_TYPE, DISCOVERY_TIMEOUT_MS
+            ).filter { it.host.isNotEmpty() && it.port > 0 }
+
+            if (services.isEmpty()) {
+                null
+            } else if (!targetSerial.isNullOrEmpty() && targetSerial != "unknown") {
+                // Prefer the service whose serial matches the same TaPro device.
+                val match = services.firstOrNull {
+                    LanClientKernel.parseServiceSerial(it.name) == targetSerial
+                }
+                match?.let { DiscoveredService(it.name, it.host, it.port) }
+                    ?: run {
+                        LogUtil.w(TAG, "AUTO LAN fallback: no mDNS service matched serial=$targetSerial; keeping existing candidates")
+                        null
+                    }
+            } else {
+                // No reliable serial to match on. Do NOT blindly connect the first discovered
+                // service — on a shared network that is very likely a DIFFERENT terminal. Only a
+                // preconfigured host may be used (handled below by keeping existing candidates).
+                LogUtil.w(TAG, "AUTO LAN fallback: no reliable target serial; refusing to connect an arbitrary discovered service")
+                null
+            }
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "AUTO LAN fallback: mDNS discovery failed: ${e.message}; keeping existing candidates")
+            null
+        }
+
+        if (discovered == null) return candidates
+
+        val lanCandidate = Pair(
+            ProtocolManager.buildLanProtocol(discovered.host, discovered.port, secure = false),
+            ConnectionMode.LAN.name
+        )
+        LogUtil.d(TAG, "AUTO LAN fallback: resolved LAN target to ${discovered.host}:${discovered.port} (service=${discovered.name})")
+
+        if (hasLanCandidate) {
+            // Rebuild the existing LAN candidate's address in place.
+            return candidates.map { if (it.second == ConnectionMode.LAN.name) lanCandidate else it }
+        }
+
+        // No LAN candidate existed (no configured host): inject one according to priority.
+        val cableRank = priority.indexOf(com.sunmi.tapro.taplink.sdk.enums.CrossDeviceStrategy.CABLE)
+        val lanRank = priority.indexOf(com.sunmi.tapro.taplink.sdk.enums.CrossDeviceStrategy.LAN)
+        val lanFirst = lanRank in 0 until (if (cableRank < 0) Int.MAX_VALUE else cableRank)
+        return if (lanFirst) listOf(lanCandidate) + candidates else candidates + lanCandidate
     }
 
     /**
@@ -905,6 +1157,36 @@ class ConnectionManager(
         isAutoSession = false
         autoCandidates = null
         autoTimeoutCount = 0
+        autoHotSwitchEnabled = false
+        hotSwitchInProgress = false
+        stopUsbAttachMonitor()
+    }
+
+    /**
+     * Previously started a USB attach monitor to hot-switch to a preferred cable while the current
+     * transport was still alive. That proactive-switch behavior has been removed: transport
+     * switching now happens ONLY after the active connection actually drops (see
+     * [rotateAutoTransportAfterDrop]). This method now only clears the in-flight switch guard on a
+     * successful connection and intentionally does NOT register the USB monitor.
+     *
+     * [ConnectionConfig.autoHotSwitch] is retained for API compatibility but no longer triggers a
+     * live-connection hot-switch.
+     */
+    private fun maybeStartUsbAttachMonitor() {
+        hotSwitchInProgress = false
+        // No USB attach monitor: do not proactively switch transports while connected.
+        stopUsbAttachMonitor()
+    }
+
+    /**
+     * Stops and clears the USB attach monitor if active. Idempotent.
+     */
+    private fun stopUsbAttachMonitor() {
+        usbAttachMonitor?.let {
+            it.stop()
+            LogUtil.d(TAG, "AUTO hot-switch: USB attach monitor stopped")
+        }
+        usbAttachMonitor = null
     }
 
     /**
@@ -1024,6 +1306,15 @@ class ConnectionManager(
                         LogUtil.e(TAG, "Error notifying connection listener: ${e.message}")
                     }
                 }
+
+                // AUTO hot-switch: once connected, watch for a physically-attached higher-priority
+                // cable so it can take over the active transport at runtime.
+                maybeStartUsbAttachMonitor()
+
+                // Persist the LAN-bound Tapro serial (if this connection is LAN) so that a later
+                // AUTO fallback to LAN can rediscover the SAME device via mDNS even after the LAN
+                // kernel is torn down (transport switch / disconnect clears the live/bound serial).
+                persistLanSerialIfAvailable()
             }
 
             ConnectionStatus.ERROR -> {
@@ -1434,10 +1725,30 @@ class ConnectionManager(
                     LogUtil.d(TAG, "Using LAN bound serial as device ID: $lanSerial")
                     lanSerial
                 } else {
-                    LogUtil.w(TAG, "No reliable device ID available")
-                    null
+                    // Last resort: the serial persisted from a previous LAN connection. This is what
+                    // makes "cable dropped → discover the SAME TaPro's LAN service" work after the
+                    // LAN kernel (and its bound serial) is already gone.
+                    val persistedSerial = connectionPersistence.getLastConnectedSerial()
+                    if (!persistedSerial.isNullOrEmpty()) {
+                        LogUtil.d(TAG, "Using persisted last-connected serial as device ID: $persistedSerial")
+                        persistedSerial
+                    } else {
+                        LogUtil.w(TAG, "No reliable device ID available")
+                        null
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * Persists the Tapro serial the active LAN kernel is bound to, if any. Safe to call after every
+     * successful connection; it is a no-op for non-LAN transports or when no serial is bound.
+     */
+    private fun persistLanSerialIfAvailable() {
+        val serial = resolveBoundLanSerial()
+        if (!serial.isNullOrEmpty()) {
+            connectionPersistence.saveLastConnectedSerial(serial)
         }
     }
 
@@ -1674,6 +1985,31 @@ class ConnectionManager(
                 val isSelfHealing = reconnectManager?.isReconnecting() == true
 
                 if (droppedToInactive && wasActive && !isSelfHealing) {
+                    // CROSS_DEVICE AUTO passive-drop fallback via the kernel status listener is
+                    // restricted to CABLE transports. Cable kernels (notably AOA on device-detach)
+                    // may only call updateStatus() without invoking the ConnectionCallback, so the
+                    // status listener is the only reliable drop signal for them.
+                    //
+                    // LAN is intentionally EXCLUDED here: the LAN kernel has its own mDNS
+                    // address-change reconnect / self-healing path that produces transient
+                    // CONNECTED⇄DISCONNECTED churn (especially on multi-terminal networks). Letting
+                    // that churn trigger an AUTO fallback caused a reconnect storm (LAN "dropped" →
+                    // rotate → cable candidates all fail "no USB device" → LAN reconnect → repeat
+                    // every few seconds). LAN drops are handled by the ConnectionCallback path and
+                    // the LAN kernel's own reconnect instead.
+                    val current = currentConnectionMode
+                    val currentIsCable = current == CableProtocol.USB_AOA.name ||
+                        current == CableProtocol.USB_VSP.name ||
+                        current == CableProtocol.RS232.name
+
+                    if (isAutoSession && currentIsCable && rotateAutoTransportAfterDrop()) {
+                        LogUtil.w(
+                            TAG,
+                            "Kernel dropped to $newStatus on cable ($current); AUTO fallback initiated from status listener"
+                        )
+                        return@setStatusChangeListener
+                    }
+
                     val reason = "Kernel status changed to $kernelStatus"
                     LogUtil.w(
                         TAG,

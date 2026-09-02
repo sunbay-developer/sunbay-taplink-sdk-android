@@ -200,12 +200,14 @@ class TaplinkApiImpl : TaplinkApi {
             return
         }
 
-        // Sub_Screen mode uses its own stricter wrapper (screen player failure = connection failure).
-        // Other modes may optionally use the softer autoOpenUsbScreenPlayer wrapper.
+        // Only Sub_Screen mode auto-opens the TaPro USB customer-facing screen player as part of
+        // connecting (screen player failure = connection failure). All other modes connect without
+        // touching the screen player; integrators that need it can call openUsbScreenPlayer()
+        // explicitly after onConnected.
         val wrappedListener = if (config?.connectionMode == ConnectionMode.SUB_SCREEN) {
             wrapWithSubScreen(listener)
         } else {
-            wrapWithUsbScreenPlayer(listener)
+            listener
         }
 
         connectionMgr.connect(config, wrappedListener)
@@ -238,7 +240,7 @@ class TaplinkApiImpl : TaplinkApi {
             )
             return
         }
-        connectionMgr.autoDiscoverAndConnect(wrapWithUsbScreenPlayer(listener))
+        connectionMgr.autoDiscoverAndConnect(listener)
     }
 
     override fun scanAndConnect(listener: ConnectionListener) {
@@ -253,46 +255,7 @@ class TaplinkApiImpl : TaplinkApi {
             )
             return
         }
-        connectionMgr.scanAndConnect(wrapWithUsbScreenPlayer(listener))
-    }
-
-    /**
-     * Wrap [listener] so that the TaPro USB secondary-screen player is opened before
-     * `onConnected` is delivered, when [TaplinkConfig.autoOpenUsbScreenPlayer] is enabled.
-     *
-     * OPEN_USB_SCREEN_PLAYER requires an established connection, so it can only run after the
-     * transport is up. Delaying `onConnected` until TaPro answers gives integrator apps a single
-     * point where both the link and the customer-facing screen are ready. `onConnected` is always
-     * delivered exactly once — on success, on failure, and on [SCREEN_PLAYER_TIMEOUT_MS] timeout.
-     */
-    private fun wrapWithUsbScreenPlayer(listener: ConnectionListener): ConnectionListener {
-        if (config?.autoOpenUsbScreenPlayer != true) {
-            return listener
-        }
-
-        return object : ConnectionListener by listener {
-            override fun onConnected(deviceId: String, taproVersion: String) {
-                val delivered = AtomicBoolean(false)
-                fun deliver(source: String) {
-                    if (delivered.compareAndSet(false, true)) {
-                        LogUtil.d(TAG, "Delivering onConnected after screen player step ($source)")
-                        listener.onConnected(deviceId, taproVersion)
-                    }
-                }
-
-                Handler(Looper.getMainLooper())
-                    .postDelayed({ deliver("timeout") }, SCREEN_PLAYER_TIMEOUT_MS)
-
-                openUsbScreenPlayer(object : PaymentCallback {
-                    override fun onSuccess(result: PaymentResult) = deliver("success")
-                    override fun onFailure(error: PaymentError) {
-                        LogUtil.w(TAG, "Auto open USB screen player failed: ${error.code} ${error.message}")
-                        deliver("failure")
-                    }
-                    override fun onProgress(event: PaymentEvent) = Unit
-                })
-            }
-        }
+        connectionMgr.scanAndConnect(listener)
     }
 
     /**

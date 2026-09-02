@@ -81,12 +81,16 @@ data class TaplinkConfig(
     val taproAppWidthRatio: Float? = null,
 
     /**
-     * Automatically open the TaPro USB secondary-screen player right after the transport
-     * is established, before [ConnectionListener.onConnected] is delivered (default: false).
+     * (Deprecated behavior) Previously auto-opened the TaPro USB secondary-screen player right
+     * after the transport was established, before [ConnectionListener.onConnected] was delivered.
      *
-     * Enable this on terminals that drive a USB customer-facing display, so the screen
-     * player is already running by the time the integrator app starts its first transaction.
-     * If TaPro does not answer within a few seconds, `onConnected` is delivered anyway.
+     * As of the Unreleased version this flag no longer triggers auto-open for LAN / Cable / AUTO /
+     * On-Device connections. Only [com.sunmi.tapro.taplink.sdk.enums.ConnectionMode.SUB_SCREEN]
+     * opens the screen player automatically as part of connecting. For other modes, call
+     * [com.sunmi.tapro.taplink.sdk.api.TaplinkApi.openUsbScreenPlayer] explicitly after
+     * `onConnected` when you need the customer-facing display.
+     *
+     * Retained for source/binary compatibility; the value is currently ignored.
      */
     val autoOpenUsbScreenPlayer: Boolean = false
 ) {

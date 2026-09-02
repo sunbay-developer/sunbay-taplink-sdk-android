@@ -70,7 +70,21 @@ class LanClientKernel(
             newPort: Int
         ): Boolean {
             if (previousName == newName) return false
-            return previousHost == newHost && previousPort == newPort
+            // Same endpoint (host:port) is a necessary condition for a peer restart.
+            if (previousHost != newHost || previousPort != newPort) return false
+            // The mDNS instance name is "Taplink-Server-<timestamp>-<serial>". TaPro re-registers
+            // its service with a FRESH timestamp periodically (and across network changes) WITHOUT
+            // restarting — same device, same serial, only the timestamp differs. Treating that as a
+            // peer restart would needlessly tear down a perfectly healthy socket (observed as a
+            // ~5s "normal closure" loop). Only a genuinely DIFFERENT serial at the same endpoint
+            // (i.e. a different device now answering there) counts as a peer restart.
+            val previousSerial = parseServiceSerial(previousName)
+            val newSerial = parseServiceSerial(newName)
+            if (previousSerial != null && newSerial != null) {
+                return previousSerial != newSerial
+            }
+            // Fall back to the old name-based heuristic only when a serial cannot be parsed.
+            return true
         }
 
         /**

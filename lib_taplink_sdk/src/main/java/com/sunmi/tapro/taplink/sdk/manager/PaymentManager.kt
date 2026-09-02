@@ -848,6 +848,17 @@ class PaymentManager(
     }
 
     /**
+     * Whether a transaction/request is currently in flight (sent and awaiting a response), or one is
+     * queued waiting for connection. The connection layer consults this before switching transports
+     * (AUTO fallback / hot-switch) so an in-progress transaction is never interrupted mid-flight.
+     */
+    fun hasInFlightTransactions(): Boolean {
+        return pendingTransaction != null ||
+            hasPendingAutoConnectTransaction ||
+            callbackManager.hasActiveCallbacks()
+    }
+
+    /**
      * Auto-connect and execute payment request
      *
      * If not connected, automatically connect first, then execute the transaction
