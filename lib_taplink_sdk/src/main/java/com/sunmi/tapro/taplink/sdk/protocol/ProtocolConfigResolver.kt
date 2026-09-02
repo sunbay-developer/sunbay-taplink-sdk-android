@@ -174,6 +174,30 @@ object ProtocolConfigResolver {
     }
 
     /**
+     * Expands the CABLE strategy of a Cross-Device AUTO session into concrete candidates.
+     *
+     * An explicitly configured sub-protocol must win over the AUTO try-order: callers that pass
+     * `cableProtocol = USB_AOA` expect the peer to be driven into accessory mode, but the plain
+     * try-order starts at VSP and would claim the port first, so the AOA switch never happens.
+     * Only [CableProtocol.AUTO]/unset falls back to the reordered VSP → RS232 → AOA list.
+     *
+     * Resolving an explicit protocol needs no [Context]; only the try-order does, so a null
+     * context yields an empty cable candidate list rather than silently dropping an explicit choice.
+     */
+    private fun buildCableCandidates(
+        connectionConfig: ConnectionConfig,
+        context: Context?
+    ): List<Pair<String, String>> {
+        val explicit = connectionConfig.cableProtocol
+        if (explicit != null && explicit != CableProtocol.AUTO) {
+            val (protocol, mode) = buildProtocolFromCableProtocol(explicit, context)
+            return listOf(Pair(protocol, mode ?: explicit.name))
+        }
+        if (context == null) return emptyList()
+        return buildCableTryOrder(context)
+    }
+
+    /**
      * Builds the reordered cable protocol try-list (VSP -> RS232 -> AOA base order, with the
      * physically-inserted cable's protocol — or the last-successful cached protocol — moved first).
      * Shared by [getCableProtocolsToTry] and [getCrossDeviceAutoCandidates].
@@ -181,9 +205,9 @@ object ProtocolConfigResolver {
     private fun buildCableTryOrder(context: Context): List<Pair<String, String>> {
         // Base order: VSP, RS232, AOA. Prefer serial when peer enumerates as CDC; AOA last for stale-enum cases.
         val baseOrder = listOf(
+            Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name),
             Pair(ProtocolManager.buildVspProtocol(), CableProtocol.USB_VSP.name),
-            Pair(ProtocolManager.buildRs232Protocol(), CableProtocol.RS232.name),
-            Pair(ProtocolManager.buildUsbHostProtocol(), CableProtocol.USB_AOA.name)
+            Pair(ProtocolManager.buildRs232Protocol(), CableProtocol.RS232.name)
         )
 
         // 1) Prioritize the physically-inserted cable's protocol (plug-and-play).
@@ -212,7 +236,8 @@ object ProtocolConfigResolver {
      * Only applies when [ConnectionConfig.crossDeviceAuto] is true. Iterates
      * [ConnectionConfig.autoPriority] and expands each strategy into concrete attempts:
      * - [CrossDeviceStrategy.LAN] → a single LAN candidate (requires a non-blank host)
-     * - [CrossDeviceStrategy.CABLE] → the cable try-order (VSP/RS232/AOA, reordered by inserted cable)
+     * - [CrossDeviceStrategy.CABLE] → the explicitly configured cable sub-protocol when one is set,
+     *   otherwise the cable try-order (VSP/RS232/AOA, reordered by inserted cable)
      *
      * The connection layer ([com.sunmi.tapro.taplink.sdk.manager.ConnectionManager]) tries the
      * returned candidates in order, falling back to the next on connection failure/timeout.
@@ -241,9 +266,7 @@ object ProtocolConfigResolver {
                     }
                 }
                 CrossDeviceStrategy.CABLE -> {
-                    if (context != null) {
-                        candidates.addAll(buildCableTryOrder(context))
-                    }
+                    candidates.addAll(buildCableCandidates(connectionConfig, context))
                 }
                 CrossDeviceStrategy.AUTO -> {
                     // AUTO is not a concrete transport within a priority list; ignore.

@@ -1648,14 +1648,43 @@ class ConnectionManager(
         kernel.setStatusChangeListener { kernelStatus ->
             val newStatus = convertToConnectionStatus(kernelStatus)
             if (connectionStatus != newStatus) {
+                val previousStatus = connectionStatus
                 LogUtil.d(
                     TAG,
-                    "Kernel status changed: $kernelStatus -> syncing to ConnectionManager: $newStatus (was: $connectionStatus)"
+                    "Kernel status changed: $kernelStatus -> syncing to ConnectionManager: $newStatus (was: $previousStatus)"
                 )
-                // Update status without triggering callbacks (to avoid duplicate notifications)
-                // The callbacks should be triggered by ConnectionCallback, not by status sync
+                // Update status without triggering callbacks here (the primary notification path
+                // is ConnectionCallback). We only additionally notify the integrator when the
+                // kernel dropped to DISCONNECTED/ERROR while the SDK still believed it was
+                // connected/connecting — otherwise that drop is only reflected in the internal
+                // status field and the integrator (e.g. Demo ConnectionManager) stays stuck in
+                // CONNECTING until the next connect()'s validateStatusConsistency reconciles it.
                 synchronized(this) {
                     connectionStatus = newStatus
+                }
+
+                val droppedToInactive = newStatus == ConnectionStatus.DISCONNECTED ||
+                        newStatus == ConnectionStatus.ERROR
+                val wasActive = previousStatus == ConnectionStatus.CONNECTED ||
+                        previousStatus == ConnectionStatus.CONNECTING ||
+                        previousStatus == ConnectionStatus.WAIT_CONNECTING
+                // Suppress during self-healing reconnect so a transient VSP/sub-screen kernel
+                // bounce (which surfaces as RECONNECTING -> CONNECTING, not DISCONNECTED) or an
+                // in-progress reconnect never raises a spurious onDisconnected to the integrator.
+                val isSelfHealing = reconnectManager?.isReconnecting() == true
+
+                if (droppedToInactive && wasActive && !isSelfHealing) {
+                    val reason = "Kernel status changed to $kernelStatus"
+                    LogUtil.w(
+                        TAG,
+                        "Kernel dropped to $newStatus while SDK was $previousStatus and not reconnecting; " +
+                            "notifying integrator onDisconnected to keep states in sync"
+                    )
+                    try {
+                        connectionListener?.onDisconnected(reason)
+                    } catch (e: Exception) {
+                        LogUtil.e(TAG, "Error notifying onDisconnected from kernel status sync: ${e.message}")
+                    }
                 }
             }
         }

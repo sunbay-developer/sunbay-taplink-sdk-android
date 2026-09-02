@@ -15,7 +15,30 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application>
-        <!-- 本地IPC服务 -->
+        <!-- Local IPC service -->
+
+        <!--
+            AOA device claim entry point. Declaring a <usb-device> filter makes the
+            system grant this app USB permission for the device automatically (no
+            prompt) once the peer switches into accessory mode.
+            This must be an Activity: ACTION_USB_DEVICE_ATTACHED is dispatched by the
+            system as an Activity Intent, so neither runtime nor manifest
+            BroadcastReceivers ever see it. See the class KDoc for details.
+        -->
+        <activity
+            android:name="com.sunmi.tapro.taplink.communication.cable.aoa.host.TaplinkUsbDeviceAttachedActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/taplink_usb_device_filter" />
+        </activity>
     </application>
 
 </manifest>
