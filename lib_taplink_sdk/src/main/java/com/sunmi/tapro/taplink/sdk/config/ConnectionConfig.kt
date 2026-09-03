@@ -69,24 +69,6 @@ class ConnectionConfig {
     var autoPriority: List<CrossDeviceStrategy> = DEFAULT_AUTO_PRIORITY
         private set
 
-    /**
-     * Whether a Cross-Device AUTO session should hot-switch to a higher-priority transport when it
-     * is physically attached at runtime (default: false).
-     *
-     * When true and this config resolves to the Cross-Device AUTO strategy ([crossDeviceAuto]), the
-     * connection layer registers a USB attach monitor after a successful connection. If a cable
-     * whose [CrossDeviceStrategy.CABLE] priority is higher than the currently active transport is
-     * plugged in (e.g. the session is running over LAN and a cable is inserted while CABLE is the
-     * preferred transport in [autoPriority]), the SDK tears down the active transport and reconnects
-     * over the preferred cable — "plug in and it takes over".
-     *
-     * Only meaningful for the Cross-Device AUTO strategy; ignored for all other modes/strategies.
-     * Defaults to false to preserve the previous, stable behavior (transport is chosen once at
-     * connect time and only rotated on request timeout).
-     */
-    var autoHotSwitch: Boolean = false
-        private set
-
     /** Internal flag: the public mode selected was [ConnectionMode.CROSS_DEVICE]. */
     private var isCrossDeviceMode: Boolean = false
 
@@ -205,18 +187,6 @@ class ConnectionConfig {
     fun setAutoPriority(preferred: CrossDeviceStrategy): ConnectionConfig {
         val other = if (preferred == CrossDeviceStrategy.CABLE) CrossDeviceStrategy.LAN else CrossDeviceStrategy.CABLE
         return setAutoPriority(listOf(preferred, other))
-    }
-
-    /**
-     * Enables or disables runtime hot-switching to a higher-priority transport for a Cross-Device
-     * AUTO session. See [autoHotSwitch]. Only honored for the Cross-Device AUTO strategy.
-     *
-     * @param enabled whether runtime hot-switch is enabled
-     * @return the current configuration instance for method chaining
-     */
-    fun setAutoHotSwitch(enabled: Boolean): ConnectionConfig {
-        this.autoHotSwitch = enabled
-        return this
     }
 
     /**
@@ -379,7 +349,6 @@ class ConnectionConfig {
                this.crossDeviceAuto == other.crossDeviceAuto &&
                this.crossDeviceStrategy == other.crossDeviceStrategy &&
                this.autoPriority == other.autoPriority &&
-               this.autoHotSwitch == other.autoHotSwitch &&
                this.host == other.host &&
                this.port == other.port &&
                this.connectionTimeout == other.connectionTimeout &&
@@ -401,7 +370,6 @@ class ConnectionConfig {
                 "crossDeviceStrategy=$crossDeviceStrategy, " +
                 "crossDeviceAuto=$crossDeviceAuto, " +
                 "autoPriority=$autoPriority, " +
-                "autoHotSwitch=$autoHotSwitch, " +
                 "host=$host, " +
                 "port=$port, " +
                 "connectionTimeout=${connectionTimeout}s, " +
@@ -512,8 +480,6 @@ class ConnectionConfig {
          * @param cableProtocol explicit cable protocol (for CABLE); defaults to AUTO try-order when null.
          *   Ignored when [strategy] is [CrossDeviceStrategy.LAN].
          * @param autoPriority optional AUTO priority override
-         * @param autoHotSwitch enable runtime hot-switch to a higher-priority transport when it is
-         *   physically attached (only honored for the AUTO strategy; default false)
          * @return the Cross-Device mode configuration
          */
         fun createCrossDeviceMode(
@@ -521,15 +487,13 @@ class ConnectionConfig {
             host: String? = null,
             port: Int? = null,
             cableProtocol: CableProtocol? = null,
-            autoPriority: List<CrossDeviceStrategy>? = null,
-            autoHotSwitch: Boolean = false
+            autoPriority: List<CrossDeviceStrategy>? = null
         ): ConnectionConfig {
             val config = ConnectionConfig()
             if (host != null) config.setHost(host)
             if (port != null) config.setPort(port)
             if (cableProtocol != null) config.setCableProtocol(cableProtocol)
             if (autoPriority != null) config.setAutoPriority(autoPriority)
-            config.setAutoHotSwitch(autoHotSwitch)
             config.setCrossDeviceStrategy(strategy)
             config.setConnectionMode(ConnectionMode.CROSS_DEVICE)
             return config

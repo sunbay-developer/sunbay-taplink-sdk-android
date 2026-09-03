@@ -158,25 +158,11 @@ class ConnectionManager(
     private var autoTimeoutCount: Int = 0
 
     /**
-     * Whether the current CROSS_DEVICE AUTO session enabled runtime hot-switch
-     * ([ConnectionConfig.autoHotSwitch]). When true, a [UsbAttachMonitor] is active while connected
-     * so a physically-attached higher-priority cable can take over the active transport.
+     * Guards against re-entrant / rapidly-repeated transport switch attempts. A single physical
+     * event can produce a burst of drop notifications; while a switch is in flight further attempts
+     * are ignored. Internal only — not configurable by integrators.
      */
-    private var autoHotSwitchEnabled: Boolean = false
-
-    /**
-     * USB attach monitor for the AUTO hot-switch feature. Non-null only while an AUTO session with
-     * hot-switch enabled is (or is becoming) connected. Started on successful connect, stopped on
-     * disconnect / AUTO state clear.
-     */
-    private var usbAttachMonitor: com.sunmi.tapro.taplink.sdk.protocol.UsbAttachMonitor? = null
-
-    /**
-     * Guards against re-entrant / rapidly-repeated hot-switch attempts. USB attach broadcasts can
-     * arrive in bursts (device + accessory) for a single physical insertion; while a switch is in
-     * flight further attach events are ignored.
-     */
-    private var hotSwitchInProgress: Boolean = false
+    private var transportSwitchInProgress: Boolean = false
 
     /**
      * Coroutine job for auto-discovery operation.
@@ -326,7 +312,6 @@ class ConnectionManager(
             isAutoSession = true
             autoCandidates = autoCandidateList
             autoTimeoutCount = 0
-            autoHotSwitchEnabled = config?.autoHotSwitch == true
             tryConnectWithProtocolList(autoCandidateList, connectionConfig, listener)
             return
         } else {
@@ -554,7 +539,7 @@ class ConnectionManager(
         fun tryNextProtocol() {
             if (tryIndex >= protocols.size) {
                 LogUtil.w(TAG, "All cable protocols failed: VSP, RS232, AOA")
-                hotSwitchInProgress = false
+                transportSwitchInProgress = false
                 updateConnectionStatus(ConnectionStatus.DISCONNECTED, listener = listener)
                 listener.onError(
                     ConnectionError(
@@ -688,7 +673,7 @@ class ConnectionManager(
                             currentConnectionConfig = null
                             // A fallback/hot-switch reconnect that ended in ERROR must not leave the
                             // guard set, or future drop-fallback / hot-switch attempts are blocked.
-                            hotSwitchInProgress = false
+                            transportSwitchInProgress = false
                         }
                         syncStatusFromKernel()
                     }
@@ -934,7 +919,7 @@ class ConnectionManager(
             LogUtil.d(TAG, "AUTO drop-fallback skipped: no candidates")
             return false
         }
-        if (hotSwitchInProgress) {
+        if (transportSwitchInProgress) {
             LogUtil.d(TAG, "AUTO drop-fallback skipped: a switch is already in progress")
             return false
         }
@@ -1022,7 +1007,7 @@ class ConnectionManager(
             ?: internalReconnectListener
         val config = currentConnectionConfig ?: reconnectManager?.getLastConnectionConfig()
 
-        hotSwitchInProgress = true
+        transportSwitchInProgress = true
         autoCandidates = rotated
 
         // Move to CONNECTING immediately so integrators never observe a stale CONNECTED while the
@@ -1049,7 +1034,7 @@ class ConnectionManager(
             // CONNECTING — surface a disconnect so the integrator can react.
             if (resolved.isEmpty()) {
                 LogUtil.w(TAG, "AUTO fallback: no connectable candidate after resolution; reporting disconnected")
-                hotSwitchInProgress = false
+                transportSwitchInProgress = false
                 clearAutoFallbackState()
                 updateConnectionStatus(
                     ConnectionStatus.DISCONNECTED,
@@ -1093,7 +1078,7 @@ class ConnectionManager(
             "AUTO fallback abandoned after mDNS discovery: link already recovered " +
                 "(kernelStatus=$kernelStatus, transactionInFlight=$txInFlight)"
         )
-        hotSwitchInProgress = false
+        transportSwitchInProgress = false
 
         if (linkUp) {
             // The fallback moved the SDK to CONNECTING before discovery; restore the real state so
@@ -1212,36 +1197,7 @@ class ConnectionManager(
         isAutoSession = false
         autoCandidates = null
         autoTimeoutCount = 0
-        autoHotSwitchEnabled = false
-        hotSwitchInProgress = false
-        stopUsbAttachMonitor()
-    }
-
-    /**
-     * Previously started a USB attach monitor to hot-switch to a preferred cable while the current
-     * transport was still alive. That proactive-switch behavior has been removed: transport
-     * switching now happens ONLY after the active connection actually drops (see
-     * [rotateAutoTransportAfterDrop]). This method now only clears the in-flight switch guard on a
-     * successful connection and intentionally does NOT register the USB monitor.
-     *
-     * [ConnectionConfig.autoHotSwitch] is retained for API compatibility but no longer triggers a
-     * live-connection hot-switch.
-     */
-    private fun maybeStartUsbAttachMonitor() {
-        hotSwitchInProgress = false
-        // No USB attach monitor: do not proactively switch transports while connected.
-        stopUsbAttachMonitor()
-    }
-
-    /**
-     * Stops and clears the USB attach monitor if active. Idempotent.
-     */
-    private fun stopUsbAttachMonitor() {
-        usbAttachMonitor?.let {
-            it.stop()
-            LogUtil.d(TAG, "AUTO hot-switch: USB attach monitor stopped")
-        }
-        usbAttachMonitor = null
+        transportSwitchInProgress = false
     }
 
     /**
@@ -1362,9 +1318,8 @@ class ConnectionManager(
                     }
                 }
 
-                // AUTO hot-switch: once connected, watch for a physically-attached higher-priority
-                // cable so it can take over the active transport at runtime.
-                maybeStartUsbAttachMonitor()
+                // A new successful connection ends any in-flight transport switch.
+                transportSwitchInProgress = false
 
                 // Persist the LAN-bound Tapro serial (if this connection is LAN) so that a later
                 // AUTO fallback to LAN can rediscover the SAME device via mDNS even after the LAN
