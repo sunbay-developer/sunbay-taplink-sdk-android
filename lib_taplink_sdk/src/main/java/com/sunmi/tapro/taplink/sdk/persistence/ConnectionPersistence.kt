@@ -25,6 +25,7 @@ class ConnectionPersistence(context: Context) {
         private const val PREFS_NAME = "taplink_connection_prefs"
         private const val KEY_LAST_CONNECTION_CONFIG = "last_connection_config"
         private const val KEY_CONNECTED_DEVICE_ID = "connected_device_id"
+        private const val KEY_LAST_CONNECTED_SERIAL = "last_connected_serial"
         private const val KEY_DEVICE_SERVICE_INFO = "device_service_info_"
         private const val KEY_AUTO_CONNECT_ENABLED = "auto_connect_enabled"
         private const val KEY_DETECTED_CABLE_PROTOCOL = "detected_cable_protocol"
@@ -67,10 +68,15 @@ class ConnectionPersistence(context: Context) {
                 LogUtil.d(TAG, "Saved connection config: $configJson")
             }
 
-            // Save connected device ID
-            if (deviceId != null) {
+            // Save connected device ID. Never overwrite a previously stored, valid id with a
+            // blank/"unknown" value — LAN connections deliver deviceId="unknown" at onConnected
+            // (the real serial only arrives via INIT or is parsed from the mDNS service name), and
+            // clobbering the stored id would break same-device mDNS discovery on a later fallback.
+            if (!deviceId.isNullOrEmpty() && deviceId != "unknown") {
                 editor.putString(KEY_CONNECTED_DEVICE_ID, deviceId)
                 LogUtil.d(TAG, "Saved connected device ID: $deviceId")
+            } else {
+                LogUtil.d(TAG, "Skip saving connected device ID (blank/unknown): $deviceId")
             }
 
             editor.apply()
@@ -165,6 +171,38 @@ class ConnectionPersistence(context: Context) {
             deviceId
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to retrieve device ID: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Persist the Tapro serial of the most recent LAN connection (parsed from the mDNS service
+     * name). LAN connections do not deliver a real deviceId at `onConnected` (it is "unknown"), and
+     * the transport-bound serial is lost once the LAN kernel is torn down (transport switch /
+     * disconnect). Persisting it here keeps same-device mDNS discovery working when an AUTO session
+     * later falls back to LAN after the cable drops.
+     *
+     * @param serial the Tapro serial, ignored when null/blank/"unknown"
+     */
+    fun saveLastConnectedSerial(serial: String?) {
+        if (serial.isNullOrEmpty() || serial == "unknown") return
+        try {
+            prefs.edit().putString(KEY_LAST_CONNECTED_SERIAL, serial).apply()
+            LogUtil.d(TAG, "Saved last connected serial: $serial")
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to save last connected serial: ${e.message}")
+        }
+    }
+
+    /**
+     * The Tapro serial of the most recent connection that exposed one (see [saveLastConnectedSerial]),
+     * or null if none is stored.
+     */
+    fun getLastConnectedSerial(): String? {
+        return try {
+            prefs.getString(KEY_LAST_CONNECTED_SERIAL, null)
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to retrieve last connected serial: ${e.message}")
             null
         }
     }
@@ -272,6 +310,7 @@ class ConnectionPersistence(context: Context) {
             val editor = prefs.edit()
             editor.remove(KEY_LAST_CONNECTION_CONFIG)
             editor.remove(KEY_CONNECTED_DEVICE_ID)
+            editor.remove(KEY_LAST_CONNECTED_SERIAL)
             editor.apply()
             
             LogUtil.d(TAG, "Cleared connection data")

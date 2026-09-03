@@ -36,13 +36,20 @@ object ProtocolRequestBuilder {
      * @param version  SDK version string
      * @param appid    App identifier — injected into bizData JSON
      * @param secretKey HMAC-SHA256 signing key
+     * @param appToAppMode App-to-App processing mode tag (CUSTOM / HEADLESS), written into
+     *   bizData.appToAppMode. Only meaningful for the APP_TO_APP connection mode; null otherwise.
+     * @param connectionMode Standalone connection-mode tag written into bizData.connectionMode.
+     *   Used to identify dedicated connection modes (e.g. SUB_SCREEN) independently of
+     *   [appToAppMode]. SUB_SCREEN is a first-class connection mode and must NOT be conflated
+     *   with the App-to-App processing mode field. null when no standalone tag applies.
      */
     fun convertToBasicRequest(
         request: Any,
         version: String,
         appid: String,
         secretKey: String,
-        appToAppMode: String? = null
+        appToAppMode: String? = null,
+        connectionMode: String? = null
     ): BasicRequest {
         try {
             val action = getActionByRequest(request)
@@ -51,9 +58,16 @@ object ProtocolRequestBuilder {
             @Suppress("UNCHECKED_CAST")
             val bizMap = mapper.convertValue(request, MutableMap::class.java) as MutableMap<String, Any?>
             bizMap["appId"] = appid
-            // App-to-App mode is carried in bizData so Tapro can decide per-connection behavior.
+            // App-to-App processing mode (CUSTOM / HEADLESS) is carried in bizData so Tapro can
+            // decide the per-connection foreground/headless flow. Exclusive to APP_TO_APP mode.
             if (!appToAppMode.isNullOrBlank()) {
                 bizMap["appToAppMode"] = appToAppMode
+            }
+            // Standalone connection-mode tag (e.g. SUB_SCREEN) carried in its own bizData field,
+            // decoupled from appToAppMode. Tapro reads bizData.connectionMode to route dedicated
+            // connection modes independently of the App-to-App processing mode.
+            if (!connectionMode.isNullOrBlank()) {
+                bizMap["connectionMode"] = connectionMode
             }
 
             val bizDataStr = mapper.writeValueAsString(bizMap)

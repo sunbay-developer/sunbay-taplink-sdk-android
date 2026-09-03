@@ -25,11 +25,14 @@ import com.hoho.android.usbserial.driver.UsbSerialProber
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.text.Charsets
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * VSP client kernel class
@@ -87,6 +90,22 @@ class VSPClientKernel(
     @Volatile
     private var handshakeWaiter: CompletableDeferred<Unit>? = null
 
+    /**
+     * True once this connection attempt has written its first [VspHandshake.REQ] to the port.
+     *
+     * The receive loop uses it to reject handshake frames that cannot be a reply to us — i.e.
+     * bytes left over in the link FIFO by a previous session. Reset per connection attempt in
+     * [awaitVspHandshake] and cleared in [performDisconnect].
+     */
+    private val hasSentHandshakeReq = AtomicBoolean(false)
+
+    /**
+     * Set while an active liveness probe ([checkLinkAlive]) is in flight. Completed by the receive
+     * loop as soon as *any* inbound bytes arrive from the server, proving the peer is responsive.
+     */
+    @Volatile
+    private var livenessWaiter: CompletableDeferred<Boolean>? = null
+
     // VSP configuration parameters
     private var baudRate: Int = 115200
     private var dataBits: Int = 8
@@ -95,13 +114,13 @@ class VSPClientKernel(
     private var targetDeviceName: String? = null
 
     /**
-     * 接收数据缓冲区：USB CDC-ACM 分包到达时暂存不完整的 JSON，
-     * 由 [extractNextJsonObject] 按大括号深度提取完整对象后再交给 [dataReceiver]。
-     * 仅在 dataReceiveJob 协程内访问，无并发争用。
+     * Receive data buffer: temporarily stores incomplete JSON when USB CDC-ACM receives fragmented packets.
+     * Complete JSON objects are extracted by [extractNextJsonObject] based on brace depth before passing to [dataReceiver].
+     * It is only accessed within the dataReceiveJob coroutine, with no concurrent contention.
      */
     private val receiveBuffer = StringBuilder()
 
-    /** 缓冲区上限：超限清空，防止异常数据导致内存持续增长 */
+    /** Buffer size limit: clear when exceeded to prevent memory growth from abnormal data. */
     private val MAX_RECEIVE_BUFFER_SIZE = 512 * 1024 // 512 KB
 
     // Permission request broadcast receiver
@@ -159,6 +178,15 @@ class VSPClientKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
+        // Fail fast when no USB device is physically attached. Without this gate the kernel would
+        // register receivers and start polling for a device that will never appear, producing
+        // phantom UART activity and blocking transport switch (e.g. Cable -> LAN).
+        if (usbManager.deviceList.isEmpty()) {
+            LogUtil.w(TAG, "performConnect aborted: no USB device attached")
+            notifyConnectionError("No USB device attached", InnerErrorCode.E251)
+            return
+        }
+
         registerUsbPermissionReceiverIfNeeded()
 
         val vspProtocol = parseResult as ProtocolParseResult.VspProtocol
@@ -238,17 +266,66 @@ class VSPClientKernel(
         }
     }
 
+    /**
+     * Active VSP liveness probe.
+     *
+     * A successful [usbSerialPort]?.write only proves the local USB port accepted the bytes, not
+     * that TaPro (the server) is still processing them — if its UART receive loop is stuck
+     * ("port timeout"), transactions would silently hang until the full request timeout. To fail
+     * fast, we send a lightweight handshake REQ and wait for TaPro to reply (it answers REQ with an
+     * ACK even during the data phase). Any inbound bytes complete [livenessWaiter].
+     */
+    override suspend fun checkLinkAlive(timeoutMs: Long): Boolean {
+        if (currentInnerConnectionStatus != InnerConnectionStatus.CONNECTED || usbSerialPort == null) {
+            LogUtil.w(TAG, "checkLinkAlive: not connected (status=$currentInnerConnectionStatus)")
+            return false
+        }
+
+        val waiter = CompletableDeferred<Boolean>()
+        livenessWaiter = waiter
+        return try {
+            val sent = withSendLock {
+                try {
+                    usbSerialPort?.write(VspHandshake.REQ.toByteArray(Charsets.UTF_8), 1000)
+                    true
+                } catch (e: Exception) {
+                    LogUtil.e(TAG, "checkLinkAlive: failed to send probe: ${e.message}")
+                    false
+                }
+            }
+            if (!sent) {
+                return false
+            }
+            val alive = withTimeoutOrNull(timeoutMs) { waiter.await() } ?: false
+            if (!alive) {
+                LogUtil.w(TAG, "checkLinkAlive: no response within ${timeoutMs}ms, link presumed dead")
+                // Tear down the dead link so upstream reconnect logic can re-establish it, instead
+                // of every subsequent transaction paying the full probe timeout again.
+                handleConnectionError()
+            }
+            alive
+        } finally {
+            if (livenessWaiter === waiter) {
+                livenessWaiter = null
+            }
+        }
+    }
+
     override fun performDisconnect() {
         LogUtil.d(TAG, "=== VSP Client Disconnect Started ===")
 
         handshakeWaiter?.cancel(CancellationException("VSP client disconnect"))
         handshakeWaiter = null
+        hasSentHandshakeReq.set(false)
+
+        livenessWaiter?.complete(false)
+        livenessWaiter = null
 
         try {
             dataReceiveJob?.cancel()
             dataReceiveJob = null
 
-            // 清空接收缓冲，避免重连后读到上次的残留数据
+            // Clear receive buffer to avoid reading residual data from the previous connection after reconnecting
             receiveBuffer.clear()
 
             usbSerialPort?.close()
@@ -287,8 +364,8 @@ class VSPClientKernel(
     }
 
     /**
-     * 判断 USB 设备是否为商米 VSP 设备。
-     * 识别依据：存在 interfaceClass=10 且名称为 "CDC ACM Data" 的接口。
+     * Determine if the USB device is a Sunmi VSP device.
+     * Identification basis: interface with interfaceClass=10 and name "CDC ACM Data".
      */
     private fun isVspDevice(device: UsbDevice): Boolean {
         for (i in 0 until device.interfaceCount) {
@@ -303,7 +380,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 在已连接的 USB 设备中找到第一个商米 VSP 设备（按接口名识别，不依赖 VID/PID）。
+     * Find the first Sunmi VSP device from connected USB devices (identify by interface name, not VID/PID).
      */
     private fun findVspUsbDevice(): UsbDevice? {
         for (device in usbManager.deviceList.values) {
@@ -322,23 +399,47 @@ class VSPClientKernel(
     }
 
     /**
-     * 构建自定义探针。
+     * Find the VSP USB device, waiting up to [VSP_DEVICE_WAIT_TIMEOUT_MS] for it to enumerate.
      *
-     * 根本原因：商米 VSP 设备 VID/PID 不在默认 ProbeTable 中，
-     * [UsbSerialProber.getDefaultProber] 的 findAllDrivers 始终返回空列表。
+     * Fixes the "cannot connect" case where `connect()` is called right after the cable is plugged
+     * in and the CDC-ACM interface has not finished enumerating yet. The poll is fully cancellable:
+     * [delay] throws [CancellationException] when [disconnect] cancels the scope's children (manual
+     * disconnect or a cable AUTO protocol switch), so it never blocks a teardown.
+     */
+    private suspend fun awaitVspUsbDevice(): UsbDevice? {
+        findVspUsbDevice()?.let { return it }
+
+        val deadline = System.currentTimeMillis() + VSP_DEVICE_WAIT_TIMEOUT_MS
+        LogUtil.d(TAG, "VSP device not enumerated yet, waiting up to ${VSP_DEVICE_WAIT_TIMEOUT_MS}ms...")
+        while (System.currentTimeMillis() < deadline) {
+            delay(VSP_DEVICE_POLL_INTERVAL_MS)
+            findVspUsbDevice()?.let {
+                LogUtil.i(TAG, "VSP device appeared after wait: ${it.deviceName}")
+                return it
+            }
+        }
+        LogUtil.e(TAG, "No VSP device after waiting ${VSP_DEVICE_WAIT_TIMEOUT_MS}ms")
+        return null
+    }
+
+    /**
+     * Build a custom prober.
      *
-     * 修复策略：
-     * - 注册已知商米 VID/PID 作为兜底（使用标准 CdcAcmSerialDriver）
-     * - 对运行时检测到的设备注册 [VSPSerialDriver]：
-     *   该驱动按接口名 "CDC ACM Data" 选择正确的数据接口，
-     *   标准 CdcAcmSerialDriver 按顺序选接口，在多接口设备上会选错导致无法收发数据
+     * Root cause: Sunmi VSP device VID/PID is not in the default ProbeTable;
+     * [UsbSerialProber.getDefaultProber].findAllDrivers always returns an empty list.
+     *
+     * Fix strategy:
+     * - Register known Sunmi VID/PID as fallback (using standard CdcAcmSerialDriver)
+     * - For runtime-detected devices, register [VSPSerialDriver]:
+     *   This driver selects the correct data interface by name "CDC ACM Data",
+     *   while standard CdcAcmSerialDriver selects interfaces sequentially, which may fail on multi-interface devices.
      */
     private fun buildCustomProber(targetDevice: UsbDevice? = null): UsbSerialProber {
         val table = ProbeTable()
-        // 已知商米 VSP VID/PID 兜底
+        // Known Sunmi VSP VID/PID fallback
         table.addProduct(0x16d0, 0x087e, CdcAcmSerialDriver::class.java)
         table.addProduct(0x067b, 0x23c3, CdcAcmSerialDriver::class.java)
-        // 运行时设备使用 VSPSerialDriver，确保选到正确的 "CDC ACM Data" 接口
+        // Runtime devices use VSPSerialDriver to ensure selecting the correct "CDC ACM Data" interface
         if (targetDevice != null) {
             table.addProduct(targetDevice.vendorId, targetDevice.productId, VSPSerialDriver::class.java)
             LogUtil.d(
@@ -350,14 +451,14 @@ class VSPClientKernel(
     }
 
     /**
-     * 连接到 VSP 设备。
+     * Connect to the VSP device.
      *
-     * 修复：原实现用 getDefaultProber() 找不到商米设备。
-     * 改为按接口名枚举设备，再用自定义探针（含 VSPSerialDriver）打开正确接口。
+     * Fix: Original implementation cannot find Sunmi devices using getDefaultProber().
+     * Changed to enumerate devices by interface name, then open the correct interface using custom prober (with VSPSerialDriver).
      */
     private suspend fun connectToVspDevice(): Boolean {
         return try {
-            val vspDevice = findVspUsbDevice()
+            val vspDevice = awaitVspUsbDevice()
             if (vspDevice == null) {
                 LogUtil.e(TAG, "No VSP device found (no device with 'CDC ACM Data' interface)")
                 return false
@@ -381,11 +482,14 @@ class VSPClientKernel(
                     synchronized(this@VSPClientKernel) { pendingDevice = null }
                     return false
                 }
-                // 等待权限广播，由 continueConnection() 继续后续流程
+                // Wait for permission broadcast; continueConnection() will continue the subsequent flow
                 return false
             }
 
             continueConnectionInternal(targetDriver)
+        } catch (e: CancellationException) {
+            // Disconnect / AUTO protocol switch cancelled the device wait — propagate, do not report error.
+            throw e
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to connect to VSP device: ${e.message}")
             false
@@ -393,9 +497,9 @@ class VSPClientKernel(
     }
 
     /**
-     * 权限授予后继续建立连接。
+     * Continue establishing connection after permission is granted.
      *
-     * 修复：原实现同样使用 getDefaultProber()，此处同样改为自定义探针。
+     * Fix: Original implementation also uses getDefaultProber(); changed to custom prober here as well.
      */
     private suspend fun continueConnection(device: UsbDevice, connectionCallback: ConnectionCallback) {
         try {
@@ -473,6 +577,14 @@ class VSPClientKernel(
             usbSerialPort = port
             usbSerialDriver = targetDriver
 
+            // Discard bytes the peer left in the link FIFO during its previous session (typically
+            // ##TAPLINK_HSK_REQ## re-sent every second by TaPro and never read). Handshake markers
+            // carry no session id, so without this the receive loop would immediately read a stale
+            // REQ and declare the handshake verified while the peer's port may still be closed —
+            // the first business frame sent afterwards is then lost on the wire (TaPro shows
+            // "connected" while the SDK reports 351 three seconds later).
+            drainStaleRxBytes()
+
             LogUtil.d(TAG, "VSP client connected to: ${usbDevice.deviceName}")
             LogUtil.d(TAG, "Serial parameters: baudRate=$baudRate, dataBits=$dataBits, parity=$parity, stopBits=$stopBits")
 
@@ -484,7 +596,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 获取当前可用的 VSP 设备列表（使用自定义探针，避免默认探针遗漏商米设备）。
+     * Get the current list of available VSP devices (using custom prober to avoid default prober missing Sunmi devices).
      */
     fun getAvailableDevices(): List<Map<String, String>> {
         return try {
@@ -507,16 +619,25 @@ class VSPClientKernel(
     }
 
     /**
-     * USB port is open: start receive loop and block until application-layer handshake completes
-     * (service sends [VspHandshake.REQ], we send [VspHandshake.ACK]), same window as
-     * [VspHandshake.DEFAULT_TIMEOUT_MS].
+     * USB port is open: start the receive loop, actively drive [VspHandshake.REQ] and block until
+     * the application-layer handshake completes, within [VspHandshake.DEFAULT_TIMEOUT_MS].
+     *
+     * The waiter is passed explicitly into [startDataReceive] so each receive-loop coroutine holds
+     * a reference to its own handshake waiter (captured at launch time) rather than reading the
+     * shared [handshakeWaiter] field at runtime. This prevents a stale receive loop from a
+     * previous connection attempt from accidentally completing/failing the new handshake waiter
+     * when its blocked [UsbSerialPort.read] throws IOException after the old port is closed.
      */
     private suspend fun awaitVspHandshake(): Boolean {
         val waiter = CompletableDeferred<Unit>()
         handshakeWaiter = waiter
+        // Re-evaluate causality for every attempt; never inherit the previous connection's flag.
+        hasSentHandshakeReq.set(false)
+        var handshakeReqJob: Job? = null
         return try {
-            startDataReceive()
-            withTimeoutOrNull(VspHandshake.DEFAULT_TIMEOUT_MS) {
+            startDataReceive(waiter)
+            handshakeReqJob = startHandshakeRequests(waiter)
+            withTimeoutOrNull(VspHandshake.DEFAULT_TIMEOUT_MS.milliseconds) {
                 waiter.await()
             } != null
         } catch (e: CancellationException) {
@@ -528,6 +649,7 @@ class VSPClientKernel(
             LogUtil.w(TAG, "VSP handshake await failed: ${e.message}")
             false
         } finally {
+            handshakeReqJob?.cancel()
             handshakeWaiter = null
             if (!waiter.isCompleted) {
                 waiter.cancel(CancellationException("VSP handshake abandoned"))
@@ -535,12 +657,21 @@ class VSPClientKernel(
         }
     }
 
-    private fun signalHandshakeSuccess() {
-        val w = handshakeWaiter ?: return
-        if (w.complete(Unit)) {
-            LogUtil.i(TAG, "VSP client handshake verified with server")
+    /**
+     * Actively drive the handshake instead of only waiting for the service side.
+     *
+     * TaPro only periodically sends [VspHandshake.REQ] in its own connect flow; when the cable is not physically disconnected
+     * and TaPro is still CONNECTED (e.g., the integration app reconnects on its own), it won't send REQ again.
+     * If the client only waits passively, handshake will timeout. TaPro immediately replies with ACK upon receiving REQ during the data phase,
+     * so the client can periodically initiate REQ to cover both initial connection and reconnection scenarios.
+     */
+    private fun startHandshakeRequests(waiter: CompletableDeferred<Unit>): Job =
+        scope.launch {
+            while (isActive && !waiter.isCompleted) {
+                sendHandshakeReq()
+                delay(VspHandshake.DEFAULT_INTERVAL_MS)
+            }
         }
-    }
 
     private fun cleanupAfterHandshakeFailure() {
         dataReceiveJob?.cancel()
@@ -551,11 +682,16 @@ class VSPClientKernel(
     /**
      * Start data reception loop.
      *
-     * 握手：服务端发 [VspHandshake.REQ]，客户端回 [VspHandshake.ACK]。
-     * 非握手数据追加到 [receiveBuffer]，由 [extractNextJsonObject] 按大括号深度
-     * 提取完整 JSON 后再交给 [dataReceiver]，解决 USB CDC-ACM 分包导致的 JSON 残缺问题。
+     * Handshake: service side sends [VspHandshake.REQ], client replies [VspHandshake.ACK].
+     * Non-handshake data is appended to [receiveBuffer]; [extractNextJsonObject] extracts complete JSON objects
+     * based on brace depth and passes them to [dataReceiver], solving the JSON incompleteness problem caused by USB CDC-ACM fragmentation.
+     *
+     * @param handshakeWaiter The waiter for this specific connection attempt, captured by the
+     *   coroutine closure at launch time. Using a parameter (rather than the shared field) prevents
+     *   a stale receive loop from a previous connection from accidentally completing or failing the
+     *   new connection's handshake waiter after its USB port is closed and an IOException fires.
      */
-    private fun startDataReceive() {
+    private fun startDataReceive(handshakeWaiter: CompletableDeferred<Unit>?) {
         dataReceiveJob?.cancel()
         dataReceiveJob = scope.launch {
             receiveBuffer.clear()
@@ -568,19 +704,36 @@ class VSPClientKernel(
                     val bytesRead = usbSerialPort?.read(buffer, 1000) ?: 0
 
                     if (bytesRead > 0) {
+                        // Any inbound byte proves the server is alive; unblock a pending liveness probe.
+                        livenessWaiter?.complete(true)
                         val data = buffer.copyOf(bytesRead)
                         val dataString = String(data, Charsets.UTF_8)
                         LogUtil.d(TAG, "VSP client raw received: ${data.size} bytes")
 
                         if (VspHandshake.isHandshakeMessage(dataString)) {
+                            // Only handshake frames that arrive *after* we sent our own REQ count:
+                            // that proves the peer has its port open and answered within this
+                            // session, ruling out stale REQ/ACK left in the link. An inbound REQ is
+                            // still always ACKed, preserving peer-initiated handshake compatibility.
                             if (VspHandshake.containsReq(dataString)) {
-                                if (sendHandshakeAck()) {
-                                    signalHandshakeSuccess()
+                                val acked = sendHandshakeAck()
+                                if (acked && hasSentHandshakeReq.get()) {
+                                    if (handshakeWaiter?.complete(Unit) == true) {
+                                        LogUtil.i(TAG, "VSP client handshake verified with server")
+                                    }
+                                } else if (!hasSentHandshakeReq.get()) {
+                                    LogUtil.d(TAG, "Ignoring handshake REQ received before our first REQ was sent")
                                 }
                             } else if (VspHandshake.containsAck(dataString)) {
-                                signalHandshakeSuccess()
+                                if (hasSentHandshakeReq.get()) {
+                                    if (handshakeWaiter?.complete(Unit) == true) {
+                                        LogUtil.i(TAG, "VSP client handshake verified with server")
+                                    }
+                                } else {
+                                    LogUtil.d(TAG, "Ignoring handshake ACK received before our first REQ was sent")
+                                }
                             }
-                            // 握手包可能携带后续 payload（对端合并发送）
+                            // Handshake packet may carry subsequent payload (sent merged by the remote end)
                             val remaining = VspHandshake.stripHandshakeMarkers(dataString)
                             if (remaining != null) {
                                 processIncomingPayload(remaining.toByteArray(Charsets.UTF_8))
@@ -616,7 +769,7 @@ class VSPClientKernel(
     }
 
     /**
-     * 将新到字节追加到 [receiveBuffer]，触发 JSON 对象提取。
+     * Append newly arrived bytes to [receiveBuffer] and trigger JSON object extraction.
      */
     private fun processIncomingPayload(data: ByteArray) {
         if (data.isNotEmpty()) {
@@ -630,11 +783,11 @@ class VSPClientKernel(
     }
 
     /**
-     * 按大括号深度从 [receiveBuffer] 提取完整 JSON 对象，分发给 [dataReceiver]，
-     * 然后递归处理剩余内容（应对单次 read 包含多条消息的情况）。
+     * Extract complete JSON objects from [receiveBuffer] based on brace depth, dispatch to [dataReceiver],
+     * then recursively process remaining content (to handle multiple messages in a single read).
      *
-     * 与 Tapro VSPServiceKernel.unwrapVspFramedUartPayload 算法一致：
-     * '{' 深度+1，'}' 深度-1，归零即为完整 JSON。
+     * Algorithm matches Tapro VSPServiceKernel.unwrapVspFramedUartPayload:
+     * '{' increments depth, '}' decrements depth; depth reaching zero indicates a complete JSON object.
      */
     private fun extractNextJsonObject() {
         val startIdx = receiveBuffer.indexOf('{')
@@ -646,7 +799,7 @@ class VSPClientKernel(
             return
         }
         if (startIdx > 0) {
-            // 丢弃 '{' 之前的非 JSON 前缀（如 UART 帧头字节）
+            // Discard non-JSON prefix before '{' (e.g., UART frame header bytes)
             receiveBuffer.delete(0, startIdx)
         }
 
@@ -672,6 +825,42 @@ class VSPClientKernel(
     }
 
     /**
+     * Discard bytes left in the link FIFO by the peer's previous session.
+     *
+     * The VSP handshake markers carry no session identifier, so a stale
+     * [VspHandshake.REQ] is indistinguishable from a fresh one. Reading one before the peer has
+     * reopened its port makes the client declare the handshake verified too early and lose the
+     * first business frame it sends afterwards.
+     *
+     * Called once right after the port is opened and configured, before the receive loop starts.
+     * Draining is safe: a live peer re-sends REQ every [VspHandshake.DEFAULT_INTERVAL_MS], and the
+     * client drives its own REQ as well, so at most one round is delayed.
+     */
+    private fun drainStaleRxBytes() {
+        val port = usbSerialPort ?: return
+        val buffer = ByteArray(DRAIN_BUFFER_SIZE)
+        var discarded = 0
+        var rounds = 0
+        try {
+            while (rounds < MAX_DRAIN_ROUNDS) {
+                rounds++
+                val read = port.read(buffer, DRAIN_READ_TIMEOUT_MS)
+                if (read <= 0) break
+                discarded += read
+            }
+            if (rounds >= MAX_DRAIN_ROUNDS) {
+                LogUtil.w(TAG, "Stale RX drain hit the round limit ($MAX_DRAIN_ROUNDS), discarded $discarded byte(s)")
+            } else if (discarded > 0) {
+                LogUtil.w(TAG, "Discarded $discarded stale RX byte(s) left by a previous VSP session")
+            }
+        } catch (e: IOException) {
+            LogUtil.w(TAG, "Failed to drain stale RX bytes: ${e.message}")
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Unexpected error draining stale RX bytes: ${e.message}")
+        }
+    }
+
+    /**
      * Reply to handshake [VspHandshake.REQ] from server.
      * @return false if ACK could not be sent (handshake cannot complete).
      */
@@ -684,6 +873,22 @@ class VSPClientKernel(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to send handshake ACK: ${e.message}")
             false
+        }
+    }
+
+    /**
+     * Send a handshake [VspHandshake.REQ] to the service side.
+     */
+    private fun sendHandshakeReq() {
+        try {
+            val reqBytes = VspHandshake.REQ.toByteArray(Charsets.UTF_8)
+            usbSerialPort?.write(reqBytes, 1000)
+            // Set only after a successful write: an inbound handshake frame can be a reply to us
+            // only if a REQ actually left this port.
+            hasSentHandshakeReq.set(true)
+            LogUtil.d(TAG, "Handshake REQ sent (client initiated)")
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Failed to send handshake REQ: ${e.message}")
         }
     }
 
@@ -890,6 +1095,32 @@ class VSPClientKernel(
     }
 
     companion object {
+        /**
+         * Max time to wait for the VSP USB (CDC-ACM) device to appear/enumerate before giving up.
+         *
+         * A common "cannot connect" report is caused by calling `connect()` right after plugging the
+         * cable: the Sunmi VSP CDC-ACM interface has not finished enumerating yet, so a single
+         * [findVspUsbDevice] lookup returns null and the attempt fails immediately. Polling for a
+         * bounded window makes the connection plug-and-play while still allowing cable AUTO mode to
+         * fall through to the next protocol within an acceptable time.
+         */
+        private const val VSP_DEVICE_WAIT_TIMEOUT_MS = 6_000L
+
+        /** Poll interval while waiting for the VSP USB device to enumerate. */
+        private const val VSP_DEVICE_POLL_INTERVAL_MS = 500L
+
+        /** Scratch buffer size for [drainStaleRxBytes]. */
+        private const val DRAIN_BUFFER_SIZE = 4096
+
+        /**
+         * Read timeout while draining stale RX bytes. Kept short: the FIFO either already holds
+         * leftover bytes or it is empty, so a long wait would only delay the handshake.
+         */
+        private const val DRAIN_READ_TIMEOUT_MS = 50
+
+        /** Round limit for [drainStaleRxBytes], guarding against a peer that keeps flooding data. */
+        private const val MAX_DRAIN_ROUNDS = 32
+
         /**
          * Check if system supports USB Host mode
          */

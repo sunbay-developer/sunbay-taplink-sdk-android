@@ -14,6 +14,8 @@ import com.sunmi.tapro.taplink.sdk.model.base.BasicResponseJacksonDeserializer
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
+import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
+import com.sunmi.tapro.taplink.sdk.model.response.TerminalInfo
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 
 /**
@@ -29,6 +31,13 @@ class ResponseProcessor {
         private const val ERROR_EVENT_CODE = "ERROR"
         const val SUCCESS_CODE = "100"
     }
+
+    /**
+     * Listener for device info extracted from transaction responses.
+     * Called when a response contains taproVersion/deviceId (typically from the first
+     * transaction after INIT on the TaPro side).
+     */
+    var onDeviceInfoReceived: ((deviceId: String, taproVersion: String) -> Unit)? = null
 
     private val mapper: ObjectMapper = ObjectMapper()
         .registerKotlinModule()
@@ -144,6 +153,7 @@ class ResponseProcessor {
                         "[TAPLINK-TX] TraceId=${paymentResult.traceId} | Cancel: " +
                                 "code=${paymentResult.code}, status=${paymentResult.transactionStatus}"
                     )
+                    notifyDeviceInfoIfPresent(paymentResult)
                     callback.onSuccess(paymentResult)
                 }
                 is PaymentEvent.Completed -> {
@@ -152,6 +162,7 @@ class ResponseProcessor {
                         "[TAPLINK-TX] TraceId=${paymentResult.traceId} | Completed: " +
                                 "code=${paymentResult.code}, status=${paymentResult.transactionStatus}"
                     )
+                    notifyDeviceInfoIfPresent(paymentResult)
                     callback.onSuccess(paymentResult)
                 }
                 else -> {
@@ -190,6 +201,60 @@ class ResponseProcessor {
             )
         }
     }
+
+    /**
+     * Deserialize a GET_TERMINAL_INFO response using the standard response-handler contract.
+     *
+     * Its `bizData` is a [TerminalInfo] payload rather than a [PaymentResult], so completed
+     * and cancelled events dispatch through [TerminalInfoCallback]; non-final events are
+     * surfaced as technical failures because this control action has no progress callback.
+     */
+    fun handleResponse(
+        result: String,
+        callback: TerminalInfoCallback,
+        request: PaymentRequest
+    ) {
+        try {
+            val basicResponse = responseMapper.readValue(result, BasicResponse::class.java)
+            LogUtil.d(TAG, "Received BasicResponse: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}")
+
+            val bizData = basicResponse.bizData
+            if (bizData.isNullOrBlank()) {
+                throw IllegalArgumentException(
+                    "GET_TERMINAL_INFO response missing terminal info data" +
+                        (basicResponse.event.eventMsg?.let { ": $it" } ?: "")
+                )
+            }
+
+            val terminalInfo = mapper.readValue(bizData, TerminalInfo::class.java)
+            when (basicResponse.event) {
+                is PaymentEvent.Cancel,
+                is PaymentEvent.Completed -> callback.onSuccess(terminalInfo)
+                else -> {
+                    val errorCode = InnerErrorCode.E302
+                    callback.onFailure(
+                        PaymentError.create(
+                            code = errorCode.code,
+                            message = basicResponse.event.eventMsg ?: errorCode.description,
+                            suggestion = ErrorStringHelper.getSolution(errorCode.code) ?: "",
+                            traceId = basicResponse.traceId
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to parse response: action=${request.action}, error=${e.message}")
+            val errorCode = InnerErrorCode.E302
+            callback.onFailure(
+                PaymentError.create(
+                    code = errorCode.code,
+                    message = "${errorCode.description}(${e.message})",
+                    suggestion = ErrorStringHelper.getSolution(errorCode.code) ?: ""
+                )
+            )
+        }
+    }
+
     /**
      * Try to parse response as a Headless intermediate event.
      *
@@ -323,6 +388,23 @@ class ResponseProcessor {
         synchronized(processedTerminalEvents) {
             processedTerminalEvents.clear()
             LogUtil.d(TAG, "Cleared processed terminal events tracking")
+        }
+    }
+
+    /**
+     * If the payment result contains TaPro device info (taproVersion / deviceId),
+     * notify the registered listener. This typically happens on the first transaction
+     * response after INIT is performed by TaPro.
+     */
+    private fun notifyDeviceInfoIfPresent(result: PaymentResult) {
+        val taproVersion = result.taproVersion
+        val deviceId = result.deviceId
+        if (!taproVersion.isNullOrBlank() || !deviceId.isNullOrBlank()) {
+            LogUtil.d(TAG, "Device info found in response: taproVersion=$taproVersion, deviceId=$deviceId")
+            onDeviceInfoReceived?.invoke(
+                deviceId ?: "unknown",
+                taproVersion ?: "unknown"
+            )
         }
     }
 }

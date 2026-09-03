@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Google AOA (Android Open Accessory) device filter.
+
+    vendor-id 6353 = 0x18D1 (Google), product-id 11520..11525 = 0x2D00..0x2D05,
+    covering every accessory combination (accessory / accessory+adb / audio /
+    audio+adb). This range matches UsbStandardProtocol.isAoaCompatible() exactly.
+
+    With this filter declared, the system grants USB permission to this app
+    automatically (no prompt) once the peer switches into accessory mode and the
+    AOA device is enumerated here, so the host side no longer needs to call
+    requestPermission.
+-->
+<resources>
+    <usb-device vendor-id="6353" product-id="11520" />
+    <usb-device vendor-id="6353" product-id="11521" />
+    <usb-device vendor-id="6353" product-id="11522" />
+    <usb-device vendor-id="6353" product-id="11523" />
+    <usb-device vendor-id="6353" product-id="11524" />
+    <usb-device vendor-id="6353" product-id="11525" />
+</resources>

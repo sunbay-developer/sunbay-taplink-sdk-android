@@ -1,6 +1,7 @@
 package com.sunmi.tapro.taplink.sdk
 
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
+import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
 import com.sunmi.tapro.taplink.sdk.adapter.PaymentRequestAdapter
 import com.sunmi.tapro.taplink.sdk.enums.TransactionAction
 import com.sunmi.tapro.taplink.sdk.impl.TaplinkApiImpl
@@ -183,5 +184,19 @@ class TaplinkClient internal constructor(
     fun batchClose(request: BatchCloseRequest, callback: PaymentCallback) {
         val paymentRequest = PaymentRequestAdapter.convertBatchCloseRequest(request)
         apiImpl.execute(paymentRequest, callback)
+    }
+
+    /**
+     * Get the merchant and terminal information for the TaPro device selected by the current
+     * connection configuration.
+     *
+     * Read-only control action — not a transaction, does not require a
+     * transactionRequestId. If the SDK is disconnected, it automatically connects before querying.
+     * Queries only one TaPro device (not a cloud merchant lookup, not a terminal-list query).
+     *
+     * @param callback Callback to receive the terminal info result
+     */
+    fun getTerminalInfo(callback: TerminalInfoCallback) {
+        apiImpl.getTerminalInfo(callback)
     }
 }

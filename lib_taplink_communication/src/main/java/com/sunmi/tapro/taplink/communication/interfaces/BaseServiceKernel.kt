@@ -48,6 +48,17 @@ abstract class BaseServiceKernel : IServiceKernel {
     }
 
     /**
+     * Default liveness probe.
+     *
+     * Passive by default: it only reports the cached CONNECTED state. Transports that can perform
+     * an active application-level ping (e.g. [com.sunmi.tapro.taplink.communication.cable.vsp.VSPClientKernel])
+     * override this to actually verify the peer is responsive.
+     */
+    override suspend fun checkLinkAlive(timeoutMs: Long): Boolean {
+        return currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED
+    }
+
+    /**
      * Update connection status
      *
      * @param newStatus New status

@@ -4,6 +4,7 @@ import android.content.Context
 import com.sunmi.tapro.taplink.sdk.api.TaplinkApi
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
+import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
@@ -391,6 +392,20 @@ class TaplinkSDK private constructor() : TaplinkApi {
             getInstance().openUsbScreenPlayer(callback)
         }
 
+        /**
+         * Get the merchant and terminal information for the currently connected TaPro device.
+         *
+         * Read-only control action — queries only the currently connected TaPro device,
+         * not a cloud merchant lookup and not a terminal-list query.
+         *
+         * @param callback Callback to receive the terminal info result
+         */
+        @JvmStatic
+        @JvmName("getSDKTerminalInfo")
+        fun getTerminalInfo(callback: TerminalInfoCallback) {
+            getInstance().getTerminalInfo(callback)
+        }
+
 
 
 
@@ -517,6 +532,10 @@ class TaplinkSDK private constructor() : TaplinkApi {
 
     override fun openUsbScreenPlayer(callback: PaymentCallback) {
         apiImpl.openUsbScreenPlayer(callback)
+    }
+
+    override fun getTerminalInfo(callback: TerminalInfoCallback) {
+        apiImpl.getTerminalInfo(callback)
     }
 
 

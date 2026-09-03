@@ -244,6 +244,17 @@ class LocalCallbackManager<T>(
     }
 
     /**
+     * Whether there are any in-flight requests still awaiting a response.
+     *
+     * Used by the connection layer to avoid switching transports (AUTO fallback / hot-switch) while
+     * a transaction is in progress — tearing the transport down mid-transaction would drop the
+     * response callback and cannot recover the in-flight transaction anyway.
+     */
+    fun hasActiveCallbacks(): Boolean {
+        return traceIdCallbackMap.isNotEmpty() || callbackMap.isNotEmpty()
+    }
+
+    /**
      * Clear expired callbacks
      *
      * @return Int Number of cleared callbacks

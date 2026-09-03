@@ -29,6 +29,9 @@ class ServiceDiscoveryManager(
     companion object {
         private const val TAG = "ServiceDiscoveryManager"
         private const val DISCOVERY_TIMEOUT_MS = 30_000L
+
+        /** Upper bound on a single NsdManager resolve before its slot is force-released. */
+        private const val RESOLVE_TIMEOUT_MS = 10_000L
     }
     
     private val nsdManager: NsdManager by lazy {
@@ -48,6 +51,113 @@ class ServiceDiscoveryManager(
     
     // Used to synchronize service update operations
     private val serviceUpdateLock = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Optional filter deciding whether a discovered service name is worth resolving.
+     *
+     * Android's NsdManager only tolerates a single in-flight resolveService() call; issuing
+     * concurrent resolves for unrelated devices makes every extra call fail with
+     * FAILURE_ALREADY_ACTIVE (error 3). In a shop there are typically several Tapro terminals
+     * advertising on the same subnet, so resolving all of them both floods the logs and starves
+     * the resolve we actually care about. Returning false here skips the resolve entirely.
+     */
+    @Volatile
+    private var serviceNameFilter: ((String) -> Boolean)? = null
+
+    /**
+     * Serializes resolveService() calls, since NsdManager rejects concurrent resolutions
+     * with FAILURE_ALREADY_ACTIVE (error 3).
+     */
+    private val resolveQueue = ArrayDeque<Pair<Long, (Long) -> Unit>>()
+    private val resolveQueueLock = Any()
+    private var resolveInFlight = false
+
+    /** Identifies the resolve currently occupying the single NSD resolve slot. */
+    private var inFlightResolveToken = 0L
+    private var nextResolveToken = 0L
+    private var resolveWatchdog: Job? = null
+
+    /**
+     * Install a filter restricting which discovered services get resolved.
+     *
+     * @param filter Receives the mDNS service name, returns true to resolve it. Pass null to
+     *               resolve every discovered service.
+     */
+    fun setServiceNameFilter(filter: ((String) -> Boolean)?) {
+        serviceNameFilter = filter
+        LogUtil.d(TAG, "Service name filter ${if (filter != null) "set" else "cleared"}")
+    }
+
+    private fun shouldResolve(serviceName: String): Boolean {
+        val filter = serviceNameFilter ?: return true
+        return try {
+            filter(serviceName)
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Service name filter threw for $serviceName, resolving anyway: ${e.message}")
+            true
+        }
+    }
+
+    /**
+     * Queue a resolve request, running it only once any previous resolve has settled.
+     */
+    private fun enqueueResolve(serviceName: String, resolve: (Long) -> Unit) {
+        synchronized(resolveQueueLock) {
+            resolveQueue.addLast(nextResolveToken++ to resolve)
+            if (resolveInFlight) {
+                LogUtil.d(TAG, "Resolve already in flight, queued: $serviceName (depth=${resolveQueue.size})")
+                return
+            }
+        }
+        pumpResolveQueue()
+    }
+
+    /**
+     * Release the resolve slot and start the next queued resolve, if any.
+     *
+     * @param token Token of the resolve that finished; ignored when it no longer owns the slot,
+     *              which keeps a late callback from evicting a newer resolve.
+     */
+    private fun onResolveSettled(token: Long) {
+        synchronized(resolveQueueLock) {
+            if (!resolveInFlight || token != inFlightResolveToken) {
+                return
+            }
+            resolveInFlight = false
+            resolveWatchdog?.cancel()
+            resolveWatchdog = null
+        }
+        pumpResolveQueue()
+    }
+
+    private fun pumpResolveQueue() {
+        val token: Long
+        val next: (Long) -> Unit
+        synchronized(resolveQueueLock) {
+            if (resolveInFlight) return
+            val (queuedToken, task) = resolveQueue.removeFirstOrNull() ?: return
+            resolveInFlight = true
+            inFlightResolveToken = queuedToken
+            token = queuedToken
+            next = task
+
+            // NsdManager occasionally drops a resolve on the floor without invoking either
+            // callback. Without this watchdog the single resolve slot would stay occupied and
+            // service discovery would stop permanently.
+            resolveWatchdog?.cancel()
+            resolveWatchdog = scope.launch {
+                delay(RESOLVE_TIMEOUT_MS)
+                LogUtil.w(TAG, "Resolve timed out, releasing resolve slot")
+                onResolveSettled(token)
+            }
+        }
+        try {
+            next.invoke(token)
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to start queued resolve: ${e.message}")
+            onResolveSettled(token)
+        }
+    }
 
     suspend fun discoverServices(serviceType: String, timeoutMs: Long = DISCOVERY_TIMEOUT_MS): List<ServiceInfo> {
         return withContext(Dispatchers.IO) {
@@ -264,6 +374,13 @@ class ServiceDiscoveryManager(
                 LogUtil.d(TAG, "Service found: ${serviceInfo.serviceName}, host=${serviceInfo.host?.hostAddress}, port=${serviceInfo.port}")
                 
                 val serviceName = serviceInfo.serviceName
+
+                // Skip services belonging to other Tapro terminals: resolving them would
+                // contend for NsdManager's single resolve slot and fail with error 3.
+                if (!shouldResolve(serviceName)) {
+                    LogUtil.d(TAG, "Skipping resolve for non-target service: $serviceName")
+                    return
+                }
                 
                 // Check if service already exists, if exists, may be re-registered, need to re-resolve to detect address changes
                 val existing = discoveredServices[serviceName]
@@ -277,13 +394,15 @@ class ServiceDiscoveryManager(
                 val isResolving = resolvingServices.computeIfAbsent(serviceName) { AtomicBoolean(false) }
                 
                 if (isResolving.compareAndSet(false, true)) {
-                    // Successfully set to resolving state, start resolution
-                    LogUtil.d(TAG, "Starting to resolve service: $serviceName")
-                    
-                    // Resolve service information
-                    nsdManager.resolveService(serviceInfo, createResolveListener(serviceName) { resolvedInfo ->
-                        handleServiceResolved(serviceName, resolvedInfo)
-                    })
+                    // Successfully set to resolving state, queue resolution. NsdManager only
+                    // supports one in-flight resolve, so requests are serialized.
+                    LogUtil.d(TAG, "Queueing resolve for service: $serviceName")
+
+                    enqueueResolve(serviceName) { token ->
+                        nsdManager.resolveService(serviceInfo, createResolveListener(serviceName, token) { resolvedInfo ->
+                            handleServiceResolved(serviceName, resolvedInfo)
+                        })
+                    }
                 } else {
                     // Service already being resolved, skip
                     LogUtil.d(TAG, "Service $serviceName is already being resolved, skipping")
@@ -356,16 +475,24 @@ class ServiceDiscoveryManager(
     /**
      * Create service resolution listener
      */
-    private fun createResolveListener(serviceName: String, onResolved: (NsdServiceInfo) -> Unit): NsdManager.ResolveListener {
+    private fun createResolveListener(
+        serviceName: String,
+        resolveToken: Long,
+        onResolved: (NsdServiceInfo) -> Unit
+    ): NsdManager.ResolveListener {
         return object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 LogUtil.w(TAG, "Resolve failed: ${serviceInfo.serviceName}, error: $errorCode")
                 // Clear resolution status
                 resolvingServices.remove(serviceName)
+                // Release the resolve slot so queued resolves can proceed
+                onResolveSettled(resolveToken)
             }
             
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                 LogUtil.d(TAG, "Service resolved: ${serviceInfo.serviceName}")
+                // Release the resolve slot so queued resolves can proceed
+                onResolveSettled(resolveToken)
                 onResolved(serviceInfo)
             }
         }
@@ -404,6 +531,12 @@ class ServiceDiscoveryManager(
         serviceChangeListener = null
         discoveredServices.clear()
         resolvingServices.clear()
+        synchronized(resolveQueueLock) {
+            resolveQueue.clear()
+            resolveInFlight = false
+            resolveWatchdog?.cancel()
+            resolveWatchdog = null
+        }
     }
     
     /**

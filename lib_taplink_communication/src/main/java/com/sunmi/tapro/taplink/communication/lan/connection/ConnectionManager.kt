@@ -3,6 +3,7 @@ package com.sunmi.tapro.taplink.communication.lan.connection
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import kotlinx.coroutines.*
 import org.java_websocket.client.WebSocketClient
+import org.java_websocket.framing.CloseFrame
 import org.java_websocket.handshake.ServerHandshake
 import java.net.URI
 import java.nio.ByteBuffer
@@ -33,6 +34,28 @@ class ConnectionManager {
         // ws connections don't need TLS, time can be shorter
         private const val CONNECTION_TIMEOUT_MS_WS = 15_000L  // ws:// 15 seconds
         private const val CONNECTION_TIMEOUT_MS_WSS = 45_000L  // wss:// 45 seconds (TLS handshake needs more time)
+
+        /**
+         * Interval, in seconds, for the WebSocket protocol-level ping/pong keepalive.
+         *
+         * This is transport-level liveness detection built into RFC 6455, not an application
+         * heartbeat: no business message is exchanged and Tapro answers pings automatically in
+         * the WebSocket layer. It exists purely to detect a half-open socket — a peer that
+         * disappeared without a close handshake — which otherwise stays "connected" forever and
+         * silently swallows every request.
+         *
+         * The value is the maximum time a single ping may go un-ponged before the link is
+         * declared lost. It must stay comfortably above the worst-case pong stall that a healthy
+         * peer can exhibit, otherwise a live transaction is torn down by mistake. During a
+         * transaction Tapro is foreground-busy driving the card reader, PIN pad and online
+         * authorization; its automatic pong can legitimately be delayed for several seconds under
+         * load or GC. A value that is too tight (e.g. 10s) drops the socket mid card-read/PIN and
+         * the pending result can never be delivered — a dropped in-flight payment is far worse
+         * than a dead link surfacing a little later. 60s (the library default) tolerates those
+         * transient stalls while still detecting a genuinely vanished peer within a minute; the
+         * link itself survives arbitrarily long idle periods because pings/pongs keep flowing.
+         */
+        private const val CONNECTION_LOST_TIMEOUT_SECONDS = 60
     }
     
     /**
@@ -76,9 +99,6 @@ class ConnectionManager {
     private val isConnected = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    // Network connectivity checker
-    private val connectivityChecker = NetworkConnectivityChecker()
-
     suspend fun connect(uri: URI): ConnectionResult {
         return withContext(Dispatchers.IO) {
             try {
@@ -105,6 +125,10 @@ class ConnectionManager {
                 // Create new WebSocket client
                 client = InternalWebSocketClient(uri)
                 currentUri = uri
+
+                // Enable protocol-level ping/pong so a vanished peer is detected promptly
+                // instead of leaving a half-open socket that reports CONNECTED indefinitely.
+                client?.connectionLostTimeout = CONNECTION_LOST_TIMEOUT_SECONDS
 
                 // If wss connection, configure SSL Socket Factory (accept self-signed certificates)
                 if (uri.scheme == "wss") {
@@ -169,6 +193,27 @@ class ConnectionManager {
         cleanup()
     }
 
+    /**
+     * Tear the connection down immediately without attempting a closing handshake.
+     *
+     * [disconnect] sends a close frame and waits for the peer to echo it back. When the peer has
+     * vanished (process restarted, cable pulled, host rebooted) that reply never arrives and the
+     * socket lingers in a half-open state. This variant drops the connection locally and reports
+     * it as an abnormal close (1006) so the disconnect surfaces to listeners right away.
+     *
+     * @param reason Human readable reason, forwarded in the close event.
+     */
+    fun invalidate(reason: String) {
+        LogUtil.w(TAG, "Invalidating WebSocket connection: $reason")
+        try {
+            client?.closeConnection(CloseFrame.ABNORMAL_CLOSE, reason)
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Error invalidating WebSocket client: ${e.message}")
+        }
+
+        cleanup()
+    }
+
     fun isConnected(): Boolean {
         return isConnected.get() && client?.isOpen == true
     }
@@ -225,90 +270,6 @@ class ConnectionManager {
         }
     }
     
-    /**
-     * Simplified heartbeat send method
-     * 
-     * Removes additional network connectivity checks to reduce send delay
-     * Network issues will be detected through WebSocket's onError/onClose callbacks
-     * 
-     * @param message Heartbeat message
-     * @return true if sent successfully, false otherwise
-     */
-    suspend fun sendHeartbeat(message: String): Boolean {
-        return try {
-            val client = this.client
-            if (client == null || client.isClosed || client.isClosing) {
-                LogUtil.w(TAG, "Cannot send heartbeat: WebSocket not available")
-                isConnected.set(false)
-                return false
-            }
-
-            // Send heartbeat directly, no additional checks
-            client.send(message)
-            LogUtil.d(TAG, "Heartbeat sent: $message")
-            true
-            
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to send heartbeat: ${e.message}")
-            isConnected.set(false)
-            false
-        }
-    }
-    
-    /**
-     * Send heartbeat message (with network connectivity check)
-     * 
-     * Note: Network connectivity check only uses ping, does not create TCP connection,
-     * this avoids interfering with existing WebSocket connection (especially when server only supports single client connection)
-     * 
-     * @param message Heartbeat message
-     * @return true if sent successfully, false otherwise
-     */
-    suspend fun sendHeartbeatWithConnectivityCheck(message: String): Boolean {
-        return try {
-            if (!isConnected()) {
-                LogUtil.w(TAG, "Cannot send heartbeat: not connected")
-                return false
-            }
-
-            // Check WebSocket connection actual status
-            val client = this.client
-            if (client == null || client.isClosed || client.isClosing) {
-                LogUtil.w(TAG, "Cannot send heartbeat: WebSocket client is closed or closing")
-                isConnected.set(false)
-                return false
-            }
-
-            // Check network connectivity (only additional check for heartbeat)
-            val uri = currentUri
-            if (uri != null) {
-                val isReachable = connectivityChecker.isHostReachable(
-                    host = uri.host,
-                    port = uri.port,
-                    timeoutMs = 2000 // 2 second timeout
-                )
-                
-                if (!isReachable) {
-                    LogUtil.w(TAG, "Cannot send heartbeat: host ${uri.host}:${uri.port} is not reachable")
-                    // When network is unreachable, update connection status but don't immediately disconnect WebSocket
-                    // Let WebSocket detect network issues itself and trigger onError or onClose
-                    return false
-                }
-            }
-
-            // Send heartbeat message
-            client.send(message)
-            LogUtil.d(TAG, "Heartbeat message sent with connectivity check: $message")
-            true
-            
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to send heartbeat message: ${e.message}")
-            // Update connection status when send fails
-            isConnected.set(false)
-            false
-        }
-    }
-
     fun setMessageListener(listener: MessageListener?) {
         this.messageListener = listener
         LogUtil.d(TAG, "Message listener ${if (listener != null) "set" else "removed"}")

@@ -4,6 +4,7 @@ import android.content.Context
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.DiscoveryListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
+import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.sdk.config.TaplinkConfig
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
@@ -281,6 +282,27 @@ interface TaplinkApi {
      * @param callback Callback to receive control result
      */
     fun openUsbScreenPlayer(callback: PaymentCallback)
+
+    /**
+     * Get the merchant and terminal information for the TaPro device selected by the current
+     * connection configuration.
+     *
+     * This is a read-only control action — it queries only the single TaPro device that is
+     * selected for the current connection. If the SDK is disconnected, it automatically connects
+     * before querying. It is not a cloud merchant lookup and not a
+     * terminal-list query: it never returns other devices, is not paginated, and the
+     * response has no `terminals` array or `nextToken`.
+     *
+     * GET_TERMINAL_INFO does not create a transaction, does not require a transactionRequestId, and
+     * does not enter payment/sign-in/queue/foreground-page flows. It responds even while
+     * TaPro is processing a payment transaction, and is not affected by transactional API
+     * permission or service-plan gating (though it is still subject to request signature
+     * verification like any other action).
+     *
+     * @param callback Callback to receive the [com.sunmi.tapro.taplink.sdk.model.response.TerminalInfo]
+     * result or a [com.sunmi.tapro.taplink.sdk.error.PaymentError] on failure
+     */
+    fun getTerminalInfo(callback: TerminalInfoCallback)
 
 
 }

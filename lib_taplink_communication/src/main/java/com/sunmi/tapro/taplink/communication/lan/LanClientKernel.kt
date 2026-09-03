@@ -8,7 +8,6 @@ import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.lan.connection.ConnectionManager
 import com.sunmi.tapro.taplink.communication.lan.discovery.ServiceDiscoveryManager
-import com.sunmi.tapro.taplink.communication.lan.heartbeat.HeartbeatManager
 import com.sunmi.tapro.taplink.communication.lan.model.ServiceInfo
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.util.LogUtil
@@ -30,7 +29,7 @@ import java.util.concurrent.atomic.AtomicLong
  * Manager components:
  * - ConnectionManager: WebSocket connection management
  * - ServiceDiscoveryManager: mDNS service discovery
- * - HeartbeatManager: Heartbeat mechanism management
+ * - WebSocket callbacks: connection lifecycle management
  *
  * @param appId Application ID
  * @param appSecretKey Application secret key
@@ -53,6 +52,56 @@ class LanClientKernel(
         private const val SERVICE_DISCOVERY_MAX_RETRIES = 3  // Maximum retry count
         private const val SERVICE_DISCOVERY_RETRY_DELAY_MS = 1000L  // Initial retry delay (milliseconds)
         private const val SERVICE_DISCOVERY_RETRY_DELAY_MULTIPLIER = 2  // Retry delay multiplier (incremental delay)
+
+        /**
+         * Decide whether a newly advertised service represents a restart of the peer we are
+         * already connected to.
+         *
+         * Tapro embeds a fresh timestamp in its mDNS instance name on every registration, so a
+         * restart appears as a *different* instance name advertising the *same* endpoint. A
+         * changed endpoint is an ordinary address change and is handled elsewhere.
+         */
+        internal fun isPeerRestart(
+            previousName: String,
+            previousHost: String,
+            previousPort: Int,
+            newName: String,
+            newHost: String,
+            newPort: Int
+        ): Boolean {
+            if (previousName == newName) return false
+            // Same endpoint (host:port) is a necessary condition for a peer restart.
+            if (previousHost != newHost || previousPort != newPort) return false
+            // The mDNS instance name is "Taplink-Server-<timestamp>-<serial>". TaPro re-registers
+            // its service with a FRESH timestamp periodically (and across network changes) WITHOUT
+            // restarting — same device, same serial, only the timestamp differs. Treating that as a
+            // peer restart would needlessly tear down a perfectly healthy socket (observed as a
+            // ~5s "normal closure" loop). Only a genuinely DIFFERENT serial at the same endpoint
+            // (i.e. a different device now answering there) counts as a peer restart.
+            val previousSerial = parseServiceSerial(previousName)
+            val newSerial = parseServiceSerial(newName)
+            if (previousSerial != null && newSerial != null) {
+                return previousSerial != newSerial
+            }
+            // Fall back to the old name-based heuristic only when a serial cannot be parsed.
+            return true
+        }
+
+        /**
+         * Parse the Tapro serial from a LAN mDNS service name.
+         *
+         * The service name is "Taplink-Server-<timestamp>-<serial>"; the serial is the trailing
+         * '-'-delimited segment. Returns null for names that don't match the expected prefix or
+         * carry no serial segment.
+         *
+         * Exposed so both the instance-level discovery binding and the SDK layer's device-identity
+         * match rely on one canonical parse and cannot drift apart. Kept public (not internal)
+         * because the SDK module (lib_taplink_sdk) is a separate Gradle module.
+         */
+        fun parseServiceSerial(serviceName: String): String? {
+            if (!serviceName.startsWith("Taplink-Server-", ignoreCase = true)) return null
+            return serviceName.substringAfterLast('-').takeIf { it.isNotEmpty() }
+        }
     }
 
     override fun getTag(): String = TAG
@@ -88,6 +137,9 @@ class LanClientKernel(
      * Service address change listener (independent of connection callback, for persistent monitoring)
      */
     private var serviceAddressChangeListener: ServiceAddressChangeListener? = null
+
+    /** Stable serial suffix of the Tapro mDNS service selected for this connection. */
+    private var targetServiceSerial: String? = null
 
     /**
      * Service address change listener interface
@@ -125,6 +177,57 @@ class LanClientKernel(
 
     fun getServiceAddressChangeListener(): ServiceAddressChangeListener? = serviceAddressChangeListener
 
+    /**
+     * The Tapro serial this LAN discovery is currently bound to, parsed from the mDNS service name
+     * (e.g. "Taplink-Server-<ts>-<serial>" -> "<serial>"), or null if not yet bound.
+     *
+     * In LAN mode the serial is the only reliable device identity available at the transport layer
+     * (the AIDL device-id / INIT-response device-id may be absent or already cleared on a passive
+     * disconnect). The SDK layer uses it to attribute disconnect errors to the correct device and
+     * to make reconnection decisions by exact device identity instead of a conservative fallback.
+     */
+    fun getTargetServiceSerial(): String? = targetServiceSerial
+
+    private fun serviceSerial(serviceName: String): String? = parseServiceSerial(serviceName)
+
+    private fun isTargetService(service: ServiceInfo): Boolean {
+        val serial = serviceSerial(service.name)
+        val target = targetServiceSerial
+
+        // The endpoint our live socket is actually connected to is authoritative: a service that
+        // advertises that exact host:port defines our bound identity, even if a stale serial is
+        // still remembered. This is what lets a manual reconnect to a *different* device (new
+        // ip/port that advertises a new serial) rebind discovery to the new serial, while never
+        // allowing an unrelated device at some other address to preempt an established binding.
+        if (isConnectedEndpoint(service)) return true
+
+        if (target != null) return serial == target
+
+        // For a direct first connection, bind identity to the service advertising
+        // the endpoint that actually connected instead of selecting another device.
+        val uri = currentUri
+        return uri != null && service.host == uri.host && service.port == uri.port
+    }
+
+    /**
+     * Whether [service] describes the exact endpoint our live WebSocket is currently connected to.
+     *
+     * Only the endpoint we truly connected to may (re)bind the discovery identity, so a manual
+     * switch to another Tapro adopts the new serial while other devices on the subnet can never
+     * hijack the connection.
+     */
+    private fun isConnectedEndpoint(service: ServiceInfo): Boolean {
+        val uri = currentUri ?: return false
+        return isWebSocketConnected() && service.host == uri.host && service.port == uri.port
+    }
+
+    private fun rememberTargetService(service: ServiceInfo) {
+        serviceSerial(service.name)?.let {
+            targetServiceSerial = it
+            LogUtil.i(TAG, "Bound LAN discovery to Tapro serial: $it")
+        }
+    }
+
     // ==================== Manager Components ====================
 
     /**
@@ -136,11 +239,6 @@ class LanClientKernel(
      * Service discovery manager
      */
     private val serviceDiscoveryManager = ServiceDiscoveryManager(context)
-
-    /**
-     * Heartbeat manager
-     */
-    private val heartbeatManager = HeartbeatManager()
 
     // ==================== State Management ====================
 
@@ -163,6 +261,14 @@ class LanClientKernel(
      * Whether it's a manual disconnect
      */
     private var isManualDisconnect = false
+
+    /** Distinguishes a failed handshake from a drop of an established LAN link. */
+    @Volatile
+    private var hasEstablishedConnection = false
+
+    /** Suppresses the close callback that follows a failed connection attempt. */
+    @Volatile
+    private var suppressNextDisconnect = false
 
     /**
      * Timestamp of last service address change trigger (for debouncing)
@@ -192,7 +298,7 @@ class LanClientKernel(
         // Note: Even though TaplinkServiceKernel ensures disconnect() before connect(),
         // mutex protection is still needed here because:
         // 1. There may be concurrent calls from other threads
-        // 2. There may be internal reconnection operations (service discovery, heartbeat failure, etc.) in progress
+        // 2. There may be internal reconnection operations from service discovery in progress
         if (!operationMutex.tryLock()) {
             val currentOp = currentOperation
             LogUtil.w(TAG, "Another operation is in progress: $currentOp, rejecting $operationType")
@@ -411,7 +517,9 @@ class LanClientKernel(
                     // Find first valid service and notify upper layer (using persistent listener)
                     var notified = false
                     for (service in services) {
-                        if (service.isValid()) {
+                        if (service.isValid() && isTargetService(service)) {
+                            rememberTargetService(service)
+                            currentService = service
                             LogUtil.d(
                                 TAG,
                                 "Notifying upper layer of discovered service: ${service.name} at ${service.getAddress()} ($operationId)"
@@ -598,9 +706,6 @@ class LanClientKernel(
             // Mark as manual disconnect
             isManualDisconnect = true
 
-            // Stop heartbeat
-            stopHeartbeat()
-
             // Stop service discovery (stop when manual disconnect)
             stopServiceDiscovery()
 
@@ -617,49 +722,6 @@ class LanClientKernel(
         }
     }
 
-    /**
-     * Disconnect handling when heartbeat fails
-     *
-     * When heartbeat fails, only disconnect connection, do not stop mDNS service discovery,
-     * so that device can be rediscovered and reconnected after recovery
-     */
-    private fun disconnectOnHeartbeatFailure() {
-        launchInScope {
-            try {
-                LogUtil.d(TAG, "Disconnecting due to heartbeat failure, keeping service discovery active")
-
-                // Do not mark as manual disconnect (because it's passive disconnect)
-                // isManualDisconnect remains false
-
-                // Stop heartbeat
-                stopHeartbeat()
-
-                // Safely update status
-                updateStatusSafely(InnerConnectionStatus.ERROR)
-
-                // Notify connection error: use base class's notifyConnectionError()
-                notifyConnectionError("Connection lost due to heartbeat failure", InnerErrorCode.E213)
-
-                // Do not stop service discovery, keep mDNS service discovery running,
-                // so that device can be rediscovered after recovery
-
-                // Disconnect WebSocket connection
-                connectionManager.disconnect()
-
-                // Clean up connection-related resources, but keep service discovery-related resources
-                currentUri = null
-                currentService = null
-                // Note: Do not call cleanupResources(), because it will clean up all resources
-                // Also do not call stopServiceDiscovery(), keep service discovery running
-
-                LogUtil.d(TAG, "Connection disconnected due to heartbeat failure, service discovery remains active")
-
-            } catch (e: Exception) {
-                LogUtil.e(TAG, "Error during heartbeat failure disconnect: ${e.message}")
-            }
-        }
-    }
-
     // ==================== Manager Setup and Integration ====================
 
     /**
@@ -669,13 +731,36 @@ class LanClientKernel(
         // Set connection status listener
         connectionManager.setConnectionListener(object : ConnectionManager.ConnectionListener {
             override fun onConnected() {
+                hasEstablishedConnection = true
                 // Update status SYNCHRONOUSLY first so canSendData() is true
-                // before any external callback fires. Heartbeat start and notification
+                // before any external callback fires. Notification
                 // happen asynchronously afterwards.
                 updateStatus(InnerConnectionStatus.CONNECTED)
 
                 launchInScope {
                     LogUtil.d(TAG, "LAN connection established")
+
+                    // If the endpoint we just connected to is a *different* address than the one we
+                    // previously bound our discovery identity to, the user reconnected to another
+                    // Tapro (manual ip/port change). Forget the stale serial so the connected
+                    // endpoint rebinds discovery to whatever serial it advertises. For an ordinary
+                    // reconnect/ip-follow to the same device the endpoint re-advertises the same
+                    // serial, so this rebind is a harmless no-op; an unrelated device can never
+                    // rebind because only the address we actually connected to is honored.
+                    val connectedHost = currentUri?.host
+                    val connectedPort = currentUri?.port ?: -1
+                    val bound = currentService
+                    if (bound != null && connectedHost != null &&
+                        (bound.host != connectedHost || bound.port != connectedPort)
+                    ) {
+                        LogUtil.i(
+                            TAG,
+                            "Connected endpoint changed (${bound.host}:${bound.port} -> $connectedHost:$connectedPort); " +
+                                    "forgetting stale serial ($targetServiceSerial) so discovery rebinds to the connected device"
+                        )
+                        targetServiceSerial = null
+                        currentService = null
+                    }
 
                     // Create service information (if needed)
                     if (currentService == null && currentUri != null) {
@@ -696,9 +781,6 @@ class LanClientKernel(
                             LogUtil.w(TAG, "Failed to create ServiceInfo from URI: ${e.message}")
                         }
                     }
-
-                    // Start heartbeat
-                    startHeartbeat()
 
                     // Start service monitoring
                     startServiceMonitoring()
@@ -725,14 +807,15 @@ class LanClientKernel(
                         "LAN connection closed: code=$code, reason=$reason, remote=$remote, isManual=$isManualDisconnect"
                     )
 
-                    // Stop heartbeat
-                    stopHeartbeat()
-
-                    // Build disconnect information
+                    // Build disconnect information. Preserve the real underlying WebSocket close
+                    // code so ConnectionManager can correctly distinguish manual disconnect /
+                    // normal close / abnormal network close (e.g. 1006) instead of always
+                    // reporting a generic E213, which previously masked the real disconnect
+                    // reason and broke auto-reconnect classification.
                     val disconnectCode = if (isManualDisconnect) {
-                        InnerErrorCode.E213.code
+                        "MANUAL_DISCONNECT"
                     } else {
-                        InnerErrorCode.E213.code
+                        code.toString()
                     }
                     val disconnectMessage = if (isManualDisconnect) {
                         "${InnerErrorCode.E213.description}:Manual disconnect, $reason($code)"
@@ -742,6 +825,15 @@ class LanClientKernel(
 
                     val wasManual = isManualDisconnect
                     isManualDisconnect = false
+
+                    if (suppressNextDisconnect) {
+                        suppressNextDisconnect = false
+                        hasEstablishedConnection = false
+                        updateStatusSafely(InnerConnectionStatus.DISCONNECTED)
+                        LogUtil.d(TAG, "Suppressing disconnect callback for failed LAN handshake")
+                        return@launchInScope
+                    }
+                    hasEstablishedConnection = false
 
                     // Determine if it's a connection error
                     val isError = code == 1006 || code >= 1002
@@ -768,8 +860,26 @@ class LanClientKernel(
             }
 
             override fun onError(exception: Exception) {
+                val isHandshakeFailure = !hasEstablishedConnection && !isManualDisconnect
+                if (isHandshakeFailure) {
+                    suppressNextDisconnect = true
+                }
                 launchInScope {
                     LogUtil.e(TAG, "LAN connection error: ${exception.message}")
+
+                    if (isHandshakeFailure) {
+                        // A failed direct endpoint must be visible to the SDK caller even when
+                        // service discovery fallback is still allowed by performConnect().
+                        // The next close callback is suppressed separately to avoid delivering
+                        // a duplicate disconnect notification for this same failed handshake.
+                        updateStatusSafely(InnerConnectionStatus.ERROR)
+                        notifyConnectionError(
+                            "Connection error: ${exception.message}",
+                            InnerErrorCode.E241
+                        )
+                        LogUtil.d(TAG, "LAN handshake failed; notifying caller and allowing service discovery fallback")
+                        return@launchInScope
+                    }
 
                     // Safely update status
                     updateStatusSafely(InnerConnectionStatus.ERROR)
@@ -785,12 +895,6 @@ class LanClientKernel(
             override fun onTextMessage(message: String) {
                 LogUtil.d(TAG, "Text message received: $message")
 
-                // Check if it's a heartbeat response
-                if (heartbeatManager.isHeartbeatResponse(message)) {
-                    handleHeartbeatResponse()
-                    return
-                }
-
                 // Pass to data receiver (provided by BaseServiceKernel)
                 dataReceiver?.invoke(message.toByteArray(Charsets.UTF_8))
             }
@@ -805,6 +909,66 @@ class LanClientKernel(
     }
 
     // ==================== Service Discovery Functionality ====================
+
+    /**
+     * Detect that the target Tapro restarted its LAN server and force the stale socket closed.
+     *
+     * Tapro embeds a fresh timestamp in its mDNS instance name every time it registers, so a
+     * restart shows up as: old instance lost -> new instance found at the *same* host:port.
+     * That case is invisible to [handleServiceAddressChange] (the address did not change) and
+     * invisible to the WebSocket layer (a peer that restarts without a graceful close leaves the
+     * client socket half-open, so no close frame ever arrives). The result is a connection that
+     * reports CONNECTED forever while every request silently disappears.
+     *
+     * Closing the socket here converts the situation into an ordinary disconnect, letting the
+     * existing reconnect machinery re-establish the link against the restarted peer.
+     *
+     * @return true when a restart was detected and handled, false otherwise.
+     */
+    private fun handleServiceInstanceRestart(service: ServiceInfo): Boolean {
+        val previous = currentService ?: return false
+
+        if (!isPeerRestart(
+                previousName = previous.name,
+                previousHost = previous.host,
+                previousPort = previous.port,
+                newName = service.name,
+                newHost = service.host,
+                newPort = service.port
+            )
+        ) {
+            // Either the same instance, or a genuine address change that the regular
+            // address-change path already handles.
+            return false
+        }
+
+        LogUtil.w(
+            TAG,
+            "Target Tapro re-registered at the same address (${previous.name} -> ${service.name} " +
+                    "at ${service.getAddress()}); treating existing link as stale"
+        )
+
+        // Adopt the new instance identity so subsequent lost/found events compare correctly.
+        currentService = service
+        rememberTargetService(service)
+
+        if (!isWebSocketConnected()) {
+            LogUtil.d(TAG, "No live WebSocket to invalidate after peer restart")
+            return false
+        }
+
+        return try {
+            // Not a user-initiated disconnect: the close must surface as a passive disconnect so
+            // the SDK layer runs its auto-reconnect logic.
+            isManualDisconnect = false
+            connectionManager.invalidate("Peer re-registered mDNS service: ${service.name}")
+            LogUtil.i(TAG, "Closed stale LAN socket after peer restart, awaiting reconnect")
+            true
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Failed to close stale LAN socket after peer restart: ${e.message}")
+            false
+        }
+    }
 
     /**
      * Common method to handle service address changes
@@ -882,6 +1046,7 @@ class LanClientKernel(
      * Stop service discovery
      */
     private fun stopServiceDiscovery() {
+        serviceDiscoveryManager.setServiceNameFilter(null)
         serviceDiscoveryManager.stopServiceMonitoring()
         isServiceMonitoring = false
         LogUtil.d(TAG, "Service discovery stopped")
@@ -903,6 +1068,39 @@ class LanClientKernel(
             val listener = object : ServiceDiscoveryManager.ServiceChangeListener {
                 override fun onServiceFound(service: ServiceInfo) {
                     LogUtil.i(TAG, "New service found: ${service.name} at ${service.getAddress()}")
+                    if (!isTargetService(service)) {
+                        LogUtil.d(TAG, "Ignoring unrelated Tapro service: ${service.name}")
+                        return
+                    }
+                    if (targetServiceSerial == null) {
+                        rememberTargetService(service)
+                        currentService = service
+                    } else {
+                        val serial = serviceSerial(service.name)
+                        if (serial != null && serial != targetServiceSerial && isConnectedEndpoint(service)) {
+                            // The user manually reconnected to a *different* Tapro (new ip/port that
+                            // now advertises a new serial at the endpoint we are connected to).
+                            // Adopt the new serial as the discovery identity so subsequent ip
+                            // changes follow this device instead of the previously bound one.
+                            LogUtil.i(
+                                TAG,
+                                "Connected endpoint advertises a new serial ($targetServiceSerial -> $serial); rebinding LAN discovery"
+                            )
+                            rememberTargetService(service)
+                            currentService = service
+                        }
+                    }
+
+                    // Tapro re-registers its mDNS service with a fresh instance name on restart.
+                    // If the target device now advertises a *different* instance name at the same
+                    // address we were connected to, the peer restarted and our socket is half-open:
+                    // the local endpoint still reports ESTABLISHED, so no close callback will ever
+                    // fire and the address-change path below would be skipped as "same address".
+                    // Force the socket closed so the normal disconnect/reconnect flow can run.
+                    if (handleServiceInstanceRestart(service)) {
+                        return
+                    }
+
                     // Use current service as old address
                     handleServiceAddressChange(
                         service = service,
@@ -913,11 +1111,16 @@ class LanClientKernel(
                 }
 
                 override fun onServiceLost(service: ServiceInfo) {
+                    if (!isTargetService(service)) {
+                        LogUtil.d(TAG, "Ignoring lost event for unrelated Tapro service: ${service.name}")
+                        return
+                    }
+
                     LogUtil.w(TAG, "Service lost: ${service.name} at ${service.getAddress()}")
 
-                    // If lost service is currently connected service, heartbeat failure will detect first and trigger disconnect
+                    // A lost service is normally followed by the WebSocket close/error callback.
                     if (currentService != null && service.name == currentService?.name) {
-                        LogUtil.w(TAG, "Current connected service is lost, heartbeat failure will handle reconnection")
+                        LogUtil.w(TAG, "Current connected service is lost, waiting for WebSocket disconnect")
                     }
                 }
 
@@ -933,6 +1136,11 @@ class LanClientKernel(
                         LogUtil.d(TAG, "Service updated but address unchanged, ignoring")
                         return
                     }
+                    if (!isTargetService(newService)) {
+                        LogUtil.d(TAG, "Ignoring address change for unrelated Tapro service: ${newService.name}")
+                        return
+                    }
+                    rememberTargetService(newService)
 
                     // Use old service as old address
                     handleServiceAddressChange(
@@ -959,6 +1167,14 @@ class LanClientKernel(
                 }
             }
 
+            serviceDiscoveryManager.setServiceNameFilter { serviceName ->
+                // Only resolve the terminal we are bound to. NsdManager allows a single in-flight
+                // resolve, so resolving every Tapro on the subnet makes the calls we actually
+                // need fail with FAILURE_ALREADY_ACTIVE (error 3).
+                val target = targetServiceSerial
+                target == null || serviceSerial(serviceName) == target
+            }
+
             serviceDiscoveryManager.startServiceMonitoring(NSD_SERVICE_TYPE, listener)
 
         } catch (e: Exception) {
@@ -966,95 +1182,6 @@ class LanClientKernel(
         }
     }
 
-
-    // ==================== Heartbeat Functionality ====================
-
-    /**
-     * Start heartbeat
-     */
-    private fun startHeartbeat() {
-        try {
-            val config = HeartbeatManager.HeartbeatConfig()
-            val sender = object : HeartbeatManager.HeartbeatSender {
-                override suspend fun sendHeartbeat(message: String): Boolean {
-                    // Use heartbeat send method with network connectivity check, ensure network is reachable before sending
-                    return connectionManager.sendHeartbeatWithConnectivityCheck(message)
-                }
-            }
-
-            // Set heartbeat listener
-            heartbeatManager.setHeartbeatListener(object : HeartbeatManager.HeartbeatListener {
-                override fun onHeartbeatSent(sentTime: Long) {
-                    LogUtil.d(TAG, "Heartbeat sent at: $sentTime")
-                }
-
-                override fun onHeartbeatResponse(responseTime: Long, roundTripTime: Long) {
-                    LogUtil.d(TAG, "Heartbeat response received, RTT: ${roundTripTime}ms")
-                }
-
-                override fun onHeartbeatDelayed(timeoutMs: Long, ratio: Double) {
-                    LogUtil.w(
-                        TAG,
-                        "Heartbeat response delayed: ${(timeoutMs * ratio).toLong()}ms (${(ratio * 100).toInt()}% of timeout)"
-                    )
-                }
-
-                override fun onHeartbeatTimeout(timeoutMs: Long, consecutiveFailures: Int) {
-                    LogUtil.w(TAG, "Heartbeat timeout: ${timeoutMs}ms, consecutive failures: $consecutiveFailures")
-
-                    // If consecutive failures too many, can consider reconnection
-                    if (consecutiveFailures >= 2) {
-                        LogUtil.w(TAG, "Multiple heartbeat timeouts, connection may be unstable")
-                    }
-                }
-
-                override fun onHeartbeatFailed(error: String, consecutiveFailures: Int) {
-                    LogUtil.e(TAG, "Heartbeat failed: $error, consecutive failures: $consecutiveFailures")
-
-                    // Heartbeat consecutive failures, connection may be disconnected
-                    if (consecutiveFailures >= 2) { // Lower threshold, detect problems faster
-                        LogUtil.e(TAG, "Too many heartbeat failures, disconnecting connection but keeping service discovery")
-                        // Notify connection error
-                        notifyConnectionError("Heartbeat failed: $error", InnerErrorCode.E241)
-                        // Disconnect on heartbeat failure, but don't stop mDNS service discovery, so can rediscover and reconnect after device recovery
-                        disconnectOnHeartbeatFailure()
-                    }
-                }
-
-                override fun onConfigUpdated(
-                    oldConfig: HeartbeatManager.HeartbeatConfig,
-                    newConfig: HeartbeatManager.HeartbeatConfig
-                ) {
-                    LogUtil.d(TAG, "Heartbeat config updated: ${oldConfig.intervalMs}ms -> ${newConfig.intervalMs}ms")
-                }
-            })
-
-            heartbeatManager.startHeartbeat(config, sender)
-            LogUtil.d(TAG, "Heartbeat started")
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to start heartbeat: ${e.message}")
-        }
-    }
-
-    /**
-     * Stop heartbeat
-     */
-    private fun stopHeartbeat() {
-        try {
-            heartbeatManager.stopHeartbeat()
-            LogUtil.d(TAG, "Heartbeat stopped")
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to stop heartbeat: ${e.message}")
-        }
-    }
-
-    /**
-     * Handle heartbeat response
-     */
-    private fun handleHeartbeatResponse() {
-        heartbeatManager.handleHeartbeatResponse()
-        LogUtil.d(TAG, "Heartbeat response processed")
-    }
 
     // ==================== Resource Management ====================
 
@@ -1068,15 +1195,17 @@ class LanClientKernel(
         // Reset state variables
         currentUri = null
         currentService = null
+        targetServiceSerial = null
         isServiceMonitoring = false
         isManualDisconnect = false
         lastServiceAddressChangeTime = 0
         currentOperation = null
         currentOperationId = null
+        hasEstablishedConnection = false
+        suppressNextDisconnect = false
 
         // Ensure all manager components are completely cleaned up
         try {
-            stopHeartbeat()
             stopServiceDiscovery()
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error during cleanup: ${e.message}")

@@ -204,7 +204,21 @@ data class PaymentResult(
     /**
      * Original transaction request ID (refund/void/authorization completion)
      */
-    val originalTransactionRequestId: String? = null
+    val originalTransactionRequestId: String? = null,
+
+    // ========== Connection info fields (populated from INIT response) ==========
+
+    /**
+     * TaPro application version (populated from INIT response bizData).
+     * Available after the first transaction completes.
+     */
+    val taproVersion: String? = null,
+
+    /**
+     * Device ID / serial number (populated from INIT response bizData).
+     * Available after the first transaction completes.
+     */
+    val deviceId: String? = null
 ) {
     /**
      * Check if transaction is successful.

@@ -1,6 +1,6 @@
 [versions]
 compileSdk = "35"
-minSdk = "25"
+minSdk = "24"
 
 agp = "8.13.1"
 kotlin = "1.7.10"
@@ -57,4 +57,3 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
-

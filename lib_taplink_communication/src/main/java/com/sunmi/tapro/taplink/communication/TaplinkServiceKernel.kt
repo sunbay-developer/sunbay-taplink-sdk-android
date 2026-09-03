@@ -237,6 +237,29 @@ class TaplinkServiceKernel private constructor(context: Context) {
     }
 
     /**
+     * Actively probe whether the current link is alive.
+     *
+     * Delegates to the connected service kernel's [IServiceKernel.checkLinkAlive]. Returns `false`
+     * when there is no connected kernel, so callers can fail fast instead of waiting for a
+     * transaction timeout.
+     *
+     * @param timeoutMs Maximum time to wait for the peer to acknowledge the probe.
+     */
+    suspend fun checkLinkAlive(timeoutMs: Long): Boolean {
+        val kernel = currentServiceKernel
+        if (kernel == null) {
+            LogUtil.w(TAG, "checkLinkAlive: no service kernel available")
+            return false
+        }
+        return try {
+            kernel.checkLinkAlive(timeoutMs)
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "checkLinkAlive failed: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Get application context
      *
      * @return Context Application context

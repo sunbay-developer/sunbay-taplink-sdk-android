@@ -55,8 +55,50 @@ class CableAoaHostKernel(
 
     private companion object {
         const val BULK_OUT_RETRY_DELAY_MS = 50L
-        const val AOA_SWITCH_TIMEOUT_MS = 8000L
+        const val AOA_SWITCH_TIMEOUT_MS = 30_000L
+        const val AOA_DEVICE_POLL_INTERVAL_MS = 200L
+        const val AOA_DEVICE_SNAPSHOT_INTERVAL_MS = 2_000L
+
+        /** Android `f_accessory` gadget interface descriptor: vendor-specific / 255 / 0. */
+        const val AOA_ACCESSORY_SUBCLASS = 255
+        const val AOA_ACCESSORY_PROTOCOL = 0
+
+        /** ADB interface descriptor: vendor-specific / 0x42 / 1. Never carries TapLink traffic. */
+        const val ADB_SUBCLASS = 66
+        const val ADB_PROTOCOL = 1
+
+        /** Device classes that can never be an Android AOA peer. */        val NON_AOA_DEVICE_CLASSES = setOf(
+            UsbConstants.USB_CLASS_AUDIO,
+            UsbConstants.USB_CLASS_COMM,
+            UsbConstants.USB_CLASS_HID,
+            UsbConstants.USB_CLASS_PRINTER,
+            UsbConstants.USB_CLASS_MASS_STORAGE,
+            UsbConstants.USB_CLASS_HUB,
+            UsbConstants.USB_CLASS_VIDEO
+        )
+
+        /**
+         * The peer may re-enumerate once more even after entering accessory mode: when the
+         * TapLink host (TaPro) takes over the accessory it closes its VSP fallback channel,
+         * and because VSP and accessory share the same USB gadget, closing it triggers
+         * USB_STATE DISCONNECTED -> CONNECTED -> CONFIGURED, invalidating the AOA device node
+         * that was just enumerated on this side.
+         * Such failures are transient — the accessory is normally stable after a rescan — so
+         * we retry with the parameters below instead of failing outright.
+         */
+        const val AOA_CONNECT_MAX_ATTEMPTS = 4
+        const val AOA_CONNECT_RETRY_DELAY_MS = 1_000L
+        const val AOA_CONNECT_TOTAL_DEADLINE_MS = 60_000L
     }
+
+    /** Retryable AOA connection failure, usually a device node invalidated by peer re-enumeration. */
+    private class TransientAoaFailure(message: String) : Exception(message)
+
+    /**
+     * Non-retryable AOA connection failure (for example a peer that only supports VSP/RS232);
+     * the caller should move on to the next protocol as soon as possible.
+     */
+    private class TerminalAoaFailure(message: String) : Exception(message)
 
     private val TAG = "SimplifiedAoaHostKernel"
 
@@ -167,6 +209,14 @@ class CableAoaHostKernel(
         connectionCallback: ConnectionCallback
     ) {
         LogUtil.i(TAG, "=== Connect requested, current state: $state ===")
+
+        // Fail fast when no USB device is physically attached, so AOA doesn't start switching /
+        // polling for a device that isn't there (avoids phantom UART activity / blocked switch).
+        if (usbManager.deviceList.isEmpty()) {
+            LogUtil.w(TAG, "performConnect aborted: no USB device attached")
+            notifyConnectionError("No USB device attached", InnerErrorCode.E251)
+            return
+        }
 
         synchronized(stateLock) {
             when (state) {
@@ -361,83 +411,113 @@ class CableAoaHostKernel(
     // ============ Internal Implementation ============
 
     /**
-     * Start connection flow
+     * Start connection flow.
+     *
+     * Outer retry loop: when the peer takes over the accessory it closes its VSP fallback
+     * channel, and since VSP and accessory share the same USB gadget, the AOA device node that
+     * was just enumerated gets torn down once. Such a [TransientAoaFailure] succeeds on a
+     * rescan after the peer settles, so it is retried rather than reported as a failure.
      */
     private suspend fun startConnection(callback: ConnectionCallback) {
-        try {
-            updateStatus(InnerConnectionStatus.CONNECTING)
+        val deadline = System.currentTimeMillis() + AOA_CONNECT_TOTAL_DEADLINE_MS
+        var lastTransient: String? = null
 
-            // 1. Find device
-            val device = findTargetDevice()
-            if (device == null) {
-                handleConnectionError("No USB device found", callback, InnerErrorCode.E212.code)
+        for (attempt in 1..AOA_CONNECT_MAX_ATTEMPTS) {
+            try {
+                attemptConnection(callback)
+                return
+            } catch (e: TransientAoaFailure) {
+                lastTransient = e.message
+                val remaining = deadline - System.currentTimeMillis()
+                if (attempt == AOA_CONNECT_MAX_ATTEMPTS || remaining <= AOA_CONNECT_RETRY_DELAY_MS) {
+                    break
+                }
+                LogUtil.w(
+                    TAG,
+                    "AOA connect attempt $attempt/$AOA_CONNECT_MAX_ATTEMPTS failed transiently " +
+                        "(${e.message}) — peer likely re-enumerated, retrying in ${AOA_CONNECT_RETRY_DELAY_MS}ms"
+                )
+                cleanupResources()
+                delay(AOA_CONNECT_RETRY_DELAY_MS)
+            } catch (e: TerminalAoaFailure) {
+                handleConnectionError(e.message ?: "AOA connection failed", callback, InnerErrorCode.E212.code)
+                return
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Connection failed: ${e.message}")
+                handleConnectionError("Connection failed: ${e.message}", callback, InnerErrorCode.E212.code)
                 return
             }
+        }
 
-            LogUtil.i(TAG, "Found device: ${getDeviceDisplayKey(device)}")
+        handleConnectionError(
+            "AOA connection failed after $AOA_CONNECT_MAX_ATTEMPTS attempts: $lastTransient",
+            callback,
+            InnerErrorCode.E212.code
+        )
+    }
 
-            // 2. Check if already in AOA mode
-            if (isAoaDevice(device)) {
-                LogUtil.i(TAG, "Device already in AOA mode, connecting directly")
-                connectToAoaDevice(device, callback)
-            } else {
-                LogUtil.i(TAG, "Device not in AOA mode, need to switch")
-                switchToAoaMode(device, callback)
-            }
+    /**
+     * A single connection attempt. Invokes the callback itself on success; throws
+     * [TransientAoaFailure] for retryable failures.
+     */
+    private suspend fun attemptConnection(callback: ConnectionCallback) {
+        updateStatus(InnerConnectionStatus.CONNECTING)
 
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Connection failed: ${e.message}")
-            handleConnectionError("Connection failed: ${e.message}", callback, InnerErrorCode.E212.code)
+        // 1. Find device
+        val device = findTargetDevice()
+            ?: throw TransientAoaFailure("No USB device found")
+
+        LogUtil.i(TAG, "Found device: ${getDeviceDisplayKey(device)}")
+
+        // 2. Check if already in AOA mode
+        if (isAoaDevice(device)) {
+            LogUtil.i(TAG, "Device already in AOA mode, connecting directly")
+            connectToAoaDevice(device, callback)
+        } else {
+            LogUtil.i(TAG, "Device not in AOA mode, need to switch")
+            switchToAoaMode(device, callback)
         }
     }
 
 
     /**
-     * Switch device to AOA mode
+     * Switch device to AOA mode.
+     *
+     * On failure it throws [TransientAoaFailure] / [TerminalAoaFailure]; [startConnection]
+     * decides whether to retry or report the error.
      */
     private suspend fun switchToAoaMode(device: UsbDevice, callback: ConnectionCallback) {
-        try {
-            // 1. Request permission (if needed)
-            if (!usbManager.hasPermission(device)) {
-                synchronized(stateLock) {
-                    state = ConnectionState.REQUESTING_PERMISSION
-                }
-                LogUtil.i(TAG, "Requesting permission for device")
-                requestPermissionAndWait(device)
-                LogUtil.i(TAG, "Permission granted")
-            }
-
-            // 2. Save original device reference
-            originalDevice = device
-
-            // 3. Send AOA protocol
+        // 1. Request permission (if needed)
+        if (!usbManager.hasPermission(device)) {
             synchronized(stateLock) {
-                state = ConnectionState.SWITCHING_AOA
+                state = ConnectionState.REQUESTING_PERMISSION
             }
-            LogUtil.i(TAG, "Sending AOA protocol")
-            sendAoaProtocol(device)
-            LogUtil.i(TAG, "AOA protocol sent, waiting for device to switch")
-
-            // 4. Wait for AOA device to appear
-            val aoaDevice = waitForAoaDevice(timeout = AOA_SWITCH_TIMEOUT_MS)
-            if (aoaDevice == null) {
-                handleConnectionError(
-                    "AOA device not found after switch (timeout ${AOA_SWITCH_TIMEOUT_MS / 1000}s), will try next protocol",
-                    callback,
-                    InnerErrorCode.E212.code
-                )
-                return
-            }
-
-            LogUtil.i(TAG, "AOA device appeared: ${getDeviceDisplayKey(aoaDevice)}")
-
-            // 5. Connect to AOA device
-            connectToAoaDevice(aoaDevice, callback)
-
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to switch to AOA mode: ${e.message}")
-            handleConnectionError("Failed to switch to AOA mode: ${e.message}", callback, InnerErrorCode.E212.code)
+            LogUtil.i(TAG, "Requesting permission for device")
+            requestPermissionAndWait(device)
+            LogUtil.i(TAG, "Permission granted")
         }
+
+        // 2. Save original device reference
+        originalDevice = device
+
+        // 3. Send AOA protocol
+        synchronized(stateLock) {
+            state = ConnectionState.SWITCHING_AOA
+        }
+        LogUtil.i(TAG, "Sending AOA protocol")
+        sendAoaProtocol(device)
+        LogUtil.i(TAG, "AOA protocol sent, waiting for device to switch")
+
+        // 4. Wait for AOA device to appear
+        val aoaDevice = waitForAoaDevice(timeout = AOA_SWITCH_TIMEOUT_MS)
+            ?: throw TransientAoaFailure(
+                "AOA device not found after switch (timeout ${AOA_SWITCH_TIMEOUT_MS / 1000}s)"
+            )
+
+        LogUtil.i(TAG, "AOA device appeared: ${getDeviceDisplayKey(aoaDevice)}")
+
+        // 5. Connect to AOA device
+        connectToAoaDevice(aoaDevice, callback)
     }
 
     /**
@@ -518,12 +598,7 @@ class CableAoaHostKernel(
                 LogUtil.w(TAG, "AOA: no IN endpoint — cannot run Taplink handshake")
                 conn.releaseInterface(iface)
                 conn.close()
-                handleConnectionError(
-                    "AOA device has no IN endpoint for handshake",
-                    callback,
-                    InnerErrorCode.E212.code
-                )
-                return
+                throw TerminalAoaFailure("AOA device has no IN endpoint for handshake")
             }
             if (!performTaplinkAppHandshake(conn, epIn, epOut)) {
                 LogUtil.w(TAG, "AOA Taplink handshake failed — peer may be VSP-only or not ready")
@@ -544,7 +619,6 @@ class CableAoaHostKernel(
                 )
                 return
             }
-
             // 7. Save resources
             synchronized(stateLock) {
                 currentDevice = device
@@ -573,10 +647,23 @@ class CableAoaHostKernel(
             LogUtil.i(TAG, "=== Connection established successfully ===")
             handleConnectionSuccess(callback, null)
 
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to connect to AOA device: ${e.message}")
+        } catch (e: TerminalAoaFailure) {
             cleanupResources()
-            handleConnectionError("Failed to connect: ${e.message}", callback, InnerErrorCode.E212.code)
+            throw e
+        } catch (e: Exception) {
+            cleanupResources()
+            // The device node disappeared from the system list -> peer re-enumeration, retryable.
+            val stillPresent = usbManager.deviceList.containsKey(device.deviceName)
+            if (!stillPresent) {
+                LogUtil.w(
+                    TAG,
+                    "AOA device ${getDeviceDisplayKey(device)} disappeared during connect " +
+                        "(${e.message}) — peer re-enumerated"
+                )
+                throw TransientAoaFailure("AOA device re-enumerated during connect: ${e.message}")
+            }
+            LogUtil.e(TAG, "Failed to connect to AOA device: ${e.message}")
+            throw TerminalAoaFailure("Failed to connect: ${e.message}")
         }
     }
 
@@ -851,20 +938,67 @@ class CableAoaHostKernel(
 
         LogUtil.i(TAG, "Waiting for AOA device to appear (timeout: ${timeout}ms)...")
 
-        // Wait for device to appear. runInterruptible makes blocking await() respond to coroutine cancellation (timeout).
-        val appeared = withTimeoutOrNull(timeout) {
-            runInterruptible(Dispatchers.IO) {
-                aoaDeviceLatch?.await()
+        val deadline = System.currentTimeMillis() + timeout
+        var lastSnapshotAt = 0L
+        while (System.currentTimeMillis() < deadline) {
+            // AOA re-enumeration can finish before Android delivers the attach broadcast. Polling
+            // UsbManager closes that gap while the broadcast still provides the fast-path wake-up.
+            findAoaDevice()?.let {
+                LogUtil.i(TAG, "AOA device found while waiting: ${getDeviceDisplayKey(it)}")
+                return it
             }
-            true
+
+            // Periodically dump what the USB stack actually reports. Without this a failed switch is
+            // indistinguishable from "peer never re-enumerated", which makes field diagnosis guesswork.
+            val now = System.currentTimeMillis()
+            if (now - lastSnapshotAt >= AOA_DEVICE_SNAPSHOT_INTERVAL_MS) {
+                lastSnapshotAt = now
+                logUsbDeviceSnapshot("waiting for AOA re-enumeration")
+            }
+
+            val remainingMs = deadline - System.currentTimeMillis()
+            if (remainingMs <= 0) break
+            val attached = runInterruptible(Dispatchers.IO) {
+                aoaDeviceLatch?.await(
+                    minOf(AOA_DEVICE_POLL_INTERVAL_MS, remainingMs),
+                    java.util.concurrent.TimeUnit.MILLISECONDS
+                ) == true
+            }
+            if (attached) {
+                // The attach signal may arrive before UsbManager publishes the re-enumerated
+                // device. Reset the one-shot latch so a transiently early signal cannot cause
+                // the remaining wait loop to spin.
+                aoaDeviceLatch = CountDownLatch(1)
+            }
         }
 
-        if (appeared != true) {
-            LogUtil.w(TAG, "Timeout waiting for AOA device (${timeout}ms) - device did not switch to AOA mode, will try next protocol")
-            return null
-        }
+        LogUtil.w(TAG, "Timeout waiting for AOA device (${timeout}ms) - device did not switch to AOA mode, will try next protocol")
+        logUsbDeviceSnapshot("AOA wait timed out")
+        return null
+    }
 
-        return findAoaDevice()
+    /**
+     * Dump the current USB device list with the attributes that decide AOA detection.
+     */
+    private fun logUsbDeviceSnapshot(reason: String) {
+        val devices = usbManager.deviceList.values
+        if (devices.isEmpty()) {
+            LogUtil.w(TAG, "USB snapshot ($reason): no USB device visible to the host")
+            return
+        }
+        LogUtil.i(TAG, "USB snapshot ($reason): ${devices.size} device(s)")
+        devices.forEach { device ->
+            val interfaces = (0 until device.interfaceCount).joinToString(", ") { i ->
+                val iface = device.getInterface(i)
+                "cls=${iface.interfaceClass}/sub=${iface.interfaceSubclass}/" +
+                    "proto=${iface.interfaceProtocol}/ep=${iface.endpointCount}"
+            }
+            LogUtil.i(
+                TAG,
+                "  - ${getDeviceDisplayKey(device)} aoa=${isAoaDevice(device)} " +
+                    "permission=${usbManager.hasPermission(device)} interfaces=[$interfaces]"
+            )
+        }
     }
 
     // ============ Device Search ============
@@ -891,9 +1025,40 @@ class CableAoaHostKernel(
             return aoaDevice
         }
 
-        // Prefer Sunmi device, otherwise return first device
-        return devices.values.firstOrNull { "Sunmi".equals(it.manufacturerName, ignoreCase = true) }
-            ?: devices.values.firstOrNull()
+        // Prefer a plausible Android peer, deterministically.
+        return devices.values
+            .filter { isPlausibleAoaPeer(it) }
+            .sortedWith(
+                compareByDescending<UsbDevice> { hasAdbInterface(it) }
+                    .thenByDescending { "Sunmi".equals(it.manufacturerName, ignoreCase = true) }
+                    .thenBy { it.deviceName }
+            )
+            .firstOrNull()
+            ?.also { LogUtil.i(TAG, "Selected AOA peer candidate: ${getDeviceDisplayKey(it)}") }
+            ?: devices.values.sortedBy { it.deviceName }.firstOrNull()
+    }
+
+    /**
+     * Exclude devices that cannot possibly be an Android AOA peer (hubs and fixed-function
+     * peripherals such as the on-board printer, scanner or ethernet bridge). Sending the AOA
+     * GET_PROTOCOL control request to those only wastes a permission prompt and a timeout.
+     */
+    private fun isPlausibleAoaPeer(device: UsbDevice): Boolean {
+        if (device.deviceClass == UsbConstants.USB_CLASS_HUB) return false
+        if (device.deviceClass in NON_AOA_DEVICE_CLASSES) return false
+        for (i in 0 until device.interfaceCount) {
+            val cls = device.getInterface(i).interfaceClass
+            if (cls == UsbConstants.USB_CLASS_VENDOR_SPEC) return true
+        }
+        // Composite devices report class 0 at device level; keep them as candidates.
+        return device.deviceClass == 0
+    }
+
+    private fun hasAdbInterface(device: UsbDevice): Boolean {
+        for (i in 0 until device.interfaceCount) {
+            if (isAdbInterface(device.getInterface(i))) return true
+        }
+        return false
     }
 
     /**
@@ -904,7 +1069,14 @@ class CableAoaHostKernel(
     }
 
     /**
-     * Determine if device is AOA device
+     * Determine if device is AOA device.
+     *
+     * Identification is based solely on the Google accessory VID/PID pair. Interface descriptors
+     * must NOT be used as a fallback: the (class=255, subclass=66, protocol=1) triple is ADB's
+     * signature, not AOA's, so matching on it misidentifies any ADB-enabled peer (e.g. a Qualcomm
+     * composite device) as "already in accessory mode". The host would then skip the AOA switch
+     * entirely — no accessory permission prompt on the peer — and claim ADB's bulk endpoints,
+     * where the TapLink handshake can only time out.
      */
     private fun isAoaDevice(device: UsbDevice): Boolean {
         return UsbStandardProtocol.isAoaCompatible(device.vendorId, device.productId)
@@ -912,40 +1084,63 @@ class CableAoaHostKernel(
 
 
     /**
-     * Find AOA interface and endpoints
+     * Find the AOA accessory interface and its bulk endpoints.
+     *
+     * Android's accessory gadget (`f_accessory`) exposes a vendor-specific interface with
+     * subclass=255 / protocol=0. An accessory-mode device is usually a composite that ALSO exposes
+     * ADB (class=255 / subclass=66 / protocol=1); claiming ADB's endpoints yields a usable-looking
+     * bulk pair on which the TapLink handshake can never complete. So the accessory descriptor is
+     * matched strictly first, and ADB is explicitly excluded from the generic vendor-specific
+     * fallback.
      */
     private fun findAoaInterface(device: UsbDevice): Triple<UsbInterface, UsbEndpoint?, UsbEndpoint>? {
+        // Pass 1: the exact AOA accessory descriptor.
         for (i in 0 until device.interfaceCount) {
             val iface = device.getInterface(i)
-
-            // Find AOA standard interface (class=255, subclass=66, protocol=1)
-            if (iface.interfaceClass == 255 &&
-                iface.interfaceSubclass == 66 &&
-                iface.interfaceProtocol == 1 &&
-                iface.endpointCount >= 2
-            ) {
-
-                val endpoints = findBulkEndpoints(iface)
-                if (endpoints != null) {
-                    LogUtil.d(TAG, "Found AOA interface[$i] with standard descriptor")
-                    return Triple(iface, endpoints.first, endpoints.second)
-                }
-            }
-
-            // Alternative: Vendor specific interface
             if (iface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC &&
+                iface.interfaceSubclass == AOA_ACCESSORY_SUBCLASS &&
+                iface.interfaceProtocol == AOA_ACCESSORY_PROTOCOL &&
                 iface.endpointCount >= 2
             ) {
-
                 val endpoints = findBulkEndpoints(iface)
                 if (endpoints != null) {
-                    LogUtil.d(TAG, "Found AOA interface[$i] with vendor specific descriptor")
+                    LogUtil.i(TAG, "Found AOA accessory interface[$i] (255/255/0)")
                     return Triple(iface, endpoints.first, endpoints.second)
                 }
             }
         }
 
+        // Pass 2: any other vendor-specific interface, except ADB.
+        for (i in 0 until device.interfaceCount) {
+            val iface = device.getInterface(i)
+            if (iface.interfaceClass != UsbConstants.USB_CLASS_VENDOR_SPEC ||
+                iface.endpointCount < 2
+            ) {
+                continue
+            }
+            if (isAdbInterface(iface)) {
+                LogUtil.i(TAG, "Skipping ADB interface[$i] (255/66/1) — not an AOA accessory endpoint")
+                continue
+            }
+            val endpoints = findBulkEndpoints(iface)
+            if (endpoints != null) {
+                LogUtil.i(
+                    TAG,
+                    "Found AOA interface[$i] with vendor specific descriptor " +
+                        "(sub=${iface.interfaceSubclass}/proto=${iface.interfaceProtocol})"
+                )
+                return Triple(iface, endpoints.first, endpoints.second)
+            }
+        }
+
+        LogUtil.w(TAG, "No usable AOA interface found on ${getDeviceDisplayKey(device)}")
         return null
+    }
+
+    private fun isAdbInterface(iface: UsbInterface): Boolean {
+        return iface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC &&
+            iface.interfaceSubclass == ADB_SUBCLASS &&
+            iface.interfaceProtocol == ADB_PROTOCOL
     }
 
     /**
