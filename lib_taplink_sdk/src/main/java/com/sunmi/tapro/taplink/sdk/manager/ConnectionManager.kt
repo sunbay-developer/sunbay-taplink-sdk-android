@@ -1035,6 +1035,15 @@ class ConnectionManager(
             val resolved = resolveLanCandidatesViaMdns(rotated)
             autoCandidates = resolved
 
+            // The mDNS resolution above blocks for up to DISCOVERY_TIMEOUT_MS. While it runs, the
+            // ordinary candidate walk (tryConnectWithProtocolList, driven by the transport's
+            // onDisconnected) may already have brought a candidate up, and the integrator may even
+            // have started a transaction on that link. Continuing here would tear down a healthy
+            // connection mid-transaction, so re-check the world before touching any kernel.
+            if (abandonFallbackIfLinkRecovered(listener)) {
+                return@launch
+            }
+
             // If nothing is connectable (e.g. LAN candidate could not be resolved and there is no
             // usable fallback address, and no cable candidate remains), do not silently hang in
             // CONNECTING — surface a disconnect so the integrator can react.
@@ -1055,6 +1064,48 @@ class ConnectionManager(
             }
             tryConnectWithProtocolList(resolved, config, listener)
         }
+    }
+
+    /**
+     * Guard against an AUTO fallback that has become obsolete while it was waiting on mDNS
+     * discovery.
+     *
+     * A single transport drop can start two recovery paths at once: the candidate walk driven by
+     * the transport's `onDisconnected` (which reconnects immediately) and
+     * [reconnectWithRotatedCandidates] (which first spends up to `DISCOVERY_TIMEOUT_MS` resolving
+     * LAN addresses via mDNS). By the time the slow path resumes, the fast path has usually already
+     * established a link — and the integrator may have started a transaction on it. Reconnecting
+     * then kills a live link mid-transaction and loses the in-flight response.
+     *
+     * @return true when the fallback was abandoned and the caller must stop.
+     */
+    private fun abandonFallbackIfLinkRecovered(listener: ConnectionListener?): Boolean {
+        val kernelStatus = TaplinkServiceKernel.getInstance()
+            ?.getCurrentServiceKernel()
+            ?.getConnectionStatus()
+        val linkUp = kernelStatus == InnerConnectionStatus.CONNECTED
+        val txInFlight = paymentManager?.hasInFlightTransactions() == true
+
+        if (!linkUp && !txInFlight) return false
+
+        LogUtil.w(
+            TAG,
+            "AUTO fallback abandoned after mDNS discovery: link already recovered " +
+                "(kernelStatus=$kernelStatus, transactionInFlight=$txInFlight)"
+        )
+        hotSwitchInProgress = false
+
+        if (linkUp) {
+            // The fallback moved the SDK to CONNECTING before discovery; restore the real state so
+            // the integrator is not left believing the session is still reconnecting.
+            updateConnectionStatus(
+                ConnectionStatus.CONNECTED,
+                deviceId = connectedDeviceId,
+                taproVersion = connectedTaproVersion,
+                listener = listener
+            )
+        }
+        return true
     }
 
     /**
@@ -1094,10 +1145,14 @@ class ConnectionManager(
         // Only skip mDNS when LAN is neither a present candidate nor an allowed transport.
         if (!hasLanCandidate && !lanInPriority) return candidates
 
-        val targetSerial = getReliableDeviceId(
-            connectedDeviceId,
-            reconnectManager?.getLastConnectedDeviceId()
-        )
+        // Prefer the serial the live LAN kernel is bound to. getReliableDeviceId falls back to the
+        // serial persisted by a PREVIOUS session, which on a shared bench belongs to a different
+        // terminal; matching on it would either find nothing or, worse, resolve another device.
+        val targetSerial = resolveBoundLanSerial()?.takeIf { it.isNotEmpty() }
+            ?: getReliableDeviceId(
+                connectedDeviceId,
+                reconnectManager?.getLastConnectedDeviceId()
+            )
 
         val discovered: DiscoveredService? = try {
             val ctx = reconnectManager?.getContext() ?: context
