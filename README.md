@@ -1,7 +1,7 @@
 # Taplink SDK for Android
 
-[![Version](https://img.shields.io/badge/version-1.0.8-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
-[![Min SDK](https://img.shields.io/badge/minSdk-25-green.svg)](https://developer.android.com/about/versions/android-7.1)
+[![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
+[![Min SDK](https://img.shields.io/badge/minSdk-24-green.svg)](https://developer.android.com/about/versions/android-7.0)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.7.10-purple.svg)](https://kotlinlang.org/)
 
 Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS applications. It enables developers to quickly integrate payment capabilities with support for multiple connection modes and comprehensive transaction APIs.
@@ -30,7 +30,7 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
 
 ### Requirements
 
-- Android 7.1 (API 25) or higher
+- Android 7.0 (API 24) or higher
 - Android Studio Hedgehog or later
 - JDK 11 or higher
 
@@ -40,7 +40,7 @@ Add the following dependency to your app module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.8")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.9")
 }
 ```
 
@@ -617,7 +617,7 @@ The QR scanner is built on **CameraX** and **ZXing**. These are `implementation`
 ```kotlin
 dependencies {
     // Taplink SDK
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.8")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.9")
 
     // Required only if you use the QR scan APIs
     val cameraxVersion = "1.3.4"
@@ -1603,9 +1603,15 @@ client.query(request: QueryRequest, callback: PaymentCallback)
 
 ## Version Information
 
-- **Current Version**: 1.0.8
+- **Current Version**: 1.0.9
 
 ### Changelog
+
+#### v1.0.9
+- Added `ON_DEVICE` and `CROSS_DEVICE` connection modes. `CrossDeviceStrategy` selects LAN, cable, or AUTO transport for cross-device integrations; existing App-to-App, LAN, and Cable configuration remains supported.
+- Added `TaplinkSDK.getTerminalInfo()` and `TerminalInfoCallback` for read-only merchant and terminal information retrieval from the connected TaPro device.
+- Improved LAN and cable reliability, including connection recovery and inserted-cable detection for cable AUTO mode.
+- Lowered the minimum supported Android version to Android 7.0 (API 24).
 
 #### v1.0.8
 - **New — LAN service discovery**: `TaplinkSDK.discoverLanServices(DiscoveryListener)` runs a one-shot mDNS (`_taplink._tcp`) discovery and returns the resolved `host`/`port` list **without connecting**.
@@ -1667,7 +1673,7 @@ client.sale(request, object : PaymentCallbackAdapter() {
 - **Language**: Kotlin 1.7.10
 - **Build Tool**: Gradle with Kotlin DSL
 - **Android Gradle Plugin**: 8.13.1
-- **Min SDK**: Android 7.1 (API 25)
+- **Min SDK**: Android 7.0 (API 24)
 - **Target SDK**: Android API 35
 - **Java Version**: Java 11
 
