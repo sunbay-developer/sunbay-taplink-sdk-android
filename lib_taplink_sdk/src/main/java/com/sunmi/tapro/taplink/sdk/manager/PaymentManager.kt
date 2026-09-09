@@ -812,10 +812,31 @@ class PaymentManager(
     }
 
     /**
-     * Clear all pending callbacks
+     * Clear all pending callbacks and queued transactions.
+     *
+     * Called on manual disconnect. Besides clearing the in-flight request callbacks, this also
+     * fails and clears any transaction that was still QUEUED waiting for the connection
+     * (pendingTransaction) and resets the auto-connect flag. Without this, a transaction that was
+     * queued right before disconnect() would linger and be executed on the NEXT successful connect
+     * (via processPendingTransaction) as a stale transaction — or its callback would never fire.
      */
     fun clearAllCallbacks() {
         callbackManager.clearAll()
+
+        // Fail and clear a queued (not-yet-sent) transaction so it is neither executed on the next
+        // connect nor left with a dangling callback.
+        val queued = pendingTransaction
+        if (queued != null) {
+            pendingTransaction = null
+            val (request, callback) = queued
+            LogUtil.w(TAG, "Failing queued pending transaction on disconnect: action=${request.action}")
+            callback.onFailure(
+                errorCode = InnerErrorCode.E213,
+                errorMessage = "${InnerErrorCode.E213.description}(disconnected before the queued transaction was sent)",
+                transactionRequestId = request.transactionRequestId
+            )
+        }
+        hasPendingAutoConnectTransaction = false
     }
 
     /**

@@ -158,6 +158,27 @@ class TaplinkApiImpl : TaplinkApi {
 
     override fun init(context: Context, config: TaplinkConfig) {
         LogUtil.d(TAG, "Initializing SDK with appId: ${config.appId}")
+
+        // Re-init safety: if init() is called again (e.g. Application recreated, or the host app
+        // re-initializes), tear down the previous connection and its callbacks first. Otherwise the
+        // old ConnectionManager/PaymentManager would linger while still holding listeners on the
+        // singleton service kernel, causing ghost callbacks and a stale live connection that the
+        // freshly created managers are unaware of.
+        if (connectionManager != null) {
+            LogUtil.w(TAG, "SDK re-initialized; tearing down the previous connection and callbacks first")
+            try {
+                connectionManager?.disconnect()
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error disconnecting previous connection during re-init: ${e.message}")
+            }
+            try {
+                paymentManager?.clearAllCallbacks()
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error clearing previous callbacks during re-init: ${e.message}")
+            }
+            connectionManager?.removeConnectionListener()
+        }
+
         this.config = config
 
         // Initialize specialized managers

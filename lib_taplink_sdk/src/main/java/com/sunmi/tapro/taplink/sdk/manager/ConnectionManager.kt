@@ -180,6 +180,32 @@ class ConnectionManager(
             actualConfig = createDefaultConnectionConfig()
         }
 
+        // Self-heal a STALE CONNECTING/WAIT_CONNECTING state before deciding how to connect.
+        //
+        // If the SDK still believes it is (WAIT_)CONNECTING but the underlying kernel is no longer
+        // actually connecting/connected (it dropped to DISCONNECTED/ERROR, or there is no kernel at
+        // all), the previous attempt died without ever driving the SDK status back. In that case a
+        // fresh connect() with the same/absent config would be queued into pendingConnectionListeners
+        // and hang forever, because that queue is only drained by a kernel callback that will never
+        // come. Force a clean disconnect here so the request below takes the normal fresh-connect
+        // path instead of the "already in progress" branch. A genuinely in-flight attempt is left
+        // untouched (kernel is still CONNECTING/WAIT_CONNECTING/CONNECTED).
+        if (connectionStatus == ConnectionStatus.CONNECTING ||
+            connectionStatus == ConnectionStatus.WAIT_CONNECTING
+        ) {
+            val kernelActual = getActualConnectionStatus()
+            val kernelStillActive = kernelActual == ConnectionStatus.CONNECTING ||
+                kernelActual == ConnectionStatus.WAIT_CONNECTING ||
+                kernelActual == ConnectionStatus.CONNECTED
+            if (!kernelStillActive) {
+                LogUtil.w(
+                    TAG,
+                    "Stale $connectionStatus detected (kernel actual=$kernelActual); resetting before reconnect"
+                )
+                disconnect()
+            }
+        }
+
         // Check if currently reconnecting
         val reconnectManager = this.reconnectManager
         if (reconnectManager?.isReconnecting() == true) {
