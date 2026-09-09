@@ -28,10 +28,10 @@ package com.sunmi.tapro.taplink.sdk.model.response
  */
 data class TerminalInfo(
     /** Merchant ID. */
-    val merchantId: String,
+    val merchantId: String? = null,
 
     /** Doing-business-as name. */
-    val dbaName: String,
+    val dbaName: String? = null,
 
     /** Merchant category code. */
     val mcc: String? = null,

@@ -236,7 +236,7 @@ class ConnectionManager(
                     // may never complete, and the mode switch would silently fail.
                     LogUtil.w(TAG, "Different config requested while a connection is in progress — cancelling stuck attempt and reconnecting")
                     disconnect()
-                    reconnectManager?.prepareConnect(actualConfig, listener)
+                    reconnectManager.prepareConnect(actualConfig, listener)
                     connectInternal(actualConfig, listener)
                     return
                 }
@@ -433,14 +433,13 @@ class ConnectionManager(
                         // Immediately trigger all pending transaction callbacks (when target process crashes)
                         paymentManager?.failAllPendingTransactions(code, msg)
 
-                        // Attribute the error to the best-known device identity. In LAN mode the
-                        // live/persisted device id is often absent, so fall back to the mDNS-bound
-                        // serial (getReliableDeviceId) — resolved BEFORE the cleanup below clears
-                        // connectedDeviceId — so integrators still learn which device dropped.
-                        val errorDeviceId = getReliableDeviceId(
-                            connectedDeviceId,
-                            reconnectManager?.getLastConnectedDeviceId()
-                        )
+                        // Attribute the error to the ACTIVE connection's device identity only.
+                        // In LAN mode the live device id may be absent, so fall back to the
+                        // mDNS-bound serial of the current link (getReliableDeviceId) — resolved
+                        // BEFORE the cleanup below clears connectedDeviceId. It deliberately does
+                        // NOT use any cross-session persisted id, so a failure is never
+                        // misattributed to a previously connected device.
+                        val errorDeviceId = getReliableDeviceId(connectedDeviceId)
 
                         // Create connection error object
                         val connectionError = ConnectionError(code, msg, deviceId = errorDeviceId)
@@ -1102,10 +1101,10 @@ class ConnectionManager(
      *
      * Device matching (same TaPro): picks the discovered service whose parsed serial
      * ([LanClientKernel.parseServiceSerial]) matches the reliable target device id
-     * ([getReliableDeviceId]). The target serial comes from the live/persisted device id or, most
-     * importantly, the serial persisted from a prior LAN connection to this device
-     * ([ConnectionPersistence.getLastConnectedSerial]) — this is why "connect once, then rediscover
-     * the SAME device by serial next time" works.
+     * ([getReliableDeviceId]). The target serial comes from the ACTIVE connection only — the live
+     * LAN-bound serial or the live connected device id. It is NOT taken from any cross-session
+     * persisted serial, so an IP-follow within the current session tracks the right terminal while
+     * a stale previous-session identity can never resolve a different device.
      *
      * No reliable serial: the SDK does NOT connect an arbitrary discovered service (on a shared
      * network that is very likely a different terminal). Instead it keeps the configured LAN
@@ -1130,14 +1129,11 @@ class ConnectionManager(
         // Only skip mDNS when LAN is neither a present candidate nor an allowed transport.
         if (!hasLanCandidate && !lanInPriority) return candidates
 
-        // Prefer the serial the live LAN kernel is bound to. getReliableDeviceId falls back to the
-        // serial persisted by a PREVIOUS session, which on a shared bench belongs to a different
-        // terminal; matching on it would either find nothing or, worse, resolve another device.
+        // Use only the ACTIVE connection's identity: the serial the live LAN kernel is bound to,
+        // or the live connected device id. Never a cross-session persisted serial, which on a
+        // shared bench belongs to a different terminal and could resolve the wrong device.
         val targetSerial = resolveBoundLanSerial()?.takeIf { it.isNotEmpty() }
-            ?: getReliableDeviceId(
-                connectedDeviceId,
-                reconnectManager?.getLastConnectedDeviceId()
-            )
+            ?: getReliableDeviceId(connectedDeviceId)
 
         val discovered: DiscoveredService? = try {
             val ctx = reconnectManager?.getContext() ?: context
@@ -1584,11 +1580,10 @@ class ConnectionManager(
             "Service address changed detected: $newServiceName -> $newHost:$newPort (old: $oldHost:$oldPort)"
         )
 
-        // 1. Enhanced device identity verification
+        // 1. Enhanced device identity verification (active connection only)
         val deviceMatchResult = analyzeDeviceIdentity(
             newServiceName = newServiceName,
-            currentDeviceId = connectedDeviceId,
-            lastConnectedDeviceId = reconnectManager?.getLastConnectedDeviceId()
+            currentDeviceId = connectedDeviceId
         )
 
         when (deviceMatchResult.matchType) {
@@ -1640,11 +1635,10 @@ class ConnectionManager(
      */
     private fun analyzeDeviceIdentity(
         newServiceName: String,
-        currentDeviceId: String?,
-        lastConnectedDeviceId: String?
+        currentDeviceId: String?
     ): DeviceMatchResult {
-        // Get the most reliable device ID
-        val targetDeviceId = getReliableDeviceId(currentDeviceId, lastConnectedDeviceId)
+        // Get the most reliable device ID (active connection only)
+        val targetDeviceId = getReliableDeviceId(currentDeviceId)
 
         if (targetDeviceId.isNullOrEmpty() || targetDeviceId == "unknown") {
             return DeviceMatchResult(
@@ -1707,26 +1701,28 @@ class ConnectionManager(
     /**
      * Get the most reliable device ID.
      *
-     * Priority: live connected id > persisted last connected id > LAN bound serial.
+     * Priority: live connected id > LAN bound serial of the ACTIVE connection.
      *
-     * The LAN serial fallback matters because in LAN mode the AIDL/INIT device id is often absent
-     * or already cleared on a passive disconnect (e.g. peer mDNS re-register), yet the transport
-     * layer has bound a target serial parsed from the mDNS service name. Using it keeps device
-     * attribution and same-device reconnection decisions working across peer restarts.
+     * Only identities from the CURRENT (still-live) connection are used:
+     * - [currentDeviceId] is the in-memory device id of the active connection (cleared on
+     *   disconnect), and
+     * - [resolveBoundLanSerial] is the serial the live LAN kernel is bound to, parsed from the mDNS
+     *   service name.
+     *
+     * This intentionally does NOT fall back to any cross-session persisted device id / serial.
+     * Persisted identities belong to a PREVIOUS connection (possibly a different terminal), so using
+     * them misattributes a fresh connection failure to the old device — e.g. after switching from
+     * one device to another over VSP/Cable, the failure of the new attempt would still report the
+     * first device's id. Same-session LAN IP-follow is unaffected: it relies on the live
+     * [currentDeviceId] / bound serial above, both of which remain available for the active link.
      */
     private fun getReliableDeviceId(
-        currentDeviceId: String?,
-        lastConnectedDeviceId: String?
+        currentDeviceId: String?
     ): String? {
         return when {
             !currentDeviceId.isNullOrEmpty() && currentDeviceId != "unknown" -> {
                 LogUtil.d(TAG, "Using current connected device ID: $currentDeviceId")
                 currentDeviceId
-            }
-
-            !lastConnectedDeviceId.isNullOrEmpty() && lastConnectedDeviceId != "unknown" -> {
-                LogUtil.d(TAG, "Using last connected device ID: $lastConnectedDeviceId")
-                lastConnectedDeviceId
             }
 
             else -> {
@@ -1735,17 +1731,8 @@ class ConnectionManager(
                     LogUtil.d(TAG, "Using LAN bound serial as device ID: $lanSerial")
                     lanSerial
                 } else {
-                    // Last resort: the serial persisted from a previous LAN connection. This is what
-                    // makes "cable dropped → discover the SAME TaPro's LAN service" work after the
-                    // LAN kernel (and its bound serial) is already gone.
-                    val persistedSerial = connectionPersistence.getLastConnectedSerial()
-                    if (!persistedSerial.isNullOrEmpty()) {
-                        LogUtil.d(TAG, "Using persisted last-connected serial as device ID: $persistedSerial")
-                        persistedSerial
-                    } else {
-                        LogUtil.w(TAG, "No reliable device ID available")
-                        null
-                    }
+                    LogUtil.w(TAG, "No reliable device ID available")
+                    null
                 }
             }
         }
