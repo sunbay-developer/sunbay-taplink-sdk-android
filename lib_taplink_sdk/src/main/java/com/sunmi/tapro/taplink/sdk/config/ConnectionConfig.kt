@@ -52,23 +52,6 @@ class ConnectionConfig {
     var crossDeviceStrategy: CrossDeviceStrategy? = null
         private set
 
-    /**
-     * Whether this configuration resolves to the Cross-Device AUTO strategy (cross-transport
-     * auto-selection with fallback). Derived internally from [ConnectionMode.CROSS_DEVICE] +
-     * [CrossDeviceStrategy.AUTO]; when true, [connectionMode] is left null and the connection
-     * layer selects a transport according to [autoPriority].
-     */
-    var crossDeviceAuto: Boolean = false
-        private set
-
-    /**
-     * Priority order used by the Cross-Device AUTO strategy to decide which transport to try
-     * first when multiple are viable. Only [CrossDeviceStrategy.LAN] / [CrossDeviceStrategy.CABLE]
-     * are meaningful here. Defaults to [DEFAULT_AUTO_PRIORITY] (LAN first, then CABLE).
-     */
-    var autoPriority: List<CrossDeviceStrategy> = DEFAULT_AUTO_PRIORITY
-        private set
-
     /** Internal flag: the public mode selected was [ConnectionMode.CROSS_DEVICE]. */
     private var isCrossDeviceMode: Boolean = false
 
@@ -126,17 +109,24 @@ class ConnectionConfig {
      * New business-facing modes are normalized onto classic behavior so existing
      * resolver/manager logic is reused unchanged:
      * - [ConnectionMode.ON_DEVICE] → [ConnectionMode.APP_TO_APP]
-     * - [ConnectionMode.CROSS_DEVICE] → LAN / CABLE / AUTO depending on [crossDeviceStrategy]
-     *   (defaults to [CrossDeviceStrategy.AUTO] when unset), via [applyCrossDeviceNormalization].
+     * - [ConnectionMode.CROSS_DEVICE] → LAN / CABLE depending on [crossDeviceStrategy], via
+     *   [applyCrossDeviceNormalization]. The strategy MUST be set explicitly (LAN or CABLE);
+     *   there is no automatic transport selection.
      *
      * @param mode the connection mode
      * @return the current configuration instance for method chaining
+     * @throws IllegalArgumentException if [ConnectionMode.CROSS_DEVICE] is selected without first
+     *   specifying a [CrossDeviceStrategy] via [setCrossDeviceStrategy]
      */
     fun setConnectionMode(mode: ConnectionMode): ConnectionConfig {
         when (mode) {
             ConnectionMode.CROSS_DEVICE -> {
                 isCrossDeviceMode = true
-                if (crossDeviceStrategy == null) crossDeviceStrategy = CrossDeviceStrategy.AUTO
+                requireNotNull(crossDeviceStrategy) {
+                    "Cross-Device mode requires an explicit CrossDeviceStrategy (LAN or CABLE). " +
+                        "Call setCrossDeviceStrategy(...) before setConnectionMode(CROSS_DEVICE), " +
+                        "or use createCrossDeviceMode(strategy, ...)."
+                }
                 applyCrossDeviceNormalization()
             }
             ConnectionMode.ON_DEVICE -> {
@@ -166,38 +156,17 @@ class ConnectionConfig {
     }
 
     /**
-     * Sets the Cross-Device AUTO priority order. Only [CrossDeviceStrategy.LAN]/[CrossDeviceStrategy.CABLE]
-     * entries are honored; an empty/invalid list falls back to [DEFAULT_AUTO_PRIORITY].
-     *
-     * @param priority ordered transports to try first under AUTO
-     * @return the current configuration instance for method chaining
-     */
-    fun setAutoPriority(priority: List<CrossDeviceStrategy>): ConnectionConfig {
-        val filtered = priority.filter { it == CrossDeviceStrategy.LAN || it == CrossDeviceStrategy.CABLE }
-        this.autoPriority = filtered.distinct().ifEmpty { DEFAULT_AUTO_PRIORITY }
-        return this
-    }
-
-    /**
-     * Convenience overload: sets [preferred] first and the other transport as fallback.
-     *
-     * @param preferred the transport to try first ([CrossDeviceStrategy.LAN] or [CrossDeviceStrategy.CABLE])
-     * @return the current configuration instance for method chaining
-     */
-    fun setAutoPriority(preferred: CrossDeviceStrategy): ConnectionConfig {
-        val other = if (preferred == CrossDeviceStrategy.CABLE) CrossDeviceStrategy.LAN else CrossDeviceStrategy.CABLE
-        return setAutoPriority(listOf(preferred, other))
-    }
-
-    /**
      * Normalizes a CROSS_DEVICE selection onto classic connection behavior based on
      * [crossDeviceStrategy]. Idempotent and call-order independent.
+     *
+     * The strategy must be LAN or CABLE (there is no AUTO). For CABLE, the specific cable protocol
+     * (VSP / RS232 / AOA) must be specified via [setCableProtocol]; there is no cable-protocol
+     * auto-detection.
      */
     private fun applyCrossDeviceNormalization() {
-        when (crossDeviceStrategy ?: CrossDeviceStrategy.AUTO) {
+        when (val strategy = crossDeviceStrategy) {
             CrossDeviceStrategy.LAN -> {
                 this.connectionMode = ConnectionMode.LAN
-                this.crossDeviceAuto = false
                 // A cable protocol is meaningless for a LAN-only Cross-Device session; clearing it
                 // prevents a residual value (callers commonly pass a non-null cableProtocol
                 // regardless of strategy) from steering protocol resolution to a cable transport.
@@ -205,16 +174,17 @@ class ConnectionConfig {
             }
             CrossDeviceStrategy.CABLE -> {
                 this.connectionMode = ConnectionMode.CABLE
-                this.crossDeviceAuto = false
-                // CROSS_DEVICE + CABLE defaults to cable AUTO try-order (VSP/RS232/AOA) unless
-                // an explicit protocol was chosen — no need to pin a specific protocol.
-                if (this.cableProtocol == null) this.cableProtocol = CableProtocol.AUTO
+                // CROSS_DEVICE + CABLE requires an explicit cable protocol; there is no AUTO
+                // cable-protocol detection.
+                requireNotNull(this.cableProtocol) {
+                    "Cross-Device CABLE strategy requires an explicit cable protocol " +
+                        "(USB_VSP, RS232 or USB_AOA). Pass cableProtocol to createCrossDeviceMode(...) " +
+                        "or call setCableProtocol(...)."
+                }
             }
-            CrossDeviceStrategy.AUTO -> {
-                // AUTO selects a transport at the connection layer; leave connectionMode null.
-                this.connectionMode = null
-                this.crossDeviceAuto = true
-            }
+            null -> throw IllegalArgumentException(
+                "Cross-Device mode requires an explicit CrossDeviceStrategy (LAN or CABLE)."
+            )
         }
     }
 
@@ -222,7 +192,6 @@ class ConnectionConfig {
     private fun clearCrossDeviceState() {
         isCrossDeviceMode = false
         crossDeviceStrategy = null
-        crossDeviceAuto = false
     }
 
     /**
@@ -241,11 +210,14 @@ class ConnectionConfig {
     /**
      * Sets the cable protocol.
      *
-     * @param protocol the cable protocol type
+     * The protocol must be one of the concrete cable transports (USB_VSP, RS232, USB_AOA);
+     * there is no automatic cable-protocol detection.
+     *
+     * @param protocol the cable protocol type (must not be null)
      * @return the current configuration instance for method chaining
      */
-    fun setCableProtocol(protocol: CableProtocol?): ConnectionConfig {
-        this.cableProtocol = protocol ?: CableProtocol.AUTO
+    fun setCableProtocol(protocol: CableProtocol): ConnectionConfig {
+        this.cableProtocol = protocol
         return this
     }
 
@@ -346,9 +318,7 @@ class ConnectionConfig {
         return this.connectionMode == other.connectionMode &&
                 this.appToAppMode == other.appToAppMode &&
                this.cableProtocol == other.cableProtocol &&
-               this.crossDeviceAuto == other.crossDeviceAuto &&
                this.crossDeviceStrategy == other.crossDeviceStrategy &&
-               this.autoPriority == other.autoPriority &&
                this.host == other.host &&
                this.port == other.port &&
                this.connectionTimeout == other.connectionTimeout &&
@@ -368,8 +338,6 @@ class ConnectionConfig {
                 "appToAppMode=$appToAppMode, " +
                 "cableProtocol=$cableProtocol, " +
                 "crossDeviceStrategy=$crossDeviceStrategy, " +
-                "crossDeviceAuto=$crossDeviceAuto, " +
-                "autoPriority=$autoPriority, " +
                 "host=$host, " +
                 "port=$port, " +
                 "connectionTimeout=${connectionTimeout}s, " +
@@ -381,16 +349,11 @@ class ConnectionConfig {
     
     companion object {
 
-        /** Default Cross-Device AUTO priority: try LAN first, then CABLE. */
-        val DEFAULT_AUTO_PRIORITY: List<CrossDeviceStrategy> =
-            listOf(CrossDeviceStrategy.LAN, CrossDeviceStrategy.CABLE)
-
         /**
          * Creates a default connection configuration.
          *
-         * An empty configuration that allows the SDK to automatically determine
-         * the appropriate connection mode. Applicable to App-to-App mode,
-         * Cable mode (auto-detected), and LAN mode (using cached device information).
+         * An empty configuration. The connection mode must still be specified (e.g. via
+         * [createOnDeviceMode] / [createCrossDeviceMode] / [createSubScreenMode]) before use.
          *
          * @return the default configuration instance
          */
@@ -435,13 +398,13 @@ class ConnectionConfig {
          * @return the Cable mode configuration
          */
         @Deprecated(
-            message = "Use createCrossDeviceMode(CrossDeviceStrategy.CABLE) instead. CABLE remains fully functional.",
+            message = "Use createCrossDeviceMode(CrossDeviceStrategy.CABLE, cableProtocol = protocol) instead. CABLE remains fully functional.",
             replaceWith = ReplaceWith("ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE, cableProtocol = protocol)")
         )
-        fun createCableMode(protocol: CableProtocol = CableProtocol.AUTO): ConnectionConfig {
+        fun createCableMode(protocol: CableProtocol): ConnectionConfig {
             return ConnectionConfig()
-                .setConnectionMode(ConnectionMode.CABLE)
                 .setCableProtocol(protocol)
+                .setConnectionMode(ConnectionMode.CABLE)
         }
 
         /**
@@ -469,31 +432,31 @@ class ConnectionConfig {
         /**
          * Creates a Cross-Device integration mode configuration.
          *
-         * The concrete connection is configured via [strategy] (AUTO / LAN / CABLE), mirroring
-         * how [createCableMode] configures its protocol. AUTO selects a transport per
-         * [autoPriority] with runtime fallback; CABLE defaults to the cable AUTO try-order
-         * (VSP/RS232/AOA) unless [cableProtocol] is given; LAN requires [host] (+ optional [port]).
+         * The concrete connection MUST be specified via [strategy] (LAN or CABLE), mirroring how
+         * [createCableMode] configures its protocol. There is no automatic transport selection:
+         * - LAN requires [host] (+ optional [port]).
+         * - CABLE requires an explicit [cableProtocol] (USB_VSP / RS232 / USB_AOA); there is no
+         *   cable-protocol auto-detection.
          *
-         * @param strategy Cross-Device connection strategy (default [CrossDeviceStrategy.AUTO])
-         * @param host LAN host (for LAN / AUTO)
-         * @param port LAN port (for LAN / AUTO)
-         * @param cableProtocol explicit cable protocol (for CABLE); defaults to AUTO try-order when null.
-         *   Ignored when [strategy] is [CrossDeviceStrategy.LAN].
-         * @param autoPriority optional AUTO priority override
+         * @param strategy Cross-Device connection strategy — must be [CrossDeviceStrategy.LAN] or
+         *   [CrossDeviceStrategy.CABLE]
+         * @param host LAN host (required for LAN)
+         * @param port LAN port (for LAN)
+         * @param cableProtocol explicit cable protocol (required for CABLE). Ignored when [strategy]
+         *   is [CrossDeviceStrategy.LAN].
          * @return the Cross-Device mode configuration
+         * @throws IllegalArgumentException if CABLE is selected without an explicit [cableProtocol]
          */
         fun createCrossDeviceMode(
-            strategy: CrossDeviceStrategy = CrossDeviceStrategy.AUTO,
+            strategy: CrossDeviceStrategy,
             host: String? = null,
             port: Int? = null,
-            cableProtocol: CableProtocol? = null,
-            autoPriority: List<CrossDeviceStrategy>? = null
+            cableProtocol: CableProtocol? = null
         ): ConnectionConfig {
             val config = ConnectionConfig()
             if (host != null) config.setHost(host)
             if (port != null) config.setPort(port)
             if (cableProtocol != null) config.setCableProtocol(cableProtocol)
-            if (autoPriority != null) config.setAutoPriority(autoPriority)
             config.setCrossDeviceStrategy(strategy)
             config.setConnectionMode(ConnectionMode.CROSS_DEVICE)
             return config

@@ -5,7 +5,8 @@ package com.sunmi.tapro.taplink.sdk.enums
  *
  * A configuration detail for [ConnectionMode.CROSS_DEVICE] — analogous to how [CableProtocol]
  * configures [ConnectionMode.CABLE]. It selects HOW the Cross-Device integration mode connects,
- * without introducing separate top-level [ConnectionMode] values.
+ * without introducing separate top-level [ConnectionMode] values. The strategy must always be
+ * specified explicitly (LAN or CABLE); there is no automatic transport selection.
  *
  * Set via [com.sunmi.tapro.taplink.sdk.config.ConnectionConfig.setCrossDeviceStrategy].
  *
@@ -15,19 +16,15 @@ package com.sunmi.tapro.taplink.sdk.enums
  * SDK-selectable [CrossDeviceStrategy.CLOUD] strategy.
  */
 enum class CrossDeviceStrategy {
-    /**
-     * Automatically select an available connection.
-     *
-     * When both LAN and CABLE conditions exist, the SDK picks one according to the
-     * configured priority (see
-     * [com.sunmi.tapro.taplink.sdk.config.ConnectionConfig.setAutoPriority]); if the
-     * active transport becomes unavailable / times out, it falls back to the other.
-     */
-    AUTO,
-
     /** Connect the Cross-Device peer over LAN (requires host + port). */
     LAN,
 
-    /** Connect the Cross-Device peer over a cable (auto-detects VSP / RS232 / AOA by default). */
+    /**
+     * Connect the Cross-Device peer over a cable.
+     *
+     * The specific cable protocol (VSP / RS232 / AOA) must be specified explicitly via
+     * [com.sunmi.tapro.taplink.sdk.config.ConnectionConfig.setCableProtocol]; there is no
+     * automatic cable-protocol detection.
+     */
     CABLE
 }

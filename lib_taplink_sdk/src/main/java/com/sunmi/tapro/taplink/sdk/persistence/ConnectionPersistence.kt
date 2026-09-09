@@ -28,9 +28,6 @@ class ConnectionPersistence(context: Context) {
         private const val KEY_LAST_CONNECTED_SERIAL = "last_connected_serial"
         private const val KEY_DEVICE_SERVICE_INFO = "device_service_info_"
         private const val KEY_AUTO_CONNECT_ENABLED = "auto_connect_enabled"
-        private const val KEY_DETECTED_CABLE_PROTOCOL = "detected_cable_protocol"
-        private const val KEY_DETECTED_CABLE_DEVICE_INFO = "detected_cable_device_info"
-        private const val KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP = "detected_cable_protocol_timestamp"
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -86,55 +83,6 @@ class ConnectionPersistence(context: Context) {
         }
     }
 
-    /**
-     * Save detected cable protocol for future use
-     * 
-     * @param protocol Detected cable protocol
-     * @param deviceInfo Device information from detection
-     */
-    fun saveDetectedCableProtocol(protocol: com.sunmi.tapro.taplink.sdk.enums.CableProtocol, deviceInfo: String?) {
-        try {
-            val editor = prefs.edit()
-            editor.putString(KEY_DETECTED_CABLE_PROTOCOL, protocol.name)
-            if (deviceInfo != null) {
-                editor.putString(KEY_DETECTED_CABLE_DEVICE_INFO, deviceInfo)
-            }
-            editor.putLong(KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP, System.currentTimeMillis())
-            editor.apply()
-            
-            LogUtil.d(TAG, "Saved detected cable protocol: $protocol, deviceInfo: $deviceInfo")
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to save detected cable protocol: ${e.message}")
-        }
-    }
-
-    /**
-     * Get last detected cable protocol
-     * 
-     * @return Detected cable protocol or null if not found or expired
-     */
-    fun getDetectedCableProtocol(): com.sunmi.tapro.taplink.sdk.enums.CableProtocol? {
-        return try {
-            val protocolName = prefs.getString(KEY_DETECTED_CABLE_PROTOCOL, null)
-            val timestamp = prefs.getLong(KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP, 0)
-            
-            // Check if detection is recent (within 5 minutes)
-            val isRecent = (System.currentTimeMillis() - timestamp) < 5 * 60 * 1000
-            
-            if (protocolName != null && isRecent) {
-                val protocol = com.sunmi.tapro.taplink.sdk.enums.CableProtocol.valueOf(protocolName)
-                LogUtil.d(TAG, "Retrieved detected cable protocol: $protocol")
-                protocol
-            } else {
-                LogUtil.d(TAG, "No recent cable protocol detection found")
-                null
-            }
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to retrieve detected cable protocol: ${e.message}")
-            null
-        }
-    }
-    
     /**
      * Get last connection configuration
      * 

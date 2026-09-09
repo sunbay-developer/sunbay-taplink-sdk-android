@@ -334,11 +334,6 @@ class PaymentManager(
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
                 LogUtil.e(TAG, "[TAPLINK-GET_TERMINAL_INFO] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
-                if (code == InnerErrorCode.E306.code) {
-                    connectionManager.onRequestTimedOut(code)
-                } else {
-                    connectionManager.onRequestResponded()
-                }
                 callback.onFailure(
                     PaymentError.create(
                         code = code,
@@ -359,7 +354,6 @@ class PaymentManager(
                     )
                     return
                 }
-                connectionManager.onRequestResponded()
                 responseProcessor.handleResponse(responseData, callback, request)
             }
         }
@@ -614,14 +608,6 @@ class PaymentManager(
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
                 LogUtil.e(TAG, "[TAPLINK-TX] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
-                // Feed request health into ConnectionManager for CROSS_DEVICE AUTO fallback.
-                // A timeout (E306) means the active transport may be blocked; other errors are a
-                // response from the peer and prove the transport is alive.
-                if (code == InnerErrorCode.E306.code) {
-                    connectionManager.onRequestTimedOut(code)
-                } else {
-                    connectionManager.onRequestResponded()
-                }
                 callback.onFailure(
                     code = code,
                     errorMsg = msg,
@@ -632,8 +618,6 @@ class PaymentManager(
             }
 
             override fun onResponse(responseData: String) {
-                // Any response proves the active transport is healthy.
-                connectionManager.onRequestResponded()
                 responseProcessor.handleResponse(responseData, callback, request)
             }
         }

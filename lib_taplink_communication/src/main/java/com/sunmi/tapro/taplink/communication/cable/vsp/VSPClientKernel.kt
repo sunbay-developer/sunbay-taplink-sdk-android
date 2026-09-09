@@ -178,14 +178,12 @@ class VSPClientKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
-        // Fail fast when no USB device is physically attached. Without this gate the kernel would
-        // register receivers and start polling for a device that will never appear, producing
-        // phantom UART activity and blocking transport switch (e.g. Cable -> LAN).
-        if (usbManager.deviceList.isEmpty()) {
-            LogUtil.w(TAG, "performConnect aborted: no USB device attached")
-            notifyConnectionError("No USB device attached", InnerErrorCode.E251)
-            return
-        }
+        // NOTE: do NOT fail fast here on an empty usbManager.deviceList. Right after a cable is
+        // re-plugged (unplug → plug), the CDC-ACM interface takes a few hundred ms to enumerate, so
+        // deviceList can be transiently empty exactly when connect() is called. An immediate
+        // "no USB device" failure here is the root cause of "first connect after replug fails,
+        // second succeeds". Instead, awaitVspUsbDevice() (inside connectToVspDevice) polls for the
+        // device up to VSP_DEVICE_WAIT_TIMEOUT_MS and only fails if it never enumerates.
 
         registerUsbPermissionReceiverIfNeeded()
 
@@ -897,13 +895,30 @@ class VSPClientKernel(
      */
     private fun handleConnectionError() {
         LogUtil.w(TAG, "VSP client connection error detected")
-        
+
         if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
             updateStatus(InnerConnectionStatus.ERROR)
             notifyConnectionDisconnected(
                 InnerErrorCode.E232.code,
                 "VSP client connection error"
             )
+
+            // Release the underlying USB resources IMMEDIATELY on link loss (e.g. cable unplugged),
+            // instead of deferring cleanup to the next connect(). If the old port / connection /
+            // receive loop are left open, the NEXT connection attempt to the same or a different
+            // device fails to open the serial port (or races the still-running receive loop) — this
+            // is the "first connect after replug/device-switch fails, second succeeds" symptom, the
+            // second connect only working because it triggers a disconnect() on the stale kernel.
+            // performDisconnect() closes the port/connection, cancels the receive job, clears the
+            // buffer and resets the handshake flag. It does not change status, so we move the kernel
+            // to DISCONNECTED afterwards, which also lets TaplinkServiceKernel reuse this kernel
+            // cleanly on the next connect.
+            try {
+                performDisconnect()
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error releasing VSP resources after connection error: ${e.message}")
+            }
+            updateStatus(InnerConnectionStatus.DISCONNECTED)
         }
     }
 

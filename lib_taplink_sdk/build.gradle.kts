@@ -111,7 +111,7 @@ dependencies {
 
 fun createCopyAarTask(buildType: String, taskName: String) {
     tasks.register<Copy>(taskName) {
-        description = "Copy and rename ${buildType} AAR file"
+        description = "Copy and rename $buildType AAR file"
         group = "build"
 
         val sourceAar = "${BuildConfig.MODULE_NAME}-${buildType}.aar"

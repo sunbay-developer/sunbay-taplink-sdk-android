@@ -469,11 +469,6 @@ class MainActivity : Activity() {
                 // Different protocols handle different physical connection types
                 val protocol = ConnectionPreferences.getCableProtocol(this)
                 when (protocol) {
-                    ConnectionPreferences.CableProtocol.AUTO -> {
-                        // Persist explicit AUTO to avoid null cableProtocol in cached config
-                        connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.AUTO)
-                    }
-
                     ConnectionPreferences.CableProtocol.USB_AOA -> {
                         // Android Open Accessory protocol for USB connections
                         connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA)
