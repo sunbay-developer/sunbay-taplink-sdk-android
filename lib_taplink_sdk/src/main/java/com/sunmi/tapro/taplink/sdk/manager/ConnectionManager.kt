@@ -1436,10 +1436,23 @@ class ConnectionManager(
                         "Kernel dropped to $newStatus while SDK was $previousStatus and not reconnecting; " +
                             "notifying integrator onDisconnected to keep states in sync"
                     )
-                    try {
-                        connectionListener?.onDisconnected(reason)
-                    } catch (e: Exception) {
-                        LogUtil.e(TAG, "Error notifying onDisconnected from kernel status sync: ${e.message}")
+
+                    // The listener passed to connect() is the primary lifecycle callback for most
+                    // integrations. setConnectionListener() is optional, so notifying only the
+                    // global listener leaves callers stuck in CONNECTED after a transport drop.
+                    connectionDisconnectedListener?.invoke()
+                    val listenersToNotify = linkedSetOf<ConnectionListener>()
+                    reconnectManager?.getLastConnectionListener()?.let(listenersToNotify::add)
+                    connectionListener?.let(listenersToNotify::add)
+                    listenersToNotify.forEach { listener ->
+                        try {
+                            listener.onDisconnected(reason)
+                        } catch (e: Exception) {
+                            LogUtil.e(
+                                TAG,
+                                "Error notifying onDisconnected from kernel status sync: ${e.message}"
+                            )
+                        }
                     }
                 }
             }
