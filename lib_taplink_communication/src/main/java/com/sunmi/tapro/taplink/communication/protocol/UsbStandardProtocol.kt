@@ -115,6 +115,27 @@ object UsbStandardProtocol {
     }
 
     /**
+     * Create AOA identity strings for a concrete terminal.
+     *
+     * Android uses the AOA model string as the accessory name in its USB authorization dialog.
+     * Keep the serial in the dedicated AOA field as well, but append it to the model so the user
+     * can identify the physical terminal before granting access.
+     */
+    fun createAoaDeviceInfo(deviceModel: String?, deviceSerial: String?): UsbStandardInfo {
+        val defaults = UsbStandardInfo()
+        val model = deviceModel?.trim()?.takeIf { it.isNotEmpty() }
+        val serial = deviceSerial?.trim()?.takeIf { it.isNotEmpty() }
+        val displayName = listOfNotNull(model, serial)
+            .joinToString(":")
+            .ifEmpty { defaults.model }
+
+        return defaults.copy(
+            model = displayName,
+            serial = serial ?: defaults.serial
+        )
+    }
+
+    /**
      * Send complete AOA protocol sequence
      */
     fun sendAoaProtocolSequence(connection: android.hardware.usb.UsbDeviceConnection, deviceInfo: UsbStandardInfo): Boolean {
@@ -226,4 +247,3 @@ object UsbStandardProtocol {
         }
     }
 }
-

@@ -226,6 +226,30 @@ class ResponseProcessor {
                 )
             }
 
+            // A control action failure (e.g. device not registered / sign-in failed on the
+            // TaPro side) is delivered by TaPro as a transaction-style failure payload
+            // (a PaymentResult with a business error code such as 307/C20 and no `terminal`
+            // field) rather than a TerminalInfo. Detect it BEFORE attempting to deserialize
+            // TerminalInfo, otherwise the missing non-null `terminal` field turns the real
+            // business error into a misleading 302 "Request data format error".
+            val terminalFailure = extractTerminalInfoFailure(bizData)
+            if (terminalFailure != null) {
+                LogUtil.e(
+                    TAG,
+                    "GET_TERMINAL_INFO business failure: code=${terminalFailure.code}, " +
+                        "message=${terminalFailure.message}, traceId=${basicResponse.traceId}"
+                )
+                callback.onFailure(
+                    PaymentError.create(
+                        code = terminalFailure.code,
+                        message = terminalFailure.message,
+                        suggestion = ErrorStringHelper.getSolution(terminalFailure.code) ?: "",
+                        traceId = basicResponse.traceId
+                    )
+                )
+                return
+            }
+
             val terminalInfo = mapper.readValue(bizData, TerminalInfo::class.java)
             when (basicResponse.event) {
                 is PaymentEvent.Cancel,
@@ -252,6 +276,66 @@ class ResponseProcessor {
                     suggestion = ErrorStringHelper.getSolution(errorCode.code) ?: ""
                 )
             )
+        }
+    }
+
+    /**
+     * Business failure carried by a GET_TERMINAL_INFO `bizData`.
+     *
+     * @property code business error code (e.g. "307"); never the success code "100".
+     * @property message human-readable error message.
+     */
+    private data class TerminalInfoFailure(val code: String, val message: String)
+
+    /**
+     * Inspect a GET_TERMINAL_INFO `bizData` and, if it actually represents a control-action
+     * failure (a transaction-style failure payload) rather than a [TerminalInfo], extract the
+     * real business error code and message.
+     *
+     * TaPro emits such a payload when the control action fails before it can read terminal
+     * info (e.g. device not registered / sign-in failed): the `bizData` is a serialized
+     * `PaymentResult` — it has a `code`/`transactionResultCode` and `transactionStatus=FAILED`,
+     * but no `terminal` field. Returning the real code here lets the SDK surface, for example,
+     * a `307` business error instead of a misleading `302` "Request data format error" produced
+     * by a failed `TerminalInfo` deserialization.
+     *
+     * @return the extracted [TerminalInfoFailure] when the payload is a failure result, or
+     *   `null` when it looks like a normal [TerminalInfo] payload (which must be deserialized
+     *   by the caller).
+     */
+    private fun extractTerminalInfoFailure(bizData: String): TerminalInfoFailure? {
+        return try {
+            val node = mapper.readTree(bizData)
+            // A genuine TerminalInfo payload always carries the `terminal` object. If it is
+            // present, this is not a failure payload — let the caller deserialize normally.
+            if (node.hasNonNull("terminal")) {
+                return null
+            }
+
+            val status = node.get("transactionStatus")?.asText()?.takeIf { it.isNotBlank() }
+            val code = node.get("code")?.asText()?.takeIf { it.isNotBlank() }
+            val transactionResultCode = node.get("transactionResultCode")?.asText()
+                ?.takeIf { it.isNotBlank() }
+
+            val isFailure = status.equals("FAILED", ignoreCase = true) ||
+                (code != null && code != SUCCESS_CODE && code != "0")
+
+            if (!isFailure) {
+                // No `terminal`, but also no failure signal — leave it to the normal
+                // deserialization path, which will raise a clear parse error if invalid.
+                return null
+            }
+
+            val message = node.get("transactionResultMsg")?.asText()?.takeIf { it.isNotBlank() }
+                ?: node.get("message")?.asText()?.takeIf { it.isNotBlank() }
+                ?: "GET_TERMINAL_INFO failed"
+
+            // Prefer the transaction-mapped `code`; fall back to the raw transactionResultCode.
+            val resolvedCode = code ?: transactionResultCode ?: InnerErrorCode.E307.code
+            TerminalInfoFailure(code = resolvedCode, message = message)
+        } catch (e: Exception) {
+            LogUtil.d(TAG, "Not a terminal-info failure payload: ${e.message}")
+            null
         }
     }
 

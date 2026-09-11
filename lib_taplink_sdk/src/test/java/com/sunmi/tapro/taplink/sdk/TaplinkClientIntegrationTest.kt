@@ -4,6 +4,8 @@ import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.SaleRequest
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.AuthAmountInfo
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.AuthRequest
+import com.sunmi.tapro.taplink.sdk.util.SignUtil
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.math.BigDecimal
 
@@ -16,6 +18,14 @@ import java.math.BigDecimal
  * @since 2025-01-XX
  */
 class TaplinkClientIntegrationTest {
+
+    /** Signing failures must stop request construction instead of producing an empty signature. */
+    @Test
+    fun emptySigningKeyThrows() {
+        assertThrows(SignUtil.SignException::class.java) {
+            SignUtil.generateHMACSHA256("payload", "")
+        }
+    }
 
     /**
      * 测试SaleRequest的使用

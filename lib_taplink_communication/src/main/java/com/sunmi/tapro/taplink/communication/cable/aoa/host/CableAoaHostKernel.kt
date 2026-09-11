@@ -11,6 +11,7 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
@@ -911,7 +912,10 @@ class CableAoaHostKernel(
             ?: throw Exception("Failed to open device for AOA protocol")
 
         try {
-            val aoaDeviceInfo = UsbStandardProtocol.createDefaultAoaDeviceInfo()
+            val aoaDeviceInfo = UsbStandardProtocol.createAoaDeviceInfo(
+                deviceModel = Build.MODEL,
+                deviceSerial = InnerUtil.getSN()
+            )
 
             if (!UsbStandardProtocol.sendAoaProtocolSequence(conn, aoaDeviceInfo)) {
                 throw Exception("Failed to send AOA protocol sequence")
