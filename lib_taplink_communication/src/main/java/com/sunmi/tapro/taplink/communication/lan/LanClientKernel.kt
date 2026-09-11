@@ -11,6 +11,7 @@ import com.sunmi.tapro.taplink.communication.lan.discovery.ServiceDiscoveryManag
 import com.sunmi.tapro.taplink.communication.lan.model.ServiceInfo
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -324,6 +325,9 @@ class LanClientKernel(
             // Execute operation
             operation(operationId)
 
+        } catch (e: CancellationException) {
+            LogUtil.d(TAG, "$operationType operation cancelled: $operationId")
+            throw e
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error in $operationType operation: ${e.message}")
 
@@ -599,6 +603,9 @@ class LanClientKernel(
                     }
                 }
 
+            } catch (e: CancellationException) {
+                LogUtil.d(TAG, "Service discovery cancelled: $operationId")
+                throw e
             } catch (e: Exception) {
                 lastException = e
                 LogUtil.w(TAG, "Service discovery attempt ${retryCount + 1} failed: ${e.message} ($operationId)")

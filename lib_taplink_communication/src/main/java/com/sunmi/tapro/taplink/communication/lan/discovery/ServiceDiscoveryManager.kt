@@ -161,6 +161,9 @@ class ServiceDiscoveryManager(
 
     suspend fun discoverServices(serviceType: String, timeoutMs: Long = DISCOVERY_TIMEOUT_MS): List<ServiceInfo> {
         return withContext(Dispatchers.IO) {
+            var tempListener: NsdManager.DiscoveryListener? = null
+            var discoveryStarted = false
+
             try {
                 LogUtil.d(TAG, "Starting service discovery for: $serviceType")
                 
@@ -169,27 +172,34 @@ class ServiceDiscoveryManager(
                 resolvingServices.clear()
                 
                 // Start discovery
-                val tempListener = createDiscoveryListener()
+                tempListener = createDiscoveryListener()
                 nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, tempListener)
+                discoveryStarted = true
                 
                 // Wait for discovery to complete
                 delay(timeoutMs)
-                
-                // Stop discovery
-                try {
-                    nsdManager.stopServiceDiscovery(tempListener)
-                } catch (e: Exception) {
-                    LogUtil.w(TAG, "Error stopping service discovery: ${e.message}")
-                }
                 
                 val services = discoveredServices.values.toList()
                 LogUtil.d(TAG, "Discovery completed, found ${services.size} services")
                 
                 services
-                
+
+            } catch (e: CancellationException) {
+                LogUtil.d(TAG, "Service discovery cancelled")
+                throw e
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Service discovery failed: ${e.message}")
                 emptyList()
+            } finally {
+                if (discoveryStarted) {
+                    tempListener?.let { listener ->
+                        try {
+                            nsdManager.stopServiceDiscovery(listener)
+                        } catch (e: Exception) {
+                            LogUtil.w(TAG, "Error stopping service discovery: ${e.message}")
+                        }
+                    }
+                }
             }
         }
     }
