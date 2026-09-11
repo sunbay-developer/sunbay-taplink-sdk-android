@@ -8,7 +8,7 @@ plugins {
 object SdkVersion {
     const val CODE = 15
 
-    const val NAME = "1.0.9.2"
+    const val NAME = "1.0.9.3"
 }
 
 object BuildConfig {
@@ -80,9 +80,6 @@ dependencies {
 
     embed(project(":lib_taplink_communication"))
 
-    implementation(libs.jackson.databind)
-    implementation(libs.jackson.module.kotlin)
-
     // CameraX for QR scanner
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)
@@ -105,6 +102,7 @@ dependencies {
     }
 
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
 }

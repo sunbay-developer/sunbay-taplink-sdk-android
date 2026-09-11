@@ -1,25 +1,21 @@
 package com.sunmi.tapro.taplink.sdk.impl
 
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
-import com.sunmi.tapro.taplink.sdk.model.base.BasicResponse
-import com.sunmi.tapro.taplink.sdk.model.base.BasicResponseJacksonDeserializer
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
 import com.sunmi.tapro.taplink.sdk.model.response.TerminalInfo
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
 
 /**
- * Response processing class — Gson-free, uses Jackson.
+ * Response processing class using Android's built-in JSON implementation.
  *
  * @author TaPro Team
  * @since 2025-01-XX
@@ -39,20 +35,6 @@ class ResponseProcessor {
      */
     var onDeviceInfoReceived: ((deviceId: String, taproVersion: String) -> Unit)? = null
 
-    private val mapper: ObjectMapper = ObjectMapper()
-        .registerKotlinModule()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-
-    // Mapper that knows how to deserialize BasicResponse (custom deserializer for PaymentEvent)
-    private val responseMapper: ObjectMapper = ObjectMapper()
-        .registerKotlinModule()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-        .also { om ->
-            val module = com.fasterxml.jackson.databind.module.SimpleModule()
-            module.addDeserializer(BasicResponse::class.java, BasicResponseJacksonDeserializer())
-            om.registerModule(module)
-        }
-
     // Track processed terminal events (COMPLETED/CANCEL) by traceId to prevent duplicate processing
     // Terminal events should only be processed once even if they arrive multiple times
     private val processedTerminalEvents = mutableSetOf<String>()
@@ -69,9 +51,9 @@ class ResponseProcessor {
      */
     fun processResponse(responseJson: String, callbackManager: LocalCallbackManager<InnerCallback?>) {
         try {
-            val node = mapper.readTree(responseJson)
-            val traceId = node.get("traceId")?.asText()
-            val eventCode = node.get("eventCode")?.asText()?.uppercase()
+            val node = TaplinkJsonBridge.parseObject(responseJson)
+            val traceId = TaplinkJsonBridge.stringOrNull(node, "traceId")
+            val eventCode = TaplinkJsonBridge.stringOrNull(node, "eventCode")?.uppercase()
 
             if (traceId.isNullOrBlank()) {
                 LogUtil.e(TAG, "Received data without traceId, ignoring: $responseJson")
@@ -107,8 +89,8 @@ class ResponseProcessor {
             }
 
             if (isError) {
-                val errorCode = node.get("errorCode")?.asText() ?: "UNKNOWN_ERROR"
-                val errorMsg = node.get("eventMsg")?.asText() ?: "Unknown error"
+                val errorCode = TaplinkJsonBridge.stringOrNull(node, "errorCode") ?: "UNKNOWN_ERROR"
+                val errorMsg = TaplinkJsonBridge.stringOrNull(node, "eventMsg") ?: "Unknown error"
                 LogUtil.d(TAG, "[TAPLINK-TX] TraceId=$traceId | ECR Error received: code=$errorCode, msg=$errorMsg")
                 callback?.onError(errorCode, errorMsg)
             } else {
@@ -133,7 +115,7 @@ class ResponseProcessor {
                 return
             }
 
-            val basicResponse = responseMapper.readValue(result, BasicResponse::class.java)
+            val basicResponse = TaplinkJsonBridge.parseBasicResponse(result)
             LogUtil.d(
                 TAG,
                 "Received BasicResponse: eventCode=${basicResponse.event.eventCode}, " +
@@ -141,7 +123,7 @@ class ResponseProcessor {
             )
 
             val paymentResult = if (!basicResponse.bizData.isNullOrBlank()) {
-                mapper.readValue(basicResponse.bizData, PaymentResult::class.java)
+                TaplinkJsonBridge.parsePaymentResult(basicResponse.bizData)
             } else {
                 PaymentResult(code = "", message = basicResponse.event.eventMsg)
             }
@@ -215,7 +197,7 @@ class ResponseProcessor {
         request: PaymentRequest
     ) {
         try {
-            val basicResponse = responseMapper.readValue(result, BasicResponse::class.java)
+            val basicResponse = TaplinkJsonBridge.parseBasicResponse(result)
             LogUtil.d(TAG, "Received BasicResponse: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}")
 
             val bizData = basicResponse.bizData
@@ -250,7 +232,7 @@ class ResponseProcessor {
                 return
             }
 
-            val terminalInfo = mapper.readValue(bizData, TerminalInfo::class.java)
+            val terminalInfo = TaplinkJsonBridge.parseTerminalInfo(bizData)
             when (basicResponse.event) {
                 is PaymentEvent.Cancel,
                 is PaymentEvent.Completed -> callback.onSuccess(terminalInfo)
@@ -305,16 +287,17 @@ class ResponseProcessor {
      */
     private fun extractTerminalInfoFailure(bizData: String): TerminalInfoFailure? {
         return try {
-            val node = mapper.readTree(bizData)
+            val node = TaplinkJsonBridge.parseObject(bizData)
             // A genuine TerminalInfo payload always carries the `terminal` object. If it is
             // present, this is not a failure payload — let the caller deserialize normally.
-            if (node.hasNonNull("terminal")) {
+            if (TaplinkJsonBridge.objectOrNull(node, "terminal") != null) {
                 return null
             }
 
-            val status = node.get("transactionStatus")?.asText()?.takeIf { it.isNotBlank() }
-            val code = node.get("code")?.asText()?.takeIf { it.isNotBlank() }
-            val transactionResultCode = node.get("transactionResultCode")?.asText()
+            val status = TaplinkJsonBridge.stringOrNull(node, "transactionStatus")
+                ?.takeIf { it.isNotBlank() }
+            val code = TaplinkJsonBridge.stringOrNull(node, "code")?.takeIf { it.isNotBlank() }
+            val transactionResultCode = TaplinkJsonBridge.stringOrNull(node, "transactionResultCode")
                 ?.takeIf { it.isNotBlank() }
 
             val isFailure = status.equals("FAILED", ignoreCase = true) ||
@@ -326,8 +309,9 @@ class ResponseProcessor {
                 return null
             }
 
-            val message = node.get("transactionResultMsg")?.asText()?.takeIf { it.isNotBlank() }
-                ?: node.get("message")?.asText()?.takeIf { it.isNotBlank() }
+            val message = TaplinkJsonBridge.stringOrNull(node, "transactionResultMsg")
+                ?.takeIf { it.isNotBlank() }
+                ?: TaplinkJsonBridge.stringOrNull(node, "message")?.takeIf { it.isNotBlank() }
                 ?: "GET_TERMINAL_INFO failed"
 
             // Prefer the transaction-mapped `code`; fall back to the raw transactionResultCode.
@@ -359,7 +343,7 @@ class ResponseProcessor {
     private fun tryParseAsHeadlessIntermediateEvent(json: String): PaymentEvent? {
         return try {
 
-            val jsonObject = mapper.readTree(json)
+            val jsonObject = TaplinkJsonBridge.parseObject(json)
 
 
             // Check for Headless event signature: has "eventCode" + "eventId" but no "appSign"
@@ -368,32 +352,18 @@ class ResponseProcessor {
             val hasAppSign = jsonObject.has("appSign")
 
             if (hasEventId && hasEventCode && !hasAppSign) {
-                val eventCode = jsonObject.get("eventCode")?.asText() ?: return null
-                val eventId = jsonObject.get("eventId")?.takeUnless { it.isNull }?.asText()
-                val cancelable = jsonObject.get("cancelable")?.takeUnless { it.isNull }?.asBoolean() ?: false
-                val transactionRequestId = jsonObject.get("transactionRequestId")
-                    ?.takeUnless { it.isNull }
-                    ?.asText()
-                val referenceOrderId = jsonObject.get("referenceOrderId")
-                    ?.takeUnless { it.isNull }
-                    ?.asText()
-                val timestamp = jsonObject.get("timestamp")
-                    ?.takeUnless { it.isNull }
-                    ?.asLong()
+                val eventCode = TaplinkJsonBridge.stringOrNull(jsonObject, "eventCode") ?: return null
+                val eventId = TaplinkJsonBridge.stringOrNull(jsonObject, "eventId")
+                val cancelable = TaplinkJsonBridge.booleanOrNull(jsonObject, "cancelable") ?: false
+                val transactionRequestId =
+                    TaplinkJsonBridge.stringOrNull(jsonObject, "transactionRequestId")
+                val referenceOrderId = TaplinkJsonBridge.stringOrNull(jsonObject, "referenceOrderId")
+                val timestamp = TaplinkJsonBridge.longOrNull(jsonObject, "timestamp")
                     ?: System.currentTimeMillis()
 
                 // Parse optional data map
-                val dataMap = if (jsonObject.has("data") && jsonObject.get("data").isObject) {
-                    val dataObj = jsonObject.get("data")
-                    dataObj.fields().asSequence().associate { (key, value) ->
-                        val normalizedValue = when {
-                            value.isValueNode -> value.asText()
-                            else -> mapper.writeValueAsString(value)
-                        }
-                        key to normalizedValue
-                    }
-                } else {
-                    null
+                val dataMap = TaplinkJsonBridge.objectOrNull(jsonObject, "data")?.let { dataObj ->
+                    dataObj.keys().asSequence().associateWith { key -> dataObj.get(key).toString() }
                 }
 
                 // 归一化 eventCode/eventMsg，兼容现有业务按 WAITING_CARD 等常量判断。
@@ -435,7 +405,7 @@ class ResponseProcessor {
         return try {
 
             // Headless 中间事件（eventId 存在且无 appSign）只用于进度透传，不能释放回调。
-            val jsonObject = mapper.readTree(responseJson)
+            val jsonObject = TaplinkJsonBridge.parseObject(responseJson)
 
             val hasEventId = jsonObject.has("eventId")
             val hasAppSign = jsonObject.has("appSign")
@@ -457,8 +427,8 @@ class ResponseProcessor {
 
     private fun extractEventCode(responseJson: String): String? {
         return try {
-            val node = mapper.readTree(responseJson)
-            node.get("eventCode")?.asText()
+            val node = TaplinkJsonBridge.parseObject(responseJson)
+            TaplinkJsonBridge.stringOrNull(node, "eventCode")
         } catch (e: Exception) {
             null
         }

@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [v1.0.9.3](#v1093) — API 24 JSON compatibility and dependency removal
 - [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, AUTO channel failover, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
@@ -21,6 +22,38 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## v1.0.9.3
+
+**Unreleased**
+
+Removes Jackson from the SDK runtime to restore Android API 24/25 compatibility while preserving
+the TapLink wire contract.
+
+### 🐛 Fixed
+
+- Fixed `NoClassDefFoundError: java.lang.BootstrapMethodError` during `TaplinkSDK.init()` on
+  Android API 24 and 25.
+- Existing Jackson-era connection caches remain readable after upgrading.
+- Response parsing accepts both the legacy object-valued `bizData` representation used by SDK
+  versions through 1.0.7 and the string-valued representation used by newer versions.
+
+### 📦 Dependencies
+
+- Removed `jackson-databind` and `jackson-module-kotlin` from the SDK and published POM.
+- The SDK protocol implementation now uses Android's built-in `org.json` classes and does not add
+  a replacement runtime JSON dependency. Gson is not used by either SDK library module.
+
+### 🧭 Migration
+
+- Typed TapLink API integrations require no source changes.
+- Applications that use Jackson or Gson for their own data may keep doing so; the SDK no longer
+  selects or exports a JSON-library version.
+- `BasicResponseJacksonSerializer` and `BasicResponseJacksonDeserializer` were internal protocol
+  helpers despite their public JVM visibility and have been removed. Integrations that referenced
+  these implementation classes directly must stop doing so.
 
 ---
 

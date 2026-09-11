@@ -22,8 +22,6 @@ def addTaplinkSdkTransitivePomDependencies = { pom ->
             dep.appendNode('version', v)
             dep.appendNode('scope', 'compile')
         }
-        addDep('com.fasterxml.jackson.core', 'jackson-databind', '2.17.2')
-        addDep('com.fasterxml.jackson.module', 'jackson-module-kotlin', '2.17.2')
         addDep('org.java-websocket', 'Java-WebSocket', '1.5.3')
         addDep('com.github.mik3y', 'usb-serial-for-android', '3.7.0')
     }
@@ -204,6 +202,5 @@ afterEvaluate {
         }
     }
 }
-
 
 

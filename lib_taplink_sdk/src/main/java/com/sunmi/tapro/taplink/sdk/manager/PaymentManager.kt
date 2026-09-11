@@ -3,9 +3,6 @@
 package com.sunmi.tapro.taplink.sdk.manager
 
 import android.content.Context
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.R
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
@@ -30,6 +27,7 @@ import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
+import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
 import java.math.BigDecimal
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -60,10 +58,6 @@ class PaymentManager(
      * long before failing fast instead of blocking for the full transaction timeout.
      */
     private val linkAliveTimeoutMs = 3000L
-
-    private val mapper: ObjectMapper = ObjectMapper()
-        .registerKotlinModule()
-        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
 
     /**
      * Callback manager for managing multiple async request callbacks
@@ -261,7 +255,7 @@ class PaymentManager(
                 connectionMode = connectionMode
             )
 
-            val requestJson = mapper.writeValueAsString(basicRequest)
+            val requestJson = TaplinkJsonBridge.toJsonString(basicRequest)
             LogUtil.d(TAG, "Sending GET_TERMINAL_INFO BasicRequest: requestSize=${requestJson.length} bytes")
 
             val internalCallback = createGetTerminalInfoInternalCallback(
@@ -432,7 +426,7 @@ class PaymentManager(
             )
 
             // Serialise BasicRequest to JSON string for transport
-            val requestJson = mapper.writeValueAsString(basicRequest)
+            val requestJson = TaplinkJsonBridge.toJsonString(basicRequest)
             LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
 
             // Create internal callback for receiving raw response

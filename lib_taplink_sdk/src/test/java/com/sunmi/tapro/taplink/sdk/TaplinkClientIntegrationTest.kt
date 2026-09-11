@@ -1,10 +1,19 @@
 package com.sunmi.tapro.taplink.sdk
 
 import com.sunmi.tapro.taplink.sdk.model.common.AmountInfo
+import com.sunmi.tapro.taplink.sdk.model.common.PaymentCategory
+import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
+import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.SaleRequest
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.AuthAmountInfo
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.AuthRequest
+import com.sunmi.tapro.taplink.sdk.protocol.ProtocolRequestBuilder
 import com.sunmi.tapro.taplink.sdk.util.SignUtil
+import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.math.BigDecimal
@@ -76,4 +85,59 @@ class TaplinkClientIntegrationTest {
         assert(authRequest.description == "Test Auth")
         assert(authRequest.requestTimeout == 60L)
     }
+
+    @Test
+    fun dependencyFreeJsonKeepsRequestWireContract() {
+        val request = SaleRequest.builder()
+            .setReferenceOrderId("ORDER123")
+            .setTransactionRequestId("TXN123")
+            .setAmount(AmountInfo(BigDecimal("1000"), "USD"))
+            .setPaymentMethod(PaymentMethodInfo(category = PaymentCategory.CARD))
+            .build()
+        val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
+            request = request,
+            version = "1.0.9.3",
+            appid = "APP123",
+            secretKey = "secret"
+        )
+        val bizData = JSONObject(basicRequest.bizData)
+
+        assertEquals("APP123", bizData.getString("appId"))
+        assertEquals("1000", bizData.getJSONObject("amount").get("orderAmount").toString())
+        assertEquals("CARD", bizData.getJSONObject("paymentMethod").getString("category"))
+        assertFalse(bizData.getJSONObject("paymentMethod").has("_category"))
+        assertFalse(bizData.has("description"))
+    }
+
+    @Test
+    fun responseReaderAcceptsLegacyObjectAndCurrentStringBizData() {
+        val payload = """{"code":"100","transactionStatus":"SUCCESS"}"""
+        val current = responseEnvelope(JSONObject.quote(payload))
+        val legacy = responseEnvelope(payload)
+
+        assertEquals(payload, TaplinkJsonBridge.parseBasicResponse(current).bizData)
+        assertEquals(payload, TaplinkJsonBridge.parseBasicResponse(legacy).bizData)
+        assertTrue(TaplinkJsonBridge.parsePaymentResult(payload).isSuccess())
+    }
+
+    @Test
+    fun basicResponseWriterKeepsFlatEventFields() {
+        val response = com.sunmi.tapro.taplink.sdk.model.base.BasicResponse(
+            appSign = "sign",
+            version = "1.0.9.3",
+            timeStamp = "123",
+            action = "SALE",
+            event = PaymentEvent.Completed,
+            bizData = "{}",
+            traceId = "trace"
+        )
+        val json = JSONObject(TaplinkJsonBridge.toJsonString(response))
+
+        assertEquals("COMPLETED", json.getString("eventCode"))
+        assertEquals("Transaction completed", json.getString("eventMsg"))
+        assertFalse(json.has("event"))
+    }
+
+    private fun responseEnvelope(bizData: String): String =
+        """{"appSign":"sign","version":"1.0","timeStamp":"123","action":"SALE","eventCode":"COMPLETED","eventMsg":"done","bizData":$bizData,"traceId":"trace"}"""
 }

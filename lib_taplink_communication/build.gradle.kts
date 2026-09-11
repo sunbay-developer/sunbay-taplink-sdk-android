@@ -62,13 +62,12 @@ dependencies {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
     }
     
-    implementation(libs.jackson.databind)
-    implementation(libs.jackson.module.kotlin)
     implementation(libs.java.websocket)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.usb.serial.android)
     implementation(fileTree("libs") { include("*.jar") })
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
 }

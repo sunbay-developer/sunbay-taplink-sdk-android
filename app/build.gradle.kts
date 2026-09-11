@@ -59,7 +59,6 @@ android {
 dependencies {
     implementation(project(":lib_taplink_sdk"))
     // JSON processing
-    implementation(libs.gson)
     implementation(libs.java.websocket)
     // Android core libraries
     implementation(libs.androidx.core.ktx)
@@ -80,4 +79,3 @@ dependencies {
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
 }
-

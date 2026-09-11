@@ -386,7 +386,6 @@ data class PaymentRequest(
      *
      * @return TransactionAction? Corresponding enum, returns null if unrecognized
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
     fun getActionEnum(): TransactionAction? = TransactionAction.fromValue(action)
 
 
