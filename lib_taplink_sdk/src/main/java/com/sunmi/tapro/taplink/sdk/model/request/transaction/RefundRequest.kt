@@ -27,7 +27,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param staffInfo Staff information (optional)
  * @param signatureConfig Per-transaction signature configuration (optional, non-referenced refund only)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class RefundRequest(

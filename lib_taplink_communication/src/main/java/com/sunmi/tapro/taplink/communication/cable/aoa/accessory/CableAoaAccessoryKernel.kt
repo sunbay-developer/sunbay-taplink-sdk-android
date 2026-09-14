@@ -38,7 +38,7 @@ import java.util.concurrent.CountDownLatch
  * 3. 幂等操作，重复调用 connect() 是安全的
  * 4. 状态即真相，状态变量直接反映资源状态
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-18
  */
 class CableAoaAccessoryKernel(

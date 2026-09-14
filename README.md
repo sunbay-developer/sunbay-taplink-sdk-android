@@ -9,8 +9,8 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
 ## Features
 
 - **Integration Modes** *(v1.0.9+)*
-  - On-Device: business app and TaPro run on the same terminal
-  - Cross-Device: TaPro is a separate PIN Pad reached over LAN, Cable, or Auto channel selection
+  - On-Device: business app and Tapro run on the same terminal
+  - Cross-Device: Tapro is a separate PIN Pad reached over LAN, Cable, or Auto channel selection
   - Sub-Screen: USB VSP connection with mandatory customer-facing screen activation
 
 - **Complete Payment Functions**
@@ -22,10 +22,10 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - Comprehensive transaction query functionality
 
 - **Sub_Screen (USB Customer-Facing Screen)** *(since v1.0.9)*
-  - `ConnectionConfig.createSubScreenMode()` — dedicated mode that connects over USB VSP to a **remote** TaPro terminal and automatically launches ("拉起") TaPro's screen player as part of `connect()` (failure = connection error, code `351`)
+  - `ConnectionConfig.createSubScreenMode()` — dedicated mode that connects over USB VSP to a **remote** Tapro terminal and automatically launches ("拉起") Tapro's screen player as part of `connect()` (failure = connection error, code `351`)
   - For an optional screen outside Sub-Screen mode, call `TaplinkSDK.openUsbScreenPlayer()` explicitly after connecting
   - Drive ad carousel, order list, and tip selection on external display
-  - See [SUB_SCREEN_INTEGRATION.md](./SUB_SCREEN_INTEGRATION.md) — connecting from a primary-screen terminal to TaPro on a secondary-screen terminal with `createSubScreenMode()`
+  - See [SUB_SCREEN_INTEGRATION.md](./SUB_SCREEN_INTEGRATION.md) — connecting from a primary-screen terminal to Tapro on a secondary-screen terminal with `createSubScreenMode()`
 
 - **Developer Friendly**
   - Clean and intuitive API design
@@ -81,7 +81,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // On-Device: business app and TaPro run on the same terminal.
+        // On-Device: business app and Tapro run on the same terminal.
         val connectionConfig = ConnectionConfig.createOnDeviceMode()
         
         TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
@@ -556,7 +556,7 @@ connectLan()
 
 ### Cross-Device with Auto Channel
 
-Use `CrossDeviceStrategy.AUTO` when the separate TaPro can be reached by LAN and cable. The SDK tries channels in the configured priority order (default: LAN, then Cable), and switches only after the active link drops; it never tears down a healthy link or an in-flight transaction.
+Use `CrossDeviceStrategy.AUTO` when the separate Tapro can be reached by LAN and cable. The SDK tries channels in the configured priority order (default: LAN, then Cable), and switches only after the active link drops; it never tears down a healthy link or an in-flight transaction.
 
 ```kotlin
 val config = ConnectionConfig.createCrossDeviceMode(
@@ -569,7 +569,7 @@ TaplinkSDK.connect(config, connectionListener)
 
 ### Sub-Screen Mode
 
-Use `ConnectionConfig.createSubScreenMode()` for a remote TaPro terminal connected by USB VSP with a customer-facing display. `onConnected` is delivered only after both the VSP link and screen player are ready; error `351` means the screen player could not be opened.
+Use `ConnectionConfig.createSubScreenMode()` for a remote Tapro terminal connected by USB VSP with a customer-facing display. `onConnected` is delivered only after both the VSP link and screen player are ready; error `351` means the screen player could not be opened.
 
 ## LAN Address Acquisition (Discovery & QR Scan)
 
@@ -1221,7 +1221,7 @@ The SDK uses a segmented error code design for quick problem identification.
 | **24x** | LAN Mode | Network connection issues |
 | **25x** | Cable Mode | USB/Serial cable connection issues |
 | **30x** | Transaction | Transaction processing errors |
-| **35x** | Control Action | Connected TaPro does not support a read-only control action |
+| **35x** | Control Action | Connected Tapro does not support a read-only control action |
 
 #### Quick Reference
 
@@ -1243,7 +1243,7 @@ The SDK uses a segmented error code design for quick problem identification.
 | 241-242 | LAN mode failed | Check network and IP address |
 | 251-255 | Cable mode failed | Check cable connection and USB permissions |
 | 351 | Sub-Screen open failed | Check the USB customer-facing display and reconnect |
-| 352 | `GET_TERMINAL_INFO` unsupported | Upgrade the connected TaPro before retrying |
+| 352 | `GET_TERMINAL_INFO` unsupported | Upgrade the connected Tapro before retrying |
 
 **Transaction Issues:**
 
@@ -1665,7 +1665,7 @@ client.getTerminalInfo(callback: TerminalInfoCallback)
 
 ## Terminal Information Query
 
-*Available since v1.0.9.* `getTerminalInfo()` is a read-only control action for the single TaPro device selected by the current connection configuration. It is not a cloud merchant lookup or terminal-list query, does not create a transaction, and does not require a `transactionRequestId`.
+*Available since v1.0.9.* `getTerminalInfo()` is a read-only control action for the single Tapro device selected by the current connection configuration. It is not a cloud merchant lookup or terminal-list query, does not create a transaction, and does not require a `transactionRequestId`.
 
 If the SDK is disconnected, it automatically establishes the configured connection before querying. The result is delivered through `TerminalInfoCallback`, not `PaymentCallback`; callbacks may run on a background thread.
 
@@ -1680,7 +1680,7 @@ TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
 
     override fun onFailure(error: PaymentError) {
         if (error.code == "352") {
-            // The connected TaPro must be upgraded to support GET_TERMINAL_INFO.
+            // The connected Tapro must be upgraded to support GET_TERMINAL_INFO.
         }
     }
 })
@@ -1693,10 +1693,10 @@ TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
 ### Changelog
 
 #### v1.0.9
-- **New — Integration modes**: `ConnectionMode.ON_DEVICE` for a business app and TaPro on the same terminal, and `ConnectionMode.CROSS_DEVICE` for a separate TaPro PIN Pad. Use `CrossDeviceStrategy.LAN`, `CABLE`, or `AUTO` to choose the Cross-Device channel.
+- **New — Integration modes**: `ConnectionMode.ON_DEVICE` for a business app and Tapro on the same terminal, and `ConnectionMode.CROSS_DEVICE` for a separate Tapro PIN Pad. Use `CrossDeviceStrategy.LAN`, `CABLE`, or `AUTO` to choose the Cross-Device channel.
 - **New — Automatic channel failover**: `CrossDeviceStrategy.AUTO` tries LAN and Cable in priority order and re-routes only after the active channel drops. It never tears down a healthy connection or an in-flight transaction.
 - **New — Sub-Screen mode**: `ConnectionConfig.createSubScreenMode()` combines a USB VSP connection with mandatory customer-facing screen activation. Error `351` means the screen player could not be opened.
-- **New — Terminal information query**: `TaplinkSDK.getTerminalInfo(TerminalInfoCallback)` and `TaplinkClient.getTerminalInfo(TerminalInfoCallback)` return the merchant and terminal information for the one TaPro selected by the current connection configuration. Error `352` means that TaPro must be upgraded to support `GET_TERMINAL_INFO`.
+- **New — Terminal information query**: `TaplinkSDK.getTerminalInfo(TerminalInfoCallback)` and `TaplinkClient.getTerminalInfo(TerminalInfoCallback)` return the merchant and terminal information for the one Tapro selected by the current connection configuration. Error `352` means that Tapro must be upgraded to support `GET_TERMINAL_INFO`.
 - **Improved — LAN and Cable reliability**: faster dead-link detection, cable plug-and-play, mDNS stability, and safer reconnect behavior.
 - **No breaking changes**: the classic `APP_TO_APP`, `LAN`, and `CABLE` APIs remain available for backward compatibility. New integrations should prefer the v1.0.9 integration-mode API.
 

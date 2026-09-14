@@ -37,12 +37,12 @@
 
 ### 1. 应用名称统一
 
-**问题**：文档中混用了"Tapro"和"TaPro"
+**问题**：文档中混用了"Tapro"和"Tapro"
 - T02 → 231: `TAPRO_APP_NOT_INSTALLED`
 - T34 → 314: `TAPRO_RESPONSE_TIMEOUT`
 
-**建议**：统一使用"TaPro"（根据官方命名）
-- `TAPRO_APP_NOT_INSTALLED` → `TAPRO_APP_NOT_INSTALLED` (保持大写，但说明中统一为TaPro)
+**建议**：统一使用"Tapro"（根据官方命名）
+- `TAPRO_APP_NOT_INSTALLED` → `TAPRO_APP_NOT_INSTALLED` (保持大写，但说明中统一为Tapro)
 - `TAPRO_RESPONSE_TIMEOUT` → `TAPRO_RESPONSE_TIMEOUT`
 
 ### 2. Host大小写统一
@@ -111,7 +111,7 @@
 | T06 | 213 | CONNECTION_DISCONNECTED | 通用连接管理错误 | 可使用相同ID重试 | - |
 | T08 | 214 | MANUAL_DISCONNECT | 通用连接管理错误 | 无需重试 | - |
 | T41 | 221 | CONNECTION_AUTH_FAILED | 通用认证错误 | 修复后可重试 | - |
-| T02 | 231 | TAPRO_APP_NOT_INSTALLED | APP_TO_APP连接错误 | 修复后可重试 | 统一为TaPro（说明中） |
+| T02 | 231 | TAPRO_APP_NOT_INSTALLED | APP_TO_APP连接错误 | 修复后可重试 | 统一为Tapro（说明中） |
 | T03 | 232 | IPC_SERVICE_BIND_FAILED | APP_TO_APP连接错误 | 可使用相同ID重试 | 保持，IPC是标准术语 |
 | T04 | 251 | WEBSOCKET_CONNECTION_FAILED | LAN连接错误 | 可使用相同ID重试 | - |
 | T05 | 271 | MDNS_DISCOVERY_FAILED | LAN配置错误 | 可使用相同ID重试 | 优化：mDNS服务发现失败 |
@@ -123,7 +123,7 @@
 | T27 | 311 | TRANSACTION_LOCKED | 交易处理错误 | 可使用相同ID重试 | 简化：移除括号说明 |
 | T30 | 312 | SYSTEM_PROCESSING_OTHER_TRANSACTION | 交易处理错误 | 可使用相同ID重试 | - |
 | T31 | 313 | INIT_FAILED_SYSTEM_BUSY | 交易处理错误 | 可使用相同ID重试 | 优化：系统繁忙导致初始化失败 |
-| T34 | 314 | TAPRO_RESPONSE_TIMEOUT | 交易处理错误 | **特殊处理** | 统一为TaPro（说明中） |
+| T34 | 314 | TAPRO_RESPONSE_TIMEOUT | 交易处理错误 | **特殊处理** | 统一为Tapro（说明中） |
 | T38 | 315 | HOST_TRANSACTION_REJECTED | 交易处理错误 | **必须使用新ID** | 统一为Host（首字母大写） |
 | T39 | 316 | HOST_TRANSACTION_PROCESSING | 交易处理错误 | **必须使用新ID** | 统一为Host（首字母大写） |
 | T29 | 317 | TRANSACTION_TERMINATED | 交易处理错误 | 无需重试 | - |
@@ -147,7 +147,7 @@
 
 1. **合并T07和T37**：统一为`NO_CONNECTION_ESTABLISHED`
 2. **统一术语**：
-   - "Tapro" → "TaPro"（在说明中统一）
+   - "Tapro" → "Tapro"（在说明中统一）
    - "host" → "Host"（首字母大写）
 3. **优化描述**：
    - `MDNS_DISCOVERY_FAILED` → 说明中改为"mDNS服务发现失败"
@@ -166,7 +166,7 @@
 ### 优先级1（必须优化）
 - ✅ 合并T07和T37的错误名称
 - ✅ 统一Host大小写（Host交易拒绝/Host交易处理中）
-- ✅ 统一TaPro命名（在说明中）
+- ✅ 统一Tapro命名（在说明中）
 
 ### 优先级2（建议优化）
 - ⚠️ 优化mDNS描述为"mDNS服务发现失败"
@@ -224,7 +224,7 @@
 ### 必须优化的项目
 1. **合并T07和T37**：统一错误名称为`NO_CONNECTION_ESTABLISHED`
 2. **统一Host大小写**：所有Host相关错误统一为首字母大写
-3. **统一TaPro命名**：在说明中统一使用TaPro
+3. **统一Tapro命名**：在说明中统一使用Tapro
 
 ### 建议优化的项目
 1. **优化mDNS描述**：改为"mDNS服务发现失败"
@@ -237,4 +237,4 @@
 
 **版本**: 1.0.0  
 **更新日期**: 2025-01-12  
-**作者**: TaPro Team
+**作者**: Tapro Team

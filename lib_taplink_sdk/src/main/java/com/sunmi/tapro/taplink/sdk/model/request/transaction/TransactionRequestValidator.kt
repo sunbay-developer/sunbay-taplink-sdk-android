@@ -11,7 +11,7 @@ import java.math.BigDecimal
  *
  * Provides common validation methods for validating various fields of transaction requests
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 object TransactionRequestValidator {

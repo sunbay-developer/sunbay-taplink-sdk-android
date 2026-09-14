@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 
  * @param context Android context
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class ServiceDiscoveryManager(

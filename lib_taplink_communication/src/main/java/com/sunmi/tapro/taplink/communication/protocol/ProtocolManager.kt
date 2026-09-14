@@ -16,7 +16,7 @@ import java.net.URI
  * 3. Protocol format validation
  * 4. Protocol type conversion
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 object ProtocolManager {

@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.sdk.enums
  * 
  * Used to specify the protocol type for cable connections
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class CableProtocol {

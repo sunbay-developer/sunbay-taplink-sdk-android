@@ -14,7 +14,7 @@ import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
  * Supports App-to-App mode, Cable mode, and Local Area Network (LAN) mode.
  * Includes configuration options such as connection timeout and automatic reconnection.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 class ConnectionConfig {
@@ -380,7 +380,7 @@ class ConnectionConfig {
         /**
          * Creates an on-device (ON_DEVICE) integration mode configuration.
          *
-         * The business app and TaPro run on the same terminal. Normalized internally onto
+         * The business app and Tapro run on the same terminal. Normalized internally onto
          * the App-to-App implementation.
          *
          * @return the on-device mode configuration
@@ -465,10 +465,10 @@ class ConnectionConfig {
         /**
          * Creates a Sub_Screen mode configuration.
          *
-         * Connects via USB Virtual Serial Port (VSP) to a remote TaPro terminal and
+         * Connects via USB Virtual Serial Port (VSP) to a remote Tapro terminal and
          * automatically opens the USB customer-facing screen player. The connection
          * is only considered successful when both the VSP link is up AND the screen
-         * player launches on the remote TaPro device.
+         * player launches on the remote Tapro device.
          *
          * @return the Sub_Screen mode configuration
          */

@@ -339,4 +339,4 @@ kernel.release()
 
 ## License
 
-Copyright © 2025 Sunmi TaPro Team
+Copyright © 2025 Sunmi Tapro Team

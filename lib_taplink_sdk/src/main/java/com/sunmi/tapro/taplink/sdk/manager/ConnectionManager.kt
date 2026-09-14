@@ -36,7 +36,7 @@ import kotlin.coroutines.resume
  * - Connection status tracking
  * - Device info (updated by PaymentManager when INIT succeeds)
  *
- * @author TaPro Team
+ * @authorTapro Team
  * @since 2025-12-22
  */
 class ConnectionManager(
@@ -361,8 +361,8 @@ class ConnectionManager(
                     // Register data receiver
                     registerDataReceiver()
 
-                    // Extract TaPro version and device ID from extraInfoMap if available.
-                    // In APP_TO_APP mode, TaPro returns these via getExtraInfos() AIDL method
+                    // ExtractTapro version and device ID from extraInfoMap if available.
+                    // In APP_TO_APP mode,Tapro returns these via getExtraInfos() AIDL method
                     // at connection time. For LAN/Cable modes, extraInfoMap does not contain
                     // version info — it will be populated later from the first INIT response.
                     val deviceId = extraInfoMap?.get(EXTRA_KEY_DEVICE_ID) ?: "unknown"
@@ -373,9 +373,9 @@ class ConnectionManager(
                     currentConnectionConfig = connectionConfig
 
                     if (taproVersion != "unknown") {
-                        LogUtil.d(TAG, "TaPro version obtained at connect: $taproVersion, deviceId: $deviceId")
+                        LogUtil.d(TAG, "Tapro version obtained at connect: $taproVersion, deviceId: $deviceId")
                     } else {
-                        LogUtil.d(TAG, "Physical connection established, TaPro version will be obtained on first transaction (INIT)")
+                        LogUtil.d(TAG, "Physical connection established, Tapro version will be obtained on first transaction (INIT)")
                     }
 
                     updateConnectionStatus(
@@ -559,7 +559,7 @@ class ConnectionManager(
      *
      * Unlike [isConnected] (which only reflects the cached kernel status), this performs a
      * best-effort round-trip check on the underlying transport. It lets callers fail fast when the
-     * peer (TaPro) has stopped responding — e.g. a stuck cable/UART port — instead of waiting for a
+     * peer (Tapro) has stopped responding — e.g. a stuck cable/UART port — instead of waiting for a
      * full transaction timeout.
      *
      * Runs the (potentially blocking) probe on [Dispatchers.IO].
@@ -655,7 +655,7 @@ class ConnectionManager(
     }
 
     /**
-     * Get TaPro version
+     * Get Tapro version
      */
     fun getTaproVersion(): String? {
         return connectedTaproVersion
@@ -1641,7 +1641,7 @@ class ConnectionManager(
         const val ERROR_CAMERA_PERMISSION_DENIED = "E505"
         const val ERROR_CAMERA_UNAVAILABLE = "E506"
 
-        // Keys used by TaPro in extraInfoMap (returned via getExtraInfos in APP_TO_APP mode)
+        // Keys used by Tapro in extraInfoMap (returned via getExtraInfos in APP_TO_APP mode)
         private const val EXTRA_KEY_TAPRO_VERSION = "taproVersion"
         private const val EXTRA_KEY_DEVICE_ID = "deviceId"
     }

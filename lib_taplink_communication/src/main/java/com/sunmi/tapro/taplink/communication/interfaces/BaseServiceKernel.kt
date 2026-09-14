@@ -8,7 +8,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  *
  * Provides unified status management functionality to reduce code duplication
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 abstract class BaseServiceKernel : IServiceKernel {

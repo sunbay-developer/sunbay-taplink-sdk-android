@@ -3,7 +3,7 @@ package com.sunmi.tapro.taplink.sdk.config
 /**
  * Reconnection policy configuration object
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class ReconnectPolicy(

@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * @param T Callback type
  * @param defaultTimeoutMillis Default callback timeout time (milliseconds), default 60 seconds
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class LocalCallbackManager<T>(

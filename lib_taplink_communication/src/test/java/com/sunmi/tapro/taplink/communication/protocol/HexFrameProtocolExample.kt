@@ -12,7 +12,7 @@
 // * 
 // * 展示如何在不同的通信模式中使用 HexFrameProtocol 和 HexFrameBuffer
 // * 
-// * @author TaPro Team
+// * @author Tapro Team
 // * @since 2025-01-06
 // */
 //

@@ -45,7 +45,7 @@ import java.math.BigDecimal
  * - For temporary errors (network timeout, system busy), you can retry with the same transactionRequestId
  * - After a clear failure or parameter modification, you must use a new transactionRequestId
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class PaymentRequest(

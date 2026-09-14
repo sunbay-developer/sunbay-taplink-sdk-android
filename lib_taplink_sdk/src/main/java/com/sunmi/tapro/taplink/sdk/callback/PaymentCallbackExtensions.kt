@@ -9,7 +9,7 @@ import com.sunmi.tapro.taplink.sdk.error.PaymentError
  *
  * Provide convenient error handling methods to reduce duplicate code
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 

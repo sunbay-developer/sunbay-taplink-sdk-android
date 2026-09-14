@@ -50,7 +50,7 @@
 - 262: `NETWORK_TIMEOUT` (网络超时) - LAN网络错误
 - 286: `USB_DEVICE_CONNECTION_TIMEOUT` (USB设备连接超时) - CABLE连接错误
 - 300: `PROTOCOL_TIMEOUT` (协议超时) - CABLE协议错误
-- 314: `TAPRO_RESPONSE_TIMEOUT` (TaPro响应超时) - 交易处理错误
+- 314: `TAPRO_RESPONSE_TIMEOUT` (Tapro响应超时) - 交易处理错误
 - 350: `DATA_TIMEOUT` (数据传输超时) - 数据传输错误
 
 **建议**：
@@ -172,7 +172,7 @@
 ## 五、错误码类型归类总结
 
 ### 超时错误（8个）
-- 连接超时、认证超时、Intent超时、网络超时、USB连接超时、协议超时、TaPro响应超时、数据传输超时
+- 连接超时、认证超时、Intent超时、网络超时、USB连接超时、协议超时、Tapro响应超时、数据传输超时
 
 ### 权限错误（9个）
 - 权限不足、未授权访问、Intent权限被拒绝、USB权限被拒绝、USB权限必需、串口权限、设备访问被拒绝、驱动权限错误、系统权限被拒绝
@@ -204,4 +204,4 @@
 
 **版本**: 1.0.0  
 **更新日期**: 2025-01-12  
-**作者**: TaPro Team
+**作者**: Tapro Team

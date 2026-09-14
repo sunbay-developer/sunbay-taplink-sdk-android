@@ -19,7 +19,7 @@ import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
  *    from returning any response (connection lost, timeout, invalid request, etc.).
  *    This is NOT a card decline — it means no result was received at all.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 interface PaymentCallback {

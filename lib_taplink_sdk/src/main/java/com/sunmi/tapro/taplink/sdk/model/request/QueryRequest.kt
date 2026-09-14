@@ -6,7 +6,7 @@ package com.sunmi.tapro.taplink.sdk.model.request
  * Used to query transaction status
  * Can query by transaction ID, transaction request ID, or order ID
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 class QueryRequest {

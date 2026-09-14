@@ -291,7 +291,7 @@ A:
 ---
 
 **最后更新**: 2025-01-06  
-**维护者**: TaPro Team  
+**维护者**: Tapro Team  
 **相关文档**: 
 - [项目规则](.kiro/PROJECT_RULES.md)
 - [Steering 规则](.kiro/steering/documentation-rules.md)

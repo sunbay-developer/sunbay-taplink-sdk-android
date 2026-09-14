@@ -227,7 +227,7 @@ $ .kiro/scripts/check-md-files.sh
 ---
 
 **创建日期**: 2025-01-06  
-**创建者**: TaPro Team  
+**创建者**: Tapro Team  
 **相关文档**:
 - [项目规则](.kiro/PROJECT_RULES.md)
 - [使用说明](PROJECT_DOCUMENTATION_RULES.md)

@@ -192,5 +192,5 @@ FORCED_AUTH 交易类型已经完全集成到 Taplink SDK 中，包括：
 ---
 
 **创建日期**：2025-12-22  
-**作者**：TaPro Team  
+**作者**：Tapro Team  
 **版本**：1.0.0

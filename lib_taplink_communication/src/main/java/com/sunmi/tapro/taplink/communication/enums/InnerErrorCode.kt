@@ -17,7 +17,7 @@ import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
  * - 25x: USB mode connection failure
  * - 30x: Transaction processing errors
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-14
  */
 sealed class InnerErrorCode(

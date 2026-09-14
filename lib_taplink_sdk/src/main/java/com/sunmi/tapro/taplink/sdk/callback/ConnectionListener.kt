@@ -7,7 +7,7 @@ import com.sunmi.tapro.taplink.sdk.error.ConnectionError
  * 
  * Real-time monitoring of connection status changes, disconnection and reconnection events.
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 interface ConnectionListener {

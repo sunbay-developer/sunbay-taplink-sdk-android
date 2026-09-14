@@ -52,11 +52,11 @@ This document defines comprehensive error codes for Taplink SDK semi-integration
 
 | Code | Name | Description | ISV Message | ISO Message | Suggested Action |
 |------|------|-------------|-------------|-------------|------------------|
-| A1001 | TAPRO_APP_NOT_FOUND | TaPro app not installed | TaPro application not found on device | Payment app not installed | Install TaPro application |
-| A1002 | TAPRO_APP_OUTDATED | TaPro app version incompatible | TaPro app version not supported | Payment app needs update | Update TaPro application |
-| A1003 | INTENT_FAILED | Intent communication failed | Failed to communicate with TaPro app | Communication error with payment app | Restart both applications |
-| A1004 | TAPRO_APP_BUSY | TaPro app busy | TaPro app is processing another request | Payment app is busy | Wait and retry |
-| A1005 | PACKAGE_VERIFICATION_FAILED | Package verification failed | TaPro app package verification failed | Security verification failed | Reinstall TaPro app |
+| A1001 | TAPRO_APP_NOT_FOUND | Tapro app not installed | Tapro application not found on device | Payment app not installed | Install Tapro application |
+| A1002 | TAPRO_APP_OUTDATED | Tapro app version incompatible | Tapro app version not supported | Payment app needs update | Update Tapro application |
+| A1003 | INTENT_FAILED | Intent communication failed | Failed to communicate with Tapro app | Communication error with payment app | Restart both applications |
+| A1004 | TAPRO_APP_BUSY | Tapro app busy | Tapro app is processing another request | Payment app is busy | Wait and retry |
+| A1005 | PACKAGE_VERIFICATION_FAILED | Package verification failed | Tapro app package verification failed | Security verification failed | Reinstall Tapro app |
 
 ### A3xxx - APP_TO_APP Protocol Errors
 
@@ -64,8 +64,8 @@ This document defines comprehensive error codes for Taplink SDK semi-integration
 |------|------|-------------|-------------|-------------|------------------|
 | A3001 | INVALID_INTENT_DATA | Invalid intent data | Invalid data in intent communication | Invalid request format | Check request parameters |
 | A3002 | INTENT_TIMEOUT | Intent timeout | Intent communication timeout | Request timeout | Increase timeout or retry |
-| A3003 | RESPONSE_FORMAT_ERROR | Invalid response format | Invalid response from TaPro app | Invalid response received | Check TaPro app version |
-| A3004 | PROTOCOL_VERSION_MISMATCH | Protocol version mismatch | Protocol version not supported | Communication protocol error | Update SDK or TaPro app |
+| A3003 | RESPONSE_FORMAT_ERROR | Invalid response format | Invalid response from Tapro app | Invalid response received | Check Tapro app version |
+| A3004 | PROTOCOL_VERSION_MISMATCH | Protocol version mismatch | Protocol version not supported | Communication protocol error | Update SDK or Tapro app |
 | A3005 | DATA_SERIALIZATION_ERROR | Data serialization error | Failed to serialize request data | Data format error | Check request data format |
 
 ## LAN Mode Errors (L)
@@ -261,7 +261,7 @@ TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
     override fun onError(error: ConnectionError) {
         when (error.code) {
             "A1001" -> {
-                // TaPro app not found
+                // Tapro app not found
                 showInstallDialog()
             }
             "L1001" -> {
@@ -384,7 +384,7 @@ class ISOErrorReporter {
 class ErrorSimulator {
     fun simulateConnectionError(mode: ConnectionMode) {
         when (mode) {
-            ConnectionMode.APP_TO_APP -> throw ConnectionError("A1001", "TaPro app not found")
+            ConnectionMode.APP_TO_APP -> throw ConnectionError("A1001", "Tapro app not found")
             ConnectionMode.LAN -> throw ConnectionError("L1001", "Device not found on network")
             ConnectionMode.CABLE -> throw ConnectionError("C1001", "Cable not connected")
         }
@@ -396,4 +396,4 @@ class ErrorSimulator {
 
 **Version**: 1.0.0  
 **Updated**: 2025-12-22  
-**Authors**: TaPro Team
+**Authors**: Tapro Team

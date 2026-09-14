@@ -97,13 +97,13 @@ Choose exactly one integration mode for a connection. Do not use `CrossDeviceStr
 
 | Setup | Use this public API |
 |---|---|
-| Business app and TaPro on the same terminal | `ConnectionConfig.createOnDeviceMode()` |
-| Separate TaPro terminal on the same LAN | `ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)` |
-| Separate TaPro terminal connected by USB cable | `ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE)` |
+| Business app and Tapro on the same terminal | `ConnectionConfig.createOnDeviceMode()` |
+| Separate Tapro terminal on the same LAN | `ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)` |
+| Separate Tapro terminal connected by USB cable | `ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE)` |
 | Separate terminal with LAN/cable fallback after an active link drops | `ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.AUTO, host, port)` |
 | Dedicated USB customer-facing display | `ConnectionConfig.createSubScreenMode()` |
 
-### On-Device (business app and TaPro on the same terminal)
+### On-Device (business app and Tapro on the same terminal)
 ```kotlin
 val config = ConnectionConfig.createOnDeviceMode()
 TaplinkSDK.connect(config, connectionListener)

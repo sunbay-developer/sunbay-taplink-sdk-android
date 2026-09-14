@@ -17,7 +17,7 @@ import org.json.JSONObject
  * Handles saving and loading connection configurations for automatic reconnection
  * Supports device ID based discovery and connection parameter persistence
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-21
  */
 class ConnectionPersistence(context: Context) {

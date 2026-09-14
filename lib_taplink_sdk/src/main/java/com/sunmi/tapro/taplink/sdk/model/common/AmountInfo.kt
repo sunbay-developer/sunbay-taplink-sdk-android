@@ -16,7 +16,7 @@ import java.math.BigDecimal
  * val amount = AmountInfo.of(500L, "EUR")    // €5.00
  * ```
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class AmountInfo(

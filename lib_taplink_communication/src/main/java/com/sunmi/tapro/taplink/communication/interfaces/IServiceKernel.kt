@@ -7,7 +7,7 @@ import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
  * 
  * Defines the basic functionality that all service kernels must implement
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 interface IServiceKernel {

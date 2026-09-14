@@ -9,7 +9,7 @@ import android.content.Context
  *
  * Must be initialized via [init] before use (called automatically by [TaplinkServiceKernel]).
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 object ErrorStringHelper {

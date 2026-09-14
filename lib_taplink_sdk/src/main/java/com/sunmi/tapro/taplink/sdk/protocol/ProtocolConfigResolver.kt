@@ -17,7 +17,7 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolManager
  * explicitly by the integrator. There is no automatic transport/protocol selection: no
  * Cross-Device AUTO (LAN/CABLE auto-selection) and no Cable AUTO (VSP/RS232/AOA try-order).
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-17
  */
 object ProtocolConfigResolver {

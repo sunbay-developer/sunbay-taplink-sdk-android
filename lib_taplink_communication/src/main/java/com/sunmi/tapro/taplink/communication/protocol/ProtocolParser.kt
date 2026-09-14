@@ -7,7 +7,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 /**
  * Protocol parse result data class
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 sealed class ProtocolParseResult {
@@ -77,7 +77,7 @@ sealed class ProtocolParseResult {
  * - rs232://baudRate/dataBits/parity/stopBits - RS232 serial port (hex transmission)
  * - ws:// or wss:// - WebSocket
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 object ProtocolParser {

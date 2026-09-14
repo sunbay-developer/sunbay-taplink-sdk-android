@@ -19,7 +19,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  * @param staffInfo Staff information (optional)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class ForcedAuthRequest(

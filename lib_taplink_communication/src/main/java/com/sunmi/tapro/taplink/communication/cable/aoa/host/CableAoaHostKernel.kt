@@ -45,7 +45,7 @@ import java.util.concurrent.CountDownLatch
  * 3. Idempotent operations, repeated calls to connect() are safe
  * 4. State is truth, state variables directly reflect resource state
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-18
  */
 class CableAoaHostKernel(
@@ -80,7 +80,7 @@ class CableAoaHostKernel(
 
         /**
          * The peer may re-enumerate once more even after entering accessory mode: when the
-         * TapLink host (TaPro) takes over the accessory it closes its VSP fallback channel,
+         * TapLink host (Tapro) takes over the accessory it closes its VSP fallback channel,
          * and because VSP and accessory share the same USB gadget, closing it triggers
          * USB_STATE DISCONNECTED -> CONNECTED -> CONFIGURED, invalidating the AOA device node
          * that was just enumerated on this side.

@@ -3,7 +3,7 @@ package com.sunmi.tapro.taplink.sdk.enums
 /**
  * Connection mode enumeration
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class ConnectionMode {
@@ -13,8 +13,8 @@ enum class ConnectionMode {
     /**
      * On-device integration mode.
      *
-     * The business app and TaPro run on the SAME terminal; the business app invokes
-     * TaPro locally to complete the payment. This is the business-facing integration
+     * The business app and Tapro run on the SAME terminal; the business app invokes
+     * Tapro locally to complete the payment. This is the business-facing integration
      * mode; its current underlying implementation is App-to-App.
      *
      * Prefer this over the deprecated [APP_TO_APP] value: [ON_DEVICE] is normalized
@@ -26,7 +26,7 @@ enum class ConnectionMode {
     /**
      * Cross-Device integration mode.
      *
-     * TaPro acts as a payment terminal driven by an external business system running on
+     * Tapro acts as a payment terminal driven by an external business system running on
      * another device, over a connection channel. The concrete connection strategy
      * (AUTO / LAN / CABLE) is NOT expressed as separate enum values; it is configured as a
      * detail via
@@ -67,15 +67,15 @@ enum class ConnectionMode {
     /**
      * Sub_Screen mode.
      *
-     * Connects to a remote TaPro terminal via USB Virtual Serial Port (VSP) and
+     * Connects to a remote Tapro terminal via USB Virtual Serial Port (VSP) and
      * automatically opens the USB customer-facing screen player on the remote device.
      *
      * The connection is considered successful only when both the VSP transport is
-     * established AND the sub-screen player is launched on TaPro. If the screen
+     * established AND the sub-screen player is launched on Tapro. If the screen
      * player fails to open, the connection is treated as failed (onError is delivered).
      *
      * Prerequisites:
-     * - The remote device must have TaPro running with VSP service mode enabled.
+     * - The remote device must have Tapro running with VSP service mode enabled.
      * - The two devices must be connected via a USB cable.
      *
      * After a successful connection, the full TapLink transaction API is available

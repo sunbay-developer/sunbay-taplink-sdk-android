@@ -227,6 +227,6 @@ private fun isDeviceStillConnected(): Boolean {
 ---
 
 **修复日期**: 2026-01-19  
-**修复人员**: TaPro Team  
+**修复人员**: Tapro Team  
 **问题类型**: 接收循环错误处理  
 **影响范围**: AOA Host 模式首次连接和重连

@@ -196,7 +196,7 @@ fi
 ---
 
 **创建日期**: 2025-01-06  
-**创建者**: TaPro Team  
+**创建者**: Tapro Team  
 **相关文档**:
 - [项目规则](.kiro/PROJECT_RULES.md)
 - [文档管理规则](PROJECT_DOCUMENTATION_RULES.md)

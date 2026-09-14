@@ -10,8 +10,8 @@ package com.sunmi.tapro.taplink.sdk.enums
  *
  * Set via [com.sunmi.tapro.taplink.sdk.config.ConnectionConfig.setCrossDeviceStrategy].
  *
- * Note: Cloud is a supported Cross-Device transport at the TaPro display/status level, but it is
- * NOT a value of this enum. Cloud transactions are dispatched to TaPro directly by the cloud
+ * Note: Cloud is a supported Cross-Device transport at the Tapro display/status level, but it is
+ * NOT a value of this enum. Cloud transactions are dispatched to Tapro directly by the cloud
  * backend; the SDK never establishes, authenticates, or drives a Cloud connection, so there is no
  * SDK-selectable [CrossDeviceStrategy.CLOUD] strategy.
  */

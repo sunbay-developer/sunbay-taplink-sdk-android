@@ -12,7 +12,7 @@ import java.math.BigDecimal
  * 
  * Contains comprehensive transaction information
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class PaymentResult(
@@ -209,7 +209,7 @@ data class PaymentResult(
     // ========== Connection info fields (populated from INIT response) ==========
 
     /**
-     * TaPro application version (populated from INIT response bizData).
+     * Tapro application version (populated from INIT response bizData).
      * Available after the first transaction completes.
      */
     val taproVersion: String? = null,

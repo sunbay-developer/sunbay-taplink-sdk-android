@@ -9,7 +9,7 @@ import javax.crypto.spec.SecretKeySpec
  *
  * Provides HMAC-SHA256 signature functionality
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 object SignUtil {

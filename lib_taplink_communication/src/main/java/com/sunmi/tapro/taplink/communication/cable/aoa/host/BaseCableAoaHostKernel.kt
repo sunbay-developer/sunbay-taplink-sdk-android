@@ -37,7 +37,7 @@ import kotlinx.coroutines.sync.withLock
  * - USB设备广播接收器
  * - bulkTransfer数据传输
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 abstract class BaseCableAoaHostKernel(

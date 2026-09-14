@@ -7,7 +7,7 @@ package com.sunmi.tapro.taplink.communication.enums
  * - HOST: Android device acts as USB host, controlling external USB devices
  * - ACCESSORY: Android device acts as USB accessory, controlled by external USB host
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 enum class UsbMode {

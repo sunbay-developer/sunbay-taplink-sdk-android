@@ -57,16 +57,16 @@
 
 | 错误码 | 原错误码 | 错误名称 | 说明 | ISV消息 | ISO消息 | 解决方案 | 重试策略 |
 |--------|----------|----------|------|---------|---------|----------|----------|
-| 231 | T02, A1001 | TAPRO_APP_NOT_INSTALLED | TaPro应用未安装 | TaPro application not found on device | Payment app not installed | 安装TaPro应用到设备 | 修复后可重试 |
-| 232 | T03, A1003 | IPC_SERVICE_BIND_FAILED | IPC服务绑定失败 | IPC service bind failed | Communication error with payment app | 重启TaPro应用或重启设备 | 可使用相同ID重试 |
-| 233 | A1003 | INTENT_FAILED | Intent通信失败 | Failed to communicate with TaPro app | Communication error with payment app | 重启两个应用 | 可使用相同ID重试 |
-| 234 | A1002 | TAPRO_APP_OUTDATED | TaPro应用版本过旧 | TaPro app version not supported | Payment app needs update | 更新TaPro应用 | 修复后可重试 |
-| 235 | A1004 | TAPRO_APP_BUSY | TaPro应用忙碌 | TaPro app is processing another request | Payment app is busy | 等待并重试 | 可使用相同ID重试 |
-| 236 | A1005 | PACKAGE_VERIFICATION_FAILED | 包验证失败 | TaPro app package verification failed | Security verification failed | 重新安装TaPro应用 | 修复后可重试 |
+| 231 | T02, A1001 | TAPRO_APP_NOT_INSTALLED | Tapro应用未安装 | Tapro application not found on device | Payment app not installed | 安装Tapro应用到设备 | 修复后可重试 |
+| 232 | T03, A1003 | IPC_SERVICE_BIND_FAILED | IPC服务绑定失败 | IPC service bind failed | Communication error with payment app | 重启Tapro应用或重启设备 | 可使用相同ID重试 |
+| 233 | A1003 | INTENT_FAILED | Intent通信失败 | Failed to communicate with Tapro app | Communication error with payment app | 重启两个应用 | 可使用相同ID重试 |
+| 234 | A1002 | TAPRO_APP_OUTDATED | Tapro应用版本过旧 | Tapro app version not supported | Payment app needs update | 更新Tapro应用 | 修复后可重试 |
+| 235 | A1004 | TAPRO_APP_BUSY | Tapro应用忙碌 | Tapro app is processing another request | Payment app is busy | 等待并重试 | 可使用相同ID重试 |
+| 236 | A1005 | PACKAGE_VERIFICATION_FAILED | 包验证失败 | Tapro app package verification failed | Security verification failed | 重新安装Tapro应用 | 修复后可重试 |
 | 237 | - | INTENT_PERMISSION_DENIED | Intent权限被拒绝 | Intent permission denied | Permission denied | 检查应用权限设置 | 修复后可重试 |
-| 238 | - | APP_NOT_RESPONDING | 应用无响应 | TaPro app not responding | Payment app not responding | 重启TaPro应用 | 修复后可重试 |
-| 239 | - | APP_CRASHED | 应用崩溃 | TaPro app crashed | Payment app crashed | 重启TaPro应用 | 修复后可重试 |
-| 240 | - | APP_VERSION_MISMATCH | 应用版本不匹配 | TaPro app version incompatible with SDK | Version mismatch | 更新应用或SDK版本 | 修复后可重试 |
+| 238 | - | APP_NOT_RESPONDING | 应用无响应 | Tapro app not responding | Payment app not responding | 重启Tapro应用 | 修复后可重试 |
+| 239 | - | APP_CRASHED | 应用崩溃 | Tapro app crashed | Payment app crashed | 重启Tapro应用 | 修复后可重试 |
+| 240 | - | APP_VERSION_MISMATCH | 应用版本不匹配 | Tapro app version incompatible with SDK | Version mismatch | 更新应用或SDK版本 | 修复后可重试 |
 
 ### 251-280: LAN模式错误
 
@@ -198,7 +198,7 @@
 | 错误码 | 原错误码 | 错误名称 | 说明 | ISV消息 | ISO消息 | 解决方案 | 重试策略 |
 |--------|----------|----------|------|---------|---------|----------|----------|
 | 331 | T27, T30 | TRANSACTION_LOCKED | 交易锁定（系统正在处理其他交易） | Transaction locked, system processing other transaction | Transaction in progress | 等待当前交易完成后重试 | 可使用相同ID重试 |
-| 332 | T34 | TAPRO_RESPONSE_TIMEOUT | TaPro响应超时 | TaPro response timeout | Payment timeout | 查询交易状态后重试 | **特殊处理**：先查询状态，确认后可使用相同ID重试 |
+| 332 | T34 | TAPRO_RESPONSE_TIMEOUT | Tapro响应超时 | Tapro response timeout | Payment timeout | 查询交易状态后重试 | **特殊处理**：先查询状态，确认后可使用相同ID重试 |
 | 333 | T38 | HOST_TRANSACTION_REJECTED | Host交易拒绝 | Host transaction rejected | Transaction rejected | 交易被Host拒绝，检查交易参数 | **必须使用新ID** |
 | 334 | T39 | HOST_TRANSACTION_PROCESSING | Host交易处理中 | Host transaction processing | Transaction in progress | Host正在处理交易，请查询交易状态 | **必须使用新ID** |
 | 335 | T29 | TRANSACTION_TERMINATED | 交易已终止 | Transaction terminated | Transaction terminated | 交易已终止，无需重试 | 无需重试 |
@@ -704,7 +704,7 @@ class SemiIntegrationErrorCodeMapper {
 | 262 | L5002 | NETWORK_TIMEOUT | LAN网络错误 | 网络操作超时 |
 | 286 | T12 | USB_DEVICE_CONNECTION_TIMEOUT | CABLE连接错误 | USB设备连接超时 |
 | 300 | - | PROTOCOL_TIMEOUT | CABLE协议错误 | 协议操作超时 |
-| 314 | T34 | TAPRO_RESPONSE_TIMEOUT | 交易处理错误 | TaPro响应超时（需特殊处理） |
+| 314 | T34 | TAPRO_RESPONSE_TIMEOUT | 交易处理错误 | Tapro响应超时（需特殊处理） |
 | 350 | - | DATA_TIMEOUT | 数据传输错误 | 数据传输超时 |
 
 **通用处理方式**：增加超时时间或重试（T34需要先查询状态）
@@ -984,4 +984,4 @@ object ConnectionFailureErrorHelper {
 
 **版本**: 1.0.0  
 **更新日期**: 2025-01-12  
-**作者**: TaPro Team
+**作者**: Tapro Team

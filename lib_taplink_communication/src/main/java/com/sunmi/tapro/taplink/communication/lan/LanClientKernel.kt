@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong
  * @param appSecretKey Application secret key
  * @param context Android context
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class LanClientKernel(
@@ -73,7 +73,7 @@ class LanClientKernel(
             if (previousName == newName) return false
             // Same endpoint (host:port) is a necessary condition for a peer restart.
             if (previousHost != newHost || previousPort != newPort) return false
-            // The mDNS instance name is "Taplink-Server-<timestamp>-<serial>". TaPro re-registers
+            // The mDNS instance name is "Taplink-Server-<timestamp>-<serial>". Tapro re-registers
             // its service with a FRESH timestamp periodically (and across network changes) WITHOUT
             // restarting — same device, same serial, only the timestamp differs. Treating that as a
             // peer restart would needlessly tear down a perfectly healthy socket (observed as a

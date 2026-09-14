@@ -14,7 +14,7 @@ import java.util.*
  * Converts any request object to the underlying transport protocol format (BasicRequest).
  * Uses Android's built-in JSON implementation with no external JSON dependency.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 object ProtocolRequestBuilder {

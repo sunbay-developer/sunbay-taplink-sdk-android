@@ -10,7 +10,7 @@ import com.sunmi.tapro.taplink.sdk.model.DiscoveredService
  * the discovered LAN Taplink services without establishing a connection. The caller
  * decides which service to connect to.
  *
- * @author TaPro Team
+ * @author Tapro Team
  */
 interface DiscoveryListener {
 

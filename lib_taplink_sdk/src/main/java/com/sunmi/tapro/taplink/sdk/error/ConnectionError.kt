@@ -6,7 +6,7 @@ package com.sunmi.tapro.taplink.sdk.error
  * Returned in [com.sunmi.tapro.taplink.sdk.callback.ConnectionListener.onError] when
  * a connection attempt fails or the active connection is lost unexpectedly.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class ConnectionError(

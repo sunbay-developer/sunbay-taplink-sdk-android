@@ -20,7 +20,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * - Connection configuration persistence
  * - Device ID based auto-discovery
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-21
  */
 class ReconnectManager(

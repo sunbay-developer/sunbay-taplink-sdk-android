@@ -13,7 +13,7 @@ import java.math.BigDecimal
  * @param attach Additional information (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class TipAdjustRequest(

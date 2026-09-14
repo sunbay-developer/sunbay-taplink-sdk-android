@@ -8,7 +8,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
  * All responses use this structure.
  * The internal JSON bridge maps flat eventCode/eventMsg fields to [PaymentEvent].
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class BasicResponse(

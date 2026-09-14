@@ -23,7 +23,7 @@ import java.math.BigDecimal
  * 
  * 测试新的类型安全请求对象与TaplinkClient的集成
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 class TaplinkClientIntegrationTest {

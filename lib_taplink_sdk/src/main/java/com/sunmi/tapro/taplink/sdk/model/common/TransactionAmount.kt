@@ -7,7 +7,7 @@ import java.math.BigDecimal
  * 
  * Contains detailed amount breakdown information.
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class TransactionAmount(

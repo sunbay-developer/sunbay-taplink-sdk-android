@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.sdk.model.common
  * 
  * Used to describe staff information for processing transactions.
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class StaffInfo(

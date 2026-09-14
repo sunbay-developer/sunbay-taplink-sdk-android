@@ -25,7 +25,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * - USB AOA communication
  * - Other scenarios requiring reliable data transmission
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-06
  */
 class HexFrameProtocol {

@@ -5,13 +5,13 @@ package com.sunmi.tapro.taplink.sdk.enums
  *
  * Defines all supported transaction types to avoid using magic strings.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-12
  */
 enum class TransactionAction(val value: String) {
     /**
      * Initialize connection.
-     * Used to initialize the TaPro application after establishing a connection.
+     * Used to initialize the Tapro application after establishing a connection.
      */
     INIT("INIT"),
 
@@ -88,7 +88,7 @@ enum class TransactionAction(val value: String) {
     SWITCH_TO_MANUAL_ENTRY("SWITCH_TO_MANUAL_ENTRY"),
 
     /**
-     * Open TaPro USB secondary-screen player application.
+     * Open Tapro USB secondary-screen player application.
      *
      * Control action used by POS demo before showing Android Presentation content
      * on a secondary display.
@@ -99,7 +99,7 @@ enum class TransactionAction(val value: String) {
      * Get terminal info.
      *
      * Read-only control action that returns the merchant and terminal information for
-     * the currently connected TaPro device. Does not create a transaction, does not
+     * the currently connected Tapro device. Does not create a transaction, does not
      * require a transactionRequestId, and is not affected by transactional API
      * permission / service-plan gating (though it is still subject to request signature
      * verification).

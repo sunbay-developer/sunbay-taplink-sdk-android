@@ -577,7 +577,7 @@ fun testNetworkEnvironmentChange() {
 ### 2. 手动测试步骤
 
 1. **准备测试环境**
-   - 启动两个TaPro设备（设备A和设备B）
+   - 启动两个Tapro设备（设备A和设备B）
    - 确保设备在同一网络中
    - 记录设备ID和服务名
 

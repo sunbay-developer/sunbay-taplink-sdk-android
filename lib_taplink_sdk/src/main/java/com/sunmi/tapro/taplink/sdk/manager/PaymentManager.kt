@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - Request/response processing
  * - Callback management
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-22
  */
 class PaymentManager(
@@ -103,7 +103,7 @@ class PaymentManager(
             onPhysicalDisconnected()
         }
 
-        // When TaPro returns device info (taproVersion/deviceId) in a transaction response
+        // When Tapro returns device info (taproVersion/deviceId) in a transaction response
         // (typically from the first transaction after INIT), update ConnectionManager so
         // getTaproVersion() / getConnectedDeviceId() return the real values.
         responseProcessor.onDeviceInfoReceived = { deviceId, taproVersion ->

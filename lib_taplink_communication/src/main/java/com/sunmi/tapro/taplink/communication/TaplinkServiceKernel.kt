@@ -22,7 +22,7 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
  * Provides unified service interface for WebSocket, USB, Serial, Local communication
  * Uses singleton pattern to ensure globally unique instance
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class TaplinkServiceKernel private constructor(context: Context) {
@@ -53,7 +53,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
      * @param protocol Protocol string, supports multiple protocol formats
      * @param appid Application ID
      * @param appSecretKey Application secret key
-     * @param taproAppWidthRatio Width ratio for TaPro application (0.0 to 1.0, optional)
+     * @param taproAppWidthRatio Width ratio for Tapro application (0.0 to 1.0, optional)
      * @param connectionCallback Connection callback
      */
     fun connect(protocol: String, appid: String, appSecretKey: String, taproAppWidthRatio: Float? = null, connectionCallback: ConnectionCallback) {
@@ -125,7 +125,7 @@ class TaplinkServiceKernel private constructor(context: Context) {
      * @param parseResult Protocol parse result
      * @param appId Application ID
      * @param appSecretKey Application secret key
-     * @param taproAppWidthRatio Width ratio for TaPro application (0.0 to 1.0, optional)
+     * @param taproAppWidthRatio Width ratio for Tapro application (0.0 to 1.0, optional)
      * @return IServiceKernel? Corresponding service kernel, returns null if not supported
      */
     private fun getServiceKernelByProtocol(

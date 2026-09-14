@@ -6,7 +6,7 @@ package com.sunmi.tapro.taplink.sdk.model.common
  * Uses sealed class to provide type-safe event definitions.
  * Supports exhaustive checking in when expressions.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 sealed class PaymentEvent(

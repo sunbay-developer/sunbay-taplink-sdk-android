@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - PaymentManager: Handles payment and query operations
  * - ResponseProcessor: Handles response processing
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 class TaplinkApiImpl : TaplinkApi {
@@ -50,74 +50,74 @@ class TaplinkApiImpl : TaplinkApi {
         const val SCREEN_PLAYER_TIMEOUT_MS = 3_000L
 
         /**
-         * Error code returned when TaPro does not support [openUsbScreenPlayer].
-         * This replaces misleading error codes from legacy TaPro versions.
+         * Error code returned when Tapro does not support [openUsbScreenPlayer].
+         * This replaces misleading error codes from legacy Tapro versions.
          */
         const val ERROR_CODE_USB_SCREEN_PLAYER_UNSUPPORTED = "350"
 
         /**
          * Error code returned when Sub_Screen mode fails to open the USB screen
-         * player on the remote TaPro device. In this mode, the screen player is mandatory
+         * player on the remote Tapro device. In this mode, the screen player is mandatory
          * — failure means the connection is aborted.
          */
         const val ERROR_CODE_SUB_SCREEN_OPEN_FAILED = "351"
 
         /**
-         * Error code returned when TaPro does not support [getTerminalInfo] (GET_TERMINAL_INFO).
-         * This replaces misleading error codes from legacy TaPro versions with a clear,
-         * actionable "please upgrade TaPro" error.
+         * Error code returned when Tapro does not support [getTerminalInfo] (GET_TERMINAL_INFO).
+         * This replaces misleading error codes from legacy Tapro versions with a clear,
+         * actionable "please upgrade Tapro" error.
          */
         const val ERROR_CODE_GET_TERMINAL_INFO_UNSUPPORTED = "352"
 
         /**
-         * Minimum TaPro version that supports the GET_TERMINAL_INFO action.
+         * Minimum Tapro version that supports the GET_TERMINAL_INFO action.
          * Introduced together with `getTerminalInfo()` in SDK v1.0.9.
          *
          * Used to decide whether a GET_TERMINAL_INFO failure is a genuine business error
-         * (TaPro understands the action and reports e.g. "device not registered") that must be
-         * surfaced verbatim, versus a legacy TaPro that does not recognise the action at all
+         * (Tapro understands the action and reports e.g. "device not registered") that must be
+         * surfaced verbatim, versus a legacy Tapro that does not recognise the action at all
          * (only then do we translate to the actionable [ERROR_CODE_GET_TERMINAL_INFO_UNSUPPORTED]).
          */
         const val MIN_TAPRO_VERSION_FOR_GET_TERMINAL_INFO = "1.0.9"
 
         /**
-         * Minimum TaPro version that supports the OPEN_USB_SCREEN_PLAYER action.
+         * Minimum Tapro version that supports the OPEN_USB_SCREEN_PLAYER action.
          * Versions below this will be rejected locally without sending a request.
          */
         const val MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER = "1.0.5"
 
         /**
-         * Error codes that indicate the legacy TaPro does not support the
+         * Error codes that indicate the legacy Tapro does not support the
          * OPEN_USB_SCREEN_PLAYER action (rather than a genuine transactional error).
          *
-         * - 307: "System is processing another transaction" — TaPro was on a transaction
+         * - 307: "System is processing another transaction" — Tapro was on a transaction
          *   page and rejected the unknown action.
          * - 305: "Transaction in progress" — similar busy state.
-         * - 303: "Unsupported transaction type" — TaPro explicitly doesn't recognize the action.
-         * - 309: "Transaction terminated" — TaPro terminated the unknown request.
+         * - 303: "Unsupported transaction type" — Tapro explicitly doesn't recognize the action.
+         * - 309: "Transaction terminated" — Tapro terminated the unknown request.
          */
         val LEGACY_TAPRO_UNSUPPORTED_ERROR_CODES = setOf("307", "305", "303", "309")
 
         /**
-         * Error codes that a **legacy** TaPro (one that predates the GET_TERMINAL_INFO action)
+         * Error codes that a **legacy** Tapro (one that predates the GET_TERMINAL_INFO action)
          * returns when it receives the unknown action:
          *
-         * - 307: "System is processing another transaction" — TaPro was on a transaction page
+         * - 307: "System is processing another transaction" — Tapro was on a transaction page
          *   and rejected the unknown action.
          * - 305: "Transaction in progress" — similar busy state.
-         * - 303: "Unsupported transaction type" — TaPro explicitly doesn't recognise the action.
+         * - 303: "Unsupported transaction type" — Tapro explicitly doesn't recognise the action.
          *
-         * NOTE: 309 is deliberately **excluded** here. Unlike OPEN_USB_SCREEN_PLAYER, a TaPro that
+         * NOTE: 309 is deliberately **excluded** here. Unlike OPEN_USB_SCREEN_PLAYER, a Tapro that
          * *does* support GET_TERMINAL_INFO reports genuine business failures (e.g. C20 "device not
          * registered") as a 309 failure payload. Treating 309 as "unsupported" would swallow real,
-         * actionable business errors and mislead integrators into "please upgrade TaPro". Such
-         * failures must be surfaced verbatim, so this set only contains the codes a legacy TaPro
+         * actionable business errors and mislead integrators into "please upgrade Tapro". Such
+         * failures must be surfaced verbatim, so this set only contains the codes a legacy Tapro
          * uses to reject an action it does not recognise at all.
          */
         val LEGACY_TAPRO_UNKNOWN_GET_TERMINAL_INFO_ERROR_CODES = setOf("307", "305", "303")
 
         /**
-         * Returns true if the error code suggests TaPro does not support
+         * Returns true if the error code suggests Tapro does not support
          * OPEN_USB_SCREEN_PLAYER (legacy version incompatibility).
          */
         fun isLegacyTaproUnsupportedError(code: String): Boolean {
@@ -126,21 +126,21 @@ class TaplinkApiImpl : TaplinkApi {
 
         /**
          * Decide whether a GET_TERMINAL_INFO failure should be translated into the actionable
-         * [ERROR_CODE_GET_TERMINAL_INFO_UNSUPPORTED] ("please upgrade TaPro"), as opposed to being
+         * [ERROR_CODE_GET_TERMINAL_INFO_UNSUPPORTED] ("please upgrade Tapro"), as opposed to being
          * surfaced verbatim as a genuine business error.
          *
          * The translation only happens when BOTH conditions hold:
-         * 1. the connected TaPro version is **known and strictly below**
+         * 1. the connected Tapro version is **known and strictly below**
          *    [MIN_TAPRO_VERSION_FOR_GET_TERMINAL_INFO] — i.e. it predates the action; and
-         * 2. the error code is one a legacy TaPro emits for an action it does not recognise
+         * 2. the error code is one a legacy Tapro emits for an action it does not recognise
          *    ([LEGACY_TAPRO_UNKNOWN_GET_TERMINAL_INFO_ERROR_CODES], which excludes 309).
          *
          * If the version is unknown/unparseable, or the version already supports the action,
          * the failure is treated as a real business error and passed through untouched. This
          * prevents genuine failures (e.g. 309 "C20: Device is not registered") returned by a
-         * TaPro that DOES support GET_TERMINAL_INFO from being masked as "please upgrade TaPro".
+         * Tapro that DOES support GET_TERMINAL_INFO from being masked as "please upgrade Tapro".
          *
-         * @param taproVersion connected TaPro version, or null if not yet known
+         * @param taproVersion connected Tapro version, or null if not yet known
          * @param errorCode business/system error code from the failure response
          */
         fun shouldReportGetTerminalInfoUnsupported(
@@ -150,7 +150,7 @@ class TaplinkApiImpl : TaplinkApi {
             if (errorCode !in LEGACY_TAPRO_UNKNOWN_GET_TERMINAL_INFO_ERROR_CODES) {
                 return false
             }
-            // Only translate when we can positively confirm the TaPro is too old. An unknown or
+            // Only translate when we can positively confirm the Tapro is too old. An unknown or
             // unparseable version must NOT be assumed unsupported — surface the real error.
             val version = taproVersion?.takeIf { it.isNotBlank() } ?: return false
             return try {
@@ -161,7 +161,7 @@ class TaplinkApiImpl : TaplinkApi {
         }
 
         /**
-         * Compare TaPro version against the minimum required for USB screen player.
+         * Compare Tapro version against the minimum required for USB screen player.
          * Returns true if the version is >= [MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER].
          *
          * Uses semantic versioning comparison (major.minor.patch).
@@ -173,7 +173,7 @@ class TaplinkApiImpl : TaplinkApi {
                 compareVersions(version, MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER) >= 0
             } catch (e: Exception) {
                 // Cannot parse version — optimistic fallback: allow the request and rely
-                // on error-code interception if TaPro rejects it.
+                // on error-code interception if Tapro rejects it.
                 true
             }
         }
@@ -286,7 +286,7 @@ class TaplinkApiImpl : TaplinkApi {
             return
         }
 
-        // Only Sub_Screen mode auto-opens the TaPro USB customer-facing screen player as part of
+        // Only Sub_Screen mode auto-opens the Tapro USB customer-facing screen player as part of
         // connecting (screen player failure = connection failure). All other modes connect without
         // touching the screen player; integrators that need it can call openUsbScreenPlayer()
         // explicitly after onConnected.
@@ -348,7 +348,7 @@ class TaplinkApiImpl : TaplinkApi {
      * Wrap [listener] for Sub_Screen mode.
      *
      * After the VSP transport is established (onConnected from ConnectionManager),
-     * this wrapper sends an OPEN_USB_SCREEN_PLAYER request to the remote TaPro.
+     * this wrapper sends an OPEN_USB_SCREEN_PLAYER request to the remote Tapro.
      * Unlike [wrapWithUsbScreenPlayer], failure here is fatal:
      * - Success → deliver onConnected to the integrator.
      * - Failure or timeout → disconnect and deliver onError with code [ERROR_CODE_SUB_SCREEN_OPEN_FAILED].
@@ -376,17 +376,17 @@ class TaplinkApiImpl : TaplinkApi {
                             ConnectionError(
                                 code = ERROR_CODE_SUB_SCREEN_OPEN_FAILED,
                                 message = "Failed to open sub-screen: $detail",
-                                suggestion = "Ensure the remote TaPro device supports USB screen player " +
-                                    "(TaPro $MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER+) and that a " +
+                                suggestion = "Ensure the remote Tapro device supports USB screen player " +
+                                    "(Tapro $MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER+) and that a " +
                                     "customer-facing display is connected to it."
                             )
                         )
                     }
                 }
 
-                // Timeout guard: if TaPro doesn't respond within the allowed window, fail.
+                // Timeout guard: if Tapro doesn't respond within the allowed window, fail.
                 Handler(Looper.getMainLooper()).postDelayed(
-                    { deliverFailure("timeout", "TaPro did not respond within ${SCREEN_PLAYER_TIMEOUT_MS}ms") },
+                    { deliverFailure("timeout", "Tapro did not respond within ${SCREEN_PLAYER_TIMEOUT_MS}ms") },
                     SCREEN_PLAYER_TIMEOUT_MS
                 )
 
@@ -600,16 +600,16 @@ class TaplinkApiImpl : TaplinkApi {
             return
         }
 
-        // If TaPro version is already known and below the minimum that supports this action,
+        // If Tapro version is already known and below the minimum that supports this action,
         // skip sending the request entirely to avoid unnecessary error responses and log noise.
         val knownVersion = connectionManager?.getTaproVersion()
         if (knownVersion != null && knownVersion != "unknown" && !isTaproVersionSupported(knownVersion)) {
-            LogUtil.d(TAG, "openUsbScreenPlayer: TaPro $knownVersion does not support this action, skipping")
+            LogUtil.d(TAG, "openUsbScreenPlayer: Tapro $knownVersion does not support this action, skipping")
             callback.onFailure(
                 PaymentError.create(
                     code = ERROR_CODE_USB_SCREEN_PLAYER_UNSUPPORTED,
-                    message = "TaPro $knownVersion does not support USB screen player control " +
-                        "(requires TaPro $MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER+)",
+                    message = "Tapro $knownVersion does not support USB screen player control " +
+                        "(requires Tapro $MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER+)",
                     suggestion = "This is non-fatal. The secondary display can still " +
                         "be launched locally via Intent if the device supports it."
                 )
@@ -617,7 +617,7 @@ class TaplinkApiImpl : TaplinkApi {
             return
         }
 
-        // Send OPEN_USB_SCREEN_PLAYER control request to TaPro.
+        // Send OPEN_USB_SCREEN_PLAYER control request to Tapro.
         // The generated id must stay within the 32-character transactionRequestId limit,
         // so it uses a short prefix instead of the (22-character) action name.
         val request = PaymentRequest(
@@ -625,8 +625,8 @@ class TaplinkApiImpl : TaplinkApi {
             transactionRequestId = "USP_${System.currentTimeMillis()}"
         )
 
-        // Wrap callback to handle legacy TaPro versions that do not recognize this action.
-        // Older TaPro treats OPEN_USB_SCREEN_PLAYER as an unknown transaction request and
+        // Wrap callback to handle legacy Tapro versions that do not recognize this action.
+        // Older Tapro treats OPEN_USB_SCREEN_PLAYER as an unknown transaction request and
         // returns misleading errors (E307 "System is processing another transaction",
         // E305 "Transaction in progress", or E303 "Unsupported transaction type").
         // We intercept these and convert them to a clear "unsupported" error so integrators
@@ -638,15 +638,15 @@ class TaplinkApiImpl : TaplinkApi {
                 if (isLegacyTaproUnsupportedError(error.code)) {
                     LogUtil.w(
                         TAG,
-                        "openUsbScreenPlayer: TaPro does not support this action " +
+                        "openUsbScreenPlayer: Tapro does not support this action " +
                             "(received ${error.code}: ${error.message}). " +
-                            "This is expected on older TaPro versions."
+                            "This is expected on older Tapro versions."
                     )
                     callback.onFailure(
                         PaymentError.create(
                             code = ERROR_CODE_USB_SCREEN_PLAYER_UNSUPPORTED,
-                            message = "TaPro does not support USB screen player control " +
-                                "(openUsbScreenPlayer requires TaPro $MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER+)",
+                            message = "Tapro does not support USB screen player control " +
+                                "(openUsbScreenPlayer requires Tapro $MIN_TAPRO_VERSION_FOR_USB_SCREEN_PLAYER+)",
                             suggestion = "This is non-fatal. The secondary display can still " +
                                 "be launched locally via Intent if the device supports it."
                         )
@@ -677,11 +677,11 @@ class TaplinkApiImpl : TaplinkApi {
             return
         }
 
-        // Translate a failure into the actionable "please upgrade TaPro" error (352) ONLY when the
-        // connected TaPro is positively known to predate the GET_TERMINAL_INFO action. A TaPro that
+        // Translate a failure into the actionable "please upgrade Tapro" error (352) ONLY when the
+        // connected Tapro is positively known to predate the GET_TERMINAL_INFO action. A Tapro that
         // supports the action reports genuine business failures (e.g. 309 "C20: Device is not
         // registered") as a failure payload; those must be surfaced verbatim so integrators can act
-        // on them, instead of being masked as "please upgrade TaPro". See
+        // on them, instead of being masked as "please upgrade Tapro". See
         // [shouldReportGetTerminalInfoUnsupported] for the exact (version + error-code) predicate.
         val taproVersion = connectionManager?.getTaproVersion()
         val wrappedCallback = object : TerminalInfoCallback {
@@ -690,19 +690,19 @@ class TaplinkApiImpl : TaplinkApi {
                 if (shouldReportGetTerminalInfoUnsupported(taproVersion, error.code)) {
                     LogUtil.w(
                         TAG,
-                        "getTerminalInfo: legacy TaPro ($taproVersion) does not support " +
+                        "getTerminalInfo: legacy Tapro ($taproVersion) does not support " +
                             "GET_TERMINAL_INFO (received ${error.code}: ${error.message}); " +
                             "reporting as upgrade-required."
                     )
                     callback.onFailure(
                         PaymentError.create(
                             code = ERROR_CODE_GET_TERMINAL_INFO_UNSUPPORTED,
-                            message = "TaPro does not support GET_TERMINAL_INFO, please upgrade TaPro",
-                            suggestion = "Upgrade TaPro to a version that supports the GET_TERMINAL_INFO action."
+                            message = "Tapro does not support GET_TERMINAL_INFO, please upgrade Tapro",
+                            suggestion = "Upgrade Tapro to a version that supports the GET_TERMINAL_INFO action."
                         )
                     )
                 } else {
-                    // Genuine business/system error from a TaPro that understands the action
+                    // Genuine business/system error from a Tapro that understands the action
                     // (or an unknown version) — surface it verbatim.
                     callback.onFailure(error)
                 }

@@ -17,7 +17,7 @@ import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
 /**
  * Response processing class using Android's built-in JSON implementation.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 class ResponseProcessor {
@@ -31,7 +31,7 @@ class ResponseProcessor {
     /**
      * Listener for device info extracted from transaction responses.
      * Called when a response contains taproVersion/deviceId (typically from the first
-     * transaction after INIT on the TaPro side).
+     * transaction after INIT on the Tapro side).
      */
     var onDeviceInfoReceived: ((deviceId: String, taproVersion: String) -> Unit)? = null
 
@@ -209,7 +209,7 @@ class ResponseProcessor {
             }
 
             // A control action failure (e.g. device not registered / sign-in failed on the
-            // TaPro side) is delivered by TaPro as a transaction-style failure payload
+            // Tapro side) is delivered by Tapro as a transaction-style failure payload
             // (a PaymentResult with a business error code such as 307/C20 and no `terminal`
             // field) rather than a TerminalInfo. Detect it BEFORE attempting to deserialize
             // TerminalInfo, otherwise the missing non-null `terminal` field turns the real
@@ -274,7 +274,7 @@ class ResponseProcessor {
      * failure (a transaction-style failure payload) rather than a [TerminalInfo], extract the
      * real business error code and message.
      *
-     * TaPro emits such a payload when the control action fails before it can read terminal
+     * Tapro emits such a payload when the control action fails before it can read terminal
      * info (e.g. device not registered / sign-in failed): the `bizData` is a serialized
      * `PaymentResult` — it has a `code`/`transactionResultCode` and `transactionStatus=FAILED`,
      * but no `terminal` field. Returning the real code here lets the SDK surface, for example,
@@ -446,9 +446,9 @@ class ResponseProcessor {
     }
 
     /**
-     * If the payment result contains TaPro device info (taproVersion / deviceId),
+     * If the payment result contains Tapro device info (taproVersion / deviceId),
      * notify the registered listener. This typically happens on the first transaction
-     * response after INIT is performed by TaPro.
+     * response after INIT is performed by Tapro.
      */
     private fun notifyDeviceInfoIfPresent(result: PaymentResult) {
         val taproVersion = result.taproVersion

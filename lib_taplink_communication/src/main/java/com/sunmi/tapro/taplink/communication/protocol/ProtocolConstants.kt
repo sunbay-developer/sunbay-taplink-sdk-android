@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.communication.protocol
  *
  * Unified definition of all supported protocol formats for use by both SDK layer and Communication layer
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-17
  */
 object ProtocolConstants {
