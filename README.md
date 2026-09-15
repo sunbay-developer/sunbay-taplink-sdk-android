@@ -1,6 +1,6 @@
 # Taplink SDK for Android
 
-[![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
+[![Version](https://img.shields.io/badge/version-1.0.10-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
 [![Min SDK](https://img.shields.io/badge/minSdk-24-green.svg)](https://developer.android.com/about/versions/android-7.0)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.7.10-purple.svg)](https://kotlinlang.org/)
 
@@ -8,9 +8,9 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
 
 ## Features
 
-- **Integration Modes** *(v1.0.9+)*
+- **Integration Modes** *(v1.0.9+, explicit channel selection in v1.0.10)*
   - On-Device: business app and Tapro run on the same terminal
-  - Cross-Device: Tapro is a separate PIN Pad reached over LAN, Cable, or Auto channel selection
+  - Cross-Device: Tapro is a separate PINPAD reached over an explicitly selected LAN or Cable channel
   - Sub-Screen: USB VSP connection with mandatory customer-facing screen activation
 
 - **Complete Payment Functions**
@@ -46,7 +46,7 @@ Add the following dependency to your app module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.9")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.10")
 }
 ```
 
@@ -285,8 +285,10 @@ TaplinkSDK.getClient().sale(request, object : PaymentCallback {
 ```kotlin
 ConnectionConfig.createOnDeviceMode()                                      // Same terminal
 ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port) // Separate terminal over LAN
-ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE)           // Cable AUTO: VSP→RS232→AOA
-ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.AUTO, host, port) // LAN↔Cable after a drop
+ConnectionConfig.createCrossDeviceMode(
+    CrossDeviceStrategy.CABLE,
+    cableProtocol = CableProtocol.USB_VSP
+)                                                                            // Separate terminal over USB VSP
 ConnectionConfig.createSubScreenMode()                                     // USB VSP plus customer display
 ```
 
@@ -491,8 +493,9 @@ For traditional POS devices connected to payment terminals via USB or serial cab
 
 ```kotlin
 val connectionConfig = ConnectionConfig.createCrossDeviceMode(
-    CrossDeviceStrategy.CABLE
-) // Cable protocol defaults to AUTO: VSP → RS232 → AOA
+    CrossDeviceStrategy.CABLE,
+    cableProtocol = CableProtocol.USB_VSP
+)
 
 TaplinkSDK.connect(connectionConfig, connectionListener)
 ```
@@ -502,7 +505,8 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 - USB-VSP (USB Virtual Serial Port)
 - RS232 (USB serial adapter, hex-framed payload)
 
-**Cable `AUTO` detection:** The SDK tries cable transports in order **VSP → RS232 → AOA** until one succeeds (more reliable than guessing from device metadata alone). Serial paths are tried first so peers that enumerate as CDC connect without waiting on an AOA attempt; pure AOA accessories are still reached last.
+**Protocol selection:** Since v1.0.10, the SDK does not auto-detect the cable protocol. Select
+`USB_VSP`, `RS232`, or `USB_AOA` to match the Tapro terminal configuration.
 
 **RS232 link behavior (summary):**
 - Opening the USB serial port is not enough for `onConnected`: the stack waits for **peer liveness** via lightweight markers `##TAPLINK_HSK_REQ##` / `##TAPLINK_HSK_ACK##`, or **application payload** (hex-framed business data) after markers are stripped from the byte stream.
@@ -553,19 +557,6 @@ connectLan()
 - Manual host/port is applied first when provided by the user.
 - During runtime, when mDNS reports that the same terminal moved to a new host/port (for example 8443 -> 8444), the SDK can reconnect automatically.
 - For address-change auto reconnect, you must both call `TaplinkSDK.setConnectionListener(listener)` and pass a listener in `TaplinkSDK.connect(config, listener)`.
-
-### Cross-Device with Auto Channel
-
-Use `CrossDeviceStrategy.AUTO` when the separate Tapro can be reached by LAN and cable. The SDK tries channels in the configured priority order (default: LAN, then Cable), and switches only after the active link drops; it never tears down a healthy link or an in-flight transaction.
-
-```kotlin
-val config = ConnectionConfig.createCrossDeviceMode(
-    CrossDeviceStrategy.AUTO,
-    host = "192.168.1.100", // Required LAN fallback target
-    port = 8443
-)
-TaplinkSDK.connect(config, connectionListener)
-```
 
 ### Sub-Screen Mode
 
@@ -661,7 +652,7 @@ The QR scanner is built on **CameraX** and **ZXing**. These are `implementation`
 ```kotlin
 dependencies {
     // Taplink SDK
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.9")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.10")
 
     // Required only if you use the QR scan APIs
     val cameraxVersion = "1.3.4"
@@ -1688,9 +1679,15 @@ TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
 
 ## Version Information
 
-- **Current Version**: 1.0.9
+- **Current Version**: 1.0.10
 
 ### Changelog
+
+#### v1.0.10
+- **Breaking — explicit connection selection**: removed `CrossDeviceStrategy.AUTO`, `CableProtocol.AUTO`, and `ConnectionConfig.setAutoPriority(...)`. Select `LAN` or `CABLE` explicitly; Cable also requires `USB_VSP`, `RS232`, or `USB_AOA`.
+- **Fixed — Android 7 compatibility**: removed Jackson from the SDK runtime, fixing `BootstrapMethodError` during initialization on API 24/25. Existing caches and legacy/new `bizData` wire representations remain compatible.
+- **Improved — connection recovery**: hardened LAN endpoint-change recovery, bounded mDNS resolve retries, VSP reconnect-after-unplug, stale connection-state recovery, and repeated SDK initialization cleanup.
+- **Improved — terminal info errors**: error `352` is now returned only for a confirmed legacy Tapro version; genuine errors from supported versions pass through unchanged.
 
 #### v1.0.9
 - **New — Integration modes**: `ConnectionMode.ON_DEVICE` for a business app and Tapro on the same terminal, and `ConnectionMode.CROSS_DEVICE` for a separate Tapro PIN Pad. Use `CrossDeviceStrategy.LAN`, `CABLE`, or `AUTO` to choose the Cross-Device channel.

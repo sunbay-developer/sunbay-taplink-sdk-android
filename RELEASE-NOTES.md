@@ -10,8 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
-- [v1.0.9.4](#v1094) — LAN endpoint-change and reconnect recovery fixes
-- [v1.0.9.3](#v1093) — API 24 JSON compatibility and dependency removal
+- [v1.0.10](#v1010) — Explicit connection selection, dependency-free JSON, and reconnect hardening
 - [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
@@ -26,66 +25,91 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ---
 
-## v1.0.9.4
+## v1.0.10
 
-**Unreleased**
+**Released 2026-09-15**
 
-Improves LAN recovery when a Tapro terminal briefly leaves Wi-Fi and comes back on a different
-listening port.
+This release makes connection selection deterministic, removes the SDK's runtime JSON-library
+dependency, and hardens connection recovery across LAN, Cable, and repeated SDK initialization.
 
-### 🐛 Fixed
+### 💥 Breaking Changes
 
-- The SDK now compares a discovered mDNS endpoint with the WebSocket's actual URI instead of
-  assuming that cached service metadata identifies the live socket. A connection to an old port
-  can no longer suppress reconnection to a newly advertised port.
-- When Android reports the current mDNS instance lost and the same Tapro serial subsequently
-  advertises a replacement instance at the same endpoint, the SDK invalidates the half-open socket
-  and enters the normal reconnect flow. Timestamp-only re-registration without a preceding lost
-  event continues to leave healthy connections untouched.
-- Android NSD `FAILURE_ALREADY_ACTIVE` responses now trigger a bounded, backoff resolve retry for
-  the still-advertised target service. Other resolve failures keep their existing behavior, and a
-  lost service or stopped monitor cancels any pending retry.
-- LAN address changes preserve the complete connection timeout and automatic-retry policy instead
-  of replacing it with a host/port-only configuration.
-- A failed immediate address-change reconnect can schedule its normal delayed retry instead of
-  remaining stuck in a reconnecting state with no queued attempt.
+- **Automatic transport selection has been removed.** `CrossDeviceStrategy.AUTO`,
+  `CableProtocol.AUTO`, `ConnectionConfig.setAutoPriority(...)`, and the `autoPriority` argument of
+  `createCrossDeviceMode(...)` are no longer available.
+- `ConnectionConfig.createCrossDeviceMode(...)` now requires an explicit `LAN` or `CABLE`
+  strategy. A `CABLE` strategy also requires one concrete protocol: `USB_VSP`, `RS232`, or
+  `USB_AOA`.
+- Calling `setConnectionMode(ConnectionMode.CROSS_DEVICE)` without first calling
+  `setCrossDeviceStrategy(...)` now throws `IllegalArgumentException` instead of silently choosing
+  a transport.
 
-### 🧭 Migration
+### 🔧 Improved
 
-- No integration changes are required. Existing LAN and Cross-Device LAN configurations retain
-  their configured reconnect policy while following the replacement Tapro endpoint.
-
----
-
-## v1.0.9.3
-
-**Unreleased**
-
-Removes Jackson from the SDK runtime to restore Android API 24/25 compatibility while preserving
-the TapLink wire contract.
+- Re-initializing the SDK now tears down the previous connection, listeners, and pending payment
+  callbacks before creating new managers, preventing stale connections and duplicate callbacks.
+- A stale `CONNECTING` / `WAIT_CONNECTING` state is reset when the underlying transport is no
+  longer active, so a subsequent `connect()` can start normally instead of waiting forever.
+- `getTerminalInfo()` converts legacy unsupported-action errors to error `352` only when the
+  connected Tapro version is known to predate the action. Genuine business errors from a supported
+  Tapro version are returned unchanged.
+- Device identity is now attributed from the active transport, avoiding stale or cross-transport
+  device IDs after reconnects.
 
 ### 🐛 Fixed
 
 - Fixed `NoClassDefFoundError: java.lang.BootstrapMethodError` during `TaplinkSDK.init()` on
   Android API 24 and 25.
-- Existing Jackson-era connection caches remain readable after upgrading.
-- Response parsing accepts both the legacy object-valued `bizData` representation used by SDK
-  versions through 1.0.7 and the string-valued representation used by newer versions.
+- Existing Jackson-era connection caches remain readable, and response parsing accepts both the
+  legacy object-valued `bizData` representation and the newer string-valued representation.
+- LAN recovery now follows the WebSocket's actual endpoint when the same Tapro terminal
+  re-advertises on a different host or port. A failed immediate reconnect can fall back to the
+  configured delayed retry policy instead of remaining stuck.
+- Same-endpoint mDNS replacement after a service-loss event now invalidates a half-open socket,
+  while timestamp-only re-registration of a healthy service leaves the connection intact.
+- Android NSD `FAILURE_ALREADY_ACTIVE` now uses a bounded, backoff resolve retry; pending retries
+  are cancelled when the service is lost or monitoring stops.
+- Disconnect notifications and VSP reconnect-after-unplug handling no longer leave the SDK in an
+  inconsistent connection state.
 
 ### 📦 Dependencies
 
 - Removed `jackson-databind` and `jackson-module-kotlin` from the SDK and published POM.
-- The SDK protocol implementation now uses Android's built-in `org.json` classes and does not add
-  a replacement runtime JSON dependency. Gson is not used by either SDK library module.
+- The protocol implementation now uses Android's built-in `org.json` classes and adds no
+  replacement runtime JSON dependency. Integrator applications may continue using their own
+  Jackson or Gson version independently.
 
-### 🧭 Migration
+### 🧭 Migration from v1.0.9
 
-- Typed TapLink API integrations require no source changes.
-- Applications that use Jackson or Gson for their own data may keep doing so; the SDK no longer
-  selects or exports a JSON-library version.
+Update the dependency version:
+
+```kotlin
+dependencies {
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.10")
+}
+```
+
+Choose the Cross-Device channel and, for Cable, the protocol explicitly:
+
+```kotlin
+// v1.0.9 — removed in v1.0.10
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.AUTO, host, port)
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE) // cable AUTO
+
+// v1.0.10
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)
+ConnectionConfig.createCrossDeviceMode(
+    CrossDeviceStrategy.CABLE,
+    cableProtocol = CableProtocol.USB_VSP
+)
+```
+
+- If an application previously relied on runtime LAN/Cable failover, move that policy to the
+  application layer and switch only when no transaction is in flight.
+- Typed TapLink transaction integrations otherwise require no source changes.
 - `BasicResponseJacksonSerializer` and `BasicResponseJacksonDeserializer` were internal protocol
-  helpers despite their public JVM visibility and have been removed. Integrations that referenced
-  these implementation classes directly must stop doing so.
+  helpers despite their public JVM visibility and have been removed. Integrations must not import
+  SDK implementation helpers.
 
 ---
 
@@ -93,7 +117,7 @@ the TapLink wire contract.
 
 **Released 2026-09-03**
 
-This release reorganizes how a connection is described. Integration is now expressed as a **business form** — where the business app and Tapro physically live relative to each other — instead of as a **transport** (App-to-App / LAN / Cable). The new API requires an explicit Cross-Device channel and, for Cable, an explicit concrete cable protocol.
+This release reorganizes how a connection is described. Integration is now expressed as a **business form** — where the business app and Tapro physically live relative to each other — instead of as a **transport** (App-to-App / LAN / Cable). The new API supports automatic or explicit Cross-Device channel selection.
 
 ### 💥 Connection model: what changed since v1.0.8
 
@@ -127,20 +151,20 @@ ConnectionConfig.createCrossDeviceMode(
 |---|---|---|
 | Selection unit | Transport (`ConnectionMode`) | Integration form (`ConnectionMode`) + channel (`CrossDeviceStrategy`) |
 | Same-device | `APP_TO_APP` | `ON_DEVICE` (normalizes onto App-to-App internally) |
-| Separate device | `LAN` **or** `CABLE`, chosen at build time | `CROSS_DEVICE` + `LAN` / `CABLE` |
-| Cable protocol | `CableProtocol` selection | Explicit `USB_VSP`, `RS232`, or `USB_AOA` required |
+| Separate device | `LAN` **or** `CABLE`, chosen at build time | `CROSS_DEVICE` + `AUTO` / `LAN` / `CABLE` |
+| Cable protocol | `CableProtocol` selection | `AUTO` by default, or explicit `USB_VSP`, `RS232`, or `USB_AOA` |
 | Sub-screen | `SUB_SCREEN` | unchanged |
 
 **Scope of the change**
 
-- **Explicit Cross-Device configuration.** `CrossDeviceStrategy` must be either `LAN` or `CABLE`; there is no automatic cross-terminal channel selection. A `CABLE` strategy must specify one concrete `CableProtocol`: `USB_VSP`, `RS232`, or `USB_AOA`. The mapping table is in the Migration section below.
+- **Cross-Device configuration.** `CrossDeviceStrategy.AUTO` selects between LAN and Cable at runtime; `LAN` and `CABLE` select a channel explicitly. Cable uses `CableProtocol.AUTO` by default or accepts a concrete protocol. Automatic selection is removed in v1.0.10; see that release's migration guide.
 - **`CrossDeviceStrategy` has no `CLOUD` value on purpose.** Cloud-dispatched orders are delivered to Tapro by the cloud backend; the SDK never establishes or drives a Cloud connection. A `Cross-Device / Cloud` badge shown on Tapro is a Tapro-side display concern only.
 
 ### 🚀 New Features
 
 - **Integration modes decoupled from transport.** `ConnectionMode` gains two business-level values:
   - **`ON_DEVICE`** — the business app and Tapro run on the same terminal (currently implemented via App-to-App). Normalizes internally onto `APP_TO_APP`.
-  - **`CROSS_DEVICE`** — Tapro acts as a standalone PIN Pad reached over a connection channel. The concrete channel is chosen via the new **`CrossDeviceStrategy`** config (LAN or CABLE), not by a separate top-level mode.
+  - **`CROSS_DEVICE`** — Tapro acts as a standalone PIN Pad reached over a connection channel. The channel is chosen via the new **`CrossDeviceStrategy`** config (`AUTO`, `LAN`, or `CABLE`), not by a separate top-level mode.
 
   ```kotlin
   // On-device (same terminal)
@@ -156,8 +180,8 @@ ConnectionConfig.createCrossDeviceMode(
   )
   ```
 
-- **`CrossDeviceStrategy { LAN, CABLE }`** — new config enum selecting the CROSS_DEVICE connection strategy. Set via `ConnectionConfig.setCrossDeviceStrategy(...)`; automatic cross-terminal channel selection is not supported.
-- **Explicit Cable protocol for Cross-Device Cable.** `CrossDeviceStrategy.CABLE` requires `CableProtocol.USB_VSP`, `CableProtocol.RS232`, or `CableProtocol.USB_AOA`. `CableProtocol.AUTO` is not used by the v1.0.9 Cross-Device Cable configuration.
+- **`CrossDeviceStrategy { AUTO, LAN, CABLE }`** — new config enum selecting the CROSS_DEVICE connection strategy. Set via `ConnectionConfig.setCrossDeviceStrategy(...)`; `AUTO` tries LAN and Cable according to the configured priority.
+- **Cable protocol selection.** `CrossDeviceStrategy.CABLE` uses `CableProtocol.AUTO` by default, or accepts `USB_VSP`, `RS232`, or `USB_AOA` explicitly.
 
 - **`CrossDeviceStrategy` intentionally has no `CLOUD` value.** Cloud-dispatched orders are delivered to Tapro directly by the cloud backend; the SDK never establishes, authenticates, or drives a Cloud connection. Tapro may still display a `Cross-Device / Cloud` badge based on service-plan/sign-in permissions, but that is a Tapro-side display concern only — it is not selectable or resolvable through this SDK.
 
@@ -239,7 +263,7 @@ dependencies {
 }
 ```
 
-When adopting the new integration-mode API, select `LAN` or `CABLE` explicitly. For `CABLE`, provide a concrete protocol (`USB_VSP`, `RS232`, or `USB_AOA`) instead of relying on `CableProtocol.AUTO`.
+The v1.0.9 API allows `AUTO`, `LAN`, or `CABLE`. New code targeting v1.0.10 must select `LAN` or `CABLE` explicitly and provide a concrete Cable protocol; see the v1.0.10 migration guide above.
 
 | v1.0.8 API (still supported) | v1.0.9 API (recommended) |
 |---|---|
