@@ -80,7 +80,7 @@ private sealed class SerialUsbConnectResult {
  * @param appSecretKey Application secret key
  * @param context Android context
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-03
  */
 open class SerialServiceKernel(
@@ -289,7 +289,7 @@ open class SerialServiceKernel(
 
     /**
      * One attempt to open USB serial and notify success; returns false without notifying on failure.
-     * TaPro [TaproRS232ServiceKernel] uses this inside [runSerialConnectLoop] to poll until a cable is plugged in.
+     * Tapro [TaproRS232ServiceKernel] uses this inside [runSerialConnectLoop] to poll until a cable is plugged in.
      */
     protected suspend fun connectSerialSingleAttempt(): Boolean {
         return try {
@@ -311,7 +311,7 @@ open class SerialServiceKernel(
 
     /**
      * Default: single [connectSerialSingleAttempt] (no internal retry loop; caller triggers [performConnect]).
-     * TaPro `TaproRS232ServiceKernel` (app `lib_taplink_service`) overrides to poll until the USB serial is ready.
+     * Tapro `TaproRS232ServiceKernel` (app `lib_taplink_service`) overrides to poll until the USB serial is ready.
      */
     protected open suspend fun runSerialConnectLoop(): Boolean {
         return connectSerialSingleAttempt()
@@ -847,8 +847,8 @@ open class SerialServiceKernel(
 
     /**
      * While CONNECTED, periodically send [VspHandshake.REQ] ([RS232_HSK_REQ_INTERVAL_MS]).
-     * TaPro can return false and rely on [enableRs232HandshakePeerSilenceWatch] if Taplink keeps
-     * sending REQ (and TaPro keeps replying ACK) so inbound handshake traffic continues.
+     * Tapro can return false and rely on [enableRs232HandshakePeerSilenceWatch] if Taplink keeps
+     * sending REQ (and Tapro keeps replying ACK) so inbound handshake traffic continues.
      */
     protected open fun enableRs232HandshakePeriodicReqSend(): Boolean = true
 

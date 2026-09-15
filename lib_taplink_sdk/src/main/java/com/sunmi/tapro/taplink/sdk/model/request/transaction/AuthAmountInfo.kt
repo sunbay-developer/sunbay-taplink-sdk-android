@@ -10,7 +10,7 @@ import java.math.BigDecimal
  * @param orderAmount Transaction amount, using basic currency unit (e.g., USD)
  * @param pricingCurrency Pricing currency, following ISO 4217 standard
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class AuthAmountInfo(

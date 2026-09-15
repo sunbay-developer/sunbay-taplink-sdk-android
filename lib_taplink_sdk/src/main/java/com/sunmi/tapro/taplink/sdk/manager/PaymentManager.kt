@@ -3,9 +3,6 @@
 package com.sunmi.tapro.taplink.sdk.manager
 
 import android.content.Context
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.R
 import com.sunmi.tapro.taplink.sdk.callback.ConnectionListener
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
@@ -30,6 +27,7 @@ import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
+import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
 import java.math.BigDecimal
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -42,7 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - Request/response processing
  * - Callback management
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-22
  */
 class PaymentManager(
@@ -60,10 +58,6 @@ class PaymentManager(
      * long before failing fast instead of blocking for the full transaction timeout.
      */
     private val linkAliveTimeoutMs = 3000L
-
-    private val mapper: ObjectMapper = ObjectMapper()
-        .registerKotlinModule()
-        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
 
     /**
      * Callback manager for managing multiple async request callbacks
@@ -109,7 +103,7 @@ class PaymentManager(
             onPhysicalDisconnected()
         }
 
-        // When TaPro returns device info (taproVersion/deviceId) in a transaction response
+        // When Tapro returns device info (taproVersion/deviceId) in a transaction response
         // (typically from the first transaction after INIT), update ConnectionManager so
         // getTaproVersion() / getConnectedDeviceId() return the real values.
         responseProcessor.onDeviceInfoReceived = { deviceId, taproVersion ->
@@ -261,7 +255,7 @@ class PaymentManager(
                 connectionMode = connectionMode
             )
 
-            val requestJson = mapper.writeValueAsString(basicRequest)
+            val requestJson = TaplinkJsonBridge.toJsonString(basicRequest)
             LogUtil.d(TAG, "Sending GET_TERMINAL_INFO BasicRequest: requestSize=${requestJson.length} bytes")
 
             val internalCallback = createGetTerminalInfoInternalCallback(
@@ -334,11 +328,6 @@ class PaymentManager(
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
                 LogUtil.e(TAG, "[TAPLINK-GET_TERMINAL_INFO] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
-                if (code == InnerErrorCode.E306.code) {
-                    connectionManager.onRequestTimedOut(code)
-                } else {
-                    connectionManager.onRequestResponded()
-                }
                 callback.onFailure(
                     PaymentError.create(
                         code = code,
@@ -359,7 +348,6 @@ class PaymentManager(
                     )
                     return
                 }
-                connectionManager.onRequestResponded()
                 responseProcessor.handleResponse(responseData, callback, request)
             }
         }
@@ -438,7 +426,7 @@ class PaymentManager(
             )
 
             // Serialise BasicRequest to JSON string for transport
-            val requestJson = mapper.writeValueAsString(basicRequest)
+            val requestJson = TaplinkJsonBridge.toJsonString(basicRequest)
             LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
 
             // Create internal callback for receiving raw response
@@ -614,14 +602,6 @@ class PaymentManager(
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
                 LogUtil.e(TAG, "[TAPLINK-TX] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
-                // Feed request health into ConnectionManager for CROSS_DEVICE AUTO fallback.
-                // A timeout (E306) means the active transport may be blocked; other errors are a
-                // response from the peer and prove the transport is alive.
-                if (code == InnerErrorCode.E306.code) {
-                    connectionManager.onRequestTimedOut(code)
-                } else {
-                    connectionManager.onRequestResponded()
-                }
                 callback.onFailure(
                     code = code,
                     errorMsg = msg,
@@ -632,8 +612,6 @@ class PaymentManager(
             }
 
             override fun onResponse(responseData: String) {
-                // Any response proves the active transport is healthy.
-                connectionManager.onRequestResponded()
                 responseProcessor.handleResponse(responseData, callback, request)
             }
         }
@@ -828,10 +806,31 @@ class PaymentManager(
     }
 
     /**
-     * Clear all pending callbacks
+     * Clear all pending callbacks and queued transactions.
+     *
+     * Called on manual disconnect. Besides clearing the in-flight request callbacks, this also
+     * fails and clears any transaction that was still QUEUED waiting for the connection
+     * (pendingTransaction) and resets the auto-connect flag. Without this, a transaction that was
+     * queued right before disconnect() would linger and be executed on the NEXT successful connect
+     * (via processPendingTransaction) as a stale transaction — or its callback would never fire.
      */
     fun clearAllCallbacks() {
         callbackManager.clearAll()
+
+        // Fail and clear a queued (not-yet-sent) transaction so it is neither executed on the next
+        // connect nor left with a dangling callback.
+        val queued = pendingTransaction
+        if (queued != null) {
+            pendingTransaction = null
+            val (request, callback) = queued
+            LogUtil.w(TAG, "Failing queued pending transaction on disconnect: action=${request.action}")
+            callback.onFailure(
+                errorCode = InnerErrorCode.E213,
+                errorMessage = "${InnerErrorCode.E213.description}(disconnected before the queued transaction was sent)",
+                transactionRequestId = request.transactionRequestId
+            )
+        }
+        hasPendingAutoConnectTransaction = false
     }
 
     /**

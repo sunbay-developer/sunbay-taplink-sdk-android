@@ -12,10 +12,10 @@ import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.local.ITransaction
 import com.sunmi.tapro.taplink.communication.local.ITransactionCallback
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
+import org.json.JSONObject
 
 /**
  * Local service kernel class
@@ -25,9 +25,9 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
  *
  * @param appId Application ID
  * @param appSecretKey Application secret key
- * @param taproAppWidthRatio Width ratio for TaPro application (0.0 to 1.0, optional)
+ * @param taproAppWidthRatio Width ratio for Tapro application (0.0 to 1.0, optional)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class LocalServiceKernel constructor(
@@ -46,8 +46,6 @@ class LocalServiceKernel constructor(
     }
 
     override fun getTag(): String = TAG
-
-    private val mapper = ObjectMapper()
 
     /**
      * Currently connected service Intent
@@ -192,8 +190,7 @@ class LocalServiceKernel constructor(
                 val errorCode = code ?: "UNKNOWN_ERROR"
                 val errorMsg = msg ?: "Unknown error"
                 val errorResponse = try {
-                    // Use Jackson to properly escape errorMsg — it may itself be a JSON string
-                    val escapedMsg = mapper.writeValueAsString(errorMsg)
+                    val escapedMsg = JSONObject.quote(errorMsg)
                     """{"traceId":"$traceId","eventCode":"ERROR","errorCode":"$errorCode","eventMsg":$escapedMsg}"""
                 } catch (e: Exception) {
                     "ERROR: $errorCode - $errorMsg"
@@ -322,4 +319,3 @@ class LocalServiceKernel constructor(
         }
     }
 }
-

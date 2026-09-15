@@ -21,7 +21,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
  * @param staffInfo Staff information (optional)
  * @param tipConfig Tip configuration (optional, mutually exclusive with amount.tipAmount)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class PostAuthRequest(

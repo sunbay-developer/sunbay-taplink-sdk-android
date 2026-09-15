@@ -1,6 +1,6 @@
 # Taplink SDK for Android
 
-[![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
+[![Version](https://img.shields.io/badge/version-1.0.10-blue.svg)](https://github.com/sunbay-developer/taplink-sdk-android)
 [![Min SDK](https://img.shields.io/badge/minSdk-24-green.svg)](https://developer.android.com/about/versions/android-7.0)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.7.10-purple.svg)](https://kotlinlang.org/)
 
@@ -8,10 +8,10 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
 
 ## Features
 
-- **Multiple Connection Modes**
-  - App-to-App Mode: Inter-application communication on the same device
-  - Cable Mode: USB/Serial cable connection
-  - LAN Mode: Network connection (wired/wireless)
+- **Integration Modes** *(v1.0.9+, explicit channel selection in v1.0.10)*
+  - On-Device: business app and Tapro run on the same terminal
+  - Cross-Device: Tapro is a separate PINPAD reached over an explicitly selected LAN or Cable channel
+  - Sub-Screen: USB VSP connection with mandatory customer-facing screen activation
 
 - **Complete Payment Functions**
   - Support for various transaction types (Sale, Refund, Void, Auth, etc.)
@@ -20,6 +20,12 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - Signature routing control (Sale/Auth): ON_SCREEN or ON_RECEIPT
   - Synchronous and asynchronous calling methods
   - Comprehensive transaction query functionality
+
+- **Sub_Screen (USB Customer-Facing Screen)** *(since v1.0.9)*
+  - `ConnectionConfig.createSubScreenMode()` — dedicated mode that connects over USB VSP to a **remote** Tapro terminal and automatically launches ("拉起") Tapro's screen player as part of `connect()` (failure = connection error, code `351`)
+  - For an optional screen outside Sub-Screen mode, call `TaplinkSDK.openUsbScreenPlayer()` explicitly after connecting
+  - Drive ad carousel, order list, and tip selection on external display
+  - See [SUB_SCREEN_INTEGRATION.md](./SUB_SCREEN_INTEGRATION.md) — connecting from a primary-screen terminal to Tapro on a secondary-screen terminal with `createSubScreenMode()`
 
 - **Developer Friendly**
   - Clean and intuitive API design
@@ -40,11 +46,11 @@ Add the following dependency to your app module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.9")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.10")
 }
 ```
 
-**Note:** All required permissions and transitive dependencies are already bundled in the SDK. No additional dependencies are needed for any connection mode (App-to-App, LAN, or Cable).
+**Note:** All required permissions are declared by the SDK manifest. Normal On-Device, LAN, Cable, and Sub-Screen connections need no extra host-app dependency. If you use the QR scan APIs, add CameraX and ZXing as described in [Required host-app dependencies for QR scan](#required-host-app-dependencies-for-qr-scan).
 
 ### Basic Integration (3 Steps)
 
@@ -75,9 +81,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Connect to Tapro (App-to-App mode)
-        val connectionConfig = ConnectionConfig()
-            .setConnectionMode(ConnectionMode.APP_TO_APP)
+        // On-Device: business app and Tapro run on the same terminal.
+        val connectionConfig = ConnectionConfig.createOnDeviceMode()
         
         TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
             override fun onConnected(deviceId: String, taproVersion: String) {
@@ -108,6 +113,28 @@ class MainActivity : AppCompatActivity() {
 }
 ```
 
+```kotlin
+// Sub_Screen mode — connects via USB VSP and opens customer-facing screen
+val connectionConfig = ConnectionConfig.createSubScreenMode()
+
+TaplinkSDK.connect(connectionConfig, object : ConnectionListener {
+    override fun onConnected(deviceId: String, taproVersion: String) {
+        // Both VSP transport AND the sub-screen are ready.
+        // You can now show content on the customer-facing screen
+        // AND perform payment transactions.
+    }
+
+    override fun onDisconnected(reason: String) {
+        // Connection lost
+    }
+
+    override fun onError(error: ConnectionError) {
+        // Connection failed. If error.code == "351", the VSP link was
+        // established but the sub-screen could not be opened.
+    }
+})
+```
+
 #### Step 3: Process Payment
 
 ```kotlin
@@ -117,7 +144,7 @@ private fun processPayment() {
     
     // Create sale request
     val amount = AmountInfo()
-        .setOrderAmount(BigDecimal("10.00"))  // Amount in smallest currency unit
+        .setOrderAmount(BigDecimal("1000"))  // $10.00 in smallest currency unit
         .setPricingCurrency("USD")
     
     val request = SaleRequest.builder()
@@ -256,11 +283,13 @@ TaplinkSDK.getClient().sale(request, object : PaymentCallback {
 
 ## Connection Modes
 ```kotlin
-ConnectionConfig.createAppMode()                          // Same device (APP_TO_APP)
-ConnectionConfig.createLanMode("192.168.1.100", 8443)    // LAN first-time
-ConnectionConfig.createLanMode()                          // LAN reuse cached
-ConnectionConfig.createCableMode()                        // Cable AUTO (VSP→RS232→AOA)
-ConnectionConfig.createDefault()                          // Auto-detect all modes
+ConnectionConfig.createOnDeviceMode()                                      // Same terminal
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port) // Separate terminal over LAN
+ConnectionConfig.createCrossDeviceMode(
+    CrossDeviceStrategy.CABLE,
+    cableProtocol = CableProtocol.USB_VSP
+)                                                                            // Separate terminal over USB VSP
+ConnectionConfig.createSubScreenMode()                                     // USB VSP plus customer display
 ```
 
 ## Error Handling
@@ -441,13 +470,12 @@ Run through this checklist before going to QA:
 
 ## Connection Modes
 
-### App-to-App Mode
+### On-Device Mode
 
 For Android all-in-one devices where POS app and Tapro run on the same device.
 
 ```kotlin
-val connectionConfig = ConnectionConfig()
-    .setConnectionMode(ConnectionMode.APP_TO_APP)
+val connectionConfig = ConnectionConfig.createOnDeviceMode()
 
 TaplinkSDK.connect(connectionConfig, connectionListener)
 ```
@@ -457,14 +485,17 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 - Automatic detection
 - No additional configuration required
 
-### Cable Mode
+`ConnectionMode.APP_TO_APP` and `ConnectionConfig.createAppMode()` remain available for backward compatibility, but new integrations should use `ON_DEVICE`.
+
+### Cross-Device over Cable
 
 For traditional POS devices connected to payment terminals via USB or serial cable.
 
 ```kotlin
-val connectionConfig = ConnectionConfig()
-    .setConnectionMode(ConnectionMode.CABLE)
-    .setCableProtocol(CableProtocol.AUTO)  // Auto-detect cable type
+val connectionConfig = ConnectionConfig.createCrossDeviceMode(
+    CrossDeviceStrategy.CABLE,
+    cableProtocol = CableProtocol.USB_VSP
+)
 
 TaplinkSDK.connect(connectionConfig, connectionListener)
 ```
@@ -474,14 +505,15 @@ TaplinkSDK.connect(connectionConfig, connectionListener)
 - USB-VSP (USB Virtual Serial Port)
 - RS232 (USB serial adapter, hex-framed payload)
 
-**Cable `AUTO` detection:** The SDK tries cable transports in order **VSP → RS232 → AOA** until one succeeds (more reliable than guessing from device metadata alone). Serial paths are tried first so peers that enumerate as CDC connect without waiting on an AOA attempt; pure AOA accessories are still reached last.
+**Protocol selection:** Since v1.0.10, the SDK does not auto-detect the cable protocol. Select
+`USB_VSP`, `RS232`, or `USB_AOA` to match the Tapro terminal configuration.
 
 **RS232 link behavior (summary):**
 - Opening the USB serial port is not enough for `onConnected`: the stack waits for **peer liveness** via lightweight markers `##TAPLINK_HSK_REQ##` / `##TAPLINK_HSK_ACK##`, or **application payload** (hex-framed business data) after markers are stripped from the byte stream.
 - While connected, periodic REQ and a **peer silence** watchdog (default **5 seconds** without handshake or payload after peer activity; adjust `RS232_HSK_PEER_SILENCE_MS` in `SerialServiceKernel` if you maintain a fork) help detect a dead or unplugged far end. USB attach checks and I/O errors complement this.
 - Ensure the host app has **USB host** support and grants **USB permission** when the system prompts; RS232 uses standard Android USB serial probing (e.g. FTDI, CH340, PL2303).
 
-### LAN Mode
+### Cross-Device over LAN
 
 For POS devices connected to payment terminals via local network (wired/wireless).
 
@@ -493,8 +525,7 @@ private val connectionListener = object : ConnectionListener {
 }
 
 private fun connectLan(manualHost: String? = null, manualPort: Int? = null) {
-    val config = ConnectionConfig()
-        .setConnectionMode(ConnectionMode.LAN)
+    val config = ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN)
 
     // If user entered host/port, use user input first.
     if (!manualHost.isNullOrBlank()) {
@@ -526,6 +557,10 @@ connectLan()
 - Manual host/port is applied first when provided by the user.
 - During runtime, when mDNS reports that the same terminal moved to a new host/port (for example 8443 -> 8444), the SDK can reconnect automatically.
 - For address-change auto reconnect, you must both call `TaplinkSDK.setConnectionListener(listener)` and pass a listener in `TaplinkSDK.connect(config, listener)`.
+
+### Sub-Screen Mode
+
+Use `ConnectionConfig.createSubScreenMode()` for a remote Tapro terminal connected by USB VSP with a customer-facing display. `onConnected` is delivered only after both the VSP link and screen player are ready; error `351` means the screen player could not be opened.
 
 ## LAN Address Acquisition (Discovery & QR Scan)
 
@@ -617,7 +652,7 @@ The QR scanner is built on **CameraX** and **ZXing**. These are `implementation`
 ```kotlin
 dependencies {
     // Taplink SDK
-    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.9")
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.10")
 
     // Required only if you use the QR scan APIs
     val cameraxVersion = "1.3.4"
@@ -703,7 +738,7 @@ The most common payment transaction type. For card payments, specify `paymentMet
 val client = TaplinkSDK.getClient()
 
 val amount = AmountInfo()
-    .setOrderAmount(BigDecimal("10.00"))
+    .setOrderAmount(BigDecimal("1000")) // $10.00 in cents
     .setPricingCurrency("USD")
 
 val request = SaleRequest.builder()
@@ -862,7 +897,7 @@ Supports full and partial refunds. For card refunds, specify `paymentMethod` as 
 
 ```kotlin
 val amount = AmountInfo()
-    .setOrderAmount(BigDecimal("5.00"))
+    .setOrderAmount(BigDecimal("500")) // $5.00 in cents
     .setPricingCurrency("USD")
 
 val request = RefundRequest.referencedBuilder()
@@ -880,7 +915,7 @@ client.refund(request, paymentCallback)
 
 ```kotlin
 val amount = AmountInfo()
-    .setOrderAmount(BigDecimal("5.00"))
+    .setOrderAmount(BigDecimal("500")) // $5.00 in cents
     .setPricingCurrency("USD")
 
 val request = RefundRequest.nonReferencedBuilder()
@@ -916,7 +951,7 @@ Freeze funds without actual deduction, commonly used for hotels and car rentals.
 
 ```kotlin
 val amount = AuthAmountInfo()
-    .setAuthAmount(BigDecimal("50.00"))
+    .setAuthAmount(BigDecimal("5000")) // $50.00 in cents
     .setPricingCurrency("USD")
 
 val request = AuthRequest.builder()
@@ -935,7 +970,7 @@ Complete authorization and perform actual deduction.
 
 ```kotlin
 val amount = AmountInfo()
-    .setOrderAmount(BigDecimal("45.00"))
+    .setOrderAmount(BigDecimal("4500")) // $45.00 in cents
     .setPricingCurrency("USD")
 
 val request = PostAuthRequest.builder()
@@ -1144,8 +1179,13 @@ override fun onFailure(error: PaymentError) {
         }
         
         ErrorCategory.TRANSACTION -> {
-            // Request delivery error (timeout, etc.)
-            if (canRetry) {
+            // Error 306 is ambiguous: query before any retry or new request.
+            if (code == "306") {
+                client.query(
+                    QueryRequest().setTransactionRequestId(/* original request ID */),
+                    queryCallback
+                )
+            } else if (canRetry) {
                 retryWithSameRequest()
             } else {
                 createNewTransaction()
@@ -1172,6 +1212,7 @@ The SDK uses a segmented error code design for quick problem identification.
 | **24x** | LAN Mode | Network connection issues |
 | **25x** | Cable Mode | USB/Serial cable connection issues |
 | **30x** | Transaction | Transaction processing errors |
+| **35x** | Control Action | Connected Tapro does not support a read-only control action |
 
 #### Quick Reference
 
@@ -1192,6 +1233,8 @@ The SDK uses a segmented error code design for quick problem identification.
 | 231-232 | App-to-App mode failed | Install Tapro app or restart device |
 | 241-242 | LAN mode failed | Check network and IP address |
 | 251-255 | Cable mode failed | Check cable connection and USB permissions |
+| 351 | Sub-Screen open failed | Check the USB customer-facing display and reconnect |
+| 352 | `GET_TERMINAL_INFO` unsupported | Upgrade the connected Tapro before retrying |
 
 **Transaction Issues:**
 
@@ -1300,8 +1343,9 @@ class MainActivity : AppCompatActivity() {
     }
     
     override fun onDestroy() {
-        super.onDestroy()
+        TaplinkSDK.disconnect()
         TaplinkSDK.removeConnectionListener()
+        super.onDestroy()
     }
 }
 ```
@@ -1386,7 +1430,7 @@ override fun onProgress(event: PaymentEvent) {
 > - `receiptJson` is returned for ALL completed transactions regardless of `printReceipt` setting
 > - When `printReceipt = NONE`, Tapro does not print — use `receiptJson` to self-print
 > - When `printReceipt = MERCHANT/CUSTOMER/BOTH`, Tapro prints AND returns `receiptJson`
-> - Merchant header (name, address, logo) is NOT included — integrators manage their own merchant info
+> - Merchant header (name and address) is NOT included — integrators manage their own merchant info
 > - Tip Section UI layout fields are NOT included — only confirmed `tipAmount` is returned when tip > $0
 > - All amounts are pre-formatted with currency symbol (e.g., `"$7.90"`) — print as-is
 
@@ -1575,6 +1619,12 @@ TaplinkSDK.getTaproVersion(): String?
 // Get transaction client
 TaplinkSDK.getClient(): TaplinkClient
 
+// Read-only terminal information query — since v1.0.9
+TaplinkSDK.getTerminalInfo(callback: TerminalInfoCallback)
+
+// Optional customer-facing display control after a non-Sub-Screen connection
+TaplinkSDK.openUsbScreenPlayer(callback: PaymentCallback)
+
 // SDK version
 TaplinkSDK.getVersion(): String
 ```
@@ -1599,19 +1649,53 @@ client.batchClose(request: BatchCloseRequest, callback: PaymentCallback)
 
 // Query method
 client.query(request: QueryRequest, callback: PaymentCallback)
+
+// Read-only terminal information query — since v1.0.9
+client.getTerminalInfo(callback: TerminalInfoCallback)
+```
+
+## Terminal Information Query
+
+*Available since v1.0.9.* `getTerminalInfo()` is a read-only control action for the single Tapro device selected by the current connection configuration. It is not a cloud merchant lookup or terminal-list query, does not create a transaction, and does not require a `transactionRequestId`.
+
+If the SDK is disconnected, it automatically establishes the configured connection before querying. The result is delivered through `TerminalInfoCallback`, not `PaymentCallback`; callbacks may run on a background thread.
+
+```kotlin
+TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
+    override fun onSuccess(info: TerminalInfo) {
+        val merchantId = info.merchantId
+        val dbaName = info.dbaName
+        val mids = info.midList
+        val terminal = info.terminal // sn, vendor, model, tidList
+    }
+
+    override fun onFailure(error: PaymentError) {
+        if (error.code == "352") {
+            // The connected Tapro must be upgraded to support GET_TERMINAL_INFO.
+        }
+    }
+})
 ```
 
 ## Version Information
 
-- **Current Version**: 1.0.9
+- **Current Version**: 1.0.10
 
 ### Changelog
 
+#### v1.0.10
+- **Breaking — explicit connection selection**: removed `CrossDeviceStrategy.AUTO`, `CableProtocol.AUTO`, and `ConnectionConfig.setAutoPriority(...)`. Select `LAN` or `CABLE` explicitly; Cable also requires `USB_VSP`, `RS232`, or `USB_AOA`.
+- **Fixed — Android 7 compatibility**: removed Jackson from the SDK runtime, fixing `BootstrapMethodError` during initialization on API 24/25. Existing caches and legacy/new `bizData` wire representations remain compatible.
+- **Improved — connection recovery**: hardened LAN endpoint-change recovery, bounded mDNS resolve retries, VSP reconnect-after-unplug, stale connection-state recovery, and repeated SDK initialization cleanup.
+- **Improved — terminal info errors**: error `352` is now returned only for a confirmed legacy Tapro version; genuine errors from supported versions pass through unchanged.
+
 #### v1.0.9
-- Added `ON_DEVICE` and `CROSS_DEVICE` connection modes. `CrossDeviceStrategy` selects LAN, cable, or AUTO transport for cross-device integrations; existing App-to-App, LAN, and Cable configuration remains supported.
-- Added `TaplinkSDK.getTerminalInfo()` and `TerminalInfoCallback` for read-only merchant and terminal information retrieval from the connected TaPro device.
-- Improved LAN and cable reliability, including connection recovery and inserted-cable detection for cable AUTO mode.
-- Lowered the minimum supported Android version to Android 7.0 (API 24).
+- **New — Integration modes**: `ConnectionMode.ON_DEVICE` for a business app and Tapro on the same terminal, and `ConnectionMode.CROSS_DEVICE` for a separate Tapro PIN Pad. Use `CrossDeviceStrategy.LAN`, `CABLE`, or `AUTO` to choose the Cross-Device channel.
+- **New — Automatic channel failover**: `CrossDeviceStrategy.AUTO` tries LAN and Cable in priority order and re-routes only after the active channel drops. It never tears down a healthy connection or an in-flight transaction.
+- **New — Sub-Screen mode**: `ConnectionConfig.createSubScreenMode()` combines a USB VSP connection with mandatory customer-facing screen activation. Error `351` means the screen player could not be opened.
+- **New — Terminal information query**: `TaplinkSDK.getTerminalInfo(TerminalInfoCallback)` and `TaplinkClient.getTerminalInfo(TerminalInfoCallback)` return the merchant and terminal information for the one Tapro selected by the current connection configuration. Error `352` means that Tapro must be upgraded to support `GET_TERMINAL_INFO`.
+- **Improved — LAN and Cable reliability**: faster dead-link detection, cable plug-and-play, mDNS stability, and safer reconnect behavior.
+- **No breaking changes**: the classic `APP_TO_APP`, `LAN`, and `CABLE` APIs remain available for backward compatibility. New integrations should prefer the v1.0.9 integration-mode API.
 
 #### v1.0.8
 - **New — LAN service discovery**: `TaplinkSDK.discoverLanServices(DiscoveryListener)` runs a one-shot mDNS (`_taplink._tcp`) discovery and returns the resolved `host`/`port` list **without connecting**.

@@ -7,7 +7,7 @@ import java.math.BigDecimal
  * 
  * Used to return batch summary information during batch close.
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class BatchCloseInfo(

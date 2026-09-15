@@ -15,7 +15,7 @@ import java.net.*
  * - This design is to avoid interfering with existing WebSocket connections, especially when server only supports single client connection
  * - If TCP connection check is needed, use methods with "WithTcp" suffix, but confirm server supports multiple client connections
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class NetworkConnectivityChecker {

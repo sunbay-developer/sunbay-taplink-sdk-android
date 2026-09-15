@@ -18,7 +18,7 @@ import kotlinx.coroutines.sync.withLock
  * @param appId Application ID
  * @param appSecretKey Application secret key
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 abstract class AsyncServiceKernel(

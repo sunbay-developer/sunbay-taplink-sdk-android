@@ -12,7 +12,7 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.settlement.BatchClo
  * Adapt the specific transaction request types to a unified PaymentRequest format
  * Be responsible for data conversion and field mapping at the business layer
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 object PaymentRequestAdapter {

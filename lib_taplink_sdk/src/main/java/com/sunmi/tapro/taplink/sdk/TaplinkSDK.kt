@@ -51,7 +51,7 @@ import kotlin.jvm.JvmStatic
  * - **TaplinkSDK**: Initialization, connection, disconnect, status management, version information
  * - **TaplinkClient**: Focus on transaction operations (sale, refund, void, etc.)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 class TaplinkSDK private constructor() : TaplinkApi {
@@ -379,7 +379,7 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * Open TaPro USB secondary-screen player application.
+         * Open Tapro USB secondary-screen player application.
          *
          * POS applications should call this before showing Android Presentation content
          * on the secondary display.
@@ -393,9 +393,9 @@ class TaplinkSDK private constructor() : TaplinkApi {
         }
 
         /**
-         * Get the merchant and terminal information for the currently connected TaPro device.
+         * Get the merchant and terminal information for the currently connected Tapro device.
          *
-         * Read-only control action — queries only the currently connected TaPro device,
+         * Read-only control action — queries only the currently connected Tapro device,
          * not a cloud merchant lookup and not a terminal-list query.
          *
          * @param callback Callback to receive the terminal info result

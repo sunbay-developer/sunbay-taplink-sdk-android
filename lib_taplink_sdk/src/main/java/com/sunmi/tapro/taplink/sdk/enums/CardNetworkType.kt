@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.sdk.enums
  *
  * Defines the type of card network for payment transactions.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class CardNetworkType(val value: String) {

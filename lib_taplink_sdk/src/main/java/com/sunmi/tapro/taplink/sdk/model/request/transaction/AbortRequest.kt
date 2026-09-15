@@ -10,7 +10,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
  * @param attach Additional information (optional)
  * @param requestTimeout Request timeout duration (optional, unit: seconds)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class AbortRequest(

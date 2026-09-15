@@ -49,7 +49,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * @param appSecretKey Application secret key
  * @param context Android context
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class VSPClientKernel(
@@ -178,14 +178,12 @@ class VSPClientKernel(
     }
 
     override fun performConnect(parseResult: ProtocolParseResult, connectionCallback: ConnectionCallback) {
-        // Fail fast when no USB device is physically attached. Without this gate the kernel would
-        // register receivers and start polling for a device that will never appear, producing
-        // phantom UART activity and blocking transport switch (e.g. Cable -> LAN).
-        if (usbManager.deviceList.isEmpty()) {
-            LogUtil.w(TAG, "performConnect aborted: no USB device attached")
-            notifyConnectionError("No USB device attached", InnerErrorCode.E251)
-            return
-        }
+        // NOTE: do NOT fail fast here on an empty usbManager.deviceList. Right after a cable is
+        // re-plugged (unplug → plug), the CDC-ACM interface takes a few hundred ms to enumerate, so
+        // deviceList can be transiently empty exactly when connect() is called. An immediate
+        // "no USB device" failure here is the root cause of "first connect after replug fails,
+        // second succeeds". Instead, awaitVspUsbDevice() (inside connectToVspDevice) polls for the
+        // device up to VSP_DEVICE_WAIT_TIMEOUT_MS and only fails if it never enumerates.
 
         registerUsbPermissionReceiverIfNeeded()
 
@@ -270,9 +268,9 @@ class VSPClientKernel(
      * Active VSP liveness probe.
      *
      * A successful [usbSerialPort]?.write only proves the local USB port accepted the bytes, not
-     * that TaPro (the server) is still processing them — if its UART receive loop is stuck
+     * that Tapro (the server) is still processing them — if its UART receive loop is stuck
      * ("port timeout"), transactions would silently hang until the full request timeout. To fail
-     * fast, we send a lightweight handshake REQ and wait for TaPro to reply (it answers REQ with an
+     * fast, we send a lightweight handshake REQ and wait for Tapro to reply (it answers REQ with an
      * ACK even during the data phase). Any inbound bytes complete [livenessWaiter].
      */
     override suspend fun checkLinkAlive(timeoutMs: Long): Boolean {
@@ -578,10 +576,10 @@ class VSPClientKernel(
             usbSerialDriver = targetDriver
 
             // Discard bytes the peer left in the link FIFO during its previous session (typically
-            // ##TAPLINK_HSK_REQ## re-sent every second by TaPro and never read). Handshake markers
+            // ##TAPLINK_HSK_REQ## re-sent every second by Tapro and never read). Handshake markers
             // carry no session id, so without this the receive loop would immediately read a stale
             // REQ and declare the handshake verified while the peer's port may still be closed —
-            // the first business frame sent afterwards is then lost on the wire (TaPro shows
+            // the first business frame sent afterwards is then lost on the wire (Tapro shows
             // "connected" while the SDK reports 351 three seconds later).
             drainStaleRxBytes()
 
@@ -660,9 +658,9 @@ class VSPClientKernel(
     /**
      * Actively drive the handshake instead of only waiting for the service side.
      *
-     * TaPro only periodically sends [VspHandshake.REQ] in its own connect flow; when the cable is not physically disconnected
-     * and TaPro is still CONNECTED (e.g., the integration app reconnects on its own), it won't send REQ again.
-     * If the client only waits passively, handshake will timeout. TaPro immediately replies with ACK upon receiving REQ during the data phase,
+     * Tapro only periodically sends [VspHandshake.REQ] in its own connect flow; when the cable is not physically disconnected
+     * and Tapro is still CONNECTED (e.g., the integration app reconnects on its own), it won't send REQ again.
+     * If the client only waits passively, handshake will timeout. Tapro immediately replies with ACK upon receiving REQ during the data phase,
      * so the client can periodically initiate REQ to cover both initial connection and reconnection scenarios.
      */
     private fun startHandshakeRequests(waiter: CompletableDeferred<Unit>): Job =
@@ -897,13 +895,30 @@ class VSPClientKernel(
      */
     private fun handleConnectionError() {
         LogUtil.w(TAG, "VSP client connection error detected")
-        
+
         if (currentInnerConnectionStatus == InnerConnectionStatus.CONNECTED) {
             updateStatus(InnerConnectionStatus.ERROR)
             notifyConnectionDisconnected(
                 InnerErrorCode.E232.code,
                 "VSP client connection error"
             )
+
+            // Release the underlying USB resources IMMEDIATELY on link loss (e.g. cable unplugged),
+            // instead of deferring cleanup to the next connect(). If the old port / connection /
+            // receive loop are left open, the NEXT connection attempt to the same or a different
+            // device fails to open the serial port (or races the still-running receive loop) — this
+            // is the "first connect after replug/device-switch fails, second succeeds" symptom, the
+            // second connect only working because it triggers a disconnect() on the stale kernel.
+            // performDisconnect() closes the port/connection, cancels the receive job, clears the
+            // buffer and resets the handshake flag. It does not change status, so we move the kernel
+            // to DISCONNECTED afterwards, which also lets TaplinkServiceKernel reuse this kernel
+            // cleanly on the next connect.
+            try {
+                performDisconnect()
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error releasing VSP resources after connection error: ${e.message}")
+            }
+            updateStatus(InnerConnectionStatus.DISCONNECTED)
         }
     }
 

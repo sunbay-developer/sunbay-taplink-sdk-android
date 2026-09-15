@@ -521,7 +521,7 @@ override fun onSuccess(result: PaymentResult) {
 
 `receiptJson` is returned in every completed transaction response. It contains all data needed to compose a US-compliant receipt. Integrators can use it for self-printing (when `printReceipt = NONE`) or for digital receipt / record-keeping purposes regardless of print mode.
 
-> **Note**: Merchant header info (merchant name, address, logo) is NOT included — integrators manage their own merchant data.
+> **Note**: Merchant header info (merchant name and address) is NOT included — integrators manage their own merchant data.
 
 Parse with standard `JSONObject` (Android built-in) or any JSON library:
 

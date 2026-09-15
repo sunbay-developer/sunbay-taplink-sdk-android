@@ -7,7 +7,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
  *
  * @param errors List of validation errors
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 class TransactionRequestValidationException(

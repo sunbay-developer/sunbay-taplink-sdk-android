@@ -8,7 +8,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
  * @param isValid Whether validation passed
  * @param errors Error list, containing specific error information when validation fails
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class ValidationResult(

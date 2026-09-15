@@ -20,7 +20,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * - Connection configuration persistence
  * - Device ID based auto-discovery
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-21
  */
 class ReconnectManager(
@@ -48,6 +48,9 @@ class ReconnectManager(
      * Whether currently reconnecting
      */
     private var isReconnecting = false
+
+    /** True only while a delayed reconnect callback is actually queued. */
+    private var reconnectScheduled = false
 
     /**
      * Last connection config (for reconnection)
@@ -86,6 +89,7 @@ class ReconnectManager(
         isManualDisconnect = false
         currentRetryCount = 0
         isReconnecting = false
+        reconnectScheduled = false
 
         // Clear pending listeners
         pendingReconnectionListeners.clear()
@@ -107,6 +111,8 @@ class ReconnectManager(
     fun onConnected(deviceId: String? = null, taproVersion: String? = null) {
         currentRetryCount = 0
         isReconnecting = false
+        reconnectScheduled = false
+        retryHandler.removeCallbacksAndMessages(null)
         LogUtil.d(TAG, "Connection established, reset reconnect state")
 
         // Save connection configuration for persistence
@@ -136,7 +142,7 @@ class ReconnectManager(
      */
     fun onDisconnected(listener: ConnectionListener): Boolean {
         // Prevent duplicate reconnection triggers
-        if (isReconnecting) {
+        if (isReconnecting && reconnectScheduled) {
             LogUtil.w(TAG, "Already reconnecting, ignoring duplicate onDisconnected call")
             return true // Return true to indicate reconnection is being handled
         }
@@ -147,6 +153,7 @@ class ReconnectManager(
 
         if (shouldAutoReconnect) {
             isReconnecting = true
+            reconnectScheduled = true
             currentRetryCount++
             LogUtil.d(
                 TAG,
@@ -159,6 +166,7 @@ class ReconnectManager(
 
             // Delayed reconnection
             retryHandler.postDelayed({
+                reconnectScheduled = false
                 attemptReconnect()
             }, lastConnectionConfig?.retryDelayMs ?: 2000L)
 
@@ -176,6 +184,7 @@ class ReconnectManager(
 
         // Reset reconnection state, allow manual reconnection
         isReconnecting = false
+        reconnectScheduled = false
 
         return false
     }
@@ -189,6 +198,7 @@ class ReconnectManager(
         LogUtil.d(TAG, "Manual disconnect")
         isManualDisconnect = true
         isReconnecting = false
+        reconnectScheduled = false
         currentRetryCount = 0
         retryHandler.removeCallbacksAndMessages(null)
 
@@ -382,6 +392,7 @@ class ReconnectManager(
         currentRetryCount = 0
         isManualDisconnect = false
         isReconnecting = true
+        reconnectScheduled = false
 
         // Cancel existing reconnection tasks
         retryHandler.removeCallbacksAndMessages(null)

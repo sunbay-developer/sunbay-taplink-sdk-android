@@ -9,7 +9,7 @@ import javax.crypto.spec.SecretKeySpec
  *
  * Provides HMAC-SHA256 signature functionality
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 object SignUtil {
@@ -33,7 +33,7 @@ object SignUtil {
             bytesToHex(hash)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Failed to generate HMAC-SHA256 signature: ${e.message}")
-            ""
+            throw SignException("Failed to generate HMAC-SHA256 signature", e)
         }
     }
 
@@ -73,16 +73,5 @@ object SignUtil {
      */
     class SignException(message: String, cause: Throwable? = null) : Exception(message, cause)
 }
-
-
-
-
-
-
-
-
-
-
-
 
 

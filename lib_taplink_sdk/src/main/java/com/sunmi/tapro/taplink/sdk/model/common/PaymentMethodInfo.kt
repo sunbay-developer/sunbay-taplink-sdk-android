@@ -1,14 +1,11 @@
 package com.sunmi.tapro.taplink.sdk.model.common
 
-import com.fasterxml.jackson.annotation.JsonIgnore
-import com.fasterxml.jackson.annotation.JsonProperty
-
 /**
  * Payment method information class.
  *
  * Used to specify preferred payment method category, id and subId.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class PaymentMethodInfo(
@@ -16,7 +13,6 @@ data class PaymentMethodInfo(
      * Payment method category (optional).
      * Values: CARD, EBT, QR-MPM, QR-CPM
      */
-    @JsonProperty("category")
     val _category: String? = null,
 
     /**
@@ -24,7 +20,6 @@ data class PaymentMethodInfo(
      * Must not be specified when category = CARD; the system will automatically identify the payment method.
      * Values: VISA, MASTERCARD, EBT, DISCOVER, AMEX, JCB, UNIONPAY, DANA, DINERSCLUB, WECHAT_PAY, ALIPAY
      */
-    @JsonProperty("id")
     val _id: String? = null,
 
     /**
@@ -32,13 +27,11 @@ data class PaymentMethodInfo(
      * Must not be specified when category = CARD.
      * Can only be specified when category = EBT and id = EBT; in that case valid values are SNAP, VOUCHER, BENEFIT.
      */
-    @JsonProperty("subId")
     val _subId: String? = null
 ) {
     /**
      * Payment method category (enum type).
      */
-    @get:JsonIgnore
     @delegate:Transient
     val category: PaymentCategory? by lazy {
         PaymentCategory.fromString(_category)
@@ -48,7 +41,6 @@ data class PaymentMethodInfo(
      * Payment method ID (enum type).
      * Must not be specified when category = CARD; the system will automatically identify the payment method.
      */
-    @get:JsonIgnore
     @delegate:Transient
     val id: PaymentMethodId? by lazy {
         PaymentMethodId.fromString(_id)
@@ -59,7 +51,6 @@ data class PaymentMethodInfo(
      * Must not be specified when category = CARD.
      * Can only be specified when category = EBT and id = EBT; valid values are SNAP, VOUCHER, BENEFIT.
      */
-    @get:JsonIgnore
     @delegate:Transient
     val subId: PaymentMethodSubId? by lazy {
         PaymentMethodSubId.fromString(_subId)
@@ -135,18 +126,15 @@ data class PaymentMethodInfo(
     /**
      * Gets the category string for API transmission.
      */
-    @JsonIgnore
     fun getCategoryString(): String? = _category
 
     /**
      * Gets the ID string for API transmission.
      */
-    @JsonIgnore
     fun getIdString(): String? = _id
 
     /**
      * Gets the sub-ID string for API transmission.
      */
-    @JsonIgnore
     fun getSubIdString(): String? = _subId
 }

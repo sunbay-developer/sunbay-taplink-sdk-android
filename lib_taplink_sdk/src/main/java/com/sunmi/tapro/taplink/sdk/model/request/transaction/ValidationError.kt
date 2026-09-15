@@ -7,7 +7,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
  *
  * @param message Error message
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 sealed class ValidationError(val message: String) {

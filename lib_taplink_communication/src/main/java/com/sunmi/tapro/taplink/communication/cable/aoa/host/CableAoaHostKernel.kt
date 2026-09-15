@@ -11,6 +11,7 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
@@ -44,7 +45,7 @@ import java.util.concurrent.CountDownLatch
  * 3. Idempotent operations, repeated calls to connect() are safe
  * 4. State is truth, state variables directly reflect resource state
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-18
  */
 class CableAoaHostKernel(
@@ -79,7 +80,7 @@ class CableAoaHostKernel(
 
         /**
          * The peer may re-enumerate once more even after entering accessory mode: when the
-         * TapLink host (TaPro) takes over the accessory it closes its VSP fallback channel,
+         * TapLink host (Tapro) takes over the accessory it closes its VSP fallback channel,
          * and because VSP and accessory share the same USB gadget, closing it triggers
          * USB_STATE DISCONNECTED -> CONNECTED -> CONFIGURED, invalidating the AOA device node
          * that was just enumerated on this side.
@@ -911,7 +912,10 @@ class CableAoaHostKernel(
             ?: throw Exception("Failed to open device for AOA protocol")
 
         try {
-            val aoaDeviceInfo = UsbStandardProtocol.createDefaultAoaDeviceInfo()
+            val aoaDeviceInfo = UsbStandardProtocol.createAoaDeviceInfo(
+                deviceModel = Build.MODEL,
+                deviceSerial = InnerUtil.getSN()
+            )
 
             if (!UsbStandardProtocol.sendAoaProtocolSequence(conn, aoaDeviceInfo)) {
                 throw Exception("Failed to send AOA protocol sequence")

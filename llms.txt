@@ -1,8 +1,8 @@
 # Taplink SDK for Android — AI Integration Reference
 
 **Taplink SDK** is a semi-integrated payment SDK for Android POS applications provided by SUNBAY.
-Latest public release target: **1.0.8**.
-It supports three connection modes: App-to-App (Local), LAN (WLAN), and Cable (USB/Serial).
+Latest public release target: **1.0.9**.
+Use the v1.0.9 integration modes: **On-Device**, **Cross-Device** (`LAN`, `CABLE`, or `AUTO`), and **Sub-Screen**. The older App-to-App, LAN, and Cable APIs remain functional for backward compatibility, but new integrations should use the v1.0.9 factories below.
 
 ## Current Callback Semantics
 
@@ -54,9 +54,9 @@ TaplinkSDK.setConnectionListener(object : ConnectionListener {
     override fun onError(error: ConnectionError) { /* show error */ }
 })
 
-// onResume: connect if not connected
+// onResume: connect if not connected. Choose the configuration for the actual setup.
 if (!TaplinkSDK.isConnected()) {
-    TaplinkSDK.connect(ConnectionConfig.createDefault(), oneTimeListener)
+    TaplinkSDK.connect(ConnectionConfig.createOnDeviceMode(), oneTimeListener)
 }
 
 // onDestroy: cleanup
@@ -91,35 +91,68 @@ client.sale(request, object : PaymentCallback {
 
 ---
 
-## Connection Modes
+## Connection Modes (v1.0.9)
 
-### App-to-App (same device)
+Choose exactly one integration mode for a connection. Do not use `CrossDeviceStrategy.CLOUD`: cloud transactions are dispatched by the cloud backend and are not an SDK-selectable connection strategy.
+
+| Setup | Use this public API |
+|---|---|
+| Business app and Tapro on the same terminal | `ConnectionConfig.createOnDeviceMode()` |
+| Separate Tapro terminal on the same LAN | `ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)` |
+| Separate Tapro terminal connected by USB cable | `ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE)` |
+| Separate terminal with LAN/cable fallback after an active link drops | `ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.AUTO, host, port)` |
+| Dedicated USB customer-facing display | `ConnectionConfig.createSubScreenMode()` |
+
+### On-Device (business app and Tapro on the same terminal)
 ```kotlin
-val config = ConnectionConfig.createAppMode()
-// or: ConnectionConfig().setConnectionMode(ConnectionMode.APP_TO_APP)
+val config = ConnectionConfig.createOnDeviceMode()
+TaplinkSDK.connect(config, connectionListener)
 ```
 
-### LAN / WLAN
+### Cross-Device — LAN
 ```kotlin
-// First-time: specify IP + port (range 8443–8453)
-val config = ConnectionConfig.createLanMode(host = "192.168.1.100", port = 8443)
-
-// Subsequent: SDK uses cached device info
-val config = ConnectionConfig.createLanMode()
+val config = ConnectionConfig.createCrossDeviceMode(
+    strategy = CrossDeviceStrategy.LAN,
+    host = "192.168.1.100",
+    port = 8443
+)
+TaplinkSDK.connect(config, connectionListener)
 ```
 
-### Cable (USB / Serial)
+### Cross-Device — Cable (USB / Serial)
 ```kotlin
-// AUTO tries: VSP → RS232 → AOA
-val config = ConnectionConfig.createCableMode()
-// or with specific protocol:
-val config = ConnectionConfig.createCableMode(CableProtocol.USB_VSP)
+// Defaults to CableProtocol.AUTO: VSP → RS232 → AOA.
+val config = ConnectionConfig.createCrossDeviceMode(
+    strategy = CrossDeviceStrategy.CABLE
+)
+TaplinkSDK.connect(config, connectionListener)
 ```
 
-### Auto-detect (no mode specified)
+### Cross-Device — Auto channel
 ```kotlin
-val config = ConnectionConfig.createDefault()  // tries APP_TO_APP → Cable → LAN
+// Default priority is LAN, then CABLE. The SDK changes channel only after the active link drops.
+val config = ConnectionConfig.createCrossDeviceMode(
+    strategy = CrossDeviceStrategy.AUTO,
+    host = "192.168.1.100",
+    port = 8443,
+    autoPriority = listOf(CrossDeviceStrategy.LAN, CrossDeviceStrategy.CABLE)
+)
+TaplinkSDK.connect(config, connectionListener)
 ```
+
+`AUTO` never replaces a healthy active channel and does not interrupt an in-flight transaction. Omit `autoPriority` to use the default `[LAN, CABLE]` order.
+
+### Sub-Screen (dedicated USB customer-facing display)
+```kotlin
+val config = ConnectionConfig.createSubScreenMode()
+TaplinkSDK.connect(config, connectionListener)
+```
+
+`SUB_SCREEN` requires both the USB VSP connection and customer-display activation before `onConnected` fires. If the display cannot be opened, `onError` receives code `351`. For an optional display in another connection mode, call `TaplinkSDK.openUsbScreenPlayer(callback)` explicitly after `onConnected`; do not use `autoOpenUsbScreenPlayer`.
+
+### Legacy APIs
+
+`createAppMode()`, `createLanMode()`, `createCableMode()`, and `ConnectionMode.APP_TO_APP` / `LAN` / `CABLE` remain supported only for existing integrations. `createDefault()` is also a legacy auto-detect path; do not use it for a new v1.0.9 integration because it does not express the intended integration mode.
 
 ---
 
@@ -276,7 +309,7 @@ val amount = AmountInfo(
 
 // Factory style
 val amount = AmountInfo.of(1000L, "USD")           // from Long cents
-val amount = AmountInfo.of(BigDecimal("10.00"), "USD")  // auto-converts to cents
+val amount = AmountInfo.of(BigDecimal("1000"), "USD")   // already in cents
 ```
 
 Keep `orderAmount` as the base order amount only. When tip is known upfront, set `tipAmount` separately so Tapro can calculate and return the final transaction total. If tip is folded into `orderAmount`, tax may also be calculated on the tip portion.

@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.sdk.enums
  *
  * Defines the types of receipts that can be printed for a transaction.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class PrintReceipt(val value: String) {

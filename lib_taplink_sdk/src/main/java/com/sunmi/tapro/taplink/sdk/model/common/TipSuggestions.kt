@@ -7,7 +7,7 @@ import com.sunmi.tapro.taplink.sdk.enums.FeeMode
  *
  * Defines the suggested tip values and how they should be interpreted.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class TipSuggestions(

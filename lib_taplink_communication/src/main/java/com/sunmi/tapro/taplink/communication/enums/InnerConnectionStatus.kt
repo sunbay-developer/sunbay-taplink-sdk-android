@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.communication.enums
  * 
  * Defines various states of service connection
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 enum class InnerConnectionStatus {

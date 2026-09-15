@@ -1,11 +1,9 @@
 package com.sunmi.tapro.taplink.sdk.protocol
 
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.model.base.BasicRequest
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.util.SignUtil
+import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import java.text.SimpleDateFormat
 import java.util.*
@@ -14,9 +12,9 @@ import java.util.*
  * Protocol Request Builder
  *
  * Converts any request object to the underlying transport protocol format (BasicRequest).
- * Uses Jackson for all JSON serialisation — no Gson dependency.
+ * Uses Android's built-in JSON implementation with no external JSON dependency.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 object ProtocolRequestBuilder {
@@ -24,10 +22,6 @@ object ProtocolRequestBuilder {
     private const val TAG = "ProtocolRequestBuilder"
 
     private val TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.US)
-
-    private val mapper: ObjectMapper = ObjectMapper()
-        .registerKotlinModule()
-        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
 
     /**
      * Convert a specific request object to [BasicRequest].
@@ -54,23 +48,21 @@ object ProtocolRequestBuilder {
         try {
             val action = getActionByRequest(request)
 
-            // Serialise the business request to a mutable map so we can inject appId
-            @Suppress("UNCHECKED_CAST")
-            val bizMap = mapper.convertValue(request, MutableMap::class.java) as MutableMap<String, Any?>
-            bizMap["appId"] = appid
+            val bizData = TaplinkJsonBridge.toJsonObject(request)
+            bizData.put("appId", appid)
             // App-to-App processing mode (CUSTOM / HEADLESS) is carried in bizData so Tapro can
             // decide the per-connection foreground/headless flow. Exclusive to APP_TO_APP mode.
             if (!appToAppMode.isNullOrBlank()) {
-                bizMap["appToAppMode"] = appToAppMode
+                bizData.put("appToAppMode", appToAppMode)
             }
             // Standalone connection-mode tag (e.g. SUB_SCREEN) carried in its own bizData field,
             // decoupled from appToAppMode. Tapro reads bizData.connectionMode to route dedicated
             // connection modes independently of the App-to-App processing mode.
             if (!connectionMode.isNullOrBlank()) {
-                bizMap["connectionMode"] = connectionMode
+                bizData.put("connectionMode", connectionMode)
             }
 
-            val bizDataStr = mapper.writeValueAsString(bizMap)
+            val bizDataStr = bizData.toString()
 
             val timestamp = getCurrentTimestamp()
             val traceId = generateTraceId()

@@ -1,27 +1,23 @@
 package com.sunmi.tapro.taplink.sdk.impl
 
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
 import com.sunmi.tapro.taplink.communication.util.LocalCallbackManager
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.sdk.callback.PaymentCallback
 import com.sunmi.tapro.taplink.sdk.error.PaymentError
-import com.sunmi.tapro.taplink.sdk.model.base.BasicResponse
-import com.sunmi.tapro.taplink.sdk.model.base.BasicResponseJacksonDeserializer
 import com.sunmi.tapro.taplink.sdk.model.common.PaymentEvent
 import com.sunmi.tapro.taplink.sdk.model.request.PaymentRequest
 import com.sunmi.tapro.taplink.sdk.model.response.PaymentResult
 import com.sunmi.tapro.taplink.sdk.callback.TerminalInfoCallback
 import com.sunmi.tapro.taplink.sdk.model.response.TerminalInfo
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
 
 /**
- * Response processing class — Gson-free, uses Jackson.
+ * Response processing class using Android's built-in JSON implementation.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 class ResponseProcessor {
@@ -35,23 +31,9 @@ class ResponseProcessor {
     /**
      * Listener for device info extracted from transaction responses.
      * Called when a response contains taproVersion/deviceId (typically from the first
-     * transaction after INIT on the TaPro side).
+     * transaction after INIT on the Tapro side).
      */
     var onDeviceInfoReceived: ((deviceId: String, taproVersion: String) -> Unit)? = null
-
-    private val mapper: ObjectMapper = ObjectMapper()
-        .registerKotlinModule()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-
-    // Mapper that knows how to deserialize BasicResponse (custom deserializer for PaymentEvent)
-    private val responseMapper: ObjectMapper = ObjectMapper()
-        .registerKotlinModule()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-        .also { om ->
-            val module = com.fasterxml.jackson.databind.module.SimpleModule()
-            module.addDeserializer(BasicResponse::class.java, BasicResponseJacksonDeserializer())
-            om.registerModule(module)
-        }
 
     // Track processed terminal events (COMPLETED/CANCEL) by traceId to prevent duplicate processing
     // Terminal events should only be processed once even if they arrive multiple times
@@ -69,9 +51,9 @@ class ResponseProcessor {
      */
     fun processResponse(responseJson: String, callbackManager: LocalCallbackManager<InnerCallback?>) {
         try {
-            val node = mapper.readTree(responseJson)
-            val traceId = node.get("traceId")?.asText()
-            val eventCode = node.get("eventCode")?.asText()?.uppercase()
+            val node = TaplinkJsonBridge.parseObject(responseJson)
+            val traceId = TaplinkJsonBridge.stringOrNull(node, "traceId")
+            val eventCode = TaplinkJsonBridge.stringOrNull(node, "eventCode")?.uppercase()
 
             if (traceId.isNullOrBlank()) {
                 LogUtil.e(TAG, "Received data without traceId, ignoring: $responseJson")
@@ -107,8 +89,8 @@ class ResponseProcessor {
             }
 
             if (isError) {
-                val errorCode = node.get("errorCode")?.asText() ?: "UNKNOWN_ERROR"
-                val errorMsg = node.get("eventMsg")?.asText() ?: "Unknown error"
+                val errorCode = TaplinkJsonBridge.stringOrNull(node, "errorCode") ?: "UNKNOWN_ERROR"
+                val errorMsg = TaplinkJsonBridge.stringOrNull(node, "eventMsg") ?: "Unknown error"
                 LogUtil.d(TAG, "[TAPLINK-TX] TraceId=$traceId | ECR Error received: code=$errorCode, msg=$errorMsg")
                 callback?.onError(errorCode, errorMsg)
             } else {
@@ -133,7 +115,7 @@ class ResponseProcessor {
                 return
             }
 
-            val basicResponse = responseMapper.readValue(result, BasicResponse::class.java)
+            val basicResponse = TaplinkJsonBridge.parseBasicResponse(result)
             LogUtil.d(
                 TAG,
                 "Received BasicResponse: eventCode=${basicResponse.event.eventCode}, " +
@@ -141,7 +123,7 @@ class ResponseProcessor {
             )
 
             val paymentResult = if (!basicResponse.bizData.isNullOrBlank()) {
-                mapper.readValue(basicResponse.bizData, PaymentResult::class.java)
+                TaplinkJsonBridge.parsePaymentResult(basicResponse.bizData)
             } else {
                 PaymentResult(code = "", message = basicResponse.event.eventMsg)
             }
@@ -215,7 +197,7 @@ class ResponseProcessor {
         request: PaymentRequest
     ) {
         try {
-            val basicResponse = responseMapper.readValue(result, BasicResponse::class.java)
+            val basicResponse = TaplinkJsonBridge.parseBasicResponse(result)
             LogUtil.d(TAG, "Received BasicResponse: eventCode=${basicResponse.event.eventCode}, eventMsg=${basicResponse.event.eventMsg}")
 
             val bizData = basicResponse.bizData
@@ -226,7 +208,31 @@ class ResponseProcessor {
                 )
             }
 
-            val terminalInfo = mapper.readValue(bizData, TerminalInfo::class.java)
+            // A control action failure (e.g. device not registered / sign-in failed on the
+            // Tapro side) is delivered by Tapro as a transaction-style failure payload
+            // (a PaymentResult with a business error code such as 307/C20 and no `terminal`
+            // field) rather than a TerminalInfo. Detect it BEFORE attempting to deserialize
+            // TerminalInfo, otherwise the missing non-null `terminal` field turns the real
+            // business error into a misleading 302 "Request data format error".
+            val terminalFailure = extractTerminalInfoFailure(bizData)
+            if (terminalFailure != null) {
+                LogUtil.e(
+                    TAG,
+                    "GET_TERMINAL_INFO business failure: code=${terminalFailure.code}, " +
+                        "message=${terminalFailure.message}, traceId=${basicResponse.traceId}"
+                )
+                callback.onFailure(
+                    PaymentError.create(
+                        code = terminalFailure.code,
+                        message = terminalFailure.message,
+                        suggestion = ErrorStringHelper.getSolution(terminalFailure.code) ?: "",
+                        traceId = basicResponse.traceId
+                    )
+                )
+                return
+            }
+
+            val terminalInfo = TaplinkJsonBridge.parseTerminalInfo(bizData)
             when (basicResponse.event) {
                 is PaymentEvent.Cancel,
                 is PaymentEvent.Completed -> callback.onSuccess(terminalInfo)
@@ -256,6 +262,68 @@ class ResponseProcessor {
     }
 
     /**
+     * Business failure carried by a GET_TERMINAL_INFO `bizData`.
+     *
+     * @property code business error code (e.g. "307"); never the success code "100".
+     * @property message human-readable error message.
+     */
+    private data class TerminalInfoFailure(val code: String, val message: String)
+
+    /**
+     * Inspect a GET_TERMINAL_INFO `bizData` and, if it actually represents a control-action
+     * failure (a transaction-style failure payload) rather than a [TerminalInfo], extract the
+     * real business error code and message.
+     *
+     * Tapro emits such a payload when the control action fails before it can read terminal
+     * info (e.g. device not registered / sign-in failed): the `bizData` is a serialized
+     * `PaymentResult` — it has a `code`/`transactionResultCode` and `transactionStatus=FAILED`,
+     * but no `terminal` field. Returning the real code here lets the SDK surface, for example,
+     * a `307` business error instead of a misleading `302` "Request data format error" produced
+     * by a failed `TerminalInfo` deserialization.
+     *
+     * @return the extracted [TerminalInfoFailure] when the payload is a failure result, or
+     *   `null` when it looks like a normal [TerminalInfo] payload (which must be deserialized
+     *   by the caller).
+     */
+    private fun extractTerminalInfoFailure(bizData: String): TerminalInfoFailure? {
+        return try {
+            val node = TaplinkJsonBridge.parseObject(bizData)
+            // A genuine TerminalInfo payload always carries the `terminal` object. If it is
+            // present, this is not a failure payload — let the caller deserialize normally.
+            if (TaplinkJsonBridge.objectOrNull(node, "terminal") != null) {
+                return null
+            }
+
+            val status = TaplinkJsonBridge.stringOrNull(node, "transactionStatus")
+                ?.takeIf { it.isNotBlank() }
+            val code = TaplinkJsonBridge.stringOrNull(node, "code")?.takeIf { it.isNotBlank() }
+            val transactionResultCode = TaplinkJsonBridge.stringOrNull(node, "transactionResultCode")
+                ?.takeIf { it.isNotBlank() }
+
+            val isFailure = status.equals("FAILED", ignoreCase = true) ||
+                (code != null && code != SUCCESS_CODE && code != "0")
+
+            if (!isFailure) {
+                // No `terminal`, but also no failure signal — leave it to the normal
+                // deserialization path, which will raise a clear parse error if invalid.
+                return null
+            }
+
+            val message = TaplinkJsonBridge.stringOrNull(node, "transactionResultMsg")
+                ?.takeIf { it.isNotBlank() }
+                ?: TaplinkJsonBridge.stringOrNull(node, "message")?.takeIf { it.isNotBlank() }
+                ?: "GET_TERMINAL_INFO failed"
+
+            // Prefer the transaction-mapped `code`; fall back to the raw transactionResultCode.
+            val resolvedCode = code ?: transactionResultCode ?: InnerErrorCode.E307.code
+            TerminalInfoFailure(code = resolvedCode, message = message)
+        } catch (e: Exception) {
+            LogUtil.d(TAG, "Not a terminal-info failure payload: ${e.message}")
+            null
+        }
+    }
+
+    /**
      * Try to parse response as a Headless intermediate event.
      *
      * Headless mode intermediate events use a simplified JSON format:
@@ -275,7 +343,7 @@ class ResponseProcessor {
     private fun tryParseAsHeadlessIntermediateEvent(json: String): PaymentEvent? {
         return try {
 
-            val jsonObject = mapper.readTree(json)
+            val jsonObject = TaplinkJsonBridge.parseObject(json)
 
 
             // Check for Headless event signature: has "eventCode" + "eventId" but no "appSign"
@@ -284,32 +352,18 @@ class ResponseProcessor {
             val hasAppSign = jsonObject.has("appSign")
 
             if (hasEventId && hasEventCode && !hasAppSign) {
-                val eventCode = jsonObject.get("eventCode")?.asText() ?: return null
-                val eventId = jsonObject.get("eventId")?.takeUnless { it.isNull }?.asText()
-                val cancelable = jsonObject.get("cancelable")?.takeUnless { it.isNull }?.asBoolean() ?: false
-                val transactionRequestId = jsonObject.get("transactionRequestId")
-                    ?.takeUnless { it.isNull }
-                    ?.asText()
-                val referenceOrderId = jsonObject.get("referenceOrderId")
-                    ?.takeUnless { it.isNull }
-                    ?.asText()
-                val timestamp = jsonObject.get("timestamp")
-                    ?.takeUnless { it.isNull }
-                    ?.asLong()
+                val eventCode = TaplinkJsonBridge.stringOrNull(jsonObject, "eventCode") ?: return null
+                val eventId = TaplinkJsonBridge.stringOrNull(jsonObject, "eventId")
+                val cancelable = TaplinkJsonBridge.booleanOrNull(jsonObject, "cancelable") ?: false
+                val transactionRequestId =
+                    TaplinkJsonBridge.stringOrNull(jsonObject, "transactionRequestId")
+                val referenceOrderId = TaplinkJsonBridge.stringOrNull(jsonObject, "referenceOrderId")
+                val timestamp = TaplinkJsonBridge.longOrNull(jsonObject, "timestamp")
                     ?: System.currentTimeMillis()
 
                 // Parse optional data map
-                val dataMap = if (jsonObject.has("data") && jsonObject.get("data").isObject) {
-                    val dataObj = jsonObject.get("data")
-                    dataObj.fields().asSequence().associate { (key, value) ->
-                        val normalizedValue = when {
-                            value.isValueNode -> value.asText()
-                            else -> mapper.writeValueAsString(value)
-                        }
-                        key to normalizedValue
-                    }
-                } else {
-                    null
+                val dataMap = TaplinkJsonBridge.objectOrNull(jsonObject, "data")?.let { dataObj ->
+                    dataObj.keys().asSequence().associateWith { key -> dataObj.get(key).toString() }
                 }
 
                 // 归一化 eventCode/eventMsg，兼容现有业务按 WAITING_CARD 等常量判断。
@@ -351,7 +405,7 @@ class ResponseProcessor {
         return try {
 
             // Headless 中间事件（eventId 存在且无 appSign）只用于进度透传，不能释放回调。
-            val jsonObject = mapper.readTree(responseJson)
+            val jsonObject = TaplinkJsonBridge.parseObject(responseJson)
 
             val hasEventId = jsonObject.has("eventId")
             val hasAppSign = jsonObject.has("appSign")
@@ -373,8 +427,8 @@ class ResponseProcessor {
 
     private fun extractEventCode(responseJson: String): String? {
         return try {
-            val node = mapper.readTree(responseJson)
-            node.get("eventCode")?.asText()
+            val node = TaplinkJsonBridge.parseObject(responseJson)
+            TaplinkJsonBridge.stringOrNull(node, "eventCode")
         } catch (e: Exception) {
             null
         }
@@ -392,9 +446,9 @@ class ResponseProcessor {
     }
 
     /**
-     * If the payment result contains TaPro device info (taproVersion / deviceId),
+     * If the payment result contains Tapro device info (taproVersion / deviceId),
      * notify the registered listener. This typically happens on the first transaction
-     * response after INIT is performed by TaPro.
+     * response after INIT is performed by Tapro.
      */
     private fun notifyDeviceInfoIfPresent(result: PaymentResult) {
         val taproVersion = result.taproVersion

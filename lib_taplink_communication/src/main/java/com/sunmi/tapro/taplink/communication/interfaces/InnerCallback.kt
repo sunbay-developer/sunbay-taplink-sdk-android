@@ -6,7 +6,7 @@ package com.sunmi.tapro.taplink.communication.interfaces
  * Used for callback communication between internal service layer and SDK layer
  * Provides both success response and error response callback methods
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 interface InnerCallback {

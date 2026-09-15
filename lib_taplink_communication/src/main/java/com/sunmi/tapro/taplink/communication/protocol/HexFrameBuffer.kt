@@ -25,7 +25,7 @@ import java.util.concurrent.LinkedBlockingQueue
  * @param maxBufferSize Maximum buffer size (character count)
  * @param messageTimeoutMs Message timeout time (milliseconds)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-06
  */
 class HexFrameBuffer(

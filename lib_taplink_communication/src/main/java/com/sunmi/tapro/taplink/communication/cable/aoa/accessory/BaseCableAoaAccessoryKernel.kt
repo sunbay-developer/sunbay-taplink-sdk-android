@@ -39,7 +39,7 @@ import java.io.IOException
  * - 连接建立互斥锁（确保连接建立的原子性）
  * - 断开连接互斥锁（防止并发断开）
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 abstract class BaseCableAoaAccessoryKernel(

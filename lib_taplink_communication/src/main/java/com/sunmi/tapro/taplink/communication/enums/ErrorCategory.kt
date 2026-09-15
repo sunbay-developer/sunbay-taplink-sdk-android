@@ -13,7 +13,7 @@ import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
  * - AUTHENTICATION: 221 - Authentication failure errors
  * - TRANSACTION: 30x - Transaction processing related errors
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-14
  */
 enum class ErrorCategory {

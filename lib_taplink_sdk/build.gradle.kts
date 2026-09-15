@@ -6,9 +6,9 @@ plugins {
 
 // ==================== Constants Configuration ====================
 object SdkVersion {
-    const val CODE = 16
+    const val CODE = 17
 
-    const val NAME = "1.0.9"
+    const val NAME = "1.0.10"
 }
 
 object BuildConfig {
@@ -80,9 +80,6 @@ dependencies {
 
     embed(project(":lib_taplink_communication"))
 
-    implementation(libs.jackson.databind)
-    implementation(libs.jackson.module.kotlin)
-
     // CameraX for QR scanner
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)
@@ -105,13 +102,14 @@ dependencies {
     }
 
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
 }
 
 fun createCopyAarTask(buildType: String, taskName: String) {
     tasks.register<Copy>(taskName) {
-        description = "Copy and rename ${buildType} AAR file"
+        description = "Copy and rename $buildType AAR file"
         group = "build"
 
         val sourceAar = "${BuildConfig.MODULE_NAME}-${buildType}.aar"

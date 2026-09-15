@@ -11,7 +11,7 @@ package com.sunmi.tapro.taplink.communication.lan.model
  * @param port Service port
  * @param attributes Service attributes
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 data class ServiceInfo(

@@ -2,11 +2,14 @@ package com.sunmi.tapro.taplink.sdk.persistence
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sunmi.tapro.taplink.sdk.config.ConnectionConfig
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
+import com.sunmi.tapro.taplink.sdk.enums.CableProtocol
+import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
+import com.sunmi.tapro.taplink.sdk.enums.CrossDeviceStrategy
+import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
+import org.json.JSONObject
 
 /**
  * Connection configuration persistence manager
@@ -14,7 +17,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
  * Handles saving and loading connection configurations for automatic reconnection
  * Supports device ID based discovery and connection parameter persistence
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-12-21
  */
 class ConnectionPersistence(context: Context) {
@@ -28,16 +31,9 @@ class ConnectionPersistence(context: Context) {
         private const val KEY_LAST_CONNECTED_SERIAL = "last_connected_serial"
         private const val KEY_DEVICE_SERVICE_INFO = "device_service_info_"
         private const val KEY_AUTO_CONNECT_ENABLED = "auto_connect_enabled"
-        private const val KEY_DETECTED_CABLE_PROTOCOL = "detected_cable_protocol"
-        private const val KEY_DETECTED_CABLE_DEVICE_INFO = "detected_cable_device_info"
-        private const val KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP = "detected_cable_protocol_timestamp"
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val mapper: ObjectMapper = ObjectMapper()
-        .registerKotlinModule()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-    
     /**
      * Device service information for mDNS discovery
      */
@@ -63,7 +59,7 @@ class ConnectionPersistence(context: Context) {
 
             // Save connection config
             if (config != null) {
-                val configJson = mapper.writeValueAsString(config)
+                val configJson = TaplinkJsonBridge.toJsonString(config)
                 editor.putString(KEY_LAST_CONNECTION_CONFIG, configJson)
                 LogUtil.d(TAG, "Saved connection config: $configJson")
             }
@@ -87,55 +83,6 @@ class ConnectionPersistence(context: Context) {
     }
 
     /**
-     * Save detected cable protocol for future use
-     * 
-     * @param protocol Detected cable protocol
-     * @param deviceInfo Device information from detection
-     */
-    fun saveDetectedCableProtocol(protocol: com.sunmi.tapro.taplink.sdk.enums.CableProtocol, deviceInfo: String?) {
-        try {
-            val editor = prefs.edit()
-            editor.putString(KEY_DETECTED_CABLE_PROTOCOL, protocol.name)
-            if (deviceInfo != null) {
-                editor.putString(KEY_DETECTED_CABLE_DEVICE_INFO, deviceInfo)
-            }
-            editor.putLong(KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP, System.currentTimeMillis())
-            editor.apply()
-            
-            LogUtil.d(TAG, "Saved detected cable protocol: $protocol, deviceInfo: $deviceInfo")
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to save detected cable protocol: ${e.message}")
-        }
-    }
-
-    /**
-     * Get last detected cable protocol
-     * 
-     * @return Detected cable protocol or null if not found or expired
-     */
-    fun getDetectedCableProtocol(): com.sunmi.tapro.taplink.sdk.enums.CableProtocol? {
-        return try {
-            val protocolName = prefs.getString(KEY_DETECTED_CABLE_PROTOCOL, null)
-            val timestamp = prefs.getLong(KEY_DETECTED_CABLE_PROTOCOL_TIMESTAMP, 0)
-            
-            // Check if detection is recent (within 5 minutes)
-            val isRecent = (System.currentTimeMillis() - timestamp) < 5 * 60 * 1000
-            
-            if (protocolName != null && isRecent) {
-                val protocol = com.sunmi.tapro.taplink.sdk.enums.CableProtocol.valueOf(protocolName)
-                LogUtil.d(TAG, "Retrieved detected cable protocol: $protocol")
-                protocol
-            } else {
-                LogUtil.d(TAG, "No recent cable protocol detection found")
-                null
-            }
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "Failed to retrieve detected cable protocol: ${e.message}")
-            null
-        }
-    }
-    
-    /**
      * Get last connection configuration
      * 
      * @return Last saved connection config or null if not found
@@ -144,7 +91,7 @@ class ConnectionPersistence(context: Context) {
         return try {
             val configJson = prefs.getString(KEY_LAST_CONNECTION_CONFIG, null)
             if (configJson != null) {
-                val config = mapper.readValue(configJson, ConnectionConfig::class.java)
+                val config = parseConnectionConfig(configJson)
                 LogUtil.d(TAG, "Retrieved last connection config: $configJson")
                 config
             } else {
@@ -215,7 +162,7 @@ class ConnectionPersistence(context: Context) {
     fun saveDeviceServiceInfo(deviceServiceInfo: DeviceServiceInfo) {
         try {
             val key = KEY_DEVICE_SERVICE_INFO + deviceServiceInfo.deviceId
-            val serviceInfoJson = mapper.writeValueAsString(deviceServiceInfo)
+            val serviceInfoJson = TaplinkJsonBridge.toJsonString(deviceServiceInfo)
             
             prefs.edit()
                 .putString(key, serviceInfoJson)
@@ -240,7 +187,7 @@ class ConnectionPersistence(context: Context) {
             val serviceInfoJson = prefs.getString(key, null)
             
             if (serviceInfoJson != null) {
-                val serviceInfo = mapper.readValue(serviceInfoJson, DeviceServiceInfo::class.java)
+                val serviceInfo = parseDeviceServiceInfo(serviceInfoJson)
                 LogUtil.d(TAG, "Retrieved device service info for $deviceId: $serviceInfoJson")
                 serviceInfo
             } else {
@@ -364,7 +311,7 @@ class ConnectionPersistence(context: Context) {
             for ((key, value) in allPrefs) {
                 if (key.startsWith(KEY_DEVICE_SERVICE_INFO) && value is String) {
                     try {
-                        val serviceInfo = mapper.readValue(value, DeviceServiceInfo::class.java)
+                        val serviceInfo = parseDeviceServiceInfo(value)
                         result.add(serviceInfo)
                     } catch (e: Exception) {
                         LogUtil.w(TAG, "Failed to parse device service info: $key")
@@ -380,4 +327,55 @@ class ConnectionPersistence(context: Context) {
             emptyList()
         }
     }
+
+    /** Reads both Jackson-era cache JSON and JSON written by the current bridge. */
+    private fun parseConnectionConfig(json: String): ConnectionConfig {
+        val source = JSONObject(json)
+        val config = ConnectionConfig()
+
+        enumValueOrNull<CableProtocol>(source.optNullableString("cableProtocol"))
+            ?.let(config::setCableProtocol)
+        val strategy = enumValueOrNull<CrossDeviceStrategy>(
+            source.optNullableString("crossDeviceStrategy")
+        )
+        strategy?.let(config::setCrossDeviceStrategy)
+
+        if (strategy != null) {
+            config.setConnectionMode(ConnectionMode.CROSS_DEVICE)
+        } else {
+            enumValueOrNull<ConnectionMode>(source.optNullableString("connectionMode"))
+                ?.let(config::setConnectionMode)
+        }
+
+        enumValueOrNull<AppToAppMode>(source.optNullableString("appToAppMode"))
+            ?.let(config::setAppToAppMode)
+        source.optNullableString("host")?.let(config::setHost)
+        if (source.has("port") && !source.isNull("port")) config.setPort(source.getInt("port"))
+        if (source.has("connectionTimeout")) {
+            config.setConnectionTimeout(source.getInt("connectionTimeout"))
+        }
+        if (source.has("autoReconnect")) config.setAutoReconnect(source.getBoolean("autoReconnect"))
+        config.setRetryPolicy(
+            source.optInt("maxRetryCount", config.maxRetryCount),
+            source.optLong("retryDelayMs", config.retryDelayMs)
+        )
+        return config
+    }
+
+    private fun parseDeviceServiceInfo(json: String): DeviceServiceInfo {
+        val source = JSONObject(json)
+        return DeviceServiceInfo(
+            deviceId = source.getString("deviceId"),
+            serviceName = source.getString("serviceName"),
+            host = source.getString("host"),
+            port = source.getInt("port"),
+            lastSeen = source.optLong("lastSeen", System.currentTimeMillis())
+        )
+    }
+
+    private fun JSONObject.optNullableString(key: String): String? =
+        if (!has(key) || isNull(key)) null else getString(key)
+
+    private inline fun <reified T : Enum<T>> enumValueOrNull(value: String?): T? =
+        value?.let { runCatching { enumValueOf<T>(it) }.getOrNull() }
 }

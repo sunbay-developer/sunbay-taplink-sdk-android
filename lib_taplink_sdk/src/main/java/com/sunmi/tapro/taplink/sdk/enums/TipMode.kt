@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.sdk.enums
  *
  * Defines when the tip is applied during the transaction flow.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class TipMode(val value: String) {

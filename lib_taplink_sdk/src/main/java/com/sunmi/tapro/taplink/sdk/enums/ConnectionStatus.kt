@@ -3,7 +3,7 @@ package com.sunmi.tapro.taplink.sdk.enums
 /**
  * Connection status enumeration
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class ConnectionStatus {

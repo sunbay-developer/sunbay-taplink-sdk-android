@@ -6,10 +6,12 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 > **Legend:** 🚀 New &nbsp;·&nbsp; 💥 Breaking &nbsp;·&nbsp; 🔧 Improved &nbsp;·&nbsp; 🐛 Fixed &nbsp;·&nbsp; 📦 Dependencies &nbsp;·&nbsp; 🧭 Migration
 
-**Compatibility:** Min SDK Android API 25 (7.1) · Kotlin 1.7.10 · Java 8+
+**Compatibility:** Min SDK Android API 24 (7.0) · Kotlin 1.7.10 · Java 8+
 
 ## Contents
 
+- [v1.0.10](#v1010) — Explicit connection selection, Android 7 compatibility, and reconnect reliability
+- [v1.0.9](#v109) — Integration modes, Sub-Screen mode, and terminal information query
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
 - [v1.0.6](#v106) — Tip config moves to the transaction request
@@ -20,6 +22,80 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## v1.0.10
+
+**Released 2026-09-15**
+
+This release makes connection selection deterministic, removes the SDK's runtime Jackson
+dependency, and improves connection recovery.
+
+### 💥 Breaking Changes
+
+- Removed `CrossDeviceStrategy.AUTO`, `CableProtocol.AUTO`,
+  `ConnectionConfig.setAutoPriority(...)`, and the `autoPriority` argument of
+  `createCrossDeviceMode(...)`.
+- `createCrossDeviceMode(...)` now requires `CrossDeviceStrategy.LAN` or
+  `CrossDeviceStrategy.CABLE`. Cable connections also require `CableProtocol.USB_VSP`,
+  `CableProtocol.RS232`, or `CableProtocol.USB_AOA`.
+
+### 🔧 Improvements and Fixes
+
+- Fixed SDK initialization on Android API 24 and 25 by removing the runtime Jackson dependency.
+- Existing connection data and supported TapLink response formats remain compatible after the
+  dependency change.
+- Improved LAN recovery when the connected Tapro terminal changes its advertised address.
+- Improved Cable reconnect behavior after USB unplug/replug.
+- Repeated SDK initialization now cleans up the previous connection and callbacks first.
+- `getTerminalInfo()` preserves genuine errors from supported Tapro versions and reports error
+  `352` only for a confirmed unsupported version.
+
+### 📦 Dependencies
+
+- Removed `jackson-databind` and `jackson-module-kotlin` from the SDK runtime dependencies.
+- Applications may continue using their own Jackson or Gson version independently.
+
+### 🧭 Migration from v1.0.9
+
+```kotlin
+// v1.0.9 — removed in v1.0.10
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.AUTO, host, port)
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE)
+
+// v1.0.10 — select the channel and cable protocol explicitly
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)
+ConnectionConfig.createCrossDeviceMode(
+    CrossDeviceStrategy.CABLE,
+    cableProtocol = CableProtocol.USB_VSP
+)
+```
+
+If runtime LAN/Cable failover is required, implement the selection policy in the application and
+switch only when no transaction is in flight.
+
+---
+
+## v1.0.9
+
+**Released 2026-09-03**
+
+### 🚀 New Features
+
+- Added `ConnectionMode.ON_DEVICE` and `ConnectionMode.CROSS_DEVICE`, with
+  `ConnectionConfig.createOnDeviceMode()` and `createCrossDeviceMode(...)` factory methods.
+- Added `CrossDeviceStrategy.AUTO`, `LAN`, and `CABLE` for Cross-Device connections. Automatic
+  selection is removed in v1.0.10.
+- Added `SUB_SCREEN` mode, which combines USB VSP connection with customer-display activation.
+  Error `351` indicates that the display could not be activated.
+- Added `getTerminalInfo(TerminalInfoCallback)` for reading merchant and terminal information from
+  the connected Tapro device. Error `352` indicates that Tapro must be upgraded to support it.
+
+### 🔧 Improvements and Fixes
+
+- Improved LAN discovery, reconnect behavior, Cable plug-and-play, and dead-link detection.
+- Existing `APP_TO_APP`, `LAN`, and `CABLE` APIs remain available for compatibility.
 
 ---
 

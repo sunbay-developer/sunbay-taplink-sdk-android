@@ -11,7 +11,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * Supports default values to simplify request parameters.
  * Uses method chaining for configuration.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class TaplinkConfig(
@@ -74,14 +74,14 @@ data class TaplinkConfig(
     val timeout: Int = 180,
 
     /**
-     * Width ratio for TaPro application execution (optional, default: null).
-     * Specifies the width ratio that the TaPro app occupies on the screen.
+     * Width ratio for Tapro application execution (optional, default: null).
+     * Specifies the width ratio that the Tapro app occupies on the screen.
      * Value should be between 0.0 and 1.0 (e.g., 0.5 means 50% of screen width).
      */
     val taproAppWidthRatio: Float? = null,
 
     /**
-     * (Deprecated behavior) Previously auto-opened the TaPro USB secondary-screen player right
+     * (Deprecated behavior) Previously auto-opened the Tapro USB secondary-screen player right
      * after the transport was established, before [ConnectionListener.onConnected] was delivered.
      *
      * As of the Unreleased version this flag no longer triggers auto-open for LAN / Cable / AUTO /
@@ -171,15 +171,15 @@ data class TaplinkConfig(
     fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
 
     /**
-     * Sets the width ratio for TaPro application execution.
+     * Sets the width ratio for Tapro application execution.
      *
-     * @param taproAppWidthRatio the width ratio (0.0 to 1.0) for the TaPro app
+     * @param taproAppWidthRatio the width ratio (0.0 to 1.0) for the Tapro app
      * @return the updated configuration instance for method chaining
      */
     fun setTaproAppWidthRatio(taproAppWidthRatio: Float?): TaplinkConfig = copy(taproAppWidthRatio = taproAppWidthRatio)
 
     /**
-     * Enables or disables automatically opening the TaPro USB secondary-screen player on connect.
+     * Enables or disables automatically opening the Tapro USB secondary-screen player on connect.
      *
      * @param enabled whether the screen player is opened before `onConnected` is delivered
      * @return the updated configuration instance for method chaining

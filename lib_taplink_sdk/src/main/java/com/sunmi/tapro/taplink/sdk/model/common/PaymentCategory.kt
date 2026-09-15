@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.sdk.model.common
  *
  * Defines all supported payment method categories.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class PaymentCategory(val value: String) {

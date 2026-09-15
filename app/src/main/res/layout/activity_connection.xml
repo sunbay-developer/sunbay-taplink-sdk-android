@@ -261,7 +261,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Connect to payment terminal via USB or serial cable. Protocol will be auto-detected unless specified."
+                    android:text="Connect to payment terminal via USB or serial cable. Select the cable protocol explicitly (USB_AOA, USB_VSP or RS232)."
                     android:textSize="14sp"
                     android:textColor="#666666"
                     android:layout_marginBottom="16dp" />

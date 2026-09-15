@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.sdk.enums
  *
  * Defines how tip suggestion values are interpreted.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class FeeMode(val value: String) {

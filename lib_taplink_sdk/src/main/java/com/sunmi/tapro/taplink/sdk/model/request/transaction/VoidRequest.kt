@@ -14,7 +14,7 @@ import com.sunmi.tapro.taplink.sdk.enums.PrintReceipt
  * @param attach Additional information (optional)
  * @param notifyUrl Notification URL (optional)
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class VoidRequest(

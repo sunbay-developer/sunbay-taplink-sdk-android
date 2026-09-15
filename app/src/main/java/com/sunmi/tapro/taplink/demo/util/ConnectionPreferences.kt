@@ -26,7 +26,7 @@ object ConnectionPreferences {
     // Default values
     private const val DEFAULT_MODE = "APP_TO_APP"
     private const val DEFAULT_LAN_PORT = Constants.DEFAULT_LAN_PORT
-    private const val DEFAULT_CABLE_PROTOCOL = "AUTO"
+    private const val DEFAULT_CABLE_PROTOCOL = "USB_VSP"
     
     /**
      * Connection mode enumeration
@@ -41,9 +41,8 @@ object ConnectionPreferences {
      * Cable protocol enumeration
      */
     enum class CableProtocol {
-        AUTO,          // Auto-detect protocol (default)
         USB_AOA,       // USB Android Open Accessory 2.0
-        USB_VSP,       // USB Virtual Serial Port
+        USB_VSP,       // USB Virtual Serial Port (default)
         RS232          // Standard RS232 serial communication
     }
     
@@ -126,7 +125,7 @@ object ConnectionPreferences {
      * Get Cable protocol configuration
      * 
      * @param context Android Context
-     * @return Cable protocol, default is AUTO
+     * @return Cable protocol, default is USB_VSP
      */
     fun getCableProtocol(context: Context): CableProtocol {
         val prefs = getPreferences(context)
@@ -134,8 +133,8 @@ object ConnectionPreferences {
         return try {
             CableProtocol.valueOf(protocolName ?: DEFAULT_CABLE_PROTOCOL)
         } catch (e: IllegalArgumentException) {
-            // Return default value if saved value is invalid
-            CableProtocol.AUTO
+            // Return default value if saved value is invalid (e.g. a legacy "AUTO" preference)
+            CableProtocol.USB_VSP
         }
     }
 }

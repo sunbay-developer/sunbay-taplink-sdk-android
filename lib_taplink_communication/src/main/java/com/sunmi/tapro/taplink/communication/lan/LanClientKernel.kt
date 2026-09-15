@@ -11,6 +11,7 @@ import com.sunmi.tapro.taplink.communication.lan.discovery.ServiceDiscoveryManag
 import com.sunmi.tapro.taplink.communication.lan.model.ServiceInfo
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.util.LogUtil
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong
  * @param appSecretKey Application secret key
  * @param context Android context
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class LanClientKernel(
@@ -67,21 +68,20 @@ class LanClientKernel(
             previousPort: Int,
             newName: String,
             newHost: String,
-            newPort: Int
+            newPort: Int,
+            previousInstanceWasLost: Boolean = false
         ): Boolean {
             if (previousName == newName) return false
             // Same endpoint (host:port) is a necessary condition for a peer restart.
             if (previousHost != newHost || previousPort != newPort) return false
-            // The mDNS instance name is "Taplink-Server-<timestamp>-<serial>". TaPro re-registers
-            // its service with a FRESH timestamp periodically (and across network changes) WITHOUT
-            // restarting — same device, same serial, only the timestamp differs. Treating that as a
-            // peer restart would needlessly tear down a perfectly healthy socket (observed as a
-            // ~5s "normal closure" loop). Only a genuinely DIFFERENT serial at the same endpoint
-            // (i.e. a different device now answering there) counts as a peer restart.
+            // The mDNS instance name is "Taplink-Server-<timestamp>-<serial>". A timestamp-only
+            // refresh from the same device must not tear down a healthy socket. It is a real
+            // replacement only after Android first reported the previous instance lost. A
+            // different serial at the same endpoint is always a replacement.
             val previousSerial = parseServiceSerial(previousName)
             val newSerial = parseServiceSerial(newName)
             if (previousSerial != null && newSerial != null) {
-                return previousSerial != newSerial
+                return previousSerial != newSerial || previousInstanceWasLost
             }
             // Fall back to the old name-based heuristic only when a serial cannot be parsed.
             return true
@@ -101,6 +101,20 @@ class LanClientKernel(
         fun parseServiceSerial(serviceName: String): String? {
             if (!serviceName.startsWith("Taplink-Server-", ignoreCase = true)) return null
             return serviceName.substringAfterLast('-').takeIf { it.isNotEmpty() }
+        }
+
+        internal fun shouldSkipDiscoveredEndpoint(
+            serviceHost: String,
+            servicePort: Int,
+            currentUriHost: String?,
+            currentUriPort: Int?,
+            isWebSocketConnected: Boolean,
+            currentStatus: InnerConnectionStatus
+        ): Boolean {
+            val isActualEndpoint = currentUriHost == serviceHost && currentUriPort == servicePort
+            val isConnecting = currentStatus == InnerConnectionStatus.CONNECTING ||
+                currentStatus == InnerConnectionStatus.WAITING_CONNECT
+            return isActualEndpoint && (isWebSocketConnected || isConnecting)
         }
     }
 
@@ -140,6 +154,9 @@ class LanClientKernel(
 
     /** Stable serial suffix of the Tapro mDNS service selected for this connection. */
     private var targetServiceSerial: String? = null
+
+    /** Name of the current mDNS instance after Android reported it lost. */
+    private var lostCurrentServiceName: String? = null
 
     /**
      * Service address change listener interface
@@ -324,6 +341,9 @@ class LanClientKernel(
             // Execute operation
             operation(operationId)
 
+        } catch (e: CancellationException) {
+            LogUtil.d(TAG, "$operationType operation cancelled: $operationId")
+            throw e
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error in $operationType operation: ${e.message}")
 
@@ -388,14 +408,14 @@ class LanClientKernel(
      * @return true if should skip, false otherwise
      */
     private fun shouldSkipServiceProcessing(service: ServiceInfo): Boolean {
-        val isSameAddress = currentService != null &&
-                currentService?.host == service.host &&
-                currentService?.port == service.port
-        val isCurrentlyConnected = isWebSocketConnected()
-        val isCurrentlyConnecting = currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING ||
-                currentInnerConnectionStatus == InnerConnectionStatus.WAITING_CONNECT
-
-        return isSameAddress && (isCurrentlyConnected || isCurrentlyConnecting)
+        return shouldSkipDiscoveredEndpoint(
+            serviceHost = service.host,
+            servicePort = service.port,
+            currentUriHost = currentUri?.host,
+            currentUriPort = currentUri?.port,
+            isWebSocketConnected = isWebSocketConnected(),
+            currentStatus = currentInnerConnectionStatus
+        )
     }
 
     // ==================== AsyncServiceKernel Abstract Method Implementation ====================
@@ -599,6 +619,9 @@ class LanClientKernel(
                     }
                 }
 
+            } catch (e: CancellationException) {
+                LogUtil.d(TAG, "Service discovery cancelled: $operationId")
+                throw e
             } catch (e: Exception) {
                 lastException = e
                 LogUtil.w(TAG, "Service discovery attempt ${retryCount + 1} failed: ${e.message} ($operationId)")
@@ -934,7 +957,8 @@ class LanClientKernel(
                 previousPort = previous.port,
                 newName = service.name,
                 newHost = service.host,
-                newPort = service.port
+                newPort = service.port,
+                previousInstanceWasLost = previous.name == lostCurrentServiceName
             )
         ) {
             // Either the same instance, or a genuine address change that the regular
@@ -950,6 +974,7 @@ class LanClientKernel(
 
         // Adopt the new instance identity so subsequent lost/found events compare correctly.
         currentService = service
+        lostCurrentServiceName = null
         rememberTargetService(service)
 
         if (!isWebSocketConnected()) {
@@ -1073,8 +1098,12 @@ class LanClientKernel(
                         return
                     }
                     if (targetServiceSerial == null) {
+                        // isTargetService only permits the actual connected endpoint while no
+                        // serial is bound. Adopt its identity without restarting a healthy socket.
                         rememberTargetService(service)
                         currentService = service
+                        lostCurrentServiceName = null
+                        return
                     } else {
                         val serial = serviceSerial(service.name)
                         if (serial != null && serial != targetServiceSerial && isConnectedEndpoint(service)) {
@@ -1102,12 +1131,17 @@ class LanClientKernel(
                     }
 
                     // Use current service as old address
-                    handleServiceAddressChange(
+                    val addressChangeAccepted = handleServiceAddressChange(
                         service = service,
                         oldHost = currentService?.host ?: "",
                         oldPort = currentService?.port ?: -1,
                         logPrefix = "Service found"
                     )
+                    if (addressChangeAccepted) {
+                        currentService = service
+                        lostCurrentServiceName = null
+                        rememberTargetService(service)
+                    }
                 }
 
                 override fun onServiceLost(service: ServiceInfo) {
@@ -1120,6 +1154,7 @@ class LanClientKernel(
 
                     // A lost service is normally followed by the WebSocket close/error callback.
                     if (currentService != null && service.name == currentService?.name) {
+                        lostCurrentServiceName = service.name
                         LogUtil.w(TAG, "Current connected service is lost, waiting for WebSocket disconnect")
                     }
                 }
@@ -1143,12 +1178,16 @@ class LanClientKernel(
                     rememberTargetService(newService)
 
                     // Use old service as old address
-                    handleServiceAddressChange(
+                    val addressChangeAccepted = handleServiceAddressChange(
                         service = newService,
                         oldHost = oldService.host,
                         oldPort = oldService.port,
                         logPrefix = "Service updated"
                     )
+                    if (addressChangeAccepted) {
+                        currentService = newService
+                        lostCurrentServiceName = null
+                    }
                 }
 
                 override fun onDiscoveryStarted(serviceType: String) {
@@ -1196,6 +1235,7 @@ class LanClientKernel(
         currentUri = null
         currentService = null
         targetServiceSerial = null
+        lostCurrentServiceName = null
         isServiceMonitoring = false
         isManualDisconnect = false
         lastServiceAddressChangeTime = 0

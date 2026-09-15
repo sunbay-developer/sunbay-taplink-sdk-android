@@ -22,7 +22,7 @@ import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
  * - Uses ConnectionConfig to uniformly manage all connection modes
  * - Method signatures correspond to TaplinkSDK static methods in documentation
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 interface TaplinkApi {
@@ -273,10 +273,10 @@ interface TaplinkApi {
     fun switchToManualEntry(transactionRequestId: String? = null, callback: PaymentCallback)
 
     /**
-     * Open TaPro USB secondary-screen player application.
+     * Open Tapro USB secondary-screen player application.
      *
      * This control action is used by POS apps before showing Android [android.app.Presentation]
-     * content on a secondary display. TaPro will handle launching:
+     * content on a secondary display. Tapro will handle launching:
      * `sunmi.intent.action.SunmiUsbScreenPlayer`.
      *
      * @param callback Callback to receive control result
@@ -284,10 +284,10 @@ interface TaplinkApi {
     fun openUsbScreenPlayer(callback: PaymentCallback)
 
     /**
-     * Get the merchant and terminal information for the TaPro device selected by the current
+     * Get the merchant and terminal information for the Tapro device selected by the current
      * connection configuration.
      *
-     * This is a read-only control action — it queries only the single TaPro device that is
+     * This is a read-only control action — it queries only the single Tapro device that is
      * selected for the current connection. If the SDK is disconnected, it automatically connects
      * before querying. It is not a cloud merchant lookup and not a
      * terminal-list query: it never returns other devices, is not paginated, and the
@@ -295,7 +295,7 @@ interface TaplinkApi {
      *
      * GET_TERMINAL_INFO does not create a transaction, does not require a transactionRequestId, and
      * does not enter payment/sign-in/queue/foreground-page flows. It responds even while
-     * TaPro is processing a payment transaction, and is not affected by transactional API
+     * Tapro is processing a payment transaction, and is not affected by transactional API
      * permission or service-plan gating (though it is still subject to request signature
      * verification like any other action).
      *

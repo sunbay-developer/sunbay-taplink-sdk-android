@@ -6,7 +6,7 @@ package com.sunmi.tapro.taplink.communication.interfaces
  * Implement this interface and pass it to [IServiceKernel.connect] to receive
  * connection state changes.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 interface ConnectionCallback {

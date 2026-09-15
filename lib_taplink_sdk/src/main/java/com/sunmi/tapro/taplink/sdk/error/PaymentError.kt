@@ -7,7 +7,7 @@ import com.sunmi.tapro.taplink.communication.enums.ErrorCategory
  * 
  * Contains structured error information and handling suggestions
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-14
  */
 class PaymentError(
@@ -120,7 +120,7 @@ class PaymentError(
      * Error detail class
      * Contains complete error information and handling suggestions
      *
-     * @author TaPro Team
+     * @author Tapro Team
      * @since 2025-01-14
      */
     data class Detail(

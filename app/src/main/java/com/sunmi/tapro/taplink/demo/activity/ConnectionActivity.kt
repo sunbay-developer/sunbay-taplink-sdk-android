@@ -249,9 +249,9 @@ class ConnectionActivity : AppCompatActivity() {
      * Setup cable protocol spinner
      */
     private fun setupCableProtocolSpinner() {
-        // Create protocol display names
+        // Create protocol display names. The cable protocol must be chosen explicitly
+        // (there is no AUTO detection); order must match ConnectionPreferences.CableProtocol.
         val protocolNames = arrayOf(
-            "AUTO (Auto-detect)",
             "USB_AOA (USB Android Open Accessory)",
             "USB_VSP (USB Virtual Serial Port)",
             "RS232 (Standard RS232 Serial)"
@@ -264,7 +264,7 @@ class ConnectionActivity : AppCompatActivity() {
         // Set adapter to spinner
         spinnerCableProtocol.adapter = adapter
         
-        // Load saved protocol or set default to AUTO
+        // Load saved protocol (default USB_VSP); ordinal maps 1:1 to the spinner entries above.
         val savedProtocol = ConnectionPreferences.getCableProtocol(this)
         spinnerCableProtocol.setSelection(savedProtocol.ordinal)
         
@@ -902,10 +902,6 @@ class ConnectionActivity : AppCompatActivity() {
         Log.d(TAG, "Cable config - Protocol: $protocol")
         
         when (protocol) {
-            ConnectionPreferences.CableProtocol.AUTO -> {
-                // Persist explicit AUTO to avoid null cableProtocol in cached config
-                connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.AUTO)
-            }
             ConnectionPreferences.CableProtocol.USB_AOA -> {
                 connectionConfig.setCableProtocol(com.sunmi.tapro.taplink.sdk.enums.CableProtocol.USB_AOA)
             }

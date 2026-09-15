@@ -31,7 +31,7 @@ import com.sunmi.tapro.taplink.sdk.enums.TipMode
  * non-null with defaults, so typed SDK requests always carry a value; only raw-JSON and Cloud
  * requests can omit them.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class TipConfig(

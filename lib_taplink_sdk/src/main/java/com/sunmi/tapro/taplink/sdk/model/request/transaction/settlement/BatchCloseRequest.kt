@@ -18,7 +18,7 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
  *   `MERCHANT` and `CUSTOMER` are meaningless for a batch report and are treated as `AUTO`
  *   (the terminal's batch close configuration is used) instead of being rejected.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 data class BatchCloseRequest(

@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.communication.local.constant
  *
  * Defines constants related to local IPC service
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 object LocalServiceConstant {

@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 
  * @param context Android context
  * 
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-01
  */
 class ServiceDiscoveryManager(
@@ -32,6 +32,17 @@ class ServiceDiscoveryManager(
 
         /** Upper bound on a single NsdManager resolve before its slot is force-released. */
         private const val RESOLVE_TIMEOUT_MS = 10_000L
+
+        /** Retry only NsdManager's transient "another resolve is active" failure. */
+        private const val RESOLVE_ALREADY_ACTIVE_MAX_RETRIES = 4
+        private const val RESOLVE_ALREADY_ACTIVE_INITIAL_DELAY_MS = 250L
+
+        internal fun shouldRetryResolve(errorCode: Int, retryAttempt: Int): Boolean =
+            errorCode == NsdManager.FAILURE_ALREADY_ACTIVE &&
+                    retryAttempt in 1..RESOLVE_ALREADY_ACTIVE_MAX_RETRIES
+
+        internal fun resolveRetryDelayMs(retryAttempt: Int): Long =
+            RESOLVE_ALREADY_ACTIVE_INITIAL_DELAY_MS shl (retryAttempt - 1).coerceAtLeast(0)
     }
     
     private val nsdManager: NsdManager by lazy {
@@ -48,6 +59,11 @@ class ServiceDiscoveryManager(
     
     // Used to prevent duplicate resolution of the same service
     private val resolvingServices = ConcurrentHashMap<String, AtomicBoolean>()
+
+    // Keep retries bound to services that are still advertised. This prevents a delayed retry
+    // from reviving a service after onServiceLost or after monitoring has stopped.
+    private val visibleServiceNames = ConcurrentHashMap.newKeySet<String>()
+    private val resolveRetryJobs = ConcurrentHashMap<String, Job>()
     
     // Used to synchronize service update operations
     private val serviceUpdateLock = kotlinx.coroutines.sync.Mutex()
@@ -96,6 +112,64 @@ class ServiceDiscoveryManager(
             LogUtil.w(TAG, "Service name filter threw for $serviceName, resolving anyway: ${e.message}")
             true
         }
+    }
+
+    private fun queueServiceResolve(serviceInfo: NsdServiceInfo, retryAttempt: Int = 0) {
+        val serviceName = serviceInfo.serviceName
+        val isResolving = resolvingServices.computeIfAbsent(serviceName) { AtomicBoolean(false) }
+
+        if (!isResolving.compareAndSet(false, true)) {
+            LogUtil.d(TAG, "Service $serviceName is already being resolved, skipping")
+            return
+        }
+
+        LogUtil.d(
+            TAG,
+            "Queueing resolve for service: $serviceName" +
+                    if (retryAttempt > 0) " (retry $retryAttempt/$RESOLVE_ALREADY_ACTIVE_MAX_RETRIES)" else ""
+        )
+        enqueueResolve(serviceName) { token ->
+            nsdManager.resolveService(
+                serviceInfo,
+                createResolveListener(serviceName, token, serviceInfo, retryAttempt) { resolvedInfo ->
+                    handleServiceResolved(serviceName, resolvedInfo)
+                }
+            )
+        }
+    }
+
+    private fun scheduleAlreadyActiveRetry(serviceInfo: NsdServiceInfo, retryAttempt: Int) {
+        val serviceName = serviceInfo.serviceName
+        if (!isMonitoring ||
+            serviceName !in visibleServiceNames ||
+            !shouldResolve(serviceName)
+        ) {
+            return
+        }
+
+        val delayMs = resolveRetryDelayMs(retryAttempt)
+        val retryJob = scope.launch(start = CoroutineStart.LAZY) {
+            delay(delayMs)
+            if (!isMonitoring ||
+                serviceName !in visibleServiceNames ||
+                !shouldResolve(serviceName)
+            ) {
+                LogUtil.d(TAG, "Skipping stale resolve retry for service: $serviceName")
+                return@launch
+            }
+            queueServiceResolve(serviceInfo, retryAttempt)
+        }
+
+        resolveRetryJobs.put(serviceName, retryJob)?.cancel()
+        retryJob.invokeOnCompletion {
+            resolveRetryJobs.remove(serviceName, retryJob)
+        }
+        LogUtil.w(
+            TAG,
+            "Resolve slot busy for $serviceName; retrying in ${delayMs}ms " +
+                    "($retryAttempt/$RESOLVE_ALREADY_ACTIVE_MAX_RETRIES)"
+        )
+        retryJob.start()
     }
 
     /**
@@ -161,6 +235,9 @@ class ServiceDiscoveryManager(
 
     suspend fun discoverServices(serviceType: String, timeoutMs: Long = DISCOVERY_TIMEOUT_MS): List<ServiceInfo> {
         return withContext(Dispatchers.IO) {
+            var tempListener: NsdManager.DiscoveryListener? = null
+            var discoveryStarted = false
+
             try {
                 LogUtil.d(TAG, "Starting service discovery for: $serviceType")
                 
@@ -169,27 +246,34 @@ class ServiceDiscoveryManager(
                 resolvingServices.clear()
                 
                 // Start discovery
-                val tempListener = createDiscoveryListener()
+                tempListener = createDiscoveryListener()
                 nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, tempListener)
+                discoveryStarted = true
                 
                 // Wait for discovery to complete
                 delay(timeoutMs)
-                
-                // Stop discovery
-                try {
-                    nsdManager.stopServiceDiscovery(tempListener)
-                } catch (e: Exception) {
-                    LogUtil.w(TAG, "Error stopping service discovery: ${e.message}")
-                }
                 
                 val services = discoveredServices.values.toList()
                 LogUtil.d(TAG, "Discovery completed, found ${services.size} services")
                 
                 services
-                
+
+            } catch (e: CancellationException) {
+                LogUtil.d(TAG, "Service discovery cancelled")
+                throw e
             } catch (e: Exception) {
                 LogUtil.e(TAG, "Service discovery failed: ${e.message}")
                 emptyList()
+            } finally {
+                if (discoveryStarted) {
+                    tempListener?.let { listener ->
+                        try {
+                            nsdManager.stopServiceDiscovery(listener)
+                        } catch (e: Exception) {
+                            LogUtil.w(TAG, "Error stopping service discovery: ${e.message}")
+                        }
+                    }
+                }
             }
         }
     }
@@ -381,6 +465,9 @@ class ServiceDiscoveryManager(
                     LogUtil.d(TAG, "Skipping resolve for non-target service: $serviceName")
                     return
                 }
+
+                visibleServiceNames.add(serviceName)
+                resolveRetryJobs.remove(serviceName)?.cancel()
                 
                 // Check if service already exists, if exists, may be re-registered, need to re-resolve to detect address changes
                 val existing = discoveredServices[serviceName]
@@ -390,29 +477,16 @@ class ServiceDiscoveryManager(
                     resolvingServices.remove(serviceName)
                 }
                 
-                // Check if already resolving this service, prevent duplicate resolution
-                val isResolving = resolvingServices.computeIfAbsent(serviceName) { AtomicBoolean(false) }
-                
-                if (isResolving.compareAndSet(false, true)) {
-                    // Successfully set to resolving state, queue resolution. NsdManager only
-                    // supports one in-flight resolve, so requests are serialized.
-                    LogUtil.d(TAG, "Queueing resolve for service: $serviceName")
-
-                    enqueueResolve(serviceName) { token ->
-                        nsdManager.resolveService(serviceInfo, createResolveListener(serviceName, token) { resolvedInfo ->
-                            handleServiceResolved(serviceName, resolvedInfo)
-                        })
-                    }
-                } else {
-                    // Service already being resolved, skip
-                    LogUtil.d(TAG, "Service $serviceName is already being resolved, skipping")
-                }
+                queueServiceResolve(serviceInfo)
             }
             
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                 LogUtil.d(TAG, "Service lost: ${serviceInfo.serviceName}")
                 
                 val serviceName = serviceInfo.serviceName
+
+                visibleServiceNames.remove(serviceName)
+                resolveRetryJobs.remove(serviceName)?.cancel()
                 
                 // Clear resolution status
                 resolvingServices.remove(serviceName)
@@ -478,6 +552,8 @@ class ServiceDiscoveryManager(
     private fun createResolveListener(
         serviceName: String,
         resolveToken: Long,
+        originalServiceInfo: NsdServiceInfo,
+        retryAttempt: Int,
         onResolved: (NsdServiceInfo) -> Unit
     ): NsdManager.ResolveListener {
         return object : NsdManager.ResolveListener {
@@ -485,12 +561,16 @@ class ServiceDiscoveryManager(
                 LogUtil.w(TAG, "Resolve failed: ${serviceInfo.serviceName}, error: $errorCode")
                 // Clear resolution status
                 resolvingServices.remove(serviceName)
+                if (shouldRetryResolve(errorCode, retryAttempt + 1)) {
+                    scheduleAlreadyActiveRetry(originalServiceInfo, retryAttempt + 1)
+                }
                 // Release the resolve slot so queued resolves can proceed
                 onResolveSettled(resolveToken)
             }
             
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                 LogUtil.d(TAG, "Service resolved: ${serviceInfo.serviceName}")
+                resolveRetryJobs.remove(serviceName)?.cancel()
                 // Release the resolve slot so queued resolves can proceed
                 onResolveSettled(resolveToken)
                 onResolved(serviceInfo)
@@ -531,6 +611,9 @@ class ServiceDiscoveryManager(
         serviceChangeListener = null
         discoveredServices.clear()
         resolvingServices.clear()
+        visibleServiceNames.clear()
+        resolveRetryJobs.values.forEach(Job::cancel)
+        resolveRetryJobs.clear()
         synchronized(resolveQueueLock) {
             resolveQueue.clear()
             resolveInFlight = false

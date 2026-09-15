@@ -5,7 +5,7 @@ package com.sunmi.tapro.taplink.sdk.model.common
  *
  * Defines sub-payment method identifiers.
  *
- * @author TaPro Team
+ * @author Tapro Team
  * @since 2025-01-XX
  */
 enum class PaymentMethodSubId(val value: String) {
