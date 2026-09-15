@@ -19,7 +19,7 @@ class LanClientKernelPeerRestartTest {
     private val port = 8443
 
     @Test
-    fun `new instance name at same address is treated as peer restart`() {
+    fun `replacement after lost event at same address is treated as peer restart`() {
         assertTrue(
             LanClientKernel.isPeerRestart(
                 previousName = "Taplink-Server-1787900514782-PA12P58T10075",
@@ -27,7 +27,50 @@ class LanClientKernelPeerRestartTest {
                 previousPort = port,
                 newName = "Taplink-Server-1787908618928-PA12P58T10075",
                 newHost = host,
+                newPort = port,
+                previousInstanceWasLost = true
+            )
+        )
+    }
+
+    @Test
+    fun `periodic re-registration for same device is not treated as peer restart`() {
+        assertFalse(
+            LanClientKernel.isPeerRestart(
+                previousName = "Taplink-Server-1787900514782-PA12P58T10075",
+                previousHost = host,
+                previousPort = port,
+                newName = "Taplink-Server-1787908618928-PA12P58T10075",
+                newHost = host,
                 newPort = port
+            )
+        )
+    }
+
+    @Test
+    fun `connected socket to old port does not suppress newly discovered port`() {
+        assertFalse(
+            LanClientKernel.shouldSkipDiscoveredEndpoint(
+                serviceHost = host,
+                servicePort = 8444,
+                currentUriHost = host,
+                currentUriPort = 8443,
+                isWebSocketConnected = true,
+                currentStatus = com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus.CONNECTED
+            )
+        )
+    }
+
+    @Test
+    fun `connected socket to discovered endpoint suppresses duplicate event`() {
+        assertTrue(
+            LanClientKernel.shouldSkipDiscoveredEndpoint(
+                serviceHost = host,
+                servicePort = port,
+                currentUriHost = host,
+                currentUriPort = port,
+                isWebSocketConnected = true,
+                currentStatus = com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus.CONNECTED
             )
         )
     }

@@ -303,6 +303,25 @@ class ConnectionConfig {
         this.retryDelayMs = delayMs
         return this
     }
+
+    /**
+     * Creates an internal copy that keeps the complete connection/retry policy while replacing
+     * only the LAN endpoint discovered through mDNS.
+     */
+    internal fun copyWithLanEndpoint(host: String, port: Int): ConnectionConfig =
+        ConnectionConfig().also { copy ->
+            copy.connectionMode = connectionMode
+            copy.appToAppMode = appToAppMode
+            copy.cableProtocol = cableProtocol
+            copy.crossDeviceStrategy = crossDeviceStrategy
+            copy.isCrossDeviceMode = isCrossDeviceMode
+            copy.host = host
+            copy.port = port
+            copy.connectionTimeout = connectionTimeout
+            copy.autoReconnect = autoReconnect
+            copy.maxRetryCount = maxRetryCount
+            copy.retryDelayMs = retryDelayMs
+        }
     
     /**
      * Checks if this configuration is equivalent to another configuration.
@@ -505,7 +524,6 @@ class ConnectionConfig {
         }
     }
 }
-
 
 
 

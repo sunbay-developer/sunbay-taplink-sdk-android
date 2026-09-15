@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [v1.0.9.4](#v1094) — LAN endpoint-change and reconnect recovery fixes
 - [v1.0.9.3](#v1093) — API 24 JSON compatibility and dependency removal
 - [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
@@ -22,6 +23,37 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## v1.0.9.4
+
+**Unreleased**
+
+Improves LAN recovery when a Tapro terminal briefly leaves Wi-Fi and comes back on a different
+listening port.
+
+### 🐛 Fixed
+
+- The SDK now compares a discovered mDNS endpoint with the WebSocket's actual URI instead of
+  assuming that cached service metadata identifies the live socket. A connection to an old port
+  can no longer suppress reconnection to a newly advertised port.
+- When Android reports the current mDNS instance lost and the same Tapro serial subsequently
+  advertises a replacement instance at the same endpoint, the SDK invalidates the half-open socket
+  and enters the normal reconnect flow. Timestamp-only re-registration without a preceding lost
+  event continues to leave healthy connections untouched.
+- Android NSD `FAILURE_ALREADY_ACTIVE` responses now trigger a bounded, backoff resolve retry for
+  the still-advertised target service. Other resolve failures keep their existing behavior, and a
+  lost service or stopped monitor cancels any pending retry.
+- LAN address changes preserve the complete connection timeout and automatic-retry policy instead
+  of replacing it with a host/port-only configuration.
+- A failed immediate address-change reconnect can schedule its normal delayed retry instead of
+  remaining stuck in a reconnecting state with no queued attempt.
+
+### 🧭 Migration
+
+- No integration changes are required. Existing LAN and Cross-Device LAN configurations retain
+  their configured reconnect policy while following the replacement Tapro endpoint.
 
 ---
 

@@ -1366,10 +1366,12 @@ class ConnectionManager(
      */
     private fun executeReconnection(newHost: String, newPort: Int): Boolean {
         return try {
-            val newConnectionConfig = ConnectionConfig().apply {
-                setHost(newHost)
-                setPort(newPort)
-            }
+            val newConnectionConfig = reconnectManager?.getLastConnectionConfig()
+                ?.copyWithLanEndpoint(newHost, newPort)
+                ?: ConnectionConfig()
+                    .setConnectionMode(ConnectionMode.LAN)
+                    .setHost(newHost)
+                    .setPort(newPort)
 
             val reconnectListener =
                 connectionListener ?: reconnectManager?.getLastConnectionListener()
