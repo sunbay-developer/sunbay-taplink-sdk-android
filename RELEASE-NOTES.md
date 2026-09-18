@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [Unreleased](#unreleased) — Request timeout carried over the wire
 - [v1.0.10](#v1010) — Explicit connection selection, dependency-free JSON, and reconnect hardening
 - [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
@@ -22,6 +23,38 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## Unreleased
+
+### 🔧 Improved — Request timeout carried over the wire
+
+- When a transaction request does not set `requestTimeout`, the SDK now falls back to the
+  SDK-wide `TaplinkConfig.timeout` (default 180 seconds) and **writes that value into the
+  request's `requestTimeout` before signing and sending**. Previously `TaplinkConfig.timeout`
+  only drove the SDK's local callback timeout while the on-the-wire `requestTimeout` stayed unset
+  and was omitted from `bizData`, leaving the terminal (Tapro) with no timeout and unable to align
+  its own timeout/abort handling with the SDK.
+- The SDK's local callback timeout and the `requestTimeout` delivered to the terminal now share a
+  single source of truth. No public API changes are required.
+- Precedence is unchanged for callers who set the value explicitly: an explicit positive
+  `requestTimeout` on the request always takes precedence over `TaplinkConfig.timeout`.
+
+### 🔧 Improved — Auto-abort the terminal on local callback timeout
+
+- When a transaction-class request (`SALE`, `REFUND`, `AUTH`, `POST_AUTH`, `INCREMENT_AUTH`,
+  `FORCED_AUTH`) times out locally without a terminal response, the SDK now proactively sends an
+  `ABORT` to the terminal for that transaction. This lets the terminal (Tapro) stop the in-flight
+  transaction — for example dismiss the card-read prompt — instead of leaving it open until the
+  next request is rejected.
+- Control, query, and background actions (`INIT`, `QUERY`, `ABORT`, `SWITCH_TO_MANUAL_ENTRY`,
+  `OPEN_USB_SCREEN_PLAYER`, `GET_TERMINAL_INFO`, `VOID`, `BATCH_CLOSE`, `TIP_ADJUST`) are never
+  auto-aborted, and the auto-abort only fires when a `transactionRequestId` is present.
+- The auto-abort is fire-and-forget: the original request's callback still receives the timeout
+  error (`306`) exactly once; the ABORT result is not re-delivered to the caller.
+
+This section documents source changes only. No version has been assigned or published.
 
 ---
 
