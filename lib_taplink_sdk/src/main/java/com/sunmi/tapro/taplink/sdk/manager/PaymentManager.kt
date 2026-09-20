@@ -64,29 +64,7 @@ class PaymentManager(
      */
     private val callbackManager = LocalCallbackManager<InnerCallback?>(
         defaultTimeoutMillis = Int.MAX_VALUE * 1L, // Use config timeout as default
-        tag = TAG,
-        // When a transaction-class callback times out locally, proactively notify the terminal
-        // (Tapro) so it can abort the in-flight transaction (e.g. dismiss the card-read prompt).
-        // The SDK's local timeout and the terminal are otherwise independent; without this the
-        // terminal would keep the transaction open until the next request is rejected with E307.
-        onTraceIdTimeout = { traceId -> onTransactionCallbackTimeout(traceId) }
-    )
-
-    /**
-     * In-flight transactions keyed by traceId, used to drive the auto-ABORT-on-timeout behaviour.
-     *
-     * Recorded right before a request is sent and removed once a response/error arrives or the
-     * request times out. Only the minimal fields required to build an ABORT are kept — no card
-     * data or other sensitive payload. Thread-safe for the transport/timeout coroutine threads.
-     */
-    private val inFlightTransactions = java.util.concurrent.ConcurrentHashMap<String, InFlightTransaction>()
-
-    /**
-     * Minimal snapshot of an in-flight request needed to decide and issue an auto-ABORT.
-     */
-    private data class InFlightTransaction(
-        val action: String,
-        val transactionRequestId: String?
+        tag = TAG
     )
 
     /**
@@ -435,22 +413,11 @@ class PaymentManager(
             // Validate amount (must be integer, no decimal)
             if (!validateAmount(request, callback)) return
 
-            // Resolve the effective request so the SDK's local callback timeout and the
-            // requestTimeout carried to the terminal (in bizData) share a single source of truth.
-            //
-            // When the caller does not set requestTimeout, fall back to the SDK-wide
-            // TaplinkConfig.timeout (seconds). Historically TaplinkConfig.timeout only drove the
-            // local callback timeout while requestTimeout stayed null and was omitted from bizData,
-            // leaving the terminal (Tapro) without a timeout and unable to align its own
-            // timeout/abort handling with the SDK. An explicit per-request requestTimeout still
-            // takes precedence over the configured default.
-            val effectiveRequest = applyDefaultRequestTimeout(request, config.timeout)
-
             // Convert PaymentRequest to BasicRequest
             val appToAppMode = resolveAppToAppModeForRequest()
             val connectionMode = resolveConnectionModeTagForRequest()
             val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
-                request = effectiveRequest,
+                request = request,
                 version = config.version,
                 config.appId,
                 secretKey = config.secretKey,
@@ -460,52 +427,39 @@ class PaymentManager(
 
             // Serialise BasicRequest to JSON string for transport
             val requestJson = TaplinkJsonBridge.toJsonString(basicRequest)
-            LogUtil.d(TAG, "Sending BasicRequest: action=${effectiveRequest.action}, requestSize=${requestJson.length} bytes")
+            LogUtil.d(TAG, "Sending BasicRequest: action=${request.action}, requestSize=${requestJson.length} bytes")
 
             // Create internal callback for receiving raw response
-            val internalCallback = createInternalCallback(callback, effectiveRequest, basicRequest.traceId)
+            val internalCallback = createInternalCallback(callback, request, basicRequest.traceId)
 
             // Add callback to LocalCallbackManager before sending
             val isApp2App = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
-            val added = when (effectiveRequest.action) {
+            val added = when (request.action) {
                 "QUERY" -> callbackManager.addQueryCallback(
                     basicRequest.traceId,
                     internalCallback,
                     isApp2App,
-                    effectiveRequest.requestTimeout
+                    request.requestTimeout
                 )
 
                 else -> callbackManager.addTransactionCallback(
                     basicRequest.traceId,
                     internalCallback,
                     isApp2App,
-                    effectiveRequest.requestTimeout
+                    request.requestTimeout
                 )
             }
 
             if (!added) {
                 LogUtil.w(TAG, "Failed to add callback to manager for traceId: ${basicRequest.traceId}")
             }
-            LogUtil.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}, action: ${effectiveRequest.action}")
-
-            // Record the in-flight transaction ONLY when it is eligible for auto-abort-on-timeout,
-            // i.e. an interactive transaction action carrying a transactionRequestId. This narrow
-            // scope guarantees the timeout hook can never affect other request types (INIT / QUERY /
-            // ABORT / control / background actions never enter the map), and the auto-abort ABORT
-            // request we may send below is likewise never recorded, so it cannot re-trigger itself.
-            if (shouldAutoAbortOnTimeout(effectiveRequest.action, effectiveRequest.transactionRequestId)) {
-                inFlightTransactions[basicRequest.traceId] = InFlightTransaction(
-                    action = effectiveRequest.action,
-                    transactionRequestId = effectiveRequest.transactionRequestId
-                )
-            }
+            LogUtil.d(TAG, "Callback registered with traceId: ${basicRequest.traceId}, action: ${request.action}")
 
             // Send data through TaplinkServiceKernel
             val serviceKernel = TaplinkServiceKernel.getInstance()
             if (serviceKernel == null) {
                 LogUtil.e(TAG, "Service kernel not available")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                inFlightTransactions.remove(basicRequest.traceId)
                 callback.onFailure(
                     errorCode = InnerErrorCode.E212,
                     errorMessage = "${InnerErrorCode.E212.description}(${"Service kernel not available"})",
@@ -526,7 +480,6 @@ class PaymentManager(
                 // Remove callback and notify error on send failure
                 LogUtil.e(TAG, "Failed to send data: traceId=${basicRequest.traceId}, error=${e.message}")
                 callbackManager.removeCallbackByTraceId(basicRequest.traceId)
-                inFlightTransactions.remove(basicRequest.traceId)
                 callback.onFailure(
                     errorCode = InnerErrorCode.E304,
                     errorMessage = "${InnerErrorCode.E304.description}(${"Failed to send data(${e.message})"})",
@@ -649,12 +602,6 @@ class PaymentManager(
         return object : InnerCallback {
             override fun onError(code: String, msg: String) {
                 LogUtil.e(TAG, "[TAPLINK-TX] TraceId=$traceId | SDK received error: code=$code, msg=$msg")
-                // Clear the in-flight record on genuine errors. Local timeouts (E306) are the sole
-                // exception: LocalCallbackManager invokes this error callback BEFORE the timeout
-                // hook, so the record must survive here and is cleared by onTransactionCallbackTimeout.
-                if (code != InnerErrorCode.E306.code) {
-                    inFlightTransactions.remove(traceId)
-                }
                 callback.onFailure(
                     code = code,
                     errorMsg = msg,
@@ -665,70 +612,9 @@ class PaymentManager(
             }
 
             override fun onResponse(responseData: String) {
-                // Terminal response arrived: the transaction is no longer in flight.
-                inFlightTransactions.remove(traceId)
                 responseProcessor.handleResponse(responseData, callback, request)
             }
         }
-    }
-
-    /**
-     * Handles a local transaction-callback timeout surfaced by [LocalCallbackManager].
-     *
-     * When a transaction-class request times out locally without any terminal response, the SDK
-     * proactively sends an ABORT to the terminal so it can stop the in-flight transaction (for
-     * example dismiss the card-read prompt) instead of leaving it open until the next request is
-     * rejected. Non-transaction actions (INIT / QUERY / control actions) and requests without a
-     * transactionRequestId are not aborted — see [shouldAutoAbortOnTimeout].
-     *
-     * @param traceId the traceId of the timed-out request
-     */
-    private fun onTransactionCallbackTimeout(traceId: String) {
-        val inFlight = inFlightTransactions.remove(traceId)
-        if (inFlight == null) {
-            LogUtil.d(TAG, "Timeout hook: no in-flight record for traceId=$traceId, skip auto-abort")
-            return
-        }
-
-        if (!shouldAutoAbortOnTimeout(inFlight.action, inFlight.transactionRequestId)) {
-            LogUtil.i(
-                TAG,
-                "Timeout hook: action=${inFlight.action} not eligible for auto-abort, traceId=$traceId"
-            )
-            return
-        }
-
-        // Guard against aborting when the link is already gone; there is nothing to stop and the
-        // ABORT itself would just fail.
-        if (!connectionManager.isConnected()) {
-            LogUtil.w(TAG, "Timeout hook: not connected, skip auto-abort for traceId=$traceId")
-            return
-        }
-
-        val transactionRequestId = inFlight.transactionRequestId
-        LogUtil.i(
-            TAG,
-            "Timeout hook: auto-aborting timed-out transaction, action=${inFlight.action}, " +
-                "transactionRequestId=$transactionRequestId, traceId=$traceId"
-        )
-        val abortRequest = PaymentRequest(
-            action = TransactionAction.ABORT.value,
-            originalTransactionRequestId = transactionRequestId
-        )
-        // Fire-and-forget: the original request's callback already received E306. The ABORT result
-        // is only for bookkeeping/logging and must never re-deliver a result to the caller.
-        execute(
-            abortRequest,
-            object : com.sunmi.tapro.taplink.sdk.callback.PaymentCallbackAdapter() {
-                override fun onSuccess(result: com.sunmi.tapro.taplink.sdk.model.response.PaymentResult) {
-                    LogUtil.i(TAG, "Timeout auto-abort acknowledged: traceId=$traceId")
-                }
-
-                override fun onFailure(error: com.sunmi.tapro.taplink.sdk.error.PaymentError) {
-                    LogUtil.w(TAG, "Timeout auto-abort failed: traceId=$traceId, error=${error.code}")
-                }
-            }
-        )
     }
 
     /**
@@ -1092,87 +978,6 @@ class PaymentManager(
                 errorMessage = "${InnerErrorCode.E307.description}(${"Connection failed,pending transaction failed"})",
                 transactionRequestId = request.transactionRequestId
             )
-        }
-    }
-
-    companion object {
-
-        /**
-         * Fallback request timeout, in seconds, used only when neither the request nor the
-         * [TaplinkConfig] provides a positive value. Mirrors [TaplinkConfig.timeout]'s default so
-         * behaviour stays consistent even if a caller constructs a config with an invalid timeout.
-         */
-        internal const val FALLBACK_REQUEST_TIMEOUT_SECONDS: Long = 180L
-
-        /**
-         * Returns a request whose [PaymentRequest.requestTimeout] is guaranteed to be a positive
-         * number of seconds, so the local callback timeout and the on-the-wire `requestTimeout`
-         * share a single source of truth.
-         *
-         * Precedence:
-         * 1. A positive [PaymentRequest.requestTimeout] explicitly set by the caller is preserved.
-         * 2. Otherwise the SDK-wide [configTimeoutSeconds] ([TaplinkConfig.timeout]) is applied.
-         * 3. If neither is positive (e.g. a config built with a non-positive timeout), the safe
-         *    [FALLBACK_REQUEST_TIMEOUT_SECONDS] default is applied.
-         *
-         * The input request is never mutated; a copy is returned when a default is applied.
-         *
-         * @param request the caller-supplied payment request
-         * @param configTimeoutSeconds the configured default timeout, in seconds
-         * @return a request carrying a positive `requestTimeout` in seconds
-         */
-        internal fun applyDefaultRequestTimeout(
-            request: PaymentRequest,
-            configTimeoutSeconds: Int
-        ): PaymentRequest {
-            val explicitTimeout = request.requestTimeout
-            if (explicitTimeout != null && explicitTimeout > 0L) {
-                return request
-            }
-
-            val resolvedSeconds = when {
-                configTimeoutSeconds > 0 -> configTimeoutSeconds.toLong()
-                else -> FALLBACK_REQUEST_TIMEOUT_SECONDS
-            }
-            return request.copy(requestTimeout = resolvedSeconds)
-        }
-
-        /**
-         * Transaction-class actions that drive an interactive, in-flight terminal flow
-         * (card read / PIN / online), and therefore should be aborted on the terminal when the
-         * SDK's local callback times out without a response.
-         *
-         * Deliberately a whitelist: control/query actions (INIT, QUERY, ABORT,
-         * SWITCH_TO_MANUAL_ENTRY, OPEN_USB_SCREEN_PLAYER, GET_TERMINAL_INFO) and background/
-         * settlement actions (VOID, BATCH_CLOSE, TIP_ADJUST) are never auto-aborted, and any
-         * future action defaults to "no auto-abort" until explicitly added here.
-         */
-        private val AUTO_ABORT_ELIGIBLE_ACTIONS: Set<String> = setOf(
-            TransactionAction.SALE.value,
-            TransactionAction.REFUND.value,
-            TransactionAction.AUTH.value,
-            TransactionAction.POST_AUTH.value,
-            TransactionAction.INCREMENT_AUTH.value,
-            TransactionAction.FORCED_AUTH.value
-        )
-
-        /**
-         * Decides whether a locally timed-out request should trigger an automatic ABORT to the
-         * terminal.
-         *
-         * Returns true only when both hold:
-         * 1. [action] is an interactive transaction action (see [AUTO_ABORT_ELIGIBLE_ACTIONS]); and
-         * 2. [transactionRequestId] is present — ABORT targets the original transaction by this id.
-         *
-         * @param action the timed-out request's action (case-insensitive)
-         * @param transactionRequestId the timed-out request's transaction request id, if any
-         * @return true when an auto-ABORT should be issued
-         */
-        internal fun shouldAutoAbortOnTimeout(action: String?, transactionRequestId: String?): Boolean {
-            if (action.isNullOrBlank() || transactionRequestId.isNullOrBlank()) {
-                return false
-            }
-            return AUTO_ABORT_ELIGIBLE_ACTIONS.any { it.equals(action, ignoreCase = true) }
         }
     }
 }
