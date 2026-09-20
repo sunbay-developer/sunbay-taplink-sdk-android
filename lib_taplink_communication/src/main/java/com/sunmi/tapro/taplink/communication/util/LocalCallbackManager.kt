@@ -19,14 +19,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class LocalCallbackManager<T>(
     private val defaultTimeoutMillis: Long = 60_000L,
-    private val tag: String = "LocalCallbackManager",
-    /**
-     * Optional hook invoked when a traceId-keyed callback times out, after its error callback has
-     * been delivered. Communication-layer component intentionally carries no transaction semantics:
-     * it only reports "this traceId timed out" and lets the business layer (e.g. PaymentManager)
-     * decide any follow-up action such as notifying the peer. Never null-checks or throws here.
-     */
-    private val onTraceIdTimeout: ((traceId: String) -> Unit)? = null
+    private val tag: String = "LocalCallbackManager"
 ) {
     /**
      * Request ID generator
@@ -338,14 +331,6 @@ class LocalCallbackManager<T>(
                     val removedCallback = traceIdCallbackMap.remove(traceId)
                     LogUtil.i(tag, "Callback timeout and removed by traceId: $traceId, elapsed=${elapsed}ms")
                     (removedCallback?.callback as InnerCallback).onError(InnerErrorCode.E306.code, "Callback timeout")
-                    // Notify the business layer so it can take transaction-level follow-up
-                    // (e.g. sending an ABORT to the peer). Guarded so a hook failure never breaks
-                    // the timeout task or the coroutine scope.
-                    try {
-                        onTraceIdTimeout?.invoke(traceId)
-                    } catch (e: Exception) {
-                        LogUtil.e(tag, "onTraceIdTimeout hook failed for traceId=$traceId: ${e.message}")
-                    }
                 }
             }
         }
