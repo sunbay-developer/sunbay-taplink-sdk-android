@@ -7,6 +7,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.PaymentMethodInfo
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.SaleRequest
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.AuthAmountInfo
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.AuthRequest
+import com.sunmi.tapro.taplink.sdk.manager.PaymentManager
 import com.sunmi.tapro.taplink.sdk.protocol.ProtocolRequestBuilder
 import com.sunmi.tapro.taplink.sdk.util.SignUtil
 import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
@@ -84,6 +85,21 @@ class TaplinkClientIntegrationTest {
         assert(authRequest.amount.orderAmount == BigDecimal("20.00"))
         assert(authRequest.description == "Test Auth")
         assert(authRequest.requestTimeout == 60L)
+    }
+
+    @Test
+    fun callbackTimeoutConvertsRequestSecondsToMilliseconds() {
+        assertEquals(30_000L, PaymentManager.resolveCallbackTimeoutMillis(30L, 180))
+    }
+
+    @Test
+    fun callbackTimeoutUsesConfiguredDefaultInMilliseconds() {
+        assertEquals(180_000L, PaymentManager.resolveCallbackTimeoutMillis(null, 180))
+    }
+
+    @Test
+    fun callbackTimeoutFallsBackToCallbackManagerDefaultWhenNonPositive() {
+        assertEquals(null, PaymentManager.resolveCallbackTimeoutMillis(0L, 0))
     }
 
     @Test

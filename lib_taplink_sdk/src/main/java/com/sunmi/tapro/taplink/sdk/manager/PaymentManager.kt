@@ -29,6 +29,7 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestV
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
 import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
 import java.math.BigDecimal
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -269,7 +270,7 @@ class PaymentManager(
                 basicRequest.traceId,
                 internalCallback,
                 isApp2App,
-                request.requestTimeout
+                resolveCallbackTimeoutMillis(request.requestTimeout, config.timeout)
             )
             if (!added) {
                 LogUtil.w(TAG, "Failed to add GET_TERMINAL_INFO callback to manager for traceId: ${basicRequest.traceId}")
@@ -434,19 +435,21 @@ class PaymentManager(
 
             // Add callback to LocalCallbackManager before sending
             val isApp2App = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
+            val callbackTimeoutMillis =
+                resolveCallbackTimeoutMillis(request.requestTimeout, config.timeout)
             val added = when (request.action) {
                 "QUERY" -> callbackManager.addQueryCallback(
                     basicRequest.traceId,
                     internalCallback,
                     isApp2App,
-                    request.requestTimeout
+                    callbackTimeoutMillis
                 )
 
                 else -> callbackManager.addTransactionCallback(
                     basicRequest.traceId,
                     internalCallback,
                     isApp2App,
-                    request.requestTimeout
+                    callbackTimeoutMillis
                 )
             }
 
@@ -978,6 +981,21 @@ class PaymentManager(
                 errorMessage = "${InnerErrorCode.E307.description}(${"Connection failed,pending transaction failed"})",
                 transactionRequestId = request.transactionRequestId
             )
+        }
+    }
+
+    companion object {
+        /**
+         * Converts the public timeout contract (seconds) to the callback manager's milliseconds.
+         */
+        internal fun resolveCallbackTimeoutMillis(
+            requestTimeoutSeconds: Long?,
+            configTimeoutSeconds: Int
+        ): Long? {
+            val timeoutSeconds = requestTimeoutSeconds?.takeIf { it > 0L }
+                ?: configTimeoutSeconds.toLong().takeIf { it > 0L }
+                ?: return null
+            return TimeUnit.SECONDS.toMillis(timeoutSeconds)
         }
     }
 }
