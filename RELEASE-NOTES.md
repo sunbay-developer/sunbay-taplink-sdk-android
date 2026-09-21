@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [Unreleased](#unreleased) — LAN reconnect callback and state recovery fixes
 - [v1.0.10](#v1010) — Explicit connection selection, dependency-free JSON, and reconnect hardening
 - [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
@@ -22,6 +23,20 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## Unreleased
+
+### 🐛 Fixed — LAN reconnect completion after endpoint changes
+
+- LAN service discovery no longer exits silently when a stale `CONNECTING` status remains after a
+  direct WebSocket timeout; exhausted discovery now reaches the connection error callback.
+- Address-change reconnects wait briefly for the cancelled connection operation to release its
+  lock, clear reconnect state when the replacement attempt fails, and notify listeners that were
+  queued during the attempt instead of leaving them pending indefinitely.
+- Duplicate `onReconnecting` callbacks are suppressed when the explicit listener and the retained
+  reconnect listener refer to the same object.
 
 ---
 

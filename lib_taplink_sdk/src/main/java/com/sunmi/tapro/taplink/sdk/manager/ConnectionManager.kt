@@ -423,6 +423,14 @@ class ConnectionManager(
 
                         // Create connection error object
                         val connectionError = ConnectionError(code, msg, deviceId = errorDeviceId)
+                        // Address-change and delayed reconnect attempts enter ReconnectManager's
+                        // reconnecting state before the transport is started. A connection-phase
+                        // error reaches this branch instead of the normal disconnect branch, so
+                        // explicitly terminate that state and fail listeners queued during the
+                        // attempt. Otherwise a later connect() with the same config is accepted
+                        // into the pending queue forever.
+                        reconnectManager?.onReconnectFailed(connectionError)
+
                         updateConnectionStatus(
                             ConnectionStatus.ERROR,
                             errorCode = connectionError,

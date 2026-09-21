@@ -160,9 +160,14 @@ class ReconnectManager(
                 "Connection lost, attempting reconnect ($currentRetryCount/${lastConnectionConfig?.maxRetryCount ?: 3})"
             )
 
-            // Notify listener of reconnection attempt
-            listener.onReconnecting(currentRetryCount, lastConnectionConfig?.maxRetryCount ?: 3)
-            lastConnectionListener?.onReconnecting(currentRetryCount, lastConnectionConfig?.maxRetryCount ?: 3)
+            // Notify listener of reconnection attempt. The listener passed to onDisconnected is
+            // normally the same instance as lastConnectionListener; notify through a set so one
+            // reconnect event cannot be delivered twice to the integrator.
+            notifyReconnectingListeners(
+                listener,
+                currentRetryCount,
+                lastConnectionConfig?.maxRetryCount ?: 3
+            )
 
             // Delayed reconnection
             retryHandler.postDelayed({
@@ -187,6 +192,28 @@ class ReconnectManager(
         reconnectScheduled = false
 
         return false
+    }
+
+    /**
+     * Finish an in-progress reconnect attempt that failed before a normal disconnect callback
+     * could reach [onDisconnected].
+     *
+     * Address-change reconnects call [onAddressChanged] and enter the reconnecting state before
+     * invoking the transport. If that transport fails during the connection phase, the SDK
+     * receives an error callback rather than a normal disconnect callback. Without explicitly
+     * closing this state, subsequent connect() calls with the same configuration are queued as
+     * pending reconnection listeners forever.
+     */
+    fun onReconnectFailed(error: ConnectionError) {
+        if (!isReconnecting && pendingReconnectionListeners.isEmpty()) {
+            return
+        }
+
+        LogUtil.w(TAG, "Reconnect attempt failed; clearing reconnect state: ${error.code}")
+        isReconnecting = false
+        reconnectScheduled = false
+        retryHandler.removeCallbacksAndMessages(null)
+        notifyPendingListenersError(error)
     }
 
     /**
@@ -397,13 +424,34 @@ class ReconnectManager(
         // Cancel existing reconnection tasks
         retryHandler.removeCallbacksAndMessages(null)
 
-        // Notify listener of reconnection (address change)
-        listener.onReconnecting(0, lastConnectionConfig?.maxRetryCount ?: 3)
-        lastConnectionListener?.onReconnecting(0, lastConnectionConfig?.maxRetryCount ?: 3)
+        // Notify listener of reconnection (address change). Avoid duplicate callbacks when the
+        // explicit listener is also the last listener retained for automatic reconnection.
+        notifyReconnectingListeners(
+            listener,
+            0,
+            lastConnectionConfig?.maxRetryCount ?: 3
+        )
 
         // Immediately attempt connection to new address (no delay)
         LogUtil.d(TAG, "Attempting to connect to new address immediately")
         reconnectAction(newConnectionConfig, listener)
+    }
+
+    private fun notifyReconnectingListeners(
+        listener: ConnectionListener,
+        attempt: Int,
+        maxRetries: Int
+    ) {
+        val listeners = linkedSetOf<ConnectionListener>()
+        listeners.add(listener)
+        lastConnectionListener?.let(listeners::add)
+        listeners.forEach { target ->
+            try {
+                target.onReconnecting(attempt, maxRetries)
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "Error notifying reconnecting listener: ${e.message}")
+            }
+        }
     }
 
     /**

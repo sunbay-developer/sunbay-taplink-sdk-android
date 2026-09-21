@@ -13,6 +13,7 @@ import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.URI
@@ -53,6 +54,7 @@ class LanClientKernel(
         private const val SERVICE_DISCOVERY_MAX_RETRIES = 3  // Maximum retry count
         private const val SERVICE_DISCOVERY_RETRY_DELAY_MS = 1000L  // Initial retry delay (milliseconds)
         private const val SERVICE_DISCOVERY_RETRY_DELAY_MULTIPLIER = 2  // Retry delay multiplier (incremental delay)
+        private const val OPERATION_LOCK_TIMEOUT_MS = 3000L
 
         /**
          * Decide whether a newly advertised service represents a restart of the peer we are
@@ -311,14 +313,18 @@ class LanClientKernel(
         callback: ConnectionCallback,
         operation: suspend (String) -> Unit
     ) {
-        // Check if another operation is in progress
-        // Note: Even though TaplinkServiceKernel ensures disconnect() before connect(),
-        // mutex protection is still needed here because:
-        // 1. There may be concurrent calls from other threads
-        // 2. There may be internal reconnection operations from service discovery in progress
-        if (!operationMutex.tryLock()) {
+        // TaplinkServiceKernel cancels the previous operation synchronously before starting an
+        // address-change reconnect, but coroutine cancellation and the old operation's finally
+        // block may complete on a different dispatcher turn. Wait briefly for that lock to be
+        // released instead of rejecting the reconnect during this narrow hand-off window. Keep
+        // the wait bounded so a genuinely stuck operation still produces a terminal callback.
+        val lockAcquired = withTimeoutOrNull(OPERATION_LOCK_TIMEOUT_MS) {
+            operationMutex.lock()
+            true
+        } ?: false
+        if (!lockAcquired) {
             val currentOp = currentOperation
-            LogUtil.w(TAG, "Another operation is in progress: $currentOp, rejecting $operationType")
+            LogUtil.w(TAG, "Another operation is in progress: $currentOp, rejecting $operationType after lock timeout")
             callback.onDisconnected(
                 InnerErrorCode.E241.code,
                 "Another connection operation is in progress: $currentOp"
@@ -601,10 +607,15 @@ class LanClientKernel(
                     // Check current connection status
                     // Use ConnectionManager's actual status, not currentInnerConnectionStatus
                     val isCurrentlyConnected = isWebSocketConnected()
-                    val isCurrentlyConnecting = currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING
 
-                    if (isCurrentlyConnected || isCurrentlyConnecting) {
-                        LogUtil.d(TAG, "Service discovery found no services, but already connected/connecting ($operationId)")
+                    // CONNECTING is not sufficient evidence that another transport attempt is
+                    // alive. After a direct WebSocket timeout the kernel can retain CONNECTING
+                    // while the socket has already been cleaned up. Returning here would finish
+                    // the coroutine without an onError/onDisconnected callback and leave the SDK
+                    // stuck in CONNECTING forever. Only a live WebSocket may short-circuit the
+                    // discovery fallback.
+                    if (isCurrentlyConnected) {
+                        LogUtil.d(TAG, "Service discovery found no services, but WebSocket is connected ($operationId)")
                         return
                     }
 
@@ -629,10 +640,12 @@ class LanClientKernel(
                 // Check current connection status
                 // Use ConnectionManager's actual status, not currentInnerConnectionStatus
                 val isCurrentlyConnected = isWebSocketConnected()
-                val isCurrentlyConnecting = currentInnerConnectionStatus == InnerConnectionStatus.CONNECTING
 
-                if (isCurrentlyConnected || isCurrentlyConnecting) {
-                    LogUtil.d(TAG, "Service discovery failed, but already connected/connecting ($operationId)")
+                // See the no-services branch above: a stale CONNECTING enum value must not hide a
+                // terminal discovery failure. A live WebSocket is the only state that proves the
+                // connection has recovered concurrently.
+                if (isCurrentlyConnected) {
+                    LogUtil.d(TAG, "Service discovery failed, but WebSocket is connected ($operationId)")
                     return
                 }
 
