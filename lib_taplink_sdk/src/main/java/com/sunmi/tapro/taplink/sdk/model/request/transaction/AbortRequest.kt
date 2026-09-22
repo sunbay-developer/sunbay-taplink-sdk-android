@@ -8,7 +8,7 @@ package com.sunmi.tapro.taplink.sdk.model.request.transaction
  * @param originalTransactionRequestId Original transaction request ID (required)
  * @param description Abort reason description (optional, maximum 128 characters)
  * @param attach Additional information (optional)
- * @param requestTimeout Request timeout duration (optional, unit: seconds)
+ * @param requestTimeout Request timeout duration (optional, unit: milliseconds)
  *
  * @author Tapro Team
  * @since 2025-01-XX

@@ -11,7 +11,7 @@ import java.math.BigDecimal
  * @param originalTransactionRequestId Original transaction request ID (either this or originalTransactionId must be provided)
  * @param tipAmount Tip amount (required, non-negative, using basic currency unit)
  * @param attach Additional information (optional)
- * @param requestTimeout Request timeout duration (optional, unit: seconds)
+ * @param requestTimeout Request timeout duration (optional, unit: milliseconds)
  *
  * @author Tapro Team
  * @since 2025-01-XX

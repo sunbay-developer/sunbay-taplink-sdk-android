@@ -13,7 +13,7 @@ import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationResult
  *
  * @param transactionRequestId Transaction request ID (required)
  * @param description Close description (optional, max 128 characters)
- * @param requestTimeout Request timeout (optional, in seconds)
+ * @param requestTimeout Request timeout (optional, in milliseconds)
  * @param printReceipt Batch report type (AUTO, BOTH, TOTAL, DETAIL, or NONE; default AUTO).
  *   `MERCHANT` and `CUSTOMER` are meaningless for a batch report and are treated as `AUTO`
  *   (the terminal's batch close configuration is used) instead of being rejected.

@@ -44,10 +44,10 @@ Releases are listed newest first. Each entry highlights what changed for integra
   back to mDNS discovery, and does not start LAN monitoring or reconnect after passive disconnects,
   peer restarts, or mDNS address changes. Explicit `discoverLanServices()` and
   `autoDiscoverAndConnect()` behavior is unchanged.
-- `PaymentRequest.requestTimeout` is documented and handled as seconds. The request-level value
-  takes precedence over `TaplinkConfig.timeout`; the effective value defaults to 180 seconds,
-  is safely converted to milliseconds, and the same value is used in signed `bizData` and the
-  local callback timer.
+- `PaymentRequest.requestTimeout` uses milliseconds for compatibility with existing SDK releases.
+  It takes precedence over `TaplinkConfig.timeout`, which remains in seconds and defaults to 180.
+  When the request value is absent, the SDK converts the global value to milliseconds; the same
+  effective millisecond value is used in signed `bizData` and the local callback timer.
 - When a LAN, App-to-App, or Cable request reaches that timeout, the callback receives `306` once.
   Tapro cancels and exits only a transaction in a cancellable stage. An online or otherwise
   non-cancellable transaction (including signature) remains on its current local flow until normal

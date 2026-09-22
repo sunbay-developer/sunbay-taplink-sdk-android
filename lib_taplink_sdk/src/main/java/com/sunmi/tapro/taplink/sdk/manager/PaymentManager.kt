@@ -989,18 +989,19 @@ class PaymentManager(
 
     companion object {
         /**
-         * Converts the public timeout contract (seconds) to the callback manager's milliseconds.
+         * Resolves request milliseconds first, then converts the global seconds fallback.
          */
         internal fun resolveRequestTimeoutMillis(
-            requestTimeoutSeconds: Long?,
+            requestTimeoutMillis: Long?,
             configTimeoutSeconds: Int
         ): Long {
-            val timeoutSeconds = requestTimeoutSeconds?.takeIf { it > 0L }
-                ?: configTimeoutSeconds.toLong().takeIf { it > 0L }
-                ?: DEFAULT_REQUEST_TIMEOUT_SECONDS
-            return TimeUnit.SECONDS.toMillis(timeoutSeconds)
+            return requestTimeoutMillis?.takeIf { it > 0L }
+                ?: configTimeoutSeconds.toLong()
+                    .takeIf { it > 0L }
+                    ?.let(TimeUnit.SECONDS::toMillis)
+                ?: DEFAULT_REQUEST_TIMEOUT_MILLIS
         }
 
-        private const val DEFAULT_REQUEST_TIMEOUT_SECONDS = 180L
+        private const val DEFAULT_REQUEST_TIMEOUT_MILLIS = 180_000L
     }
 }
