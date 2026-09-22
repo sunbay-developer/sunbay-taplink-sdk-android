@@ -749,13 +749,13 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `308` | Transaction is processing | No | Wait or query status |
 | Other | Communication/configuration issue | Usually yes | Depends on the error category |
 
-For LAN, App-to-App, and Cable requests, error `306` is delivered once when the effective request
-timeout expires. If the current stage is cancellable, Tapro cancels it, exits the transaction UI,
-and releases the processing state. If the transaction is already online or otherwise
-non-cancellable (for example, waiting for signature), Tapro does not cancel or exit it; the local
-flow continues until its normal terminal state. That late terminal result is not delivered through
-the already timed-out callback. Call `query()` with the original transaction request ID before
-deciding whether to start another transaction. Never retry a `306` transaction directly.
+APP-to-APP requests do not use callback timeout and do not return `306`; they remain active until
+their normal response is delivered. For LAN and Cable, error `306` is delivered once when the
+effective request timeout expires. Tapro automatically cancels and exits only transactions that
+are still cancellable. A LAN/Cable transaction that is already non-cancellable continues locally
+until its normal terminal state, but that late result is not delivered through the timed-out
+callback. Call `query()` with the original transaction request ID before deciding whether to start
+another transaction. Never retry a `306` transaction directly.
 
 A card-reading timeout is returned as a terminal transaction result with status `FAILED` and the
 message `read card timeout`; it is not a communication-level `onFailure`. Always inspect the

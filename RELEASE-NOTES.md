@@ -44,15 +44,20 @@ Releases are listed newest first. Each entry highlights what changed for integra
   back to mDNS discovery, and does not start LAN monitoring or reconnect after passive disconnects,
   peer restarts, or mDNS address changes. Explicit `discoverLanServices()` and
   `autoDiscoverAndConnect()` behavior is unchanged.
+- With automatic reconnect enabled, a failed direct LAN endpoint can now follow the same host to a
+  newly advertised port. The previous endpoint is preserved for address-change comparison, so the
+  discovered service triggers reconnection instead of being rejected or treated as unchanged.
+  Discovery also completes as soon as the matching resolved service appears instead of always
+  waiting for the full 30-second discovery window. All automatic and explicit mDNS discovery is
+  limited to non-connected states; a successful LAN connection stops discovery immediately.
 - `PaymentRequest.requestTimeout` uses milliseconds for compatibility with existing SDK releases.
   It takes precedence over `TaplinkConfig.timeout`, which remains in seconds and defaults to 180.
   When the request value is absent, the SDK converts the global value to milliseconds; the same
   effective millisecond value is used in signed `bizData` and the local callback timer.
-- When a LAN, App-to-App, or Cable request reaches that timeout, the callback receives `306` once.
-  Tapro cancels and exits only a transaction in a cancellable stage. An online or otherwise
-  non-cancellable transaction (including signature) remains on its current local flow until normal
-  completion; its late result is not sent through the timed-out callback. Integrations must query
-  before deciding whether to retry.
+- APP-to-APP requests ignore callback timeout and do not return `306`; their callback remains active
+  for the normal response. LAN/Cable callbacks receive `306` once at timeout. Tapro cancels and
+  exits only cancellable LAN/Cable transactions; non-cancellable flows finish locally without
+  sending a late callback result. Integrations must query before deciding whether to retry.
 - Semi-integrated card-reading timeout is returned as a terminal `FAILED` transaction result with
   the message `read card timeout`, not as a communication-level callback failure.
 

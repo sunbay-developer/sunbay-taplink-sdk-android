@@ -76,6 +76,67 @@ class LanClientKernelPeerRestartTest {
     }
 
     @Test
+    fun `failed direct connection accepts a new service port on the requested host`() {
+        assertTrue(
+            LanClientKernel.matchesFailedDirectConnectionHost(
+                requestedHost = "192.168.188.113",
+                discoveredHost = "192.168.188.113"
+            )
+        )
+    }
+
+    @Test
+    fun `failed direct connection rejects services from another host`() {
+        assertFalse(
+            LanClientKernel.matchesFailedDirectConnectionHost(
+                requestedHost = "192.168.188.113",
+                discoveredHost = "192.168.188.115"
+            )
+        )
+    }
+
+    @Test
+    fun `failed direct connection reports requested endpoint as previous address`() {
+        assertEquals(
+            "192.168.188.113" to 8443,
+            LanClientKernel.previousEndpoint(
+                currentServiceHost = null,
+                currentServicePort = null,
+                requestedHost = "192.168.188.113",
+                requestedPort = 8443
+            )
+        )
+    }
+
+    @Test
+    fun `service discovery starts only while not connected`() {
+        assertFalse(
+            LanClientKernel.shouldStartServiceDiscovery(
+                isWebSocketConnected = true,
+                status = com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus.CONNECTED
+            )
+        )
+        assertFalse(
+            LanClientKernel.shouldStartServiceDiscovery(
+                isWebSocketConnected = true,
+                status = com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus.ERROR
+            )
+        )
+        assertFalse(
+            LanClientKernel.shouldStartServiceDiscovery(
+                isWebSocketConnected = false,
+                status = com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus.CONNECTED
+            )
+        )
+        assertTrue(
+            LanClientKernel.shouldStartServiceDiscovery(
+                isWebSocketConnected = false,
+                status = com.sunmi.tapro.taplink.communication.enums.InnerConnectionStatus.ERROR
+            )
+        )
+    }
+
+    @Test
     fun `same instance name is not a restart`() {
         val name = "Taplink-Server-1787900514782-PA12P58T10075"
         assertFalse(

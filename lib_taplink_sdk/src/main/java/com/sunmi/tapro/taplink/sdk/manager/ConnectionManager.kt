@@ -1684,6 +1684,17 @@ class ConnectionManager(
     fun discoverLanServices(listener: DiscoveryListener) {
         LogUtil.d(TAG, "discoverLanServices called")
 
+        if (connectionStatus == ConnectionStatus.CONNECTING ||
+            connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
+            connectionStatus == ConnectionStatus.CONNECTED
+        ) {
+            LogUtil.w(TAG, "discoverLanServices rejected: status=$connectionStatus")
+            listener.onError(
+                ConnectionError(ERROR_OPERATION_IN_PROGRESS, "Service discovery requires a disconnected state")
+            )
+            return
+        }
+
         discoveryJob = sdkScope.launch {
             try {
                 LogUtil.d(TAG, "Starting mDNS service discovery (discover-only)...")

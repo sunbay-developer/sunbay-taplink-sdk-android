@@ -115,6 +115,34 @@ class LanClientKernel(
             return serviceName.substringAfterLast('-').takeIf { it.isNotEmpty() }
         }
 
+        internal fun matchesFailedDirectConnectionHost(
+            requestedHost: String?,
+            discoveredHost: String
+        ): Boolean {
+            return !requestedHost.isNullOrBlank() &&
+                requestedHost.equals(discoveredHost, ignoreCase = true)
+        }
+
+        internal fun previousEndpoint(
+            currentServiceHost: String?,
+            currentServicePort: Int?,
+            requestedHost: String?,
+            requestedPort: Int?
+        ): Pair<String, Int> {
+            return if (!currentServiceHost.isNullOrBlank() && currentServicePort != null) {
+                currentServiceHost to currentServicePort
+            } else {
+                requestedHost.orEmpty() to (requestedPort ?: -1)
+            }
+        }
+
+        internal fun shouldStartServiceDiscovery(
+            isWebSocketConnected: Boolean,
+            status: InnerConnectionStatus
+        ): Boolean {
+            return !isWebSocketConnected && status != InnerConnectionStatus.CONNECTED
+        }
+
         internal fun shouldSkipDiscoveredEndpoint(
             serviceHost: String,
             servicePort: Int,
@@ -232,10 +260,11 @@ class LanClientKernel(
 
         if (target != null) return serial == target
 
-        // For a direct first connection, bind identity to the service advertising
-        // the endpoint that actually connected instead of selecting another device.
+        // A restarted Tapro may advertise a new port after the remembered direct endpoint has
+        // already stopped listening. With no serial bound yet, the host is the strongest safe
+        // identity available: another active terminal cannot own the same LAN address.
         val uri = currentUri
-        return uri != null && service.host == uri.host && service.port == uri.port
+        return matchesFailedDirectConnectionHost(uri?.host, service.host)
     }
 
     /**
@@ -525,6 +554,11 @@ class LanClientKernel(
                     LogUtil.w(TAG, "Service discovery cancelled: $operationId")
                     return
                 }
+                if (!shouldStartServiceDiscovery(isWebSocketConnected(), currentInnerConnectionStatus)) {
+                    LogUtil.d(TAG, "Service discovery skipped because LAN is already connected: $operationId")
+                    stopServiceDiscovery()
+                    return
+                }
 
                 if (retryCount > 0) {
                     // Calculate incremental delay: 1 second, 2 seconds, 4 seconds...
@@ -542,12 +576,20 @@ class LanClientKernel(
                         LogUtil.w(TAG, "Service discovery cancelled after delay: $operationId")
                         return
                     }
+                    if (!shouldStartServiceDiscovery(isWebSocketConnected(), currentInnerConnectionStatus)) {
+                        LogUtil.d(TAG, "Service discovery retry skipped because LAN is already connected: $operationId")
+                        stopServiceDiscovery()
+                        return
+                    }
                 } else {
                     LogUtil.d(TAG, "Starting service discovery for operation: $operationId")
                 }
 
                 // Try service discovery
-                val services = serviceDiscoveryManager.discoverServices(NSD_SERVICE_TYPE)
+                val services = serviceDiscoveryManager.discoverServices(
+                    serviceType = NSD_SERVICE_TYPE,
+                    stopWhen = { service -> service.isValid() && isTargetService(service) }
+                )
 
                 if (services.isNotEmpty()) {
                     LogUtil.d(TAG, "Found ${services.size} services for operation: $operationId (attempt ${retryCount + 1})")
@@ -557,6 +599,12 @@ class LanClientKernel(
                     var notified = false
                     for (service in services) {
                         if (service.isValid() && isTargetService(service)) {
+                            val (oldHost, oldPort) = previousEndpoint(
+                                currentServiceHost = currentService?.host,
+                                currentServicePort = currentService?.port,
+                                requestedHost = currentUri?.host,
+                                requestedPort = currentUri?.port
+                            )
                             rememberTargetService(service)
                             currentService = service
                             LogUtil.d(
@@ -570,8 +618,8 @@ class LanClientKernel(
                                         service.name,
                                         service.host,
                                         service.port,
-                                        currentService?.host ?: "",
-                                        currentService?.port ?: -1
+                                        oldHost,
+                                        oldPort
                                     )
                                 } catch (e: Exception) {
                                     LogUtil.e(TAG, "Error in service address change listener: ${e.message}")
@@ -831,9 +879,9 @@ class LanClientKernel(
                         }
                     }
 
-                    if (connectionOptions.enableServiceMonitoring) {
-                        startServiceMonitoring()
-                    }
+                    // Discovery is a recovery mechanism. Once the WebSocket is connected, stop
+                    // every mDNS session and wait for a real disconnect before discovering again.
+                    stopServiceDiscovery()
 
                     // Unified connection success notification outlet: only use base class's notifyConnectionSuccess()
                     // Directly use base class's currentConnectionCallback, no need for additional callback manager
@@ -1109,6 +1157,11 @@ class LanClientKernel(
      * Monitor service changes, handle server IP/port changes, etc.
      */
     private fun startServiceMonitoring() {
+        if (!shouldStartServiceDiscovery(isWebSocketConnected(), currentInnerConnectionStatus)) {
+            LogUtil.d(TAG, "Skipping service monitoring while LAN is connected")
+            stopServiceDiscovery()
+            return
+        }
         if (isServiceMonitoring) {
             LogUtil.d(TAG, "Service monitoring already started")
             return
