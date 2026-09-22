@@ -82,7 +82,9 @@ class ConnectionConfig {
 
     /**
      * Whether automatic reconnection is enabled (default: false).
-     * When the connection is interrupted unexpectedly, the SDK will automatically attempt to reconnect.
+     * When the connection is interrupted unexpectedly, the SDK will automatically attempt to
+     * reconnect. For a direct LAN connection, disabling this also disables automatic mDNS
+     * fallback after the direct handshake fails and disables background LAN monitoring.
      */
     var autoReconnect: Boolean = false
         private set
@@ -524,7 +526,6 @@ class ConnectionConfig {
         }
     }
 }
-
 
 
 

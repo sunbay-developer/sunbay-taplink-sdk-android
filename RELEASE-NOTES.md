@@ -10,7 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
-- [Unreleased](#unreleased) — LAN reconnect callback and state recovery fixes
+- [Unreleased](#unreleased) — LAN reconnect policy and request timeout fixes
 - [v1.0.10](#v1010) — Explicit connection selection, dependency-free JSON, and reconnect hardening
 - [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
@@ -37,6 +37,24 @@ Releases are listed newest first. Each entry highlights what changed for integra
   queued during the attempt instead of leaving them pending indefinitely.
 - Duplicate `onReconnecting` callbacks are suppressed when the explicit listener and the retained
   reconnect listener refer to the same object.
+
+### 🔧 Improved — Explicit LAN reconnect policy and request timeouts
+
+- `ConnectionConfig.autoReconnect = false` now keeps a failed direct LAN connection from falling
+  back to mDNS discovery, and does not start LAN monitoring or reconnect after passive disconnects,
+  peer restarts, or mDNS address changes. Explicit `discoverLanServices()` and
+  `autoDiscoverAndConnect()` behavior is unchanged.
+- `PaymentRequest.requestTimeout` is documented and handled as seconds. The request-level value
+  takes precedence over `TaplinkConfig.timeout`; the effective value defaults to 180 seconds,
+  is safely converted to milliseconds, and the same value is used in signed `bizData` and the
+  local callback timer.
+- When a LAN, App-to-App, or Cable request reaches that timeout, the callback receives `306` once.
+  Tapro cancels and exits only a transaction in a cancellable stage. An online or otherwise
+  non-cancellable transaction (including signature) remains on its current local flow until normal
+  completion; its late result is not sent through the timed-out callback. Integrations must query
+  before deciding whether to retry.
+- Semi-integrated card-reading timeout is returned as a terminal `FAILED` transaction result with
+  the message `read card timeout`, not as a communication-level callback failure.
 
 ---
 

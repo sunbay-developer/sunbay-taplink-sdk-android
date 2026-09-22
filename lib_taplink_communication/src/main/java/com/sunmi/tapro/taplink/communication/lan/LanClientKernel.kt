@@ -46,6 +46,16 @@ class LanClientKernel(
     private val context: Context
 ) : AsyncServiceKernel(appId, appSecretKey) {
 
+    @Volatile
+    private var connectionOptions = LanConnectionOptions()
+
+    fun configureConnectionOptions(options: LanConnectionOptions) {
+        connectionOptions = options
+        if (!options.enableServiceMonitoring) {
+            stopServiceDiscovery()
+        }
+    }
+
     companion object {
         private const val TAG = "LanClientKernel"
         private const val NSD_SERVICE_TYPE = "_taplink._tcp"
@@ -484,8 +494,11 @@ class LanClientKernel(
                             // Note: Don't check isOperationValid here, because mutex already protects operation mutual exclusivity
                             // Service discovery is a long operation, will check isOperationValid in service discovery logic
 
-                            // Try service discovery
-                            tryServiceDiscoveryForOperation(operationId)
+                            if (connectionOptions.allowServiceDiscoveryFallback) {
+                                tryServiceDiscoveryForOperation(operationId)
+                            } else {
+                                notifyConnectionError("Direct LAN connection failed: ${result.error}")
+                            }
                         }
                     }
 
@@ -818,8 +831,9 @@ class LanClientKernel(
                         }
                     }
 
-                    // Start service monitoring
-                    startServiceMonitoring()
+                    if (connectionOptions.enableServiceMonitoring) {
+                        startServiceMonitoring()
+                    }
 
                     // Unified connection success notification outlet: only use base class's notifyConnectionSuccess()
                     // Directly use base class's currentConnectionCallback, no need for additional callback manager
@@ -886,7 +900,7 @@ class LanClientKernel(
 
                     // If not manual disconnect, and currently has connection callback, start service monitoring
                     // Use base class's currentConnectionCallback to determine if there's a pending connection
-                    if (!wasManual && currentConnectionCallback != null) {
+                    if (connectionOptions.enableServiceMonitoring && !wasManual && currentConnectionCallback != null) {
                         LogUtil.d(TAG, "Passive disconnect detected, starting service monitoring")
                         if (!isServiceMonitoring) {
                             startServiceMonitoring()

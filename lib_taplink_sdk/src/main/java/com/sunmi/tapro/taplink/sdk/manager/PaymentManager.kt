@@ -247,13 +247,15 @@ class PaymentManager(
         try {
             val appToAppMode = resolveAppToAppModeForRequest()
             val connectionMode = resolveConnectionModeTagForRequest()
+            val requestTimeoutMillis = resolveRequestTimeoutMillis(request.requestTimeout, config.timeout)
             val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
                 request = request,
                 version = config.version,
                 config.appId,
                 secretKey = config.secretKey,
                 appToAppMode = appToAppMode,
-                connectionMode = connectionMode
+                connectionMode = connectionMode,
+                requestTimeoutMillis = requestTimeoutMillis
             )
 
             val requestJson = TaplinkJsonBridge.toJsonString(basicRequest)
@@ -270,7 +272,7 @@ class PaymentManager(
                 basicRequest.traceId,
                 internalCallback,
                 isApp2App,
-                resolveCallbackTimeoutMillis(request.requestTimeout, config.timeout)
+                requestTimeoutMillis
             )
             if (!added) {
                 LogUtil.w(TAG, "Failed to add GET_TERMINAL_INFO callback to manager for traceId: ${basicRequest.traceId}")
@@ -417,13 +419,16 @@ class PaymentManager(
             // Convert PaymentRequest to BasicRequest
             val appToAppMode = resolveAppToAppModeForRequest()
             val connectionMode = resolveConnectionModeTagForRequest()
+            val requestTimeoutMillis =
+                resolveRequestTimeoutMillis(request.requestTimeout, config.timeout)
             val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
                 request = request,
                 version = config.version,
                 config.appId,
                 secretKey = config.secretKey,
                 appToAppMode = appToAppMode,
-                connectionMode = connectionMode
+                connectionMode = connectionMode,
+                requestTimeoutMillis = requestTimeoutMillis
             )
 
             // Serialise BasicRequest to JSON string for transport
@@ -435,21 +440,19 @@ class PaymentManager(
 
             // Add callback to LocalCallbackManager before sending
             val isApp2App = connectionManager.getConnectionMode() == ConnectionMode.APP_TO_APP.name
-            val callbackTimeoutMillis =
-                resolveCallbackTimeoutMillis(request.requestTimeout, config.timeout)
             val added = when (request.action) {
                 "QUERY" -> callbackManager.addQueryCallback(
                     basicRequest.traceId,
                     internalCallback,
                     isApp2App,
-                    callbackTimeoutMillis
+                    requestTimeoutMillis
                 )
 
                 else -> callbackManager.addTransactionCallback(
                     basicRequest.traceId,
                     internalCallback,
                     isApp2App,
-                    callbackTimeoutMillis
+                    requestTimeoutMillis
                 )
             }
 
@@ -988,14 +991,16 @@ class PaymentManager(
         /**
          * Converts the public timeout contract (seconds) to the callback manager's milliseconds.
          */
-        internal fun resolveCallbackTimeoutMillis(
+        internal fun resolveRequestTimeoutMillis(
             requestTimeoutSeconds: Long?,
             configTimeoutSeconds: Int
-        ): Long? {
+        ): Long {
             val timeoutSeconds = requestTimeoutSeconds?.takeIf { it > 0L }
                 ?: configTimeoutSeconds.toLong().takeIf { it > 0L }
-                ?: return null
+                ?: DEFAULT_REQUEST_TIMEOUT_SECONDS
             return TimeUnit.SECONDS.toMillis(timeoutSeconds)
         }
+
+        private const val DEFAULT_REQUEST_TIMEOUT_SECONDS = 180L
     }
 }

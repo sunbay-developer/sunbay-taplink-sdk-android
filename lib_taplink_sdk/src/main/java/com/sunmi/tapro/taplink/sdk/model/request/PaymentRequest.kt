@@ -199,7 +199,7 @@ data class PaymentRequest(
     val notifyUrl: String? = null,
 
     /**
-     * Request timeout (unit: seconds)
+     * Request timeout in seconds. When omitted or non-positive, TaplinkConfig.timeout is used.
      */
     val requestTimeout: Long? = null,
 
@@ -357,7 +357,7 @@ data class PaymentRequest(
     fun setNotifyUrl(notifyUrl: String): PaymentRequest = copy(notifyUrl = notifyUrl)
 
     /**
-     * Chain call: Set transaction timeout
+     * Chain call: Set transaction timeout in seconds
      */
     fun setRequestTimeout(requestTimeout: Long): PaymentRequest = copy(requestTimeout = requestTimeout)
 

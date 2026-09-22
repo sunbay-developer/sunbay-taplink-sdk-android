@@ -89,17 +89,37 @@ class TaplinkClientIntegrationTest {
 
     @Test
     fun callbackTimeoutConvertsRequestSecondsToMilliseconds() {
-        assertEquals(30_000L, PaymentManager.resolveCallbackTimeoutMillis(30L, 180))
+        assertEquals(30_000L, PaymentManager.resolveRequestTimeoutMillis(30L, 180))
     }
 
     @Test
     fun callbackTimeoutUsesConfiguredDefaultInMilliseconds() {
-        assertEquals(180_000L, PaymentManager.resolveCallbackTimeoutMillis(null, 180))
+        assertEquals(180_000L, PaymentManager.resolveRequestTimeoutMillis(null, 180))
     }
 
     @Test
-    fun callbackTimeoutFallsBackToCallbackManagerDefaultWhenNonPositive() {
-        assertEquals(null, PaymentManager.resolveCallbackTimeoutMillis(0L, 0))
+    fun callbackTimeoutUsesThe180SecondDefaultWhenConfiguredValuesAreNonPositive() {
+        assertEquals(180_000L, PaymentManager.resolveRequestTimeoutMillis(0L, 0))
+    }
+
+    @Test
+    fun signedRequestUsesTheEffectiveTimeoutInMilliseconds() {
+        val request = SaleRequest.builder()
+            .setReferenceOrderId("ORDER123")
+            .setTransactionRequestId("TXN123")
+            .setAmount(AmountInfo(BigDecimal("1000"), "USD"))
+            .setRequestTimeout(30L)
+            .build()
+
+        val basicRequest = ProtocolRequestBuilder.convertToBasicRequest(
+            request = request,
+            version = "1.0.10",
+            appid = "app",
+            secretKey = "secret",
+            requestTimeoutMillis = PaymentManager.resolveRequestTimeoutMillis(30L, 180)
+        )
+
+        assertEquals(30_000L, JSONObject(basicRequest.bizData).getLong("requestTimeout"))
     }
 
     @Test
