@@ -1,0 +1,7 @@
+jdk:
+  - openjdk17
+
+# Publish only the SDK debug fat AAR. JitPack serves the Maven-local artifact
+# using the requested Git tag/commit as the externally visible version.
+install:
+  - ./gradlew :lib_taplink_sdk:publishDebugPublicationToMavenLocal -x test

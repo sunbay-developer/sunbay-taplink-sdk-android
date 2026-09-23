@@ -40,15 +40,16 @@ static def getSnapshotRepositoryUrl() {
 
 }
 
-static def getRepositoryUsername() {
-//    return "Sunmi"
-    return "PDUNa6"
-}
-
-static def getRepositoryPassword() {
-//    return "OJ7R0CZC0ev\$X\$He"
-    return "ikAlguiWOhfrTQM6nkE9MzHeGFsV89pGC"
-}
+// Publishing credentials must never be committed. Configure them in
+// ~/.gradle/gradle.properties or inject them as CI environment variables:
+//   centralUsername=...
+//   centralPassword=...
+//   CENTRAL_USERNAME=...
+//   CENTRAL_PASSWORD=...
+def repositoryUsername = providers.gradleProperty('centralUsername')
+        .orElse(providers.environmentVariable('CENTRAL_USERNAME'))
+def repositoryPassword = providers.gradleProperty('centralPassword')
+        .orElse(providers.environmentVariable('CENTRAL_PASSWORD'))
 
 task sourcesJar(type: Jar) {
     archiveClassifier.convention('sources')
@@ -147,16 +148,16 @@ afterEvaluate {
                 name("releaseUrl")
                 url = getReleaseRepositoryUrl()
                 credentials {
-                    username = getRepositoryUsername()
-                    password = getRepositoryPassword()
+                    username = repositoryUsername.orNull
+                    password = repositoryPassword.orNull
                 }
             }
             maven {
                 name("snapshotUrl")
                 url = getSnapshotRepositoryUrl()
                 credentials {
-                    username = getRepositoryUsername()
-                    password = getRepositoryPassword()
+                    username = repositoryUsername.orNull
+                    password = repositoryPassword.orNull
                 }
             }
         }
@@ -188,8 +189,14 @@ afterEvaluate {
             task.dependsOn('copyReleaseAar')
         }
         task.doLast {
-            def username = getRepositoryUsername()
-            def password = getRepositoryPassword()
+            def username = repositoryUsername.orNull
+            def password = repositoryPassword.orNull
+            if (!username || !password) {
+                throw new GradleException(
+                        'Missing Central credentials. Set centralUsername/centralPassword ' +
+                                'Gradle properties or CENTRAL_USERNAME/CENTRAL_PASSWORD environment variables.'
+                )
+            }
             def url = new URL('https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/com.sunmi')
             def connection = (HttpURLConnection) url.openConnection()
             connection.requestMethod = 'POST'
@@ -201,6 +208,15 @@ afterEvaluate {
             connection.disconnect()
         }
     }
-}
 
+    // The publication uses the copied fat AAR instead of the standard Android
+    // component, so local/JitPack publication must build and copy it first too.
+    tasks.withType(PublishToMavenLocal) { task ->
+        if (task.publication.name == 'debug') {
+            task.dependsOn('copyDebugAar')
+        } else if (task.publication.name == 'release') {
+            task.dependsOn('copyReleaseAar')
+        }
+    }
+}
 
