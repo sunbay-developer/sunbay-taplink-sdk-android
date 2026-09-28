@@ -10,7 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
-- [Unreleased](#unreleased) — LAN reconnect policy and request timeout fixes
+- [Unreleased](#unreleased) — GET_TERMINAL_INFO error passthrough and LAN reconnect fixes
 - [v1.0.10](#v1010) — Explicit connection selection, dependency-free JSON, and reconnect hardening
 - [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
@@ -27,6 +27,12 @@ Releases are listed newest first. Each entry highlights what changed for integra
 ---
 
 ## Unreleased
+
+### 🐛 Fixed — GET_TERMINAL_INFO error passthrough
+
+- Removed Tapro-version-based conversion to synthetic error `352`. Tapro app versions are not SDK
+  versions, and the former `1.0.9` threshold was not a verified minimum Tapro version. The SDK now
+  preserves the actual error code and message returned by Tapro.
 
 ### 🐛 Fixed — LAN reconnect completion after endpoint changes
 
@@ -88,9 +94,9 @@ dependency, and hardens connection recovery across LAN, Cable, and repeated SDK 
   callbacks before creating new managers, preventing stale connections and duplicate callbacks.
 - A stale `CONNECTING` / `WAIT_CONNECTING` state is reset when the underlying transport is no
   longer active, so a subsequent `connect()` can start normally instead of waiting forever.
-- `getTerminalInfo()` converts legacy unsupported-action errors to error `352` only when the
-  connected Tapro version is known to predate the action. Genuine business errors from a supported
-  Tapro version are returned unchanged.
+- Historical behavior: `getTerminalInfo()` used to infer unsupported-action errors from a
+  Tapro-version threshold and rewrite them as synthetic error `352`. This was removed because the
+  threshold was not verified and could misclassify real errors. See Unreleased above.
 - Device identity is now attributed from the active transport, avoiding stale or cross-transport
   device IDs after reconnects.
 
@@ -232,7 +238,7 @@ ConnectionConfig.createCrossDeviceMode(
       }
 
       override fun onFailure(error: PaymentError) {
-          // error.code == "352" → Tapro does not support GET_TERMINAL_INFO, please upgrade Tapro
+          // The Unreleased fix preserves Tapro's actual error code and message.
       }
   })
   ```
@@ -241,7 +247,7 @@ ConnectionConfig.createCrossDeviceMode(
   - New independent callback `TerminalInfoCallback` (`onSuccess(TerminalInfo)` / `onFailure(PaymentError)`) — **not** `PaymentCallback`. `GET_TERMINAL_INFO` is a read-only control action, not a transaction: it does not create a transaction, does not require a `transactionRequestId`, and its result must never be interpreted with payment-progress/success semantics.
   - New public models: `TerminalInfo`, `MerchantMid`, `Terminal`, `TerminalTid`. Top-level merchant fields (`merchantId`, `dbaName`, `mcc`, `country`, `stateName`, `cityName`, `street`, `detailAddress`, `zipCode`, `midList`) mirror the public "Retrieve merchant" API contract; `terminal` is nested (mirroring a single element of the "List merchant terminals" contract: `sn`, `vendor`, `model`, `tidList`). Merchant branding metadata is intentionally excluded from the SDK response because this read-only query is limited to merchant/terminal identity metadata. Never returns `secretKey`, `appId`, network addresses, card data, or transaction details. Merchant `status` and `createTime` (merchant and terminal level) are intentionally **not** part of the response — Tapro has no real, backend-provisioned source for them today, so they are omitted rather than fabricated or returned as `null` placeholders.
   - `GET_TERMINAL_INFO` responds even while Tapro is processing a payment transaction, and is not affected by transactional API-permission / service-plan gating — though it still goes through the same request signature verification as every other action.
-  - Legacy Tapro versions that do not recognize `GET_TERMINAL_INFO` return a misleading busy/unsupported-action error (e.g. `303`); the SDK now converts this into a clear, dedicated error code **`352`** ("Tapro does not support GET_TERMINAL_INFO, please upgrade Tapro") so integrators are not confused by false "transaction in progress" reports.
+  - Historical 1.0.9 behavior converted selected errors to synthetic `352` based on a Tapro-version threshold. This could misclassify genuine errors; Unreleased removes the heuristic and preserves the error code/message received from Tapro.
 
 - **`SUB_SCREEN` connection mode (recommended for cross-device secondary display)** — A dedicated connection mode that combines USB Virtual Serial Port (VSP) transport with mandatory sub-screen activation. Use `ConnectionConfig.createSubScreenMode()` or `ConnectionConfig().setConnectionMode(ConnectionMode.SUB_SCREEN)` to connect.
 
