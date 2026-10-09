@@ -28,6 +28,12 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Unreleased
 
+### 🚀 New — Java-friendly TaplinkConfig timeout setter
+
+- Added `TaplinkConfig.setTimeout(int)` so Java integrations can set the default transaction timeout
+  in seconds without calling the full constructor. Like the other configuration setters, it returns
+  a new `TaplinkConfig`; pass that returned instance to `TaplinkSDK.init()`.
+
 ### 🐛 Fixed — GET_TERMINAL_INFO error passthrough
 
 - Removed Tapro-version-based conversion to synthetic error `352`. Tapro app versions are not SDK
