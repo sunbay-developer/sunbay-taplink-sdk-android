@@ -1,0 +1,66 @@
+# spec-change-request.yaml —— Spec 变更请求（SCR）
+#
+# 对 active spec 的每一次实质性变更（L2/L3）都必须有一份 SCR，回答：
+#   为什么改、改了什么、依据是什么、谁批准了、影响了谁。
+# 落盘：docs/spec/changes/{change_id}.yaml（受控，进版本库，经 PR 更新）
+# 规范见 SPEC_GUIDE §6.5–§6.8。L1 纯文字澄清可不开 SCR（但 §0 Changelog 仍记一行）。
+
+change_id: SPEC-CHG-001            # 变更唯一 ID
+spec_id: SPEC-PAY-001             # 受影响 spec
+rule_id: RULE-PAY-015            # 受影响规则（可多条：[RULE-PAY-015, ...]）
+
+change_type: ADD_RULE             # ADD_RULE | MODIFY_RULE | DELETE_RULE | CLARIFY_RULE
+level: L3                          # L1 文字澄清 | L2 行为补充 | L3 高风险（金额/交易结果/EMV/Debit路由/SAF/密钥安全）
+# 注意：支付高风险即使只改一句话也是 L3——按是否改变实际交易行为定级，不按文字量。
+
+# ── 变更缘由分类（SPEC_GUIDE §6.6，必须区分 A/B）────────────────────────
+change_origin: TEST_DISCOVERED_GAP # SOURCE_OMISSION(类型A：原方案已规定但 spec 漏写)
+                                   # | TEST_DISCOVERED_GAP / DESIGN_DECISION(类型B：原方案未规定，新增业务规则)
+
+reported_by: QA                    # 谁发现/提出
+initiator_role: tester
+reason: >                          # 为什么要改
+  测试发现现有 spec 未定义「SDK 超时后查询仍无法确认结果」时的处理规则。
+
+# ── 变更依据（接 §1.3 来源可追溯）──────────────────────────────────────
+source:
+  type: UNSPECIFIED                # EXPLICIT(类型A，能定位原文) | UNSPECIFIED(类型B，原方案未规定)
+  references:
+    - document_id: DESIGN-PAY-001
+      version: "1.2"
+      section: "4.2"
+  evidence: >                      # 测试缺口的复现条件/风险，或原方案遗漏的原文位置
+    复现：SDK 返回 306 后调用 query() 仍无法确认状态；现无规则定义下一步如何处理。
+
+# ── 改了什么（before / after）────────────────────────────────────────
+before:
+  status: NOT_DEFINED
+  rule: null
+after:
+  # 类型 B 批准前只能是 PROPOSED；审批通过后替换为明确、可验证的正式规则
+  status: PROPOSED
+  rule: >
+    待支付规则负责人确认后补充正式行为（禁止 AI 自行拟定交易结果处理）。
+
+# ── 影响分析（AI 可生成，人工确认）──────────────────────────────────────
+impact:
+  acceptance_criteria: [AC-PAY-015-01]
+  test_cases: [TC-PAY-015-001]
+  implementation_review_required: true
+  regression_required: true
+
+# ── 审批（SPEC_GUIDE §6.3 / §6.8）──────────────────────────────────────
+approval:
+  status: PENDING                  # PENDING | APPROVED | REJECTED
+  reviewers: []                    # L2：spec owner (+测试代表)
+  approver_role: SDK_PAYMENT_RULE_OWNER  # L3 支付高风险：支付规则负责人必须确认
+  approved_by: null
+  decision_note: null
+
+# ── 版本与时间 ────────────────────────────────────────────────────────
+target_spec_version: "v1.3"        # 本次变更后 spec 的目标版本
+created_at: null                   # YYYY-MM-DD
+resolved_at: null
+
+# 批准后：更新 spec（after 的 PROPOSED → 正式规则）、coverage.yaml、§0 Changelog（关联本 change_id）、
+# 受影响的测试用例；已批准 spec 不得被 AI 静默覆盖。

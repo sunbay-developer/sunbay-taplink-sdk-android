@@ -1,0 +1,132 @@
+# spec-coverage.yaml —— 源需求 → 规则 → 验收 → 测试 的追溯矩阵
+#
+# 这是 spec 完整性机制的核心载体：它让"Spec 写了"和"这个问题真的被业务定义了"可区分，
+# 并支撑量化门禁（来源追溯率 / 覆盖率 / 验收覆盖率 / ID 引用完整性 / 冲突）的机械检查。
+#
+# 落盘位置：docs/spec/coverage/{spec_id}.yaml（受控，进版本库，需 Human Review 批准）
+# 维护规则：spec.md 的 R/AC 增删，必须同步此文件；R/AC 编号只增不复用（SPEC_GUIDE §7.3）。
+
+spec_id: SPEC-{域}-{序号}          # 与 spec.md front-matter 的 spec_id 一致
+spec_file: docs/spec/{主题}技术规格.md
+version: v1.0                       # 与 spec.md 一致
+status: draft                      # draft | active | deprecated（active 才可作为依据）
+approved: false                    # Human Review（Step 5）通过后置 true
+approved_by: null                  # 批准人；breaking 变更需含测试代表（SPEC_GUIDE §6.3）
+approved_at: null                  # YYYY-MM-DD
+
+# ── 来源清单（Step 1 Source Analyzer 产出）────────────────────────────
+# 每条源信息标注来源分类 + 可定位的原文，这是区分"已定义"与"待确认"、并防止 AI 伪造来源的根基。
+# 硬规则（SPEC_GUIDE §1.3.3）：
+#   - EXPLICIT 必须能在 document_path 中定位 section 与 source_quote，否则校验失败
+#   - 片段存在仍不等于语义支持该规则；由独立 Reviewer 核对并确认版本（AI 提映射，审查人验证）
+sources:
+  - source_id: SRC-1
+    classification: EXPLICIT       # EXPLICIT | DERIVED | PROPOSED | UNSPECIFIED | CONFLICT
+    document_id: DESIGN-PAY-001    # 来自哪份方案（稳定 ID；非 EXPLICIT 可为 null）
+    document_version: "1.2"        # 哪个版本（变更影响分析的基础）
+    document_path: docs/design/EXAMPLE.md  # 仓库内原文路径；EXPLICIT 必填，spec-check 核对文件、章节与原文片段
+    section: "4.2.3"               # 哪个章节（供校验程序定位）
+    source_quote: >                # 原文可定位片段——必须能在源文档里搜得到，不能是 AI 转述的"大意"
+      {粘贴源文档 §4.2.3 的原文，用于核对 AI 是否曲解}
+    content: "SDK 交易超时后，集成方应先查询交易状态，再决定后续操作"   # AI 对该来源的归纳
+    derivation: null              # DERIVED 时必填：{ derived_from: [SRC-x], rationale: "推导理由" }
+    conflict_with: null           # CONFLICT 时必填：与哪条 source/规则冲突
+    verified: false               # 审查人核对 section+quote 的语义支持该规则后置 true
+    resolution: null              # PROPOSED/UNSPECIFIED/CONFLICT 的裁决结论（Step 5 填）
+
+  - source_id: SRC-2
+    classification: UNSPECIFIED   # 源材料未说明 → 不得为填满字段而标 EXPLICIT
+    document_id: null
+    document_version: null
+    document_path: null
+    section: null
+    source_quote: null
+    content: "连接中断后状态恢复策略（源未定义）"
+    derivation: null
+    conflict_with: null
+    verified: false
+    resolution: null              # 未裁决前，受此影响的高风险功能不得批准（门禁）
+
+# ── 五维完整性自检（Step 2/3）────────────────────────────────────────
+# 每一维标注覆盖情况；N/A 必须给理由；gap 必须对应一条 open_questions。
+dimensions:
+  business_flow:        { covered: partial, note: "缺超时后的恢复分支", gap_ref: Q-1 }
+  state_and_rules:      { covered: yes,     note: "" }
+  interface_boundary:   { covered: yes,     note: "" }
+  exception_and_risk:   { covered: partial, note: "连接中断恢复未定义", gap_ref: Q-2 }
+  acceptance_coverage:  { covered: yes,     note: "" }
+
+# ── SDK 清单适用性（Step 3）───────────────────────────────────────────
+# 每项：applicable(yes/no/na) + 若 na 给 reason + 若 yes 关联覆盖它的 R 编号。
+payment_checklist:
+  transaction_lifecycle: { applicable: yes, rules: [RULE-PAY-015], note: "" }
+  amount_and_txn_type:   { applicable: yes, rules: [RULE-PAY-015],         note: "" }
+  connection_modes:      { applicable: yes, rules: [RULE-PAY-015],         note: "" }
+  callback_semantics:    { applicable: yes, rules: [RULE-PAY-015],     note: "" }
+  idempotency_and_query: { applicable: yes, rules: [RULE-PAY-015],         note: "" }
+  api_compatibility:     { applicable: yes, rules: [RULE-PAY-015],         note: "" }
+  security_compliance:   { applicable: yes, rules: [RULE-PAY-015],         note: "" }
+  perf_and_recovery:     { applicable: yes, rules: [RULE-PAY-015],         note: "" }
+
+# ── 追溯矩阵（核心）：source → rule → acceptance → test ──────────────────
+# 门禁据此机械计算：
+#   来源追溯率   = 有 source_id（或已批准 derivation）的 rule / 全部 rule
+#   验收覆盖率   = 有 ≥1 条 ac 的关键 rule / 全部关键 rule
+#   ID 引用完整性 = rule_id/ac_id/source_id/test_case 的引用均能解析
+# 四级追溯链（SPEC_GUIDE §1.3.1）：document → rule → acceptance → test
+# rule_id 建议用稳定业务编号（如 RULE-PAY-015）；AC 用 AC-PAY-015-01；TC 用 TC-PAY-015-001。
+rules:
+  - rule_id: RULE-PAY-015
+    source_id: SRC-1               # 关联来源；校验据此回溯 document/section/quote
+    source_type: EXPLICIT          # 冗余标注，便于机械门禁；须与 sources[SRC-1].classification 一致
+    dimension: business_flow
+    criticality: critical          # critical | high | medium | low
+    statement: "SDK 返回 306 超时后，不得直接重试交易，应先查询状态"
+    status: REVIEW_REQUIRED        # REVIEW_REQUIRED | APPROVED | BLOCKED（仅 APPROVED 可进实现）
+    acceptance:
+      - ac_id: AC-PAY-015-01
+        given: "SDK 返回 306 超时"
+        when: "集成方准备重试"
+        then: "先调用 query() 查询交易状态，不得直接重试"
+        verification_method: integration_test
+        test_cases: [TC-PAY-015-001]   # 测试团队回填；未覆盖留 []
+
+  - rule_id: RULE-PAY-016
+    source_id: SRC-2               # 指向 UNSPECIFIED → 该规则不得标 EXPLICIT，不得进实现
+    source_type: UNSPECIFIED
+    dimension: exception_and_risk
+    criticality: critical
+    statement: "⚠ 待确认（SRC-2 / Q-2）：连接中断后如何恢复交易状态"
+    status: BLOCKED                # 被 open_question 阻塞
+    blocked_by: Q-2
+    acceptance: []                 # 规则未定义，不编造 AC（禁止 AI 擅自补齐）
+
+# ── 待确认问题（Step 4 Gap Analysis 产出，Step 5 裁决）──────────────────
+open_questions:
+  - id: Q-1
+    risk: high
+    about: "交易超时后的恢复分支未定义"
+    source_ref: SRC-1
+    blocks: [RULE-PAY-015]         # 阻塞哪些规则/功能，须与 rules.rule_id 一致
+    status: open                   # open | resolved | na
+    decision: null                 # Step 5 裁决结论
+
+  - id: Q-2
+    risk: critical
+    about: "连接中断后交易状态恢复策略（支付/交易状态类，关键阻塞项）"
+    source_ref: SRC-2
+    blocks: [RULE-PAY-016]
+    status: open
+    decision: null
+
+# ── 门禁结果（Step 4 计算，Step 5 校验）─────────────────────────────────
+gates:
+  # 来源追溯率不止查"有没有 source_id"，还要查 EXPLICIT 的 section+source_quote 是否经核对（verified:true）
+  source_traceability:        { target: "100%", actual: null, pass: null }
+  explicit_quote_verified:    { target: "100%", actual: null, pass: null }  # 每条 EXPLICIT 都已核对原文
+  critical_rule_coverage:     { target: "100%", actual: null, pass: null }
+  critical_acceptance_coverage: { target: "100%", actual: null, pass: null }
+  unresolved_high_risk:       { target: 0,       actual: null, pass: null }  # open_questions 中 risk>=high 且 status=open
+  id_reference_integrity:     { target: "100%", actual: null, pass: null }
+  unresolved_conflicts:       { target: 0,       actual: null, pass: null }
+# 任一 critical 门禁 pass=false → 禁止 approved: true（Step 5 不得批准）。

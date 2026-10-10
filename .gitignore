@@ -17,3 +17,8 @@ local.properties
 /AGENTS.md
 /lib_taplink_sdk/src/test/*
 /docs/
+!/docs/
+/docs/*
+!/docs/spec/
+!/docs/design/
+!/AGENT.md
