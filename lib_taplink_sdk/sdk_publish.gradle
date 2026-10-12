@@ -40,12 +40,14 @@ static def getSnapshotRepositoryUrl() {
 
 }
 
-def getRepositoryUsername() {
-    return project.findProperty('sunbayMavenUsername') ?: System.getenv('SUNBAY_MAVEN_USERNAME') ?: ''
+static def getRepositoryUsername() {
+//    return "Sunmi"
+    return "PDUNa6"
 }
 
-def getRepositoryPassword() {
-    return project.findProperty('sunbayMavenPassword') ?: System.getenv('SUNBAY_MAVEN_PASSWORD') ?: ''
+static def getRepositoryPassword() {
+//    return "OJ7R0CZC0ev\$X\$He"
+    return "ikAlguiWOhfrTQM6nkE9MzHeGFsV89pGC"
 }
 
 task sourcesJar(type: Jar) {
