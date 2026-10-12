@@ -173,11 +173,18 @@ Tip suggestion configuration for predefined tip options shown to the customer.
 | `cardNetworkType` | CardNetworkType | No | Card network type, such as CREDIT or DEBIT |
 | `attach` | String | No | Additional data, returned as-is |
 | `notifyUrl` | String | No | Notification callback URL |
-| `requestTimeout` | Long | No | Request timeout in seconds |
+| `requestTimeout` | Long | No | Request timeout in milliseconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `tipConfig` | TipConfig | No | Tip configuration, mutually exclusive with `amount.tipAmount` |
 | `printReceipt` | PrintReceipt | No | Receipt print mode, defaults to AUTO |
 | `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (optional) |
+
+`requestTimeout` is expressed in milliseconds for compatibility with existing SDK releases, while
+`TaplinkConfig.timeout` is expressed in seconds and defaults to 180. The request-level value takes
+precedence. When it is absent, the SDK converts the global seconds value to milliseconds. The
+effective millisecond value is sent in `bizData.requestTimeout` and used by the local callback timer.
+Java callers can set the default with `TaplinkConfig.setTimeout(int)`; retain the returned
+configuration because the setter does not mutate the original instance.
 
 ```kotlin
 val request = SaleRequest.builder()
@@ -201,7 +208,7 @@ val request = SaleRequest.builder()
 | `paymentMethod` | PaymentMethodInfo | No | Payment method |
 | `attach` | String | No | Additional data |
 | `notifyUrl` | String | No | Notification URL |
-| `requestTimeout` | Long | No | Timeout in seconds |
+| `requestTimeout` | Long | No | Timeout in milliseconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
 | `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (optional) |
@@ -221,7 +228,7 @@ Used for offline or special authorization scenarios.
 | `paymentMethod` | PaymentMethodInfo | No | Payment method |
 | `attach` | String | No | Additional data |
 | `notifyUrl` | String | No | Notification URL |
-| `requestTimeout` | Long | No | Timeout in seconds |
+| `requestTimeout` | Long | No | Timeout in milliseconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
 
@@ -240,7 +247,7 @@ Completes a pre-authorization transaction and converts the held amount into a fi
 | `description` | String | No | Transaction description |
 | `attach` | String | No | Additional data |
 | `notifyUrl` | String | No | Notification URL |
-| `requestTimeout` | Long | No | Timeout in seconds |
+| `requestTimeout` | Long | No | Timeout in milliseconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `tipConfig` | TipConfig | No | Tip configuration |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
@@ -260,7 +267,7 @@ Increases the authorization amount on an existing pre-authorization.
 | `description` | String | No | Transaction description |
 | `attach` | String | No | Additional data |
 | `notifyUrl` | String | No | Notification URL |
-| `requestTimeout` | Long | No | Timeout in seconds |
+| `requestTimeout` | Long | No | Timeout in milliseconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
 
@@ -285,7 +292,7 @@ Supports two refund modes:
 | `cardNetworkType` | CardNetworkType | No | Card network type |
 | `attach` | String | No | Additional data |
 | `notifyUrl` | String | No | Notification URL |
-| `requestTimeout` | Long | No | Timeout in seconds |
+| `requestTimeout` | Long | No | Timeout in milliseconds |
 | `staffInfo` | StaffInfo | No | Staff information |
 | `printReceipt` | PrintReceipt | No | Receipt print mode |
 | `signatureConfig` | SignatureConfig | No | Per-transaction signature configuration (non-referenced refund only) |
@@ -323,7 +330,7 @@ val request = RefundRequest.referencedBuilder()
 | `originalTransactionRequestId` | String | One of two | Original transaction request ID |
 | `tipAmount` | BigDecimal | Yes | Tip amount in the smallest currency unit; must be non-negative |
 | `attach` | String | No | Additional data |
-| `requestTimeout` | Long | No | Timeout in seconds |
+| `requestTimeout` | Long | No | Timeout in milliseconds |
 
 ---
 
@@ -334,7 +341,7 @@ val request = RefundRequest.referencedBuilder()
 | `originalTransactionRequestId` | String | Yes | Request ID of the transaction to abort |
 | `description` | String | No | Abort reason |
 | `attach` | String | No | Additional data |
-| `requestTimeout` | Long | No | Timeout in seconds |
+| `requestTimeout` | Long | No | Timeout in milliseconds |
 
 ---
 
@@ -404,7 +411,7 @@ val request = SaleRequest.builder()
 |------|------|----------|-------------|
 | `transactionRequestId` | String | Yes | Request ID |
 | `description` | String | No | Batch close description, max 128 characters |
-| `requestTimeout` | Long | No | Timeout in seconds |
+| `requestTimeout` | Long | No | Timeout in milliseconds |
 | `printReceipt` | PrintReceipt | No | Batch report print mode. Defaults to `AUTO`; supports `AUTO`, `BOTH`, `TOTAL`, `DETAIL`, and `NONE` |
 
 For Batch Close, `printReceipt` controls batch reports rather than merchant/customer transaction copies:
@@ -743,6 +750,18 @@ Returned only from `onFailure`, which represents communication or technical erro
 | `307` | Transaction already exists | No | Use a new `transactionRequestId` |
 | `308` | Transaction is processing | No | Wait or query status |
 | Other | Communication/configuration issue | Usually yes | Depends on the error category |
+
+APP-to-APP requests do not use callback timeout and do not return `306`; they remain active until
+their normal response is delivered. For LAN and Cable, error `306` is delivered once when the
+effective request timeout expires. Tapro automatically cancels and exits only transactions that
+are still cancellable. A LAN/Cable transaction that is already non-cancellable continues locally
+until its normal terminal state, but that late result is not delivered through the timed-out
+callback. Call `query()` with the original transaction request ID before deciding whether to start
+another transaction. Never retry a `306` transaction directly.
+
+A card-reading timeout is returned as a terminal transaction result with status `FAILED` and the
+message `read card timeout`; it is not a communication-level `onFailure`. Always inspect the
+transaction result status received by the callback.
 
 ---
 

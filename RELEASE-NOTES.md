@@ -10,6 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
+- [v1.1.0](#v110) — Timeout configuration, terminal information errors, and LAN reconnect behavior (release pending)
 - [v1.0.10](#v1010) — Explicit connection selection, Android 7 compatibility, and reconnect reliability
 - [v1.0.9](#v109) — Integration modes, Sub-Screen mode, and terminal information query
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
@@ -22,6 +23,31 @@ Releases are listed newest first. Each entry highlights what changed for integra
 - [v1.0.1](#v101) — Cable modes unified under `CABLE`
 - [v1.0.0](#v100) — Initial public release
 - [Artifact verification](#artifact-verification)
+
+---
+
+## v1.1.0
+
+**Release pending.**
+
+### New and improved
+
+- Java integrations can call `TaplinkConfig.setTimeout(int)` to set the default transaction timeout in seconds. The method returns a new configuration; pass that returned value to SDK initialization.
+- `PaymentRequest.requestTimeout` uses milliseconds and takes precedence over the default timeout. The default `TaplinkConfig.timeout` remains in seconds. The SDK applies the same effective timeout to the request and its local callback.
+- `ConnectionConfig.autoReconnect = false` prevents automatic LAN discovery fallback and background reconnection after a direct LAN connection fails or disconnects. Explicit discovery remains available.
+- LAN reconnection handles endpoint changes and reports exhausted recovery attempts to connection listeners.
+
+### Fixed
+
+- `getTerminalInfo()` now passes through the actual error code and message returned by Tapro. The SDK no longer generates error `352` from a Tapro version check.
+- APP-to-APP requests no longer receive callback timeout error `306`. LAN and Cable requests report callback timeout once. A card-reading timeout is returned as a `FAILED` transaction result rather than a communication failure.
+
+### Migration from v1.0.10
+
+- Express request-level timeout values in **milliseconds**, for example `30_000L` for 30 seconds. The default configuration timeout remains in **seconds**.
+- Retain the value returned by `TaplinkConfig.setTimeout(int)` before initializing the SDK.
+- Inspect the actual `getTerminalInfo()` error code and message instead of relying on synthetic `352`.
+- After a LAN or Cable callback error `306`, query the original transaction before deciding whether to retry. Inspect a card-reading `FAILED` result as a transaction outcome.
 
 ---
 

@@ -36,6 +36,8 @@ object ProtocolRequestBuilder {
      *   Used to identify dedicated connection modes (e.g. SUB_SCREEN) independently of
      *   [appToAppMode]. SUB_SCREEN is a first-class connection mode and must NOT be conflated
      *   with the App-to-App processing mode field. null when no standalone tag applies.
+     * @param requestTimeoutMillis Effective request timeout in milliseconds, injected into bizData
+     *   before signing.
      */
     fun convertToBasicRequest(
         request: Any,
@@ -43,7 +45,8 @@ object ProtocolRequestBuilder {
         appid: String,
         secretKey: String,
         appToAppMode: String? = null,
-        connectionMode: String? = null
+        connectionMode: String? = null,
+        requestTimeoutMillis: Long? = null
     ): BasicRequest {
         try {
             val action = getActionByRequest(request)
@@ -60,6 +63,9 @@ object ProtocolRequestBuilder {
             // connection modes independently of the App-to-App processing mode.
             if (!connectionMode.isNullOrBlank()) {
                 bizData.put("connectionMode", connectionMode)
+            }
+            if (requestTimeoutMillis != null) {
+                bizData.put("requestTimeout", requestTimeoutMillis)
             }
 
             val bizDataStr = bizData.toString()

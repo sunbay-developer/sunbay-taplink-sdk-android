@@ -171,6 +171,15 @@ data class TaplinkConfig(
     fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
 
     /**
+     * Sets the default transaction timeout in seconds.
+     * Returns a new configuration instance; the original instance is unchanged.
+     *
+     * @param timeout default timeout in seconds
+     * @return the updated configuration instance for method chaining
+     */
+    fun setTimeout(timeout: Int): TaplinkConfig = copy(timeout = timeout)
+
+    /**
      * Sets the width ratio for Tapro application execution.
      *
      * @param taproAppWidthRatio the width ratio (0.0 to 1.0) for the Tapro app

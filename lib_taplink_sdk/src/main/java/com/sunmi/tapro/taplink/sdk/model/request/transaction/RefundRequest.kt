@@ -23,7 +23,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * @param paymentMethod Payment method information (optional for non-referenced refund)
  * @param attach Additional information (optional)
  * @param notifyUrl Notification URL (optional)
- * @param requestTimeout Request timeout duration (optional, unit: seconds)
+ * @param requestTimeout Request timeout duration (optional, unit: milliseconds)
  * @param staffInfo Staff information (optional)
  * @param signatureConfig Per-transaction signature configuration (optional, non-referenced refund only)
  *
