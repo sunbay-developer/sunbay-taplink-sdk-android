@@ -106,15 +106,19 @@ com.sunmi.tapro.taplink.communication.*   ❌ lib_taplink_communication 全部�
 - 构件命名：`sunbay-taplink-sdk-android-<版本号>-<buildType>.aar`，输出目录为 `lib_taplink_sdk/../build/`。
 - 传递依赖必须在 `sdk_publish.gradle` 的 POM 配置中显式声明（`addDep(...)`），不能遗漏（如 jackson-databind、Java-WebSocket、usb-serial-for-android）。
 - `-SNAPSHOT` 后缀版本发布到 Snapshot 仓库，正式版本发布到 Release 仓库，二者 URL 不同，不要混用。
-- 发版五步骤：① 更新 `SdkVersion.NAME`/`CODE` → ② 在 `RELEASE-NOTES.md` 顶部新增版本条目（含 🚀新增/🔧改进/🐛修复/📦依赖/🧭迁移指南/💥breaking change）→ ③ `git commit`（英文）+ `git tag vX.Y.Z` → ④ **AAR 打包与 Maven 发布由维护者手动执行**（见下方"人工发布节点"）→ ⑤ **同步更新 `sunbay-open-docs` 仓库的公开 SDK 文档（见下）**。
+- `dev_pro` 是内部开发及 Maven 发布准备分支；GitHub `main` 是公开源码分支。公开发布从 `GitHub/main` 基线整理 SDK 两个模块的源码、必要构建配置和面向集成商的 `README.md`、`API-REFERENCE.md`、`RELEASE-NOTES.md`，合并为**一个**英文 Conventional Commit。不得将 `dev_pro` 的完整历史、内部规范/分析文档、Demo、签名材料、`sdk_publish.gradle` 或任何凭证带入公开提交。公开提交须通过源码编译、变更文件白名单及敏感信息核查。
+- 标签使用不同命名空间：内部候选版 `dev_pro/vX.Y.Z-rc.N`，维护者确认 Maven 实际发布版本后在对应 `dev_pro` 提交上打 `dev_pro/vX.Y.Z`；GitHub 公开版只在 `main` 的单个公开提交上打 `vX.Y.Z`。标签均不可复用或重指向已推送的对象。内部标签只推送到内部 `origin`，公开标签只推送到 `GitHub`；不要用 `git push --tags` 混推。历史标签保持不变，新规则从 v1.1.0 起执行。
+- 发版流程：① 在 `dev_pro` 更新 `SdkVersion.NAME`/`CODE`（`CODE` 须高于上一公开版本），完成行为规格、验证与 `RELEASE-NOTES.md` → ② 提交内部改动并可打内部候选标签 → ③ **维护者手动打包 AAR、发布 Maven，并确认实际版本号** → ④ 按确认版本更新 Demo、Tapro 和 `sunbay-open-docs` 双语文档并验证 → ⑤ 审核公开单提交，移除待发布标记，提交到 `main`；在该提交上创建公开版本标签，再发布到 GitHub。若实际版本与候选版本不同，先修订内部与公开版本配置及文档，重新校验；不得直接沿用候选标签。
 
 ### ⚠️ 人工发布节点（AI 必须暂停等待）
 
 **第 ④ 步的 AAR 打包和 Maven 发布一律由维护者手动完成，AI agent 严禁自行执行发布相关 Gradle task**（如 publish/assembleRelease 等发布任务）。AI 的正确行为：
 
-1. 完成 ①–③ 步（版本号、RELEASE-NOTES、commit/tag 的准备）后**停下**，明确告知维护者"请手动执行 AAR 打包与 Maven 发布"。
+1. 完成内部版本号、RELEASE-NOTES、提交及可选的候选标签后**停下**，明确告知维护者"请手动执行 AAR 打包与 Maven 发布"。公开 `vX.Y.Z` 标签不能指向 `dev_pro`。
 2. **等待维护者操作完成并提供实际发布的版本号**。
-3. 拿到版本号后再继续第 ⑤ 步（sunbay-open-docs 文档同步），以及 tapro/taplinkdemo 的依赖升级——所有下游更新必须使用维护者确认的版本号，不得使用 AI 自己推测的版本号。
+3. 拿到版本号后再继续下游依赖升级及 sunbay-open-docs 文档同步——所有下游更新必须使用维护者确认的版本号，不得使用 AI 自己推测的版本号。
+
+`sdk_publish.gradle` 仅保留在内部 `dev_pro`，供维护者发布 Maven 时使用。仓库中不得保存发布凭证；从未提交的 Gradle 属性 `sunbayMavenUsername` / `sunbayMavenPassword` 或环境变量 `SUNBAY_MAVEN_USERNAME` / `SUNBAY_MAVEN_PASSWORD` 注入。历史上出现过的凭证须轮换，不得为了恢复旧发布配置而重新写入。
 
 ### 8.1 发版必须同步更新 sunbay-open-docs（强制，不可省略）
 
@@ -149,6 +153,8 @@ com.sunmi.tapro.taplink.communication.*   ❌ lib_taplink_communication 全部�
 - [ ] USB 权限处理（Cable 模式）文档/代码完整
 - [ ] 新增/变更文档位于 `docs/` 对应子目录，示例代码位于 `test/`/`androidTest/`
 - [ ] `RELEASE-NOTES.md` 已更新，版本号已在 `build.gradle.kts` 更新
+- [ ] 内部候选/正式标签均指向对应 `dev_pro` 提交，公开 `vX.Y.Z` 仅指向 `main` 的单个公开提交，且没有混推到错误 remote
+- [ ] 公开提交只包含 SDK 源码、必要构建配置和面向集成商的公开文档；已排除内部发布脚本、签名材料、内部文档及凭证
 - [ ] **AAR 打包与 Maven 发布已由维护者手动完成，且后续步骤使用的是维护者确认的版本号**
 - [ ] **`sunbay-open-docs` 中 en + zh 的 `sdk/client-side/android.mdx` 已同步更新**（版本号、Version History、迁移指南、错误码参考、changelog）
 - [ ] Git 提交信息为英文，符合 Conventional Commits
