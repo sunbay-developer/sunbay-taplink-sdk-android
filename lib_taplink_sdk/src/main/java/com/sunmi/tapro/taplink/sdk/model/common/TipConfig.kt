@@ -31,16 +31,20 @@ import com.sunmi.tapro.taplink.sdk.enums.TipMode
  * non-null with defaults, so typed SDK requests always carry a value; only raw-JSON and Cloud
  * requests can omit them.
  *
+ * Field setters update this instance and return it for chaining. Use [copy] for
+ * independent top-level values, and finish updates before request submission.
+ * Serialize writes and do not mutate instances used as hash collection keys.
+ *
  * @author Tapro Team
  * @since 2025-01-XX
  */
-data class TipConfig(
+class TipConfig(
     /**
      * Whether the whole tip configuration comes from the Tapro host (optional, default: false).
      * - false: the request fields below are used as-is, the host tip configuration is never read
      * - true: the host tip configuration is used as a whole and every other field here is ignored
      */
-    val useHostConfig: Boolean = false,
+    useHostConfig: Boolean = false,
 
     /**
      * Whether to enable on-screen tip prompt (optional, default: false).
@@ -51,7 +55,7 @@ data class TipConfig(
      *
      * This field is ignored when [useHostConfig] is true.
      */
-    val onScreenTip: Boolean = false,
+    onScreenTip: Boolean = false,
 
     /**
      * Tip mode (optional, default: ON_SALE).
@@ -61,7 +65,7 @@ data class TipConfig(
      * This field is ignored when [useHostConfig] is true. When [useHostConfig] is false it is
      * used as-is and never falls back to the host tip mode.
      */
-    val tipMode: TipMode = TipMode.ON_SALE,
+    tipMode: TipMode = TipMode.ON_SALE,
 
     /**
      * Whether tip calculation includes tax amount (optional, default: false).
@@ -70,7 +74,7 @@ data class TipConfig(
      * This field is ignored when [useHostConfig] is true. When [useHostConfig] is false it is
      * used as-is and never falls back to the host setting.
      */
-    val tipWithTax: Boolean = false,
+    tipWithTax: Boolean = false,
 
     /**
      * Tip suggestion options (optional).
@@ -84,45 +88,104 @@ data class TipConfig(
      * A null value means no suggestions are used; it never falls back to the host suggestions.
      * With [onScreenTip] = false and no suggestions, the receipt prints a blank tip line instead.
      */
-    val suggestions: TipSuggestions? = null
+    suggestions: TipSuggestions? = null
 ) {
+    var useHostConfig: Boolean = useHostConfig
+        private set
+
+    var onScreenTip: Boolean = onScreenTip
+        private set
+
+    var tipMode: TipMode = tipMode
+        private set
+
+    var tipWithTax: Boolean = tipWithTax
+        private set
+
+    var suggestions: TipSuggestions? = suggestions
+        private set
+
     /**
      * Sets the configuration source flag.
      *
      * @param useHostConfig true to use the host tip configuration as a whole
-     * @return the updated TipConfig instance for method chaining
+     * @return this TipConfig instance for method chaining
      */
-    fun setUseHostConfig(useHostConfig: Boolean): TipConfig = copy(useHostConfig = useHostConfig)
+    fun setUseHostConfig(useHostConfig: Boolean): TipConfig = apply { this.useHostConfig = useHostConfig }
 
     /**
      * Sets the on-screen tip flag.
      *
      * @param onScreenTip whether to enable on-screen tip
-     * @return the updated TipConfig instance for method chaining
+     * @return this TipConfig instance for method chaining
      */
-    fun setOnScreenTip(onScreenTip: Boolean): TipConfig = copy(onScreenTip = onScreenTip)
+    fun setOnScreenTip(onScreenTip: Boolean): TipConfig = apply { this.onScreenTip = onScreenTip }
 
     /**
      * Sets the tip mode.
      *
      * @param tipMode the tip mode
-     * @return the updated TipConfig instance for method chaining
+     * @return this TipConfig instance for method chaining
      */
-    fun setTipMode(tipMode: TipMode): TipConfig = copy(tipMode = tipMode)
+    fun setTipMode(tipMode: TipMode): TipConfig = apply { this.tipMode = tipMode }
 
     /**
      * Sets the tip with tax flag.
      *
      * @param tipWithTax whether tip includes tax
-     * @return the updated TipConfig instance for method chaining
+     * @return this TipConfig instance for method chaining
      */
-    fun setTipWithTax(tipWithTax: Boolean): TipConfig = copy(tipWithTax = tipWithTax)
+    fun setTipWithTax(tipWithTax: Boolean): TipConfig = apply { this.tipWithTax = tipWithTax }
 
     /**
      * Sets the tip suggestions.
      *
      * @param suggestions the tip suggestions configuration
-     * @return the updated TipConfig instance for method chaining
+     * @return this TipConfig instance for method chaining
      */
-    fun setSuggestions(suggestions: TipSuggestions): TipConfig = copy(suggestions = suggestions)
+    fun setSuggestions(suggestions: TipSuggestions): TipConfig = apply { this.suggestions = suggestions }
+
+    /** Creates an independent shallow copy; setters mutate this instance. */
+    fun copy(
+        useHostConfig: Boolean = this.useHostConfig,
+        onScreenTip: Boolean = this.onScreenTip,
+        tipMode: TipMode = this.tipMode,
+        tipWithTax: Boolean = this.tipWithTax,
+        suggestions: TipSuggestions? = this.suggestions
+    ): TipConfig = TipConfig(
+        useHostConfig = useHostConfig,
+        onScreenTip = onScreenTip,
+        tipMode = tipMode,
+        tipWithTax = tipWithTax,
+        suggestions = suggestions
+    )
+
+    operator fun component1(): Boolean = useHostConfig
+    operator fun component2(): Boolean = onScreenTip
+    operator fun component3(): TipMode = tipMode
+    operator fun component4(): Boolean = tipWithTax
+    operator fun component5(): TipSuggestions? = suggestions
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TipConfig) return false
+        return useHostConfig == other.useHostConfig &&
+            onScreenTip == other.onScreenTip &&
+            tipMode == other.tipMode &&
+            tipWithTax == other.tipWithTax &&
+            suggestions == other.suggestions
+    }
+
+    override fun hashCode(): Int {
+        var result = (if (useHostConfig) 1 else 0)
+        result = 31 * result + (if (onScreenTip) 1 else 0)
+        result = 31 * result + tipMode.hashCode()
+        result = 31 * result + (if (tipWithTax) 1 else 0)
+        result = 31 * result + (suggestions?.hashCode() ?: 0)
+        return result
+    }
+
+    override fun toString(): String =
+        "TipConfig(useHostConfig=$useHostConfig, onScreenTip=$onScreenTip, tipMode=$tipMode, tipWithTax=$tipWithTax, suggestions=$suggestions)"
+
 }

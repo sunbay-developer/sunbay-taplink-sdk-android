@@ -9,32 +9,35 @@ import com.sunmi.tapro.taplink.sdk.model.common.StaffInfo
  * Taplink SDK configuration class.
  *
  * Supports default values to simplify request parameters.
- * Uses method chaining for configuration.
+ * Setters update this instance and return it for method chaining.
+ * Finish configuring before SDK initialization; the SDK takes a shallow snapshot.
+ * Use [copy] when an independent configuration is needed. Do not mutate configurations
+ * used as hash collection keys. Serialize configuration writes before initialization.
  *
  * @author Tapro Team
  * @since 2025-01-XX
  */
-data class TaplinkConfig(
+class TaplinkConfig(
     // ========== Required Configuration ==========
 
     /**
      * Application identifier (required).
      * Assigned by the SUNBAY platform.
      */
-    val appId: String,
+    appId: String,
 
     /**
      * Merchant ID (optional).
      * When provided, it is validated for legacy/cloud compatibility use cases.
      * It is not required for local SDK initialization.
      */
-    val merchantId: String? = null,
+    merchantId: String? = null,
 
     /**
      * Signature secret key (required).
      * Used for HMAC-SHA256 signature verification.
      */
-    val secretKey: String,
+    secretKey: String,
 
 
     // ========== Logging Configuration ==========
@@ -42,12 +45,12 @@ data class TaplinkConfig(
     /**
      * Whether logging is enabled (optional, default: false).
      */
-    val logEnabled: Boolean = false,
+    logEnabled: Boolean = false,
 
     /**
      * Log level (optional, default: INFO).
      */
-    val logLevel: LogLevel = LogLevel.INFO,
+    logLevel: LogLevel = LogLevel.INFO,
 
     // ========== Default Value Configuration (Simplifies Request Parameters) ==========
 
@@ -55,30 +58,30 @@ data class TaplinkConfig(
      * Default staff information (optional).
      * When set, PaymentRequest can omit the staffInfo parameter.
      */
-    val defaultStaffInfo: StaffInfo? = null,
+    defaultStaffInfo: StaffInfo? = null,
 
     /**
      * Default device information (optional).
      * When set, PaymentRequest can omit the deviceInfo parameter.
      */
-    val defaultDeviceInfo: DeviceInfo? = null,
+    defaultDeviceInfo: DeviceInfo? = null,
 
     /**
      * SDK version number in format x.y.z (default: 1.0.0).
      */
-    val version: String = BuildConfig.VERSION_NAME,
+    version: String = BuildConfig.VERSION_NAME,
 
     /**
      * Default timeout in seconds (default: 180).
      */
-    val timeout: Int = 180,
+    timeout: Int = 180,
 
     /**
      * Width ratio for Tapro application execution (optional, default: null).
      * Specifies the width ratio that the Tapro app occupies on the screen.
      * Value should be between 0.0 and 1.0 (e.g., 0.5 means 50% of screen width).
      */
-    val taproAppWidthRatio: Float? = null,
+    taproAppWidthRatio: Float? = null,
 
     /**
      * (Deprecated behavior) Previously auto-opened the Tapro USB secondary-screen player right
@@ -92,8 +95,40 @@ data class TaplinkConfig(
      *
      * Retained for source/binary compatibility; the value is currently ignored.
      */
-    val autoOpenUsbScreenPlayer: Boolean = false
+    autoOpenUsbScreenPlayer: Boolean = false
 ) {
+    var appId: String = appId
+        private set
+
+    var merchantId: String? = merchantId
+        private set
+
+    var secretKey: String = secretKey
+        private set
+
+    var logEnabled: Boolean = logEnabled
+        private set
+
+    var logLevel: LogLevel = logLevel
+        private set
+
+    var defaultStaffInfo: StaffInfo? = defaultStaffInfo
+        private set
+
+    var defaultDeviceInfo: DeviceInfo? = defaultDeviceInfo
+        private set
+
+    val version: String = version
+
+    var timeout: Int = timeout
+        private set
+
+    var taproAppWidthRatio: Float? = taproAppWidthRatio
+        private set
+
+    var autoOpenUsbScreenPlayer: Boolean = autoOpenUsbScreenPlayer
+        private set
+
     init {
         validateOptionalMerchantId(merchantId)
     }
@@ -104,32 +139,35 @@ data class TaplinkConfig(
      * Sets the application ID.
      *
      * @param appId the application identifier
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setAppId(appId: String): TaplinkConfig = copy(appId = appId)
+    fun setAppId(appId: String): TaplinkConfig = apply { this.appId = appId }
 
     /**
      * Sets the merchant ID.
      *
      * @param merchantId the merchant identifier
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setMerchantId(merchantId: String?): TaplinkConfig = copy(merchantId = merchantId)
+    fun setMerchantId(merchantId: String?): TaplinkConfig = apply {
+        validateOptionalMerchantId(merchantId)
+        this.merchantId = merchantId
+    }
 
     /**
      * Clears the merchant ID.
      *
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun clearMerchantId(): TaplinkConfig = copy(merchantId = null)
+    fun clearMerchantId(): TaplinkConfig = apply { merchantId = null }
 
     /**
      * Sets the signature secret key.
      *
      * @param secretKey the secret key for signature verification
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setSecretKey(secretKey: String): TaplinkConfig = copy(secretKey = secretKey)
+    fun setSecretKey(secretKey: String): TaplinkConfig = apply { this.secretKey = secretKey }
 
 
     // ========== Logging Configuration Methods ==========
@@ -138,17 +176,17 @@ data class TaplinkConfig(
      * Enables or disables logging.
      *
      * @param enabled whether logging is enabled
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setLogEnabled(enabled: Boolean): TaplinkConfig = copy(logEnabled = enabled)
+    fun setLogEnabled(enabled: Boolean): TaplinkConfig = apply { this.logEnabled = enabled }
 
     /**
      * Sets the log level.
      *
      * @param level the log level
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setLogLevel(level: LogLevel): TaplinkConfig = copy(logLevel = level)
+    fun setLogLevel(level: LogLevel): TaplinkConfig = apply { this.logLevel = level }
 
     // ========== Default Value Configuration Methods ==========
 
@@ -157,43 +195,116 @@ data class TaplinkConfig(
      * When set, PaymentRequest can omit the staffInfo parameter.
      *
      * @param staffInfo the default staff information
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setDefaultStaffInfo(staffInfo: StaffInfo): TaplinkConfig = copy(defaultStaffInfo = staffInfo)
+    fun setDefaultStaffInfo(staffInfo: StaffInfo): TaplinkConfig = apply { this.defaultStaffInfo = staffInfo }
 
     /**
      * Sets the default device information.
      * When set, PaymentRequest can omit the deviceInfo parameter.
      *
      * @param deviceInfo the default device information
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = copy(defaultDeviceInfo = deviceInfo)
+    fun setDefaultDeviceInfo(deviceInfo: DeviceInfo): TaplinkConfig = apply { this.defaultDeviceInfo = deviceInfo }
 
     /**
      * Sets the default transaction timeout in seconds.
-     * Returns a new configuration instance; the original instance is unchanged.
+     * Updates this instance. Set before SDK initialization; initialized SDKs use a snapshot.
      *
      * @param timeout default timeout in seconds
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setTimeout(timeout: Int): TaplinkConfig = copy(timeout = timeout)
+    fun setTimeout(timeout: Int): TaplinkConfig = apply { this.timeout = timeout }
 
     /**
      * Sets the width ratio for Tapro application execution.
      *
      * @param taproAppWidthRatio the width ratio (0.0 to 1.0) for the Tapro app
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setTaproAppWidthRatio(taproAppWidthRatio: Float?): TaplinkConfig = copy(taproAppWidthRatio = taproAppWidthRatio)
+    fun setTaproAppWidthRatio(taproAppWidthRatio: Float?): TaplinkConfig = apply { this.taproAppWidthRatio = taproAppWidthRatio }
 
     /**
      * Enables or disables automatically opening the Tapro USB secondary-screen player on connect.
      *
      * @param enabled whether the screen player is opened before `onConnected` is delivered
-     * @return the updated configuration instance for method chaining
+     * @return this configuration instance for method chaining
      */
-    fun setAutoOpenUsbScreenPlayer(enabled: Boolean): TaplinkConfig = copy(autoOpenUsbScreenPlayer = enabled)
+    fun setAutoOpenUsbScreenPlayer(enabled: Boolean): TaplinkConfig = apply { this.autoOpenUsbScreenPlayer = enabled }
+
+    /** Creates an independent shallow copy, preserving the original data-class API. */
+    fun copy(
+        appId: String = this.appId,
+        merchantId: String? = this.merchantId,
+        secretKey: String = this.secretKey,
+        logEnabled: Boolean = this.logEnabled,
+        logLevel: LogLevel = this.logLevel,
+        defaultStaffInfo: StaffInfo? = this.defaultStaffInfo,
+        defaultDeviceInfo: DeviceInfo? = this.defaultDeviceInfo,
+        version: String = this.version,
+        timeout: Int = this.timeout,
+        taproAppWidthRatio: Float? = this.taproAppWidthRatio,
+        autoOpenUsbScreenPlayer: Boolean = this.autoOpenUsbScreenPlayer
+    ): TaplinkConfig = TaplinkConfig(
+        appId = appId,
+        merchantId = merchantId,
+        secretKey = secretKey,
+        logEnabled = logEnabled,
+        logLevel = logLevel,
+        defaultStaffInfo = defaultStaffInfo,
+        defaultDeviceInfo = defaultDeviceInfo,
+        version = version,
+        timeout = timeout,
+        taproAppWidthRatio = taproAppWidthRatio,
+        autoOpenUsbScreenPlayer = autoOpenUsbScreenPlayer
+    )
+
+    operator fun component1(): String = appId
+    operator fun component2(): String? = merchantId
+    operator fun component3(): String = secretKey
+    operator fun component4(): Boolean = logEnabled
+    operator fun component5(): LogLevel = logLevel
+    operator fun component6(): StaffInfo? = defaultStaffInfo
+    operator fun component7(): DeviceInfo? = defaultDeviceInfo
+    operator fun component8(): String = version
+    operator fun component9(): Int = timeout
+    operator fun component10(): Float? = taproAppWidthRatio
+    operator fun component11(): Boolean = autoOpenUsbScreenPlayer
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TaplinkConfig) return false
+        return appId == other.appId &&
+            merchantId == other.merchantId &&
+            secretKey == other.secretKey &&
+            logEnabled == other.logEnabled &&
+            logLevel == other.logLevel &&
+            defaultStaffInfo == other.defaultStaffInfo &&
+            defaultDeviceInfo == other.defaultDeviceInfo &&
+            version == other.version &&
+            timeout == other.timeout &&
+            (taproAppWidthRatio as Any?) == (other.taproAppWidthRatio as Any?) &&
+            autoOpenUsbScreenPlayer == other.autoOpenUsbScreenPlayer
+    }
+
+    override fun hashCode(): Int {
+        var result = appId.hashCode()
+        result = 31 * result + (merchantId?.hashCode() ?: 0)
+        result = 31 * result + secretKey.hashCode()
+        result = 31 * result + (if (logEnabled) 1 else 0)
+        result = 31 * result + logLevel.hashCode()
+        result = 31 * result + (defaultStaffInfo?.hashCode() ?: 0)
+        result = 31 * result + (defaultDeviceInfo?.hashCode() ?: 0)
+        result = 31 * result + version.hashCode()
+        result = 31 * result + timeout.hashCode()
+        result = 31 * result + (taproAppWidthRatio?.hashCode() ?: 0)
+        result = 31 * result + (if (autoOpenUsbScreenPlayer) 1 else 0)
+        return result
+    }
+
+    override fun toString(): String =
+        "TaplinkConfig(appId=$appId, merchantId=$merchantId, secretKey=$secretKey, logEnabled=$logEnabled, logLevel=$logLevel, defaultStaffInfo=$defaultStaffInfo, defaultDeviceInfo=$defaultDeviceInfo, version=$version, timeout=$timeout, taproAppWidthRatio=$taproAppWidthRatio, autoOpenUsbScreenPlayer=$autoOpenUsbScreenPlayer)"
 
     companion object {
         private const val MAX_MERCHANT_ID_LENGTH = 32

@@ -16,10 +16,14 @@ import java.math.BigDecimal
  * val amount = AmountInfo.of(500L, "EUR")    // €5.00
  * ```
  *
+ * Field setters update this instance and return it for chaining. Use [copy] for
+ * independent top-level values, and finish updates before request submission.
+ * Serialize writes and do not mutate instances used as hash collection keys.
+ *
  * @author Tapro Team
  * @since 2025-01-XX
  */
-data class AmountInfo(
+class AmountInfo(
     /**
      * Order amount (**required**).
      *
@@ -30,13 +34,13 @@ data class AmountInfo(
      * When a tip is known upfront, keep it out of `orderAmount` and set [tipAmount] separately.
      * If tip is folded into `orderAmount`, tax may also be calculated on the tip portion.
      */
-    val orderAmount: BigDecimal,
+    orderAmount: BigDecimal,
     
     /**
      * Pricing currency (**required**).
      * ISO 4217 currency code, e.g., `"USD"`, `"EUR"`.
      */
-    val pricingCurrency: String,
+    pricingCurrency: String,
     
     /**
      * Tip amount (optional).
@@ -45,13 +49,13 @@ data class AmountInfo(
      * When the tip is known upfront, set it separately from [orderAmount].
      * Tapro uses the amount breakdown to calculate and return the final transaction total.
      */
-    val tipAmount: BigDecimal? = null,
+    tipAmount: BigDecimal? = null,
     
     /**
      * Tax amount (optional).
      * Must be in the **smallest currency unit** (cents).
      */
-    val taxAmount: BigDecimal? = null,
+    taxAmount: BigDecimal? = null,
     
     /**
      * Surcharge amount (optional).
@@ -60,75 +64,150 @@ data class AmountInfo(
      * If the customer pays with a Debit Card, Tapro removes this surcharge amount
      * before the transaction is completed.
      */
-    val surchargeAmount: BigDecimal? = null,
+    surchargeAmount: BigDecimal? = null,
     
     /**
      * Cashback amount (optional).
      * Must be in the **smallest currency unit** (cents).
      */
-    val cashbackAmount: BigDecimal? = null,
+    cashbackAmount: BigDecimal? = null,
     
     /**
      * Service fee (optional).
      * Must be in the **smallest currency unit** (cents).
      */
-    val serviceFee: BigDecimal? = null
+    serviceFee: BigDecimal? = null
 ) {
+    var orderAmount: BigDecimal = orderAmount
+        private set
+
+    var pricingCurrency: String = pricingCurrency
+        private set
+
+    var tipAmount: BigDecimal? = tipAmount
+        private set
+
+    var taxAmount: BigDecimal? = taxAmount
+        private set
+
+    var surchargeAmount: BigDecimal? = surchargeAmount
+        private set
+
+    var cashbackAmount: BigDecimal? = cashbackAmount
+        private set
+
+    var serviceFee: BigDecimal? = serviceFee
+        private set
+
     /**
      * Sets the order amount.
      *
      * @param orderAmount the order amount
-     * @return the updated AmountInfo instance for method chaining
+     * @return this AmountInfo instance for method chaining
      */
-    fun setOrderAmount(orderAmount: BigDecimal): AmountInfo = copy(orderAmount = orderAmount)
+    fun setOrderAmount(orderAmount: BigDecimal): AmountInfo = apply { this.orderAmount = orderAmount }
     
     /**
      * Sets the pricing currency.
      *
      * @param pricingCurrency the pricing currency code
-     * @return the updated AmountInfo instance for method chaining
+     * @return this AmountInfo instance for method chaining
      */
-    fun setPricingCurrency(pricingCurrency: String): AmountInfo = copy(pricingCurrency = pricingCurrency)
+    fun setPricingCurrency(pricingCurrency: String): AmountInfo = apply { this.pricingCurrency = pricingCurrency }
     
     /**
      * Sets the tip amount.
      *
      * @param tipAmount the tip amount
-     * @return the updated AmountInfo instance for method chaining
+     * @return this AmountInfo instance for method chaining
      */
-    fun setTipAmount(tipAmount: BigDecimal): AmountInfo = copy(tipAmount = tipAmount)
+    fun setTipAmount(tipAmount: BigDecimal): AmountInfo = apply { this.tipAmount = tipAmount }
     
     /**
      * Sets the tax amount.
      *
      * @param taxAmount the tax amount
-     * @return the updated AmountInfo instance for method chaining
+     * @return this AmountInfo instance for method chaining
      */
-    fun setTaxAmount(taxAmount: BigDecimal): AmountInfo = copy(taxAmount = taxAmount)
+    fun setTaxAmount(taxAmount: BigDecimal): AmountInfo = apply { this.taxAmount = taxAmount }
     
     /**
      * Sets the surcharge amount.
      *
      * @param surchargeAmount the surcharge amount
-     * @return the updated AmountInfo instance for method chaining
+     * @return this AmountInfo instance for method chaining
      */
-    fun setSurchargeAmount(surchargeAmount: BigDecimal): AmountInfo = copy(surchargeAmount = surchargeAmount)
+    fun setSurchargeAmount(surchargeAmount: BigDecimal): AmountInfo = apply { this.surchargeAmount = surchargeAmount }
     
     /**
      * Sets the cashback amount.
      *
      * @param cashbackAmount the cashback amount
-     * @return the updated AmountInfo instance for method chaining
+     * @return this AmountInfo instance for method chaining
      */
-    fun setCashbackAmount(cashbackAmount: BigDecimal): AmountInfo = copy(cashbackAmount = cashbackAmount)
+    fun setCashbackAmount(cashbackAmount: BigDecimal): AmountInfo = apply { this.cashbackAmount = cashbackAmount }
     
     /**
      * Sets the service fee.
      *
      * @param serviceFee the service fee
-     * @return the updated AmountInfo instance for method chaining
+     * @return this AmountInfo instance for method chaining
      */
-    fun setServiceFee(serviceFee: BigDecimal): AmountInfo = copy(serviceFee = serviceFee)
+    fun setServiceFee(serviceFee: BigDecimal): AmountInfo = apply { this.serviceFee = serviceFee }
+
+
+    /** Creates an independent shallow copy; setters mutate this instance. */
+    fun copy(
+        orderAmount: BigDecimal = this.orderAmount,
+        pricingCurrency: String = this.pricingCurrency,
+        tipAmount: BigDecimal? = this.tipAmount,
+        taxAmount: BigDecimal? = this.taxAmount,
+        surchargeAmount: BigDecimal? = this.surchargeAmount,
+        cashbackAmount: BigDecimal? = this.cashbackAmount,
+        serviceFee: BigDecimal? = this.serviceFee
+    ): AmountInfo = AmountInfo(
+        orderAmount = orderAmount,
+        pricingCurrency = pricingCurrency,
+        tipAmount = tipAmount,
+        taxAmount = taxAmount,
+        surchargeAmount = surchargeAmount,
+        cashbackAmount = cashbackAmount,
+        serviceFee = serviceFee
+    )
+
+    operator fun component1(): BigDecimal = orderAmount
+    operator fun component2(): String = pricingCurrency
+    operator fun component3(): BigDecimal? = tipAmount
+    operator fun component4(): BigDecimal? = taxAmount
+    operator fun component5(): BigDecimal? = surchargeAmount
+    operator fun component6(): BigDecimal? = cashbackAmount
+    operator fun component7(): BigDecimal? = serviceFee
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is AmountInfo) return false
+        return orderAmount == other.orderAmount &&
+            pricingCurrency == other.pricingCurrency &&
+            tipAmount == other.tipAmount &&
+            taxAmount == other.taxAmount &&
+            surchargeAmount == other.surchargeAmount &&
+            cashbackAmount == other.cashbackAmount &&
+            serviceFee == other.serviceFee
+    }
+
+    override fun hashCode(): Int {
+        var result = orderAmount.hashCode()
+        result = 31 * result + pricingCurrency.hashCode()
+        result = 31 * result + (tipAmount?.hashCode() ?: 0)
+        result = 31 * result + (taxAmount?.hashCode() ?: 0)
+        result = 31 * result + (surchargeAmount?.hashCode() ?: 0)
+        result = 31 * result + (cashbackAmount?.hashCode() ?: 0)
+        result = 31 * result + (serviceFee?.hashCode() ?: 0)
+        return result
+    }
+
+    override fun toString(): String =
+        "AmountInfo(orderAmount=$orderAmount, pricingCurrency=$pricingCurrency, tipAmount=$tipAmount, taxAmount=$taxAmount, surchargeAmount=$surchargeAmount, cashbackAmount=$cashbackAmount, serviceFee=$serviceFee)"
 
     companion object {
         /**

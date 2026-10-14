@@ -45,10 +45,14 @@ import java.math.BigDecimal
  * - For temporary errors (network timeout, system busy), you can retry with the same transactionRequestId
  * - After a clear failure or parameter modification, you must use a new transactionRequestId
  *
+ * Field setters update this instance and return it for chaining. Use [copy] for
+ * independent top-level values, and finish updates before request submission.
+ * Serialize writes and do not mutate instances used as hash collection keys.
+ *
  * @author Tapro Team
  * @since 2025-01-XX
  */
-data class PaymentRequest(
+class PaymentRequest(
     // ========== Basic transaction fields ==========
 
     /**
@@ -67,7 +71,7 @@ data class PaymentRequest(
      * - BATCH_CLOSE: Batch settlement
      * - QUERY: Transaction query
      */
-    val action: String,
+    action: String,
 
     /**
      * Merchant order ID / Reference order ID (required, 6-32 characters)
@@ -79,7 +83,7 @@ data class PaymentRequest(
      * - Multiple transactions for the same order use the same referenceOrderId
      * - Can use the same value as transactionRequestId (simplified scenario)
      */
-    val referenceOrderId: String? = null,
+    referenceOrderId: String? = null,
 
     /**
      * Transaction request ID (required, for idempotency)
@@ -93,14 +97,14 @@ data class PaymentRequest(
      *
      * Can use the same value as referenceOrderId (simplified scenario)
      */
-    val transactionRequestId: String? = null,
+    transactionRequestId: String? = null,
 
 
     /**
      * Transaction description (required)
      * Transaction description or product description
      */
-    val description: String? = null,
+    description: String? = null,
 
     // ========== Amount information ==========
 
@@ -108,7 +112,7 @@ data class PaymentRequest(
      * Amount information (required)
      * Structured object containing detailed amount breakdown
      */
-    val amount: AmountInfo? = null,
+    amount: AmountInfo? = null,
 
     // ========== Payment method ==========
 
@@ -116,14 +120,14 @@ data class PaymentRequest(
      * Payment method information (optional)
      * Specifies preferred payment method category and ID
      */
-    val paymentMethod: PaymentMethodInfo? = null,
+    paymentMethod: PaymentMethodInfo? = null,
 
     /**
      * Card network type (optional)
      * Only takes effect when paymentMethod.category is CARD; when not specified, the system will automatically identify.
      * Values: CREDIT, DEBIT
      */
-    val cardNetworkType: CardNetworkType? = null,
+    cardNetworkType: CardNetworkType? = null,
 
     // ========== Staff information ==========
 
@@ -131,7 +135,7 @@ data class PaymentRequest(
      * Staff information (optional)
      * Information about the operator and tip recipient
      */
-    val staffInfo: StaffInfo? = null,
+    staffInfo: StaffInfo? = null,
 
     // ========== Device information ==========
 
@@ -139,7 +143,7 @@ data class PaymentRequest(
      * Device information (optional)
      * Details of the device initiating the transaction
      */
-    val deviceInfo: DeviceInfo? = null,
+    deviceInfo: DeviceInfo? = null,
 
     // ========== Goods details ==========
 
@@ -147,7 +151,7 @@ data class PaymentRequest(
      * Goods detail list (optional)
      * Detailed list of goods/services in the transaction
      */
-    val goodsDetail: List<GoodsDetail>? = null,
+    goodsDetail: List<GoodsDetail>? = null,
 
     // ========== Reference transaction fields ==========
 
@@ -155,20 +159,20 @@ data class PaymentRequest(
      * Original transaction ID (required for refund/void/authorization completion)
      * References the original transaction
      */
-    val originalTransactionId: String? = null,
+    originalTransactionId: String? = null,
 
     /**
      * Original transaction request ID (alternative to originalTransactionId)
      * Uses the original transaction request ID for reference
      */
-    val originalTransactionRequestId: String? = null,
+    originalTransactionRequestId: String? = null,
 
     // ========== Tip adjustment ==========
 
     /**
      * Tip amount (required for tip adjustment, unit: base currency unit)
      */
-    val tipAmount: BigDecimal? = null,
+    tipAmount: BigDecimal? = null,
 
     // ========== Forced authorization specific fields ==========
 
@@ -176,7 +180,7 @@ data class PaymentRequest(
      * Forced authorization code (required for forced authorization)
      * Authorization code used for forced authorization transactions
      */
-    val forcedAuthCode: String? = null,
+    forcedAuthCode: String? = null,
 
     // ========== Additional fields ==========
 
@@ -184,24 +188,24 @@ data class PaymentRequest(
      * Reason (optional for refund/void)
      * Reason for refund or void
      */
-    val reason: String? = null,
+    reason: String? = null,
 
     /**
      * Additional data (optional)
      * Custom data attached to the transaction (JSON format recommended)
      */
-    val attach: String? = null,
+    attach: String? = null,
 
     /**
      * Notification URL (optional)
      * URL to receive transaction result notifications
      */
-    val notifyUrl: String? = null,
+    notifyUrl: String? = null,
 
     /**
      * Request timeout in milliseconds. When omitted or non-positive, TaplinkConfig.timeout is used.
      */
-    val requestTimeout: Long? = null,
+    requestTimeout: Long? = null,
 
     // ========== Receipt configuration ==========
 
@@ -217,13 +221,13 @@ data class PaymentRequest(
      * - TOTAL: Only the batch total report will be printed (batch close only)
      * - DETAIL: Only the batch detail report will be printed (batch close only)
      */
-    val printReceipt: PrintReceipt? = PrintReceipt.AUTO,
+    printReceipt: PrintReceipt? = PrintReceipt.AUTO,
 
     /**
      * Per-transaction signature configuration for SALE and AUTH.
      * If not set, Tapro uses its terminal-side default signature policy.
      */
-    val signatureConfig: SignatureConfig? = null,
+    signatureConfig: SignatureConfig? = null,
 
     // ========== Tip configuration ==========
 
@@ -232,84 +236,147 @@ data class PaymentRequest(
      * Used by SALE and POST_AUTH to configure on-screen tip behavior.
      * Mutually exclusive with amount.tipAmount.
      */
-    val tipConfig: TipConfig? = null,
+    tipConfig: TipConfig? = null,
 ) {
+    var action: String = action
+        private set
+
+    var referenceOrderId: String? = referenceOrderId
+        private set
+
+    var transactionRequestId: String? = transactionRequestId
+        private set
+
+    var description: String? = description
+        private set
+
+    var amount: AmountInfo? = amount
+        private set
+
+    var paymentMethod: PaymentMethodInfo? = paymentMethod
+        private set
+
+    var cardNetworkType: CardNetworkType? = cardNetworkType
+        private set
+
+    var staffInfo: StaffInfo? = staffInfo
+        private set
+
+    var deviceInfo: DeviceInfo? = deviceInfo
+        private set
+
+    var goodsDetail: List<GoodsDetail>? = goodsDetail
+        private set
+
+    var originalTransactionId: String? = originalTransactionId
+        private set
+
+    var originalTransactionRequestId: String? = originalTransactionRequestId
+        private set
+
+    var tipAmount: BigDecimal? = tipAmount
+        private set
+
+    var forcedAuthCode: String? = forcedAuthCode
+        private set
+
+    var reason: String? = reason
+        private set
+
+    var attach: String? = attach
+        private set
+
+    var notifyUrl: String? = notifyUrl
+        private set
+
+    var requestTimeout: Long? = requestTimeout
+        private set
+
+    var printReceipt: PrintReceipt? = printReceipt
+        private set
+
+    var signatureConfig: SignatureConfig? = signatureConfig
+        private set
+
+    var tipConfig: TipConfig? = tipConfig
+        private set
+
     // ========== Chain call methods for basic transaction fields ==========
 
     /**
      * Chain call: Set transaction type (using enum)
      * Recommended to use this method for type safety
      */
-    fun setAction(action: TransactionAction): PaymentRequest = copy(action = action.value)
+    fun setAction(action: TransactionAction): PaymentRequest = apply { this.action = action.value }
 
     /**
      * Chain call: Set transaction type (using string)
      * Preserved for backward compatibility, recommended to use TransactionAction enum
      */
-    fun setAction(action: String): PaymentRequest = copy(action = action)
+    fun setAction(action: String): PaymentRequest = apply { this.action = action }
 
     /**
      * Chain call: Set merchant order ID / reference order ID
      */
-    fun setReferenceOrderId(referenceOrderId: String): PaymentRequest = copy(referenceOrderId = referenceOrderId)
+    fun setReferenceOrderId(referenceOrderId: String): PaymentRequest = apply { this.referenceOrderId = referenceOrderId }
 
     /**
      * Chain call: Set merchant order ID (compatible with old method name)
      * @deprecated Use setReferenceOrderId instead
      */
     @Deprecated("Use setReferenceOrderId instead", ReplaceWith("setReferenceOrderId(merchantOrderNo)"))
-    fun setMerchantOrderNo(merchantOrderNo: String): PaymentRequest = copy(referenceOrderId = merchantOrderNo)
+    fun setMerchantOrderNo(merchantOrderNo: String): PaymentRequest = apply { this.referenceOrderId = merchantOrderNo }
 
     /**
      * Chain call: Set transaction request ID
      */
-    fun setTransactionRequestId(transactionRequestId: String): PaymentRequest = copy(transactionRequestId = transactionRequestId)
+    fun setTransactionRequestId(transactionRequestId: String): PaymentRequest = apply { this.transactionRequestId = transactionRequestId }
 
     /**
      * Chain call: Set transaction description
      */
-    fun setDescription(description: String): PaymentRequest = copy(description = description)
+    fun setDescription(description: String): PaymentRequest = apply { this.description = description }
 
     // ========== Chain call methods for amount information ==========
 
     /**
      * Chain call: Set amount information
      */
-    fun setAmount(amount: AmountInfo): PaymentRequest = copy(amount = amount)
+    fun setAmount(amount: AmountInfo): PaymentRequest = apply { this.amount = amount }
 
     // ========== Chain call methods for payment method ==========
 
     /**
      * Chain call: Set payment method information
      */
-    fun setPaymentMethod(paymentMethod: PaymentMethodInfo): PaymentRequest = copy(paymentMethod = paymentMethod)
+    fun setPaymentMethod(paymentMethod: PaymentMethodInfo): PaymentRequest = apply { this.paymentMethod = paymentMethod }
 
     /**
      * Chain call: Set card network type.
      * Only takes effect when paymentMethod.category is CARD; when not specified, the system will automatically identify.
      */
-    fun setCardNetworkType(cardNetworkType: CardNetworkType): PaymentRequest = copy(cardNetworkType = cardNetworkType)
+    fun setCardNetworkType(cardNetworkType: CardNetworkType): PaymentRequest = apply { this.cardNetworkType = cardNetworkType }
 
     // ========== Chain call methods for staff information ==========
 
     /**
      * Chain call: Set staff information
      */
-    fun setStaffInfo(staffInfo: StaffInfo): PaymentRequest = copy(staffInfo = staffInfo)
+    fun setStaffInfo(staffInfo: StaffInfo): PaymentRequest = apply { this.staffInfo = staffInfo }
 
     // ========== Chain call methods for device information ==========
 
     /**
      * Chain call: Set device information
      */
-    fun setDeviceInfo(deviceInfo: DeviceInfo): PaymentRequest = copy(deviceInfo = deviceInfo)
+    fun setDeviceInfo(deviceInfo: DeviceInfo): PaymentRequest = apply { this.deviceInfo = deviceInfo }
 
     // ========== Chain call methods for goods details ==========
 
     /**
      * Chain call: Set goods detail list
      */
-    fun setGoodsDetail(goodsDetail: List<GoodsDetail>): PaymentRequest = copy(goodsDetail = goodsDetail)
+    fun setGoodsDetail(goodsDetail: List<GoodsDetail>): PaymentRequest = apply { this.goodsDetail = goodsDetail }
 
     // ========== Chain call methods for reference transaction fields ==========
 
@@ -317,69 +384,69 @@ data class PaymentRequest(
      * Chain call: Set original transaction ID
      */
     fun setOriginalTransactionId(originalTransactionId: String): PaymentRequest =
-        copy(originalTransactionId = originalTransactionId)
+        apply { this.originalTransactionId = originalTransactionId }
 
     /**
      * Chain call: Set original transaction request ID
      */
     fun setOriginalTransactionRequestId(originalTransactionRequestId: String): PaymentRequest =
-        copy(originalTransactionRequestId = originalTransactionRequestId)
+        apply { this.originalTransactionRequestId = originalTransactionRequestId }
 
     // ========== Chain call methods for tip adjustment ==========
 
     /**
      * Chain call: Set tip amount
      */
-    fun setTipAmount(tipAmount: BigDecimal): PaymentRequest = copy(tipAmount = tipAmount)
+    fun setTipAmount(tipAmount: BigDecimal): PaymentRequest = apply { this.tipAmount = tipAmount }
 
     // ========== Chain call methods for forced authorization ==========
 
     /**
      * Chain call: Set forced authorization code
      */
-    fun setForcedAuthCode(forcedAuthCode: String): PaymentRequest = copy(forcedAuthCode = forcedAuthCode)
+    fun setForcedAuthCode(forcedAuthCode: String): PaymentRequest = apply { this.forcedAuthCode = forcedAuthCode }
 
     // ========== Chain call methods for additional fields ==========
 
     /**
      * Chain call: Set reason
      */
-    fun setReason(reason: String): PaymentRequest = copy(reason = reason)
+    fun setReason(reason: String): PaymentRequest = apply { this.reason = reason }
 
     /**
      * Chain call: Set additional data
      */
-    fun setAttach(attach: String): PaymentRequest = copy(attach = attach)
+    fun setAttach(attach: String): PaymentRequest = apply { this.attach = attach }
 
     /**
      * Chain call: Set notification URL
      */
-    fun setNotifyUrl(notifyUrl: String): PaymentRequest = copy(notifyUrl = notifyUrl)
+    fun setNotifyUrl(notifyUrl: String): PaymentRequest = apply { this.notifyUrl = notifyUrl }
 
     /**
      * Chain call: Set transaction timeout in milliseconds
      */
-    fun setRequestTimeout(requestTimeout: Long): PaymentRequest = copy(requestTimeout = requestTimeout)
+    fun setRequestTimeout(requestTimeout: Long): PaymentRequest = apply { this.requestTimeout = requestTimeout }
 
     // ========== Chain call methods for receipt configuration ==========
 
     /**
      * Chain call: Set print receipt
      */
-    fun setPrintReceipt(printReceipt: PrintReceipt): PaymentRequest = copy(printReceipt = printReceipt)
+    fun setPrintReceipt(printReceipt: PrintReceipt): PaymentRequest = apply { this.printReceipt = printReceipt }
 
     /**
      * Chain call: Set per-transaction signature configuration.
      */
     fun setSignatureConfig(signatureConfig: SignatureConfig): PaymentRequest =
-        copy(signatureConfig = signatureConfig)
+        apply { this.signatureConfig = signatureConfig }
 
     // ========== Chain call methods for tip configuration ==========
 
     /**
      * Chain call: Set tip configuration
      */
-    fun setTipConfig(tipConfig: TipConfig): PaymentRequest = copy(tipConfig = tipConfig)
+    fun setTipConfig(tipConfig: TipConfig): PaymentRequest = apply { this.tipConfig = tipConfig }
 
     /**
      * Get transaction type enum
@@ -388,6 +455,130 @@ data class PaymentRequest(
      */
     fun getActionEnum(): TransactionAction? = TransactionAction.fromValue(action)
 
+
+
+    /** Creates an independent shallow copy; setters mutate this instance. */
+    fun copy(
+        action: String = this.action,
+        referenceOrderId: String? = this.referenceOrderId,
+        transactionRequestId: String? = this.transactionRequestId,
+        description: String? = this.description,
+        amount: AmountInfo? = this.amount,
+        paymentMethod: PaymentMethodInfo? = this.paymentMethod,
+        cardNetworkType: CardNetworkType? = this.cardNetworkType,
+        staffInfo: StaffInfo? = this.staffInfo,
+        deviceInfo: DeviceInfo? = this.deviceInfo,
+        goodsDetail: List<GoodsDetail>? = this.goodsDetail,
+        originalTransactionId: String? = this.originalTransactionId,
+        originalTransactionRequestId: String? = this.originalTransactionRequestId,
+        tipAmount: BigDecimal? = this.tipAmount,
+        forcedAuthCode: String? = this.forcedAuthCode,
+        reason: String? = this.reason,
+        attach: String? = this.attach,
+        notifyUrl: String? = this.notifyUrl,
+        requestTimeout: Long? = this.requestTimeout,
+        printReceipt: PrintReceipt? = this.printReceipt,
+        signatureConfig: SignatureConfig? = this.signatureConfig,
+        tipConfig: TipConfig? = this.tipConfig
+    ): PaymentRequest = PaymentRequest(
+        action = action,
+        referenceOrderId = referenceOrderId,
+        transactionRequestId = transactionRequestId,
+        description = description,
+        amount = amount,
+        paymentMethod = paymentMethod,
+        cardNetworkType = cardNetworkType,
+        staffInfo = staffInfo,
+        deviceInfo = deviceInfo,
+        goodsDetail = goodsDetail,
+        originalTransactionId = originalTransactionId,
+        originalTransactionRequestId = originalTransactionRequestId,
+        tipAmount = tipAmount,
+        forcedAuthCode = forcedAuthCode,
+        reason = reason,
+        attach = attach,
+        notifyUrl = notifyUrl,
+        requestTimeout = requestTimeout,
+        printReceipt = printReceipt,
+        signatureConfig = signatureConfig,
+        tipConfig = tipConfig
+    )
+
+    operator fun component1(): String = action
+    operator fun component2(): String? = referenceOrderId
+    operator fun component3(): String? = transactionRequestId
+    operator fun component4(): String? = description
+    operator fun component5(): AmountInfo? = amount
+    operator fun component6(): PaymentMethodInfo? = paymentMethod
+    operator fun component7(): CardNetworkType? = cardNetworkType
+    operator fun component8(): StaffInfo? = staffInfo
+    operator fun component9(): DeviceInfo? = deviceInfo
+    operator fun component10(): List<GoodsDetail>? = goodsDetail
+    operator fun component11(): String? = originalTransactionId
+    operator fun component12(): String? = originalTransactionRequestId
+    operator fun component13(): BigDecimal? = tipAmount
+    operator fun component14(): String? = forcedAuthCode
+    operator fun component15(): String? = reason
+    operator fun component16(): String? = attach
+    operator fun component17(): String? = notifyUrl
+    operator fun component18(): Long? = requestTimeout
+    operator fun component19(): PrintReceipt? = printReceipt
+    operator fun component20(): SignatureConfig? = signatureConfig
+    operator fun component21(): TipConfig? = tipConfig
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is PaymentRequest) return false
+        return action == other.action &&
+            referenceOrderId == other.referenceOrderId &&
+            transactionRequestId == other.transactionRequestId &&
+            description == other.description &&
+            amount == other.amount &&
+            paymentMethod == other.paymentMethod &&
+            cardNetworkType == other.cardNetworkType &&
+            staffInfo == other.staffInfo &&
+            deviceInfo == other.deviceInfo &&
+            goodsDetail == other.goodsDetail &&
+            originalTransactionId == other.originalTransactionId &&
+            originalTransactionRequestId == other.originalTransactionRequestId &&
+            tipAmount == other.tipAmount &&
+            forcedAuthCode == other.forcedAuthCode &&
+            reason == other.reason &&
+            attach == other.attach &&
+            notifyUrl == other.notifyUrl &&
+            requestTimeout == other.requestTimeout &&
+            printReceipt == other.printReceipt &&
+            signatureConfig == other.signatureConfig &&
+            tipConfig == other.tipConfig
+    }
+
+    override fun hashCode(): Int {
+        var result = action.hashCode()
+        result = 31 * result + (referenceOrderId?.hashCode() ?: 0)
+        result = 31 * result + (transactionRequestId?.hashCode() ?: 0)
+        result = 31 * result + (description?.hashCode() ?: 0)
+        result = 31 * result + (amount?.hashCode() ?: 0)
+        result = 31 * result + (paymentMethod?.hashCode() ?: 0)
+        result = 31 * result + (cardNetworkType?.hashCode() ?: 0)
+        result = 31 * result + (staffInfo?.hashCode() ?: 0)
+        result = 31 * result + (deviceInfo?.hashCode() ?: 0)
+        result = 31 * result + (goodsDetail?.hashCode() ?: 0)
+        result = 31 * result + (originalTransactionId?.hashCode() ?: 0)
+        result = 31 * result + (originalTransactionRequestId?.hashCode() ?: 0)
+        result = 31 * result + (tipAmount?.hashCode() ?: 0)
+        result = 31 * result + (forcedAuthCode?.hashCode() ?: 0)
+        result = 31 * result + (reason?.hashCode() ?: 0)
+        result = 31 * result + (attach?.hashCode() ?: 0)
+        result = 31 * result + (notifyUrl?.hashCode() ?: 0)
+        result = 31 * result + (requestTimeout?.hashCode() ?: 0)
+        result = 31 * result + (printReceipt?.hashCode() ?: 0)
+        result = 31 * result + (signatureConfig?.hashCode() ?: 0)
+        result = 31 * result + (tipConfig?.hashCode() ?: 0)
+        return result
+    }
+
+    override fun toString(): String =
+        "PaymentRequest(action=$action, referenceOrderId=$referenceOrderId, transactionRequestId=$transactionRequestId, description=$description, amount=$amount, paymentMethod=$paymentMethod, cardNetworkType=$cardNetworkType, staffInfo=$staffInfo, deviceInfo=$deviceInfo, goodsDetail=$goodsDetail, originalTransactionId=$originalTransactionId, originalTransactionRequestId=$originalTransactionRequestId, tipAmount=$tipAmount, forcedAuthCode=$forcedAuthCode, reason=$reason, attach=$attach, notifyUrl=$notifyUrl, requestTimeout=$requestTimeout, printReceipt=$printReceipt, signatureConfig=$signatureConfig, tipConfig=$tipConfig)"
 
     companion object {
         /**

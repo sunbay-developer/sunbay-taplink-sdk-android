@@ -150,7 +150,9 @@ class TaplinkApiImpl : TaplinkApi {
     // ==================== Initialization ====================
 
     override fun init(context: Context, config: TaplinkConfig) {
-        LogUtil.d(TAG, "Initializing SDK with appId: ${config.appId}")
+        // Caller-owned setters remain mutable; all managers use this initialization snapshot.
+        val initializedConfig = config.snapshotForInitialization()
+        LogUtil.d(TAG, "Initializing SDK with appId: ${initializedConfig.appId}")
 
         // Re-init safety: if init() is called again (e.g. Application recreated, or the host app
         // re-initializes), tear down the previous connection and its callbacks first. Otherwise the
@@ -172,12 +174,12 @@ class TaplinkApiImpl : TaplinkApi {
             connectionManager?.removeConnectionListener()
         }
 
-        this.config = config
+        this.config = initializedConfig
 
         // Initialize specialized managers
-        connectionManager = ConnectionManager(config, context)
+        connectionManager = ConnectionManager(initializedConfig, context)
         responseProcessor = ResponseProcessor()
-        paymentManager = PaymentManager(config, connectionManager!!, responseProcessor!!, context)
+        paymentManager = PaymentManager(initializedConfig, connectionManager!!, responseProcessor!!, context)
 
         // Set payment manager reference in connection manager for connection loss notifications
         connectionManager?.setPaymentManager(paymentManager!!)
@@ -186,8 +188,8 @@ class TaplinkApiImpl : TaplinkApi {
         TaplinkServiceKernel.getInstance(context)
 
         // Configure log level
-        if (config.logEnabled) {
-            when (config.logLevel) {
+        if (initializedConfig.logEnabled) {
+            when (initializedConfig.logLevel) {
                 LogLevel.VERBOSE -> LogUtil.setLevel(Log.VERBOSE)
                 LogLevel.DEBUG -> LogUtil.setLevel(Log.DEBUG)
                 LogLevel.INFO -> LogUtil.setLevel(Log.INFO)

@@ -7,16 +7,20 @@ import com.sunmi.tapro.taplink.sdk.enums.FeeMode
  *
  * Defines the suggested tip values and how they should be interpreted.
  *
+ * Field setters update this instance and return it for chaining. Use [copy] for
+ * independent top-level values, and finish updates before request submission.
+ * Serialize writes and do not mutate instances used as hash collection keys.
+ *
  * @author Tapro Team
  * @since 2025-01-XX
  */
-data class TipSuggestions(
+class TipSuggestions(
     /**
      * Fee mode that determines how suggestion values are interpreted.
      * - RATE: values represent percentage rates (e.g., 15 means 15%)
      * - AMOUNT: values represent fixed amounts in base currency unit
      */
-    val feeMode: FeeMode,
+    feeMode: FeeMode,
 
     /**
      * List of suggested tip values.
@@ -24,7 +28,7 @@ data class TipSuggestions(
      * - When feeMode is RATE: values like [15, 18, 20] mean 15%, 18%, 20%
      * - When feeMode is AMOUNT: values like [100, 200, 500] mean fixed amounts
      */
-    val values: List<Int>,
+    values: List<Int>,
 
     /**
      * Optional list of descriptive name labels for each tip suggestion.
@@ -33,29 +37,72 @@ data class TipSuggestions(
      *
      * No length validation is performed against [values] at this layer.
      */
-    val names: List<String>? = null
+    names: List<String>? = null
 ) {
+    var feeMode: FeeMode = feeMode
+        private set
+
+    var values: List<Int> = values
+        private set
+
+    var names: List<String>? = names
+        private set
+
     /**
      * Sets the fee mode.
      *
      * @param feeMode the fee mode
-     * @return the updated TipSuggestions instance for method chaining
+     * @return this TipSuggestions instance for method chaining
      */
-    fun setFeeMode(feeMode: FeeMode): TipSuggestions = copy(feeMode = feeMode)
+    fun setFeeMode(feeMode: FeeMode): TipSuggestions = apply { this.feeMode = feeMode }
 
     /**
      * Sets the suggestion values.
      *
      * @param values the list of suggestion values
-     * @return the updated TipSuggestions instance for method chaining
+     * @return this TipSuggestions instance for method chaining
      */
-    fun setValues(values: List<Int>): TipSuggestions = copy(values = values)
+    fun setValues(values: List<Int>): TipSuggestions = apply { this.values = values }
 
     /**
      * Sets the name labels for tip suggestions.
      *
      * @param names the list of name labels, or null to clear
-     * @return the updated TipSuggestions instance for method chaining
+     * @return this TipSuggestions instance for method chaining
      */
-    fun setNames(names: List<String>?): TipSuggestions = copy(names = names)
+    fun setNames(names: List<String>?): TipSuggestions = apply { this.names = names }
+
+    /** Creates an independent shallow copy; setters mutate this instance. */
+    fun copy(
+        feeMode: FeeMode = this.feeMode,
+        values: List<Int> = this.values,
+        names: List<String>? = this.names
+    ): TipSuggestions = TipSuggestions(
+        feeMode = feeMode,
+        values = values,
+        names = names
+    )
+
+    operator fun component1(): FeeMode = feeMode
+    operator fun component2(): List<Int> = values
+    operator fun component3(): List<String>? = names
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TipSuggestions) return false
+        return feeMode == other.feeMode &&
+            values == other.values &&
+            names == other.names
+    }
+
+    override fun hashCode(): Int {
+        var result = feeMode.hashCode()
+        result = 31 * result + values.hashCode()
+        result = 31 * result + (names?.hashCode() ?: 0)
+        return result
+    }
+
+    override fun toString(): String =
+        "TipSuggestions(feeMode=$feeMode, values=$values, names=$names)"
+
 }

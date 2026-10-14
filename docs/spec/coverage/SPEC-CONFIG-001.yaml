@@ -1,0 +1,334 @@
+{
+  "spec_id": "SPEC-CONFIG-001",
+  "spec_file": "docs/spec/TAPLINK_CONFIG_SETTER_SPEC.md",
+  "version": "v1.1",
+  "status": "active",
+  "approved": true,
+  "approved_by": "Maintainer (current conversation S4/S5 and scope clarification)",
+  "approved_at": "2026-10-14",
+  "sources": [
+    {
+      "source_id": "SRC-1",
+      "classification": "EXPLICIT",
+      "content": "SDK-wide same-instance field setters",
+      "verified": true,
+      "document_id": "REQ-CONFIG-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_CONFIG_SETTER_REQUEST.md",
+      "section": "S5. SDK-wide field setter scope",
+      "source_quote": "sdk中所有的set方法都需要支持这种调用并兼容链式调用"
+    },
+    {
+      "source_id": "SRC-2",
+      "classification": "DERIVED",
+      "content": "No post-init updates",
+      "verified": true,
+      "derivation": {
+        "derived_from": [
+          "SRC-1",
+          "SRC-6"
+        ],
+        "rationale": "User excludes post-init timeout propagation; current managers hold config references, so freeze values at init to preserve that boundary after same-instance mutation. Nested StaffInfo/DeviceInfo now also gain setters, requiring copies."
+      }
+    },
+    {
+      "source_id": "SRC-3",
+      "classification": "DERIVED",
+      "content": "Preserve source/binary/data utility API compatibility while changing receiver mutation",
+      "verified": true,
+      "derivation": {
+        "derived_from": [
+          "SRC-1",
+          "SRC-2"
+        ],
+        "rationale": "Preserve source/binary/data utility API compatibility while changing receiver mutation; preserve existing behavior at SDK ownership boundaries rather than adding hot updates."
+      }
+    },
+    {
+      "source_id": "SRC-4",
+      "classification": "DERIVED",
+      "content": "Preserve validation and live getters; serialized caller updates before consumption",
+      "verified": true,
+      "derivation": {
+        "derived_from": [
+          "SRC-1",
+          "SRC-2"
+        ],
+        "rationale": "Preserve validation and live getters; serialized caller updates before consumption; preserve existing behavior at SDK ownership boundaries rather than adding hot updates."
+      }
+    },
+    {
+      "source_id": "SRC-5",
+      "classification": "DERIVED",
+      "content": "Freeze submitted request values to prevent new setter mutability changing asynchronous payment processing",
+      "verified": true,
+      "derivation": {
+        "derived_from": [
+          "SRC-1",
+          "SRC-2"
+        ],
+        "rationale": "Freeze submitted request values to prevent new setter mutability changing asynchronous payment processing; preserve existing behavior at SDK ownership boundaries rather than adding hot updates."
+      }
+    },
+    {
+      "source_id": "SRC-6",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-CONFIG-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_CONFIG_SETTER_REQUEST.md",
+      "section": "S4. Final scope approval",
+      "source_quote": "不需要实现初始化后`setTimeout()` 动态影响后续请求，兼容setter即可",
+      "content": "User explicitly excludes post-init dynamic timeout updates.",
+      "verified": true
+    }
+  ],
+  "dimensions": {
+    "business_flow": {
+      "covered": "yes",
+      "note": "Approved narrowed scope"
+    },
+    "state_and_rules": {
+      "covered": "yes",
+      "note": "Approved narrowed scope"
+    },
+    "interface_boundary": {
+      "covered": "yes",
+      "note": "Approved narrowed scope"
+    },
+    "exception_and_risk": {
+      "covered": "yes",
+      "note": "Approved narrowed scope"
+    },
+    "acceptance_coverage": {
+      "covered": "yes",
+      "note": "Approved narrowed scope"
+    }
+  },
+  "payment_checklist": {
+    "transaction_lifecycle": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R3",
+        "R5"
+      ],
+      "note": "Preserve existing behavior at ownership boundaries"
+    },
+    "connection_modes": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R3",
+        "R5"
+      ],
+      "note": "Preserve existing behavior at ownership boundaries"
+    },
+    "callback_semantics": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R3",
+        "R5"
+      ],
+      "note": "Preserve existing behavior at ownership boundaries"
+    },
+    "api_compatibility": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R3",
+        "R5"
+      ],
+      "note": "Preserve existing behavior at ownership boundaries"
+    },
+    "security_compliance": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R3",
+        "R5"
+      ],
+      "note": "Preserve existing behavior at ownership boundaries"
+    },
+    "perf_and_recovery": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R3",
+        "R5"
+      ],
+      "note": "Preserve existing behavior at ownership boundaries"
+    },
+    "amount_and_txn_type": {
+      "applicable": "na",
+      "reason": "No contract/units/retry changes"
+    },
+    "idempotency_and_query": {
+      "applicable": "na",
+      "reason": "No contract/units/retry changes"
+    }
+  },
+  "rules": [
+    {
+      "rule_id": "R1",
+      "source_id": "SRC-1",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "high",
+      "statement": "All field setters update and return receiver",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC1",
+          "given": "Each affected field setter",
+          "when": "Invoke ignoring return and chaining",
+          "then": "Receiver changes; return is identical; other fields preserved",
+          "verification_method": "unit_test",
+          "test_cases": [
+            "TC-CONFIG-001"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R2",
+      "source_id": "SRC-2",
+      "source_type": "DERIVED",
+      "dimension": "state_and_rules",
+      "criticality": "critical",
+      "statement": "Init snapshots config",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC2",
+          "given": "Configured caller object",
+          "when": "Init then mutate caller config",
+          "then": "Active manager configs remain unchanged",
+          "verification_method": "unit_test",
+          "test_cases": [
+            "TC-CONFIG-002"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R3",
+      "source_id": "SRC-3",
+      "source_type": "DERIVED",
+      "dimension": "interface_boundary",
+      "criticality": "high",
+      "statement": "Preserve public API and value utilities; Kotlin reflection isData is explicitly outside preserved compatibility.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC3",
+          "given": "Existing JVM and Java/Kotlin consumers",
+          "when": "Link, copy, destructure and serialize",
+          "then": "Same descriptors; shallow copy; value semantics and JSON names preserved",
+          "verification_method": "compatibility_test",
+          "test_cases": [
+            "TC-CONFIG-003"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R4",
+      "source_id": "SRC-4",
+      "source_type": "DERIVED",
+      "dimension": "exception_and_risk",
+      "criticality": "high",
+      "statement": "Preserve validation and refresh computed getters",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC4",
+          "given": "Valid merchant and already-read payment enum",
+          "when": "Invalid merchant set and subsequent enum/string sets",
+          "then": "Merchant unchanged on failure; computed getter/JSON reflects latest values",
+          "verification_method": "unit_test",
+          "test_cases": [
+            "TC-CONFIG-004"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R5",
+      "source_id": "SRC-5",
+      "source_type": "DERIVED",
+      "dimension": "acceptance_coverage",
+      "criticality": "critical",
+      "statement": "Submission captures mutable request fields Snapshot occurs at PaymentManager.execute entry, before connection checks; includes amount/paymentMethod/staff/device/goods and tip suggestions lists.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC5",
+          "given": "Nested mutable request",
+          "when": "Submit then mutate caller fields/lists",
+          "then": "Captured request payload remains unchanged",
+          "verification_method": "unit_test",
+          "test_cases": [
+            "TC-CONFIG-005"
+          ]
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-1",
+      "risk": "high",
+      "about": "All field setter scope",
+      "blocks": [
+        "R1",
+        "R3"
+      ],
+      "status": "resolved",
+      "decision": "User approved all field setters, excluding runtime interfaces (S5)."
+    },
+    {
+      "id": "Q-2",
+      "risk": "critical",
+      "about": "Runtime timeout update",
+      "blocks": [
+        "R2",
+        "R5"
+      ],
+      "status": "resolved",
+      "decision": "User excludes runtime updates (S4); snapshot init and submissions."
+    }
+  ],
+  "gates": {},
+  "verification": {
+    "date": "2026-10-14",
+    "unit_test_task": ":lib_taplink_sdk:testDebugUnitTest",
+    "unit_tests": "19 passed, 0 failed",
+    "changed_setter_overloads": 73,
+    "public_jvm_signatures": "9 changed classes compared with pre-change javap descriptors; no differences",
+    "spec_check": "passed with PYTHONPATH=/private/tmp/taplink-spec-deps",
+    "device_validation": "not run; no device operations authorized",
+    "publication": "not performed"
+  },
+  "test_case_mapping": {
+    "TC-CONFIG-001": [
+      "FieldSetterCompatibilityTest.allChangedSettersUpdateOriginalAndReturnSameInstance",
+      "FieldSetterCompatibilityTest.ignoredChainsAndExistingBuildersWork",
+      "JavaFieldSetterCompatibilityTest.ignoredReturnAndChainsMutateOriginal"
+    ],
+    "TC-CONFIG-002": [
+      "FieldSetterCompatibilityTest.initializationFreezesCallerConfigAndNestedMetadata"
+    ],
+    "TC-CONFIG-003": [
+      "FieldSetterCompatibilityTest.copyComponentsAndValueSemanticsRemainAvailable",
+      "FieldSetterCompatibilityTest.hashCodesMatchLegacyDataClasses",
+      "JavaFieldSetterCompatibilityTest.ignoredReturnAndChainsMutateOriginal"
+    ],
+    "TC-CONFIG-004": [
+      "FieldSetterCompatibilityTest.enumGettersSerializationAndMerchantValidationStayConsistent"
+    ],
+    "TC-CONFIG-005": [
+      "FieldSetterCompatibilityTest.submittedSnapshotDoesNotTrackLaterSettersOrCollectionChanges"
+    ]
+  }
+}

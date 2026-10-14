@@ -25,6 +25,7 @@ import com.sunmi.tapro.taplink.sdk.enums.ConnectionMode
 import com.sunmi.tapro.taplink.sdk.enums.ConnectionStatus
 import com.sunmi.tapro.taplink.sdk.enums.AppToAppMode
 import com.sunmi.tapro.taplink.sdk.impl.ResponseProcessor
+import com.sunmi.tapro.taplink.sdk.impl.snapshotForExecution
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.TransactionRequestValidator
 import com.sunmi.tapro.taplink.sdk.model.request.transaction.ValidationError
 import com.sunmi.tapro.taplink.sdk.util.TaplinkJsonBridge
@@ -128,6 +129,10 @@ class PaymentManager(
      * Execute payment request
      */
     fun execute(request: PaymentRequest, callback: PaymentCallback) {
+        executeSnapshot(request.snapshotForExecution(), callback)
+    }
+
+    private fun executeSnapshot(request: PaymentRequest, callback: PaymentCallback) {
         LogUtil.d(TAG, "Executing payment request: action=${request.action}, referenceOrderId=${request.referenceOrderId}")
 
         // Check connection status
