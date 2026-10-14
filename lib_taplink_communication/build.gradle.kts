@@ -39,6 +39,11 @@ android {
         buildConfig = true
         aidl = true
     }
+
+    testOptions {
+        // LAN recovery JVM tests use loopback WebSockets and injected discovery, without Android NSD.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {

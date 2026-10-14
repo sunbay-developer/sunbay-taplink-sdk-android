@@ -66,7 +66,7 @@ class ReconnectManager(
      * List of connection listeners waiting for reconnection
      * Used when user calls connect() with same config while reconnecting
      */
-    private val pendingReconnectionListeners = mutableListOf<ConnectionListener>()
+    private val pendingReconnectionListeners = java.util.Collections.synchronizedList(mutableListOf<ConnectionListener>())
 
     /**
      * Reconnection handler
@@ -216,6 +216,16 @@ class ReconnectManager(
         notifyPendingListenersError(error)
     }
 
+    /** Drain a final LAN recovery failure without notifying before the SDK deduplicates observers. */
+    internal fun finishFailedReconnect(): List<ConnectionListener> {
+        isReconnecting = false
+        reconnectScheduled = false
+        retryHandler.removeCallbacksAndMessages(null)
+        return synchronized(pendingReconnectionListeners) {
+            pendingReconnectionListeners.toList().also { pendingReconnectionListeners.clear() }
+        }
+    }
+
     /**
      * Manual disconnect
      *
@@ -332,8 +342,9 @@ class ReconnectManager(
         }
 
         LogUtil.d(TAG, "Notifying ${pendingReconnectionListeners.size} pending listeners of connection success")
-        val listeners = pendingReconnectionListeners.toList()
-        pendingReconnectionListeners.clear()
+        val listeners = synchronized(pendingReconnectionListeners) {
+            pendingReconnectionListeners.toList().also { pendingReconnectionListeners.clear() }
+        }
 
         listeners.forEach { listener ->
             try {
@@ -355,8 +366,9 @@ class ReconnectManager(
         }
 
         LogUtil.d(TAG, "Notifying ${pendingReconnectionListeners.size} pending listeners of connection error")
-        val listeners = pendingReconnectionListeners.toList()
-        pendingReconnectionListeners.clear()
+        val listeners = synchronized(pendingReconnectionListeners) {
+            pendingReconnectionListeners.toList().also { pendingReconnectionListeners.clear() }
+        }
 
         listeners.forEach { listener ->
             try {

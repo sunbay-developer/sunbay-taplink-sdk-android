@@ -15,7 +15,9 @@ local.properties
 /.kiro/*
 /AGENT.md
 /AGENTS.md
-/lib_taplink_sdk/src/test/*
+/lib_taplink_sdk/src/test/**
+!/lib_taplink_sdk/src/test/**/
+!/lib_taplink_sdk/src/test/java/com/sunmi/tapro/taplink/sdk/manager/LanRecoveryIntegrationTest.kt
 /docs/
 !/docs/
 /docs/*

@@ -1,0 +1,334 @@
+{
+  "spec_id": "SPEC-LAN-RECOVERY-001",
+  "spec_file": "docs/spec/TAPLINK_LAN_RECOVERY_SPEC.md",
+  "version": "v1.0",
+  "status": "active",
+  "approved": true,
+  "sources": [
+    {
+      "source_id": "SRC-1",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-LAN-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_LAN_RECOVERY_REQUEST.md",
+      "section": "S1. User request (verbatim)",
+      "source_quote": "修改taplinksdk在自动重连开启的时候还先报错连接异常再做新端口连接的问题",
+      "verified": true
+    },
+    {
+      "source_id": "SRC-2",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-LAN-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_LAN_RECOVERY_REQUEST.md",
+      "section": "S4. Approval",
+      "source_quote": "开始实现",
+      "verified": true,
+      "content": "Maintainer approves the presented R1–R6 and AC1–AC6 scope in response to the preceding approval request."
+    }
+  ],
+  "dimensions": {
+    "business_flow": {
+      "covered": "yes",
+      "note": "Approved rules covered by named regression tests; JVM verification complete."
+    },
+    "state_and_rules": {
+      "covered": "yes",
+      "note": "Approved rules covered by named regression tests; JVM verification complete."
+    },
+    "interface_boundary": {
+      "covered": "yes",
+      "note": "Approved rules covered by named regression tests; JVM verification complete."
+    },
+    "exception_and_risk": {
+      "covered": "yes",
+      "note": "Approved rules covered by named regression tests; JVM verification complete."
+    },
+    "acceptance_coverage": {
+      "covered": "yes",
+      "note": "Approved rules covered by named regression tests; JVM verification complete."
+    }
+  },
+  "rules": [
+    {
+      "rule_id": "R1",
+      "source_id": "SRC-1",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "high",
+      "statement": "Auto-reconnect enabled: a failed initial LAN endpoint must not emit a terminal connection failure before attempting recovery to the discovered endpoint.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC1",
+          "given": "autoReconnect=true, stale port 8445 and same-device discovery at 8443",
+          "when": "old endpoint fails and replacement succeeds",
+          "then": "onConnected is delivered; neither onError nor onDisconnected is emitted for the failed handshake",
+          "verification_method": "unit_test_and_callback_integration",
+          "test_cases": [
+            "TC-LAN-RECOVERY-001"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R2",
+      "source_id": "SRC-2",
+      "source_type": "EXPLICIT",
+      "dimension": "state_and_rules",
+      "criticality": "high",
+      "statement": "Keep the logical attempt connecting during recoverable handshake error/close; suppress paired transport-close state regression regardless of callback ordering.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC2",
+          "given": "fallback eligible and no established socket",
+          "when": "transport error and close occur in either order while discovery is pending",
+          "then": "isConnecting remains true; ERROR/DISCONNECTED and public terminal callbacks are absent",
+          "verification_method": "unit_test_and_callback_integration",
+          "test_cases": [
+            "TC-LAN-RECOVERY-002"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R3",
+      "source_id": "SRC-2",
+      "source_type": "EXPLICIT",
+      "dimension": "exception_and_risk",
+      "criticality": "high",
+      "statement": "When recovery has no acceptable target or replacement connection fails and configured recovery is exhausted, terminate the logical attempt and report a final connection error once per listener, with no handshake-generated duplicate disconnect.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC3",
+          "given": "autoReconnect=true; no target, discovery exception, missing/rejecting address-change listener without accepted handoff, or failed replacement connection",
+          "when": "existing bounded recovery is exhausted or a non-retryable failure terminates it",
+          "then": "connecting ends; each distinct listener instance (including a shared connect/global listener and queued reconnect callers) gets one final onError for this eligible LAN recovery attempt, no duplicate handshake onDisconnected; pending reconnect callers are released and reconnect state ends; a subsequent explicit connect can proceed",
+          "verification_method": "unit_test_and_callback_integration",
+          "test_cases": [
+            "TC-LAN-RECOVERY-003"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R4",
+      "source_id": "SRC-2",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "high",
+      "statement": "autoReconnect=false retains direct failure reporting and disables discovery recovery; errors remain existing codes.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC4",
+          "given": "autoReconnect=false and refused endpoint",
+          "when": "direct connection fails",
+          "then": "existing direct failure reporting is preserved without discovery or new-port connection; this task does not add a handshake disconnect or redesign disabled-reconnect error deduplication",
+          "verification_method": "unit_test_and_callback_integration",
+          "test_cases": [
+            "TC-LAN-RECOVERY-004"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R5",
+      "source_id": "SRC-2",
+      "source_type": "EXPLICIT",
+      "dimension": "exception_and_risk",
+      "criticality": "high",
+      "statement": "Manual disconnect, superseding connection or cleanup cancels pending recovery; obsolete callbacks cannot report success/failure or start a replacement for the cancelled attempt.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC5",
+          "given": "discovery/replacement connection pending",
+          "when": "user disconnects, switches connection or cleans up",
+          "then": "old attempt produces no later recovery success/error or new connection; explicit disconnect follows the existing API contract",
+          "verification_method": "unit_test_and_callback_integration",
+          "test_cases": [
+            "TC-LAN-RECOVERY-005"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R6",
+      "source_id": "SRC-2",
+      "source_type": "EXPLICIT",
+      "dimension": "acceptance_coverage",
+      "criticality": "high",
+      "statement": "Scope the deferral to pre-connection LAN handshake recovery; preserve established-link errors and existing in-flight fast recovery budgets, transaction callbacks and query-first rules.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC6",
+          "given": "established link error or transaction fast recovery path",
+          "when": "transport failure occurs",
+          "then": "existing error/recovery path remains operative; no broadened error suppression, transaction resubmission or change to the existing fast-recovery path",
+          "verification_method": "unit_test_and_callback_integration",
+          "test_cases": [
+            "TC-LAN-RECOVERY-006"
+          ]
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-1",
+      "risk": "high",
+      "about": "Approve recovery callback ordering and bounded terminal/cancellation/compatibility boundaries (R1–R6, AC1–AC6).",
+      "blocks": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "status": "resolved",
+      "decision": "Maintainer authorized implementation of the presented specification and acceptance cases."
+    }
+  ],
+  "gates": {},
+  "verification": {
+    "date": "2026-10-14",
+    "implementation": "completed",
+    "independent_spec_review": "/private/tmp/taplink-reconnect-spec-review.md",
+    "red": "Two original regressions reproduced via failing assertions: premature E241 during discovery and duplicate final E241. /private/tmp/taplink-lan-recovery-red.log",
+    "unit_test_command": "./gradlew :lib_taplink_sdk:clean :lib_taplink_communication:testDebugUnitTest :lib_taplink_sdk:testDebugUnitTest --no-build-cache --console=plain",
+    "unit_test_results": {
+      "lib_taplink_communication": {
+        "tests": 37,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "lib_taplink_sdk": {
+        "tests": 29,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "new_regressions": 15,
+    "compile": "Both affected debug Kotlin modules compiled successfully as test prerequisites.",
+    "static_checks": "git diff --check and spec-check passed",
+    "test_environment": "JVM loopback WebSockets with fake Android context/storage and injected discovery; no device or real NSD/terminal used.",
+    "build_environment_note": "One incremental fat-aar SDK merge omitted unchanged embedded companion classes; clean SDK build with --no-build-cache restored complete classes and all tests passed. No production build configuration change made for this cache issue.",
+    "device_validation": "not run; actual Android mDNS and terminal restart/port migration remain for maintainer validation",
+    "publication": "not performed; dependency/version upgrades and bilingual public release synchronization deferred until maintainer confirms actual Maven release",
+    "workspace_additional_controls": "Two additional fast-recovery control tests appeared during the shared-workspace run; preserved and included in the final 66-test result."
+  },
+  "payment_checklist": {
+    "connection_modes": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "note": "LAN handshake recovery only; preserve existing established-link and transaction behavior."
+    },
+    "callback_semantics": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "note": "LAN handshake recovery only; preserve existing established-link and transaction behavior."
+    },
+    "api_compatibility": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "note": "LAN handshake recovery only; preserve existing established-link and transaction behavior."
+    },
+    "perf_and_recovery": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "note": "LAN handshake recovery only; preserve existing established-link and transaction behavior."
+    },
+    "transaction_lifecycle": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "note": "LAN handshake recovery only; preserve existing established-link and transaction behavior."
+    },
+    "amount_and_txn_type": {
+      "applicable": "na",
+      "reason": "No changes to amounts, transaction retries, request IDs, credentials or log configuration."
+    },
+    "idempotency_and_query": {
+      "applicable": "na",
+      "reason": "No changes to amounts, transaction retries, request IDs, credentials or log configuration."
+    },
+    "security_compliance": {
+      "applicable": "na",
+      "reason": "No changes to amounts, transaction retries, request IDs, credentials or log configuration."
+    }
+  },
+  "approved_by": "Maintainer (current conversation: 开始实现, after R1–R6 / AC1–AC6 approval request)",
+  "approved_at": "2026-10-14",
+  "test_case_mapping": {
+    "TC-LAN-RECOVERY-001": [
+      "LanRecoveryIntegrationTest.newPortSuccessNotifiesOriginalCallerObserverAndQueuedCallerWithoutTransientFailure"
+    ],
+    "TC-LAN-RECOVERY-002": [
+      "LanRecoveryCallbackTest.handshakeFailureRemainsConnectingWhileDiscoveryIsPending",
+      "LanHandshakeCallbackOrderTest.bothHandshakeErrorCloseOrdersAreDeferred"
+    ],
+    "TC-LAN-RECOVERY-003": [
+      "LanRecoveryCallbackTest.finalDiscoveryFailureReportsOnlyOneTerminalError",
+      "LanRecoveryCallbackTest.rejectedOrUnownedDiscoveryTargetTerminatesTheAttempt",
+      "LanRecoveryCallbackTest.noDiscoveryTargetExhaustsExistingBoundedRetriesAndReportsFinalFailure",
+      "LanRecoveryIntegrationTest.discoveryFailureDeduplicatesSharedObserverAndQueuedCallersAndAllowsFreshConnect",
+      "LanRecoveryIntegrationTest.replacementFailureReleasesReconnectQueueWithOneErrorPerObserver"
+    ],
+    "TC-LAN-RECOVERY-004": [
+      "LanRecoveryIntegrationTest.disabledAutoReconnectDoesNotDiscover"
+    ],
+    "TC-LAN-RECOVERY-005": [
+      "LanRecoveryIntegrationTest.cancelledDiscoveryCannotReconnectOrReportAnOldFailure",
+      "LanRecoveryIntegrationTest.switchingToNewExplicitConnectionCancelsDiscoveryWithoutAnObsoleteResult",
+      "LanHandshakeCallbackOrderTest.retiredSocketCannotEmitCallbacksIntoItsSuccessor"
+    ],
+    "TC-LAN-RECOVERY-006": [
+      "LanRecoveryIntegrationTest.establishedLinkDropStillNotifiesTheObserver",
+      "LanRecoveryIntegrationTest.transactionFastRecoveryRetainsImmediateHandshakeFailurePath",
+      "LanHandshakeCallbackOrderTest.deferredHandshakePolicyDoesNotHideEstablishedErrorsOrPeerInvalidation",
+      "LanRecoveryIntegrationTest.fastRecoveryWindowSuppressesFalseDisconnectNotification",
+      "LanRecoveryIntegrationTest.genuineDropOutsideFastRecoveryStillNotifiesDisconnect"
+    ]
+  }
+}

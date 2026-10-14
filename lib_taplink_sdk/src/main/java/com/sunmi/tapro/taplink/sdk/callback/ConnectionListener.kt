@@ -37,8 +37,14 @@ interface ConnectionListener {
     fun onDisconnected(reason: String)
     
     /**
-     * Connection error
-     * 
+     * Connection error.
+     *
+     * During LAN handshake recovery with automatic reconnect enabled, a failed endpoint
+     * is reported only if recovery ultimately fails. A recovered connection calls
+     * [onConnected] without an intermediate error or disconnect notification.
+     * Established-link errors and transaction fast recovery keep their existing behavior.
+     * Callbacks may run on a background thread; dispatch UI updates to the main thread.
+     *
      * @param error Error information
      */
     fun onError(error: ConnectionError)

@@ -30,14 +30,28 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 **Release pending — documentation prepared for the planned 1.1.0 version.**
 
-This release adds a Java-friendly default timeout setter and makes LAN recovery and transaction
+This release adds same-instance fluent field setters and makes LAN recovery and transaction
 timeout behavior more predictable. No new dependency or error code is introduced.
+
+### 💥 Changed — Field setters update the receiver
+
+- All existing public field setters on configurations, requests, and common models now update
+  their receiver and return that same object. Both ignored-return calls and fluent chains work.
+  `ConnectionConfig`, `QueryRequest`, and request Builders already follow this convention.
+- Existing constructor, getter, fluent setter, `copy`, and `componentN` JVM signatures remain.
+  Converted model classes are no longer Kotlin data classes (`KClass.isData` is false); value
+  equality, hash codes, string representations, and shallow `copy()` methods remain available.
+- Use `copy()` explicitly before setters when you need to retain the original values. Do not
+  mutate instances used as hash collection keys; serialize field updates before consumption.
+- SDK initialization captures configuration values, including default staff/device metadata.
+  Later setters do not update an initialized SDK. Submitted payment requests capture mutable
+  payload fields before asynchronous processing. Runtime API signatures are unchanged.
 
 ### 🚀 New — Java-friendly TaplinkConfig timeout setter
 
 - Added `TaplinkConfig.setTimeout(int)` so Java integrations can set the default transaction timeout
-  in seconds without calling the full constructor. Like the other configuration setters, it returns
-  a new `TaplinkConfig`; pass that returned instance to `TaplinkSDK.init()`.
+  in seconds without calling the full constructor. Like the other field setters, it returns
+  the same `TaplinkConfig`; configure it before passing it to `TaplinkSDK.init()`.
 
 ### 🐛 Fixed — GET_TERMINAL_INFO error passthrough
 
@@ -47,6 +61,12 @@ timeout behavior more predictable. No new dependency or error code is introduced
 
 ### 🐛 Fixed — LAN reconnect completion after endpoint changes
 
+- With automatic reconnect enabled, an unsuccessful LAN handshake stays within the recovery
+  attempt instead of reporting an error/disconnect before trying the same terminal's newly
+  discovered port. Successful recovery notifies the original connect caller and observers;
+  exhausted or rejected recovery reports one final error per observer and releases queued callers.
+  Cancelled socket callbacks cannot overwrite a replacement connection. Direct failure reporting
+  with automatic reconnect disabled and the existing transaction fast-recovery path are preserved.
 - LAN service discovery no longer exits silently when a stale `CONNECTING` status remains after a
   direct WebSocket timeout; exhausted discovery now reaches the connection error callback.
 - Address-change reconnects wait briefly for the cancelled connection operation to release its
@@ -84,10 +104,12 @@ timeout behavior more predictable. No new dependency or error code is introduced
   `TaplinkConfig.timeout` remains in **seconds**; the default is 180 seconds. A positive request
   value takes precedence over the global value.
 - Java callers can set the global timeout without using the full `TaplinkConfig` constructor.
-  `setTimeout(int)` returns a new config, so retain its return value before initialization:
+  `setTimeout(int)` updates its receiver; retaining the return value is optional. Complete
+  configuration before initialization; later changes require explicit reinitialization:
 
   ```java
-  TaplinkConfig config = TaplinkConfig.create(appId, secretKey).setTimeout(180);
+  TaplinkConfig config = TaplinkConfig.create(appId, secretKey);
+  config.setTimeout(180).setLogEnabled(false);
   TaplinkSDK.initSDK(context, config);
   ```
 
@@ -99,7 +121,9 @@ timeout behavior more predictable. No new dependency or error code is introduced
   retry. Treat a card-reading `FAILED` result as a transaction outcome, not `onFailure`.
 
 **Compatibility:** Existing v1.0.10 public request signatures remain available. Review timeout
-values and error handling when upgrading; no source migration is otherwise required.
+values and error handling when upgrading. Callers that relied on setters creating copies must
+use `original.copy().setTimeout(...)` (Kotlin) or explicitly construct an independent object
+before mutation (Java). Kotlin reflection consumers must account for `isData = false`.
 
 ---
 

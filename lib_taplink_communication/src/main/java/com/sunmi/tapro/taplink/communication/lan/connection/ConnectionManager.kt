@@ -91,6 +91,7 @@ class ConnectionManager {
         }
     }
 
+    @Volatile
     private var client: InternalWebSocketClient? = null
     private var currentUri: URI? = null
     private var messageListener: MessageListener? = null
@@ -99,9 +100,13 @@ class ConnectionManager {
     private val isConnected = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    suspend fun connect(uri: URI): ConnectionResult {
+    suspend fun connect(uri: URI): ConnectionResult = connect(uri, deferHandshakeFailureCallbacks = false)
+
+    internal suspend fun connect(uri: URI, deferHandshakeFailureCallbacks: Boolean): ConnectionResult {
         return withContext(Dispatchers.IO) {
+            var attempt: InternalWebSocketClient? = null
             try {
+                ensureActive()
                 LogUtil.d(TAG, "Attempting to connect to: $uri")
 
                 // If already connected to same URI, check actual connection status
@@ -123,26 +128,31 @@ class ConnectionManager {
                 }
 
                 // Create new WebSocket client
-                client = InternalWebSocketClient(uri)
-                currentUri = uri
+                val newClient = InternalWebSocketClient(uri, deferHandshakeFailureCallbacks)
+                attempt = newClient
+                synchronized(this@ConnectionManager) {
+                    client = newClient
+                    currentUri = uri
+                }
 
                 // Enable protocol-level ping/pong so a vanished peer is detected promptly
                 // instead of leaving a half-open socket that reports CONNECTED indefinitely.
-                client?.connectionLostTimeout = CONNECTION_LOST_TIMEOUT_SECONDS
+                newClient.connectionLostTimeout = CONNECTION_LOST_TIMEOUT_SECONDS
 
                 // If wss connection, configure SSL Socket Factory (accept self-signed certificates)
                 if (uri.scheme == "wss") {
                     val sslSocketFactory = createTrustAllSSLSocketFactory()
                     if (sslSocketFactory != null) {
-                        client?.setSocketFactory(sslSocketFactory)
+                        newClient.setSocketFactory(sslSocketFactory)
                         LogUtil.d(TAG, "Configured SSL socket factory for wss connection")
                     } else {
                         LogUtil.w(TAG, "Failed to create SSL socket factory, wss connection may fail")
                     }
                 }
 
-                // Connect
-                client?.connect()
+                // TLS setup may have overlapped cancellation; do not open a cancelled socket.
+                ensureActive()
+                newClient.connect()
 
                 // Use different timeout based on connection type
                 val timeoutMs = getConnectionTimeout(uri)
@@ -150,31 +160,33 @@ class ConnectionManager {
 
                 // Wait for connection result
                 val connectionResult = withTimeoutOrNull(timeoutMs) {
-                    while (!isConnected.get() && client?.isOpen != true) {
+                    while (!newClient.isOpen) {
                         delay(100)
 
                         // Check if connection failed
-                        client?.let { c ->
-                            if (c.isClosed) {
-                                throw Exception("Connection closed during handshake")
-                            }
+                        if (newClient.isClosed || client !== newClient) {
+                            throw Exception("Connection closed during handshake")
                         }
                     }
                     true
                 }
 
-                if (connectionResult == true && isConnected.get()) {
+                if (connectionResult == true && client === newClient && isConnected.get()) {
                     LogUtil.d(TAG, "Successfully connected to $uri")
                     ConnectionResult.Success
                 } else {
                     LogUtil.e(TAG, "Connection timeout or failed for $uri")
-                    cleanup()
+                    cleanup(newClient)
                     ConnectionResult.Failure("Connection timeout")
                 }
 
+            } catch (e: CancellationException) {
+                attempt?.let { cleanup(it) }
+                throw e
             } catch (e: Exception) {
+                attempt?.let { cleanup(it) }
+                ensureActive()
                 LogUtil.e(TAG, "Failed to connect to $uri: ${e.message}")
-                cleanup()
                 ConnectionResult.Failure(
                     "Connection failed: ${e.message}", e
                 )
@@ -184,13 +196,12 @@ class ConnectionManager {
 
     fun disconnect() {
         LogUtil.d(TAG, "Disconnecting WebSocket connection")
+        val oldClient = retireClient()
         try {
-            client?.close(1000, "Normal closure")
+            oldClient?.close(1000, "Normal closure")
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error closing WebSocket client: ${e.message}")
         }
-
-        cleanup()
     }
 
     /**
@@ -205,13 +216,15 @@ class ConnectionManager {
      */
     fun invalidate(reason: String) {
         LogUtil.w(TAG, "Invalidating WebSocket connection: $reason")
+        val oldClient = retireClient() ?: return
+        // Retiring the socket filters its asynchronous close; report this intentional
+        // invalidation once so peer-restart recovery still follows the normal drop path.
+        connectionListener?.onDisconnected(CloseFrame.ABNORMAL_CLOSE, reason, false)
         try {
-            client?.closeConnection(CloseFrame.ABNORMAL_CLOSE, reason)
+            oldClient.closeConnection(CloseFrame.ABNORMAL_CLOSE, reason)
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error invalidating WebSocket client: ${e.message}")
         }
-
-        cleanup()
     }
 
     fun isConnected(): Boolean {
@@ -287,46 +300,77 @@ class ConnectionManager {
     /**
      * Clean up resources
      */
-    private fun cleanup() {
-        isConnected.set(false)
-        client = null
-        currentUri = null
+    private fun retireClient(expected: InternalWebSocketClient? = null): InternalWebSocketClient? =
+        synchronized(this) {
+            if (expected != null && client !== expected) return@synchronized null
+            val oldClient = client
+            isConnected.set(false)
+            client = null
+            currentUri = null
+            oldClient
+        }
+
+    private fun cleanup(expected: InternalWebSocketClient? = null) {
+        val oldClient = retireClient(expected)
+        // A timed-out handshake may still be opening. Close the retired socket so it
+        // cannot revive the cancelled attempt or leak its WebSocket worker threads.
+        oldClient?.closeConnection(CloseFrame.NORMAL, "Connection attempt finished")
         LogUtil.d(TAG, "Resources cleaned up")
     }
 
-    /**
-     * Internal WebSocket client implementation
-     */
-    private inner class InternalWebSocketClient(serverUri: URI) : WebSocketClient(serverUri) {
+    /** Each socket owns its handshake policy; retired sockets cannot mutate the next attempt. */
+    private inner class InternalWebSocketClient(
+        serverUri: URI,
+        private val deferHandshakeFailureCallbacks: Boolean
+    ) : WebSocketClient(serverUri) {
+        private var opened = false
 
-        override fun onOpen(handshakedata: ServerHandshake) {
+        override fun onOpen(handshakedata: ServerHandshake) = synchronized(this@ConnectionManager) {
+            if (client !== this) {
+                closeConnection(CloseFrame.NORMAL, "Obsolete connection attempt")
+                return@synchronized
+            }
             LogUtil.d(TAG, "WebSocket connection opened: $uri")
+            opened = true
             isConnected.set(true)
             connectionListener?.onConnected()
+            Unit
         }
 
-        override fun onClose(code: Int, reason: String, remote: Boolean) {
+        override fun onClose(code: Int, reason: String, remote: Boolean) = synchronized(this@ConnectionManager) {
+            if (client !== this) return@synchronized
             LogUtil.d(TAG, "WebSocket connection closed: code=$code, reason=$reason, remote=$remote")
             isConnected.set(false)
-            connectionListener?.onDisconnected(code, reason, remote)
+            if (!deferHandshakeFailureCallbacks || opened) {
+                connectionListener?.onDisconnected(code, reason, remote)
+            }
+            Unit
         }
 
-        override fun onMessage(message: String) {
+        override fun onMessage(message: String) = synchronized(this@ConnectionManager) {
+            if (client !== this) return@synchronized
             LogUtil.d(TAG, "Text message received: $message")
             messageListener?.onTextMessage(message)
+            Unit
         }
 
-        override fun onMessage(message: ByteBuffer) {
+        override fun onMessage(message: ByteBuffer) = synchronized(this@ConnectionManager) {
+            if (client !== this) return@synchronized
             val data = ByteArray(message.remaining())
             message.get(data)
             LogUtil.d(TAG, "Binary message received: ${data.size} bytes")
             messageListener?.onBinaryMessage(data)
+            Unit
         }
 
-        override fun onError(ex: Exception) {
+        override fun onError(ex: Exception) = synchronized(this@ConnectionManager) {
+            if (client !== this) return@synchronized
             LogUtil.e(TAG, "WebSocket error: ${ex.message}")
             isConnected.set(false)
-            connectionListener?.onError(ex)
+            if (!deferHandshakeFailureCallbacks || opened) {
+                connectionListener?.onError(ex)
+            }
+            Unit
         }
     }
 

@@ -12,6 +12,8 @@ import com.sunmi.tapro.taplink.communication.lan.model.ServiceInfo
 import com.sunmi.tapro.taplink.communication.protocol.ProtocolParseResult
 import com.sunmi.tapro.taplink.communication.util.LogUtil
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
@@ -298,6 +300,19 @@ class LanClientKernel(
      */
     private val serviceDiscoveryManager = ServiceDiscoveryManager(context)
 
+    private var discoverServices: suspend ((ServiceInfo) -> Boolean) -> List<ServiceInfo> = { stopWhen ->
+        serviceDiscoveryManager.discoverServices(serviceType = NSD_SERVICE_TYPE, stopWhen = stopWhen)
+    }
+
+    internal constructor(
+        appId: String,
+        appSecretKey: String,
+        context: Context,
+        discoverServices: suspend ((ServiceInfo) -> Boolean) -> List<ServiceInfo>
+    ) : this(appId, appSecretKey, context) {
+        this.discoverServices = discoverServices
+    }
+
     // ==================== State Management ====================
 
     /**
@@ -364,9 +379,11 @@ class LanClientKernel(
         if (!lockAcquired) {
             val currentOp = currentOperation
             LogUtil.w(TAG, "Another operation is in progress: $currentOp, rejecting $operationType after lock timeout")
-            callback.onDisconnected(
-                InnerErrorCode.E241.code,
-                "Another connection operation is in progress: $currentOp"
+            currentCoroutineContext().ensureActive()
+            handleConnectionError(
+                "Another connection operation is in progress: $currentOp",
+                callback,
+                InnerErrorCode.E241.code
             )
             return
         }
@@ -392,8 +409,12 @@ class LanClientKernel(
         } catch (e: Exception) {
             LogUtil.e(TAG, "Error in $operationType operation: ${e.message}")
 
-            // Notify error: use base class's notifyConnectionError()
-            notifyConnectionError("Operation failed: ${e.message}", InnerErrorCode.E241)
+            currentCoroutineContext().ensureActive()
+            if (isOperationValid(operationId) && !isWebSocketConnected()) {
+                currentOperationId = null
+                // Use the captured callback: a cancelled attempt cannot fail its successor.
+                handleConnectionError("${InnerErrorCode.E241.description}:Operation failed: ${e.message}", callback, InnerErrorCode.E241.code)
+            }
 
         } finally {
             // Note: Do not clear currentOperationId here, because connection success callback may be triggered asynchronously after finally
@@ -501,7 +522,13 @@ class LanClientKernel(
                     // Note: Do not check isOperationValid here, because mutex already protects operation mutex
 
                     // Try direct connection
-                    val result = connectionManager.connect(uri)
+                    val options = connectionOptions
+                    val result = connectionManager.connect(
+                        uri,
+                        deferHandshakeFailureCallbacks = options.allowServiceDiscoveryFallback &&
+                            options.deferHandshakeFailureCallbacks
+                    )
+                    currentCoroutineContext().ensureActive()
                     when (result) {
                         is ConnectionManager.ConnectionResult.Success -> {
                             LogUtil.d(TAG, "Direct connection successful ($operationId)")
@@ -586,10 +613,9 @@ class LanClientKernel(
                 }
 
                 // Try service discovery
-                val services = serviceDiscoveryManager.discoverServices(
-                    serviceType = NSD_SERVICE_TYPE,
-                    stopWhen = { service -> service.isValid() && isTargetService(service) }
-                )
+                val services = discoverServices { service -> service.isValid() && isTargetService(service) }
+                currentCoroutineContext().ensureActive()
+                if (!isOperationValid(operationId)) return
 
                 if (services.isNotEmpty()) {
                     LogUtil.d(TAG, "Found ${services.size} services for operation: $operationId (attempt ${retryCount + 1})")
@@ -654,8 +680,12 @@ class LanClientKernel(
                             throw Exception("No valid services found after ${SERVICE_DISCOVERY_MAX_RETRIES + 1} attempts")
                         }
                     } else {
-                        // Upper layer notified, but decided not to reconnect, service discovery completed
-                        LogUtil.d(TAG, "Service discovery completed, upper layer will handle connection ($operationId)")
+                        // No accepted handoff means nobody owns a replacement connection.
+                        // Complete this attempt instead of leaving it CONNECTING forever.
+                        if (connectionOptions.deferHandshakeFailureCallbacks) {
+                            throw IllegalStateException("Service discovery target rejected; invalid recovery handoff")
+                        }
+                        // Fast transaction recovery retains its immediate error callback path.
                         return
                     }
                 } else {

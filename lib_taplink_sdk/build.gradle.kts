@@ -8,7 +8,7 @@ plugins {
 object SdkVersion {
     const val CODE = 18
 
-    const val NAME = "1.1.0"
+    const val NAME = "1.1.0.1"
 }
 
 object BuildConfig {
@@ -103,6 +103,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+    testImplementation(libs.java.websocket)
     androidTestImplementation(libs.androidx.junit.v112)
     androidTestImplementation(libs.androidx.espresso.core.v330)
 }

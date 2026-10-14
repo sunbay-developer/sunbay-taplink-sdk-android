@@ -8,5 +8,7 @@ package com.sunmi.tapro.taplink.communication.lan
  */
 data class LanConnectionOptions(
     val allowServiceDiscoveryFallback: Boolean = true,
-    val enableServiceMonitoring: Boolean = true
+    val enableServiceMonitoring: Boolean = true,
+    // Fast transaction recovery opts out to preserve its existing callback path.
+    val deferHandshakeFailureCallbacks: Boolean = true
 )

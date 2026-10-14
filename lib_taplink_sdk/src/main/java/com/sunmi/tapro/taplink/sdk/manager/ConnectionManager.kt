@@ -117,6 +117,13 @@ class ConnectionManager(
     private var paymentManager: PaymentManager? = null
 
     /**
+     * OPT-R1: 是否正在执行「交易中单次快速恢复」。用于防止快速恢复与常规重连
+     * （ReconnectManager）叠加触发双重重连，以及防止恢复期间的重入。
+     */
+    @Volatile
+    private var isFastRecovering = false
+
+    /**
      * Connection status change listener for PaymentManager
      * Called when connection status changes to CONNECTED
      */
@@ -233,7 +240,7 @@ class ConnectionManager(
                 if (inProgressConfig == null || actualConfig.isEquivalentTo(inProgressConfig)) {
                     // Same connection request already in flight: queue this listener.
                     LogUtil.w(TAG, "Connection already in progress (same config), adding listener to queue")
-                    pendingConnectionListeners.add(listener)
+                    synchronized(pendingConnectionListeners) { pendingConnectionListeners.add(listener) }
                     LogUtil.d(TAG, "Added listener to pending connection queue, total: ${pendingConnectionListeners.size}")
                     return
                 } else {
@@ -348,6 +355,10 @@ class ConnectionManager(
         // Connect through ServiceKernel
         val serviceKernel = TaplinkServiceKernel.getInstance()
 
+        val deferLanHandshakeFailure = connectionMode == ConnectionMode.LAN.name &&
+            connectionConfig?.autoReconnect != false && !isFastRecovering
+        val connectionEstablished = java.util.concurrent.atomic.AtomicBoolean(false)
+
         // Connect first, kernel will be created inside TaplinkServiceKernel.connect()
         serviceKernel?.connect(
             protocol,
@@ -357,13 +368,15 @@ class ConnectionManager(
             lanConnectionOptions = if (connectionMode == ConnectionMode.LAN.name) {
                 LanConnectionOptions(
                     allowServiceDiscoveryFallback = connectionConfig?.autoReconnect != false,
-                    enableServiceMonitoring = connectionConfig?.autoReconnect != false
+                    enableServiceMonitoring = connectionConfig?.autoReconnect != false,
+                    deferHandshakeFailureCallbacks = deferLanHandshakeFailure
                 )
             } else {
                 null
             },
             connectionCallback = object : ServiceConnectionCallback {
                 override fun onConnected(extraInfoMap: Map<String, String?>?) {
+                    connectionEstablished.set(true)
                     // Sync status after connection success
                     syncStatusFromKernel()
 
@@ -403,7 +416,7 @@ class ConnectionManager(
 
                     // Setup status listener as soon as kernel is created
                     // Kernel is created in TaplinkServiceKernel.connect() before this callback
-                    setupKernelStatusListener()
+                    setupKernelStatusListener(deferLanHandshakeFailure)
 
                     updateConnectionStatus(
                         ConnectionStatus.WAIT_CONNECTING,
@@ -438,13 +451,16 @@ class ConnectionManager(
                         // explicitly terminate that state and fail listeners queued during the
                         // attempt. Otherwise a later connect() with the same config is accepted
                         // into the pending queue forever.
-                        reconnectManager?.onReconnectFailed(connectionError)
-
-                        updateConnectionStatus(
-                            ConnectionStatus.ERROR,
-                            errorCode = connectionError,
-                            listener = listener
-                        )
+                        if (deferLanHandshakeFailure && !connectionEstablished.get()) {
+                            notifyLanRecoveryFailure(connectionError, listener)
+                        } else {
+                            reconnectManager?.onReconnectFailed(connectionError)
+                            updateConnectionStatus(
+                                ConnectionStatus.ERROR,
+                                errorCode = connectionError,
+                                listener = listener
+                            )
+                        }
 
                         // Clean up resources
                         connectedDeviceId = null
@@ -453,6 +469,37 @@ class ConnectionManager(
                         currentAppToAppMode = null
                         currentConnectionConfig = null
                     } else {
+                        // OPT-R1: 交易进行中、LAN 模式下发生被动断开时，先尝试一次「原 IP 快速
+                        // 重连」，不走 mDNS 发现、预算 5s。触发条件：
+                        //   1) 当前为 LAN 模式（跨终端 CROSS_DEVICE+LAN 与经典 LAN 均规范化为此）；
+                        //   2) autoReconnect 已开启（按产品要求，仅在开启时做交易中快速恢复）；
+                        //   3) 确有在途交易；
+                        //   4) 非用户主动断开；
+                        //   5) 未在快速恢复 / 常规重连中。
+                        // 本分支（normalDisconnect）本身即「已建立连接后的被动/正常断开」，涵盖
+                        // 1006 等真实掉线码。成功则维持连接、不进入 ReconnectManager；失败则直接
+                        // 向用户报「连接断开」(E213)，不再把底层 1006 透传给客户。
+                        val isLanMode = currentConnectionMode == ConnectionMode.LAN.name
+                        val autoReconnectEnabled = currentConnectionConfig?.autoReconnect == true
+                        val isManual = reconnectManager?.isManualDisconnect() == true
+                        val hasInFlight = paymentManager?.hasInFlightTransactions() == true
+                        val canFastRecover = isLanMode && autoReconnectEnabled && !isManual &&
+                            hasInFlight &&
+                            !isFastRecovering &&
+                            reconnectManager?.isReconnecting() != true &&
+                            currentConnectionConfig != null
+                        if (canFastRecover) {
+                            LogUtil.w(
+                                TAG,
+                                "OPT-R1: in-flight transaction + passive LAN drop (code=$code); attempting single fast recovery"
+                            )
+                            tryFastRecovery(listener)
+                            // 快速恢复在其协程内自行收口（成功维持连接 / 失败报 E213 回落），
+                            // 这里直接返回，避免与 ReconnectManager 形成双重重连。
+                            syncStatusFromKernel()
+                            return
+                        }
+
                         updateConnectionStatus(
                             ConnectionStatus.DISCONNECTED,
                             reason = reason,
@@ -483,6 +530,106 @@ class ConnectionManager(
                     syncStatusFromKernel()
                 }
             })
+    }
+
+    /** Final failure for one LAN recovery attempt, including callers queued during reconnect. */
+    private fun notifyLanRecoveryFailure(error: ConnectionError, listener: ConnectionListener) {
+        val reconnectListeners = reconnectManager?.finishFailedReconnect().orEmpty()
+        val pendingListeners = synchronized(pendingConnectionListeners) {
+            pendingConnectionListeners.toList().also { pendingConnectionListeners.clear() }
+        }
+        connectionStatus = ConnectionStatus.ERROR
+        connectionErrorListener?.invoke(error)
+        notifyDistinctConnectionErrors(
+            listOfNotNull(listener, connectionListener) + pendingListeners + reconnectListeners,
+            error
+        ) { exception -> LogUtil.e(TAG, "Error notifying LAN recovery listener: ${exception.message}") }
+    }
+
+    /**
+     * OPT-R1 + OPT-R2: 交易中 LAN 被动断开后的「单次原 IP 快速重连」。
+     *
+     * 行为约定：
+     * - 用上次成功连接的配置（currentConnectionConfig，含原 IP/端口）发起**一次**快速重连，
+     *   不走 mDNS 发现、总预算 [FAST_RECOVERY_BUDGET_MS]。
+     * - 恢复成功：维持连接，不进入 ReconnectManager。在途交易回调由 LocalCallbackManager 的
+     *   交易超时（默认 180s）继续承载，远大于本恢复窗口，故无需额外冻结倒计时。
+     * - 恢复失败/超时：立即对所有在途交易以 E306 收口，并向用户上报「连接断开」(E213)。
+     *   **不再把底层 1006 透传给客户**。
+     *
+     * 注意：本方法只负责「单次快速恢复」，不自旋、不与 ReconnectManager 并发。调用方必须在
+     * 调用前确保 isFastRecovering 为 false 且 ReconnectManager 未在重连。
+     */
+    private fun tryFastRecovery(listener: ConnectionListener) {
+        val config = currentConnectionConfig
+        if (config == null) {
+            LogUtil.w(TAG, "OPT-R1: no connection config for fast recovery; report disconnected")
+            fastRecoveryFallback(listener)
+            return
+        }
+        isFastRecovering = true
+        sdkScope.launch {
+            try {
+                LogUtil.d(TAG, "OPT-R1: fast recovery started (budget=${FAST_RECOVERY_BUDGET_MS}ms)")
+                // 发起一次快速重连（复用常规连接入口，原 IP 来自 config）。
+                connectInternal(config, internalReconnectListener)
+
+                // 在预算内轮询内核真实连接状态。
+                val recovered = withTimeoutOrNull(FAST_RECOVERY_BUDGET_MS) {
+                    while (isActive && !isConnected()) {
+                        delay(FAST_RECOVERY_POLL_MS)
+                    }
+                    isConnected()
+                } ?: false
+
+                if (recovered) {
+                    LogUtil.i(TAG, "OPT-R1: fast recovery SUCCESS; connection restored, keeping in-flight transaction")
+                    // 维持连接，不触发 ReconnectManager；在途交易回调继续等待响应。
+                } else {
+                    LogUtil.w(TAG, "OPT-R1: fast recovery FAILED within budget; failing in-flight (E306) and reporting disconnected (E213)")
+                    // 提前收口在途交易，不再干等到交易超时。
+                    paymentManager?.failAllPendingTransactions(
+                        InnerErrorCode.E306.code,
+                        InnerErrorCode.E306.description
+                    )
+                    fastRecoveryFallback(listener)
+                }
+            } catch (e: Exception) {
+                LogUtil.e(TAG, "OPT-R1: fast recovery exception: ${e.message}")
+                paymentManager?.failAllPendingTransactions(
+                    InnerErrorCode.E306.code,
+                    InnerErrorCode.E306.description
+                )
+                fastRecoveryFallback(listener)
+            } finally {
+                isFastRecovering = false
+            }
+        }
+    }
+
+    /**
+     * 快速恢复失败后的回落：向用户上报「连接断开」(E213)、清理资源。不再尝试 ReconnectManager，
+     * 避免双重重连；也不把底层 1006 透传给客户。
+     */
+    private fun fastRecoveryFallback(listener: ConnectionListener) {
+        val disconnectReason = "Code: ${InnerErrorCode.E213.code}, Message: ${InnerErrorCode.E213.description}"
+        updateConnectionStatus(
+            ConnectionStatus.DISCONNECTED,
+            reason = disconnectReason,
+            listener = listener
+        )
+        try {
+            listener.onDisconnected(disconnectReason)
+            connectionListener?.onDisconnected(disconnectReason)
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "Error notifying onDisconnected after fast recovery fallback: ${e.message}")
+        }
+        connectedDeviceId = null
+        connectedTaproVersion = null
+        currentConnectionMode = null
+        currentAppToAppMode = null
+        currentConnectionConfig = null
+        syncStatusFromKernel()
     }
 
     /**
@@ -828,8 +975,9 @@ class ConnectionManager(
         }
 
         LogUtil.d(TAG, "Notifying ${pendingConnectionListeners.size} pending connection listeners of connection success")
-        val listeners = pendingConnectionListeners.toList()
-        pendingConnectionListeners.clear()
+        val listeners = synchronized(pendingConnectionListeners) {
+            pendingConnectionListeners.toList().also { pendingConnectionListeners.clear() }
+        }
 
         listeners.forEach { listener ->
             try {
@@ -853,8 +1001,9 @@ class ConnectionManager(
         }
 
         LogUtil.d(TAG, "Notifying ${pendingConnectionListeners.size} pending connection listeners of connection error")
-        val listeners = pendingConnectionListeners.toList()
-        pendingConnectionListeners.clear()
+        val listeners = synchronized(pendingConnectionListeners) {
+            pendingConnectionListeners.toList().also { pendingConnectionListeners.clear() }
+        }
 
         listeners.forEach { listener ->
             try {
@@ -1397,9 +1546,15 @@ class ConnectionManager(
                     .setHost(newHost)
                     .setPort(newPort)
 
-            val reconnectListener =
-                connectionListener ?: reconnectManager?.getLastConnectionListener()
-                    ?: internalReconnectListener
+            // A handshake handoff continues the original connect call. Keep its listener
+            // as the primary callback; the persistent observer is notified separately.
+            val reconnectListener = if (connectionStatus == ConnectionStatus.CONNECTING ||
+                connectionStatus == ConnectionStatus.WAIT_CONNECTING
+            ) {
+                reconnectManager?.getLastConnectionListener() ?: connectionListener ?: internalReconnectListener
+            } else {
+                connectionListener ?: reconnectManager?.getLastConnectionListener() ?: internalReconnectListener
+            }
             LogUtil.d(
                 TAG,
                 "Executing reconnection to $newHost:$newPort, listener=$reconnectListener"
@@ -1420,7 +1575,7 @@ class ConnectionManager(
      * Note: This should be called after kernel is created (during connection process)
      * Called in onWaitingConnect() which is always called before onConnected()
      */
-    private fun setupKernelStatusListener() {
+    private fun setupKernelStatusListener(deferLanHandshakeFailure: Boolean = false) {
         val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
         if (kernel == null) {
             LogUtil.d(TAG, "Cannot setup kernel status listener: kernel not available yet")
@@ -1428,6 +1583,9 @@ class ConnectionManager(
         }
 
         kernel.setStatusChangeListener { kernelStatus ->
+            if (TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel() !== kernel) {
+                return@setStatusChangeListener
+            }
             val newStatus = convertToConnectionStatus(kernelStatus)
             if (connectionStatus != newStatus) {
                 val previousStatus = connectionStatus
@@ -1453,9 +1611,17 @@ class ConnectionManager(
                 // Suppress during self-healing reconnect so a transient VSP/sub-screen kernel
                 // bounce (which surfaces as RECONNECTING -> CONNECTING, not DISCONNECTED) or an
                 // in-progress reconnect never raises a spurious onDisconnected to the integrator.
-                val isSelfHealing = reconnectManager?.isReconnecting() == true
+                // OPT-R1: the single in-transaction fast-recovery window (isFastRecovering) is
+                // also self-healing — its mid-recovery kernel DISCONNECTED is transient and must
+                // not surface a false onDisconnected nor clear the processed-terminal-event set.
+                val isSelfHealing = reconnectManager?.isReconnecting() == true || isFastRecovering
 
-                if (droppedToInactive && wasActive && !isSelfHealing) {
+                // A recovering LAN handshake has one terminal owner: ConnectionCallback.
+                // Kernel ERROR is also set by the final failure path; do not synthesize a
+                // second onDisconnected before that path delivers onError.
+                val handshakeFailureOwnedByCallback = deferLanHandshakeFailure &&
+                    previousStatus in listOf(ConnectionStatus.CONNECTING, ConnectionStatus.WAIT_CONNECTING)
+                if (droppedToInactive && wasActive && !isSelfHealing && !handshakeFailureOwnedByCallback) {
                     val reason = "Kernel status changed to $kernelStatus"
                     LogUtil.w(
                         TAG,
@@ -1670,6 +1836,11 @@ class ConnectionManager(
         // Keys used by Tapro in extraInfoMap (returned via getExtraInfos in APP_TO_APP mode)
         private const val EXTRA_KEY_TAPRO_VERSION = "taproVersion"
         private const val EXTRA_KEY_DEVICE_ID = "deviceId"
+
+        // OPT-R1: 交易中单次快速恢复的总预算与轮询间隔（毫秒）。
+        // 预算取 5s（含握手），远小于交易回调超时（默认 180s），确保恢复窗口不与交易超时冲突。
+        private const val FAST_RECOVERY_BUDGET_MS = 5_000L
+        private const val FAST_RECOVERY_POLL_MS = 200L
     }
 
     /**

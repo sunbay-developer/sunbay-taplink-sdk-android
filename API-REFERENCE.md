@@ -690,6 +690,14 @@ data class DiscoveredService(
 
 Delivered to `DiscoveryListener.onError` (LAN discovery/scan) and `ConnectionListener.onError` (connection lifecycle).
 
+For LAN connections with `autoReconnect = true`, a failed handshake to an old endpoint remains
+part of the ongoing recovery attempt. It does not emit `onError` or `onDisconnected` before
+trying the same terminal at its discovered endpoint. Successful recovery emits `onConnected`;
+failed recovery emits a final `onError` and releases waiting connection callers. Disabling
+`autoReconnect` preserves direct failure reporting. Established-link errors and transaction
+fast recovery retain their existing behavior. Callbacks can run on background threads;
+dispatch UI changes to the main thread.
+
 | Field | Type | Description |
 |------|------|-------------|
 | `code` | String | Error code (see below) |
@@ -894,3 +902,19 @@ Indicates the status after follow-up actions on the original transaction. Return
 ---
 
 *SDK version: 1.0.8*
+
+
+### Field setter ownership (pending release)
+
+Existing public configuration, request, and common-model field setters update the
+receiver and return it. Both `config.setTimeout(30);` and chained calls are supported.
+Runtime APIs such as `setConnectionListener()` retain their existing return signatures.
+Finish configuring before `TaplinkSDK.init()` and request submission. Initialization
+captures configuration values; changing the caller's config afterward does not update
+the active SDK. Submitted requests snapshot mutable payload fields before async work.
+
+Use `copy()` before setters to prepare independent top-level values. It remains shallow.
+Value getters, constructors, `copy`/`componentN`, and fluent signatures remain available;
+converted classes are no longer Kotlin data classes for reflection (`isData` is false).
+Do not mutate these objects while they are keys in hash collections. Serialize writes;
+production SDK logging must remain disabled. Timeout units and payment semantics are unchanged.
