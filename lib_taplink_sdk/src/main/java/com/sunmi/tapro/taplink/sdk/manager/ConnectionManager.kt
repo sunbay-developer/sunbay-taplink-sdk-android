@@ -1423,15 +1423,22 @@ class ConnectionManager(
 
         if (isSameAddress) {
             val actualStatus = getActualConnectionStatus()
-            return if (actualStatus in listOf(ConnectionStatus.DISCONNECTED, ConnectionStatus.ERROR)) {
+            // Only a genuinely established, live link (kernel CONNECTED, i.e. WebSocket actually
+            // connected) may short-circuit as "already connected, no reconnection needed". Any
+            // transitional state (CONNECTING / WAIT_CONNECTING) is NOT proof of a live link: after a
+            // peer-side network drop the kernel can retain a stale CONNECTING while the old socket is
+            // already dead. In that case the discovered same-address target is a valid recovery
+            // handoff and we MUST reconnect. Treating stale CONNECTING as "connected" is exactly the
+            // misjudgement that let a drop-and-reconnect be mislabelled as a fatal recovery failure.
+            return if (actualStatus == ConnectionStatus.CONNECTED) {
                 ReconnectionDecision(
-                    shouldReconnect = true,
-                    reason = "Same address but currently disconnected, reconnection needed"
+                    shouldReconnect = false,
+                    reason = "Same address and link is genuinely established (status: $actualStatus), no reconnection needed"
                 )
             } else {
                 ReconnectionDecision(
-                    shouldReconnect = false,
-                    reason = "Same address and already connected (status: $actualStatus), no reconnection needed"
+                    shouldReconnect = true,
+                    reason = "Same address but link not established (status: $actualStatus), reconnection needed"
                 )
             }
         }
@@ -1448,8 +1455,12 @@ class ConnectionManager(
     private fun analyzeConnectionState(newHost: String, newPort: Int): ReconnectionDecision {
         val actualStatus = getActualConnectionStatus()
 
-        // If already connected, check if connected to same address
-        if (actualStatus !in listOf(ConnectionStatus.DISCONNECTED, ConnectionStatus.ERROR)) {
+        // Keep this second guard aligned with analyzeAddressChange: only a genuinely established link
+        // (kernel CONNECTED) to the same address may short-circuit as "no reconnection needed" to
+        // avoid thrashing a live connection. A transitional CONNECTING / WAIT_CONNECTING is a stale
+        // residue, not a live link, so it must fall through to reconnect — otherwise a drop-and-
+        // reconnect to the same address would be wrongly suppressed here.
+        if (actualStatus == ConnectionStatus.CONNECTED) {
             val currentConfig = reconnectManager?.getLastConnectionConfig()
             if (currentConfig != null &&
                 currentConfig.host == newHost &&

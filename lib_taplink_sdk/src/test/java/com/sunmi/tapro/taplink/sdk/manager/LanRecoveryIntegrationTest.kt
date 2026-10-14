@@ -344,6 +344,99 @@ class LanRecoveryIntegrationTest {
         return disconnectedNotified
     }
 
+    /** Forces the live kernel's reported connection status, driving ConnectionManager's
+     * getActualConnectionStatus(). currentInnerConnectionStatus lives on BaseServiceKernel several
+     * levels up the hierarchy. */
+    private fun forceKernelStatus(kernel: LanClientKernel, status: InnerConnectionStatus) {
+        var cls: Class<*>? = kernel.javaClass
+        var field: java.lang.reflect.Field? = null
+        while (cls != null && field == null) {
+            field = runCatching { cls!!.getDeclaredField("currentInnerConnectionStatus") }.getOrNull()
+            cls = cls.superclass
+        }
+        field!!.apply { isAccessible = true }.set(kernel, status)
+    }
+
+    /** Invokes the private analyzeAddressChange(newHost,newPort,oldHost,oldPort) and returns its
+     * shouldReconnect decision. */
+    private fun analyzeAddressChange(
+        manager: ConnectionManager,
+        newHost: String,
+        newPort: Int,
+        oldHost: String,
+        oldPort: Int
+    ): Boolean {
+        val method = ConnectionManager::class.java.getDeclaredMethod(
+            "analyzeAddressChange",
+            String::class.java,
+            Int::class.javaPrimitiveType,
+            String::class.java,
+            Int::class.javaPrimitiveType
+        ).apply { isAccessible = true }
+        val decision = method.invoke(manager, newHost, newPort, oldHost, oldPort)
+        val field = decision.javaClass.getDeclaredField("shouldReconnect").apply { isAccessible = true }
+        return field.getBoolean(decision)
+    }
+
+    /**
+     * SPEC-LAN-RECOVERY-001 §AC1/AC3 (Fix A). After a peer-side network drop the kernel can retain a
+     * stale CONNECTING while the old socket is dead. A same-address discovery in that transitional
+     * state must be judged "reconnection needed" (shouldReconnect=true) so the attempt recovers,
+     * instead of being wrongly treated as "already connected" (the pre-fix bug that let the handoff
+     * be mislabelled fatal). WAIT_CONNECTING is covered as another transitional residue.
+     */
+    @Test
+    fun staleTransitionalStateSameAddressIsJudgedAsReconnectNeeded() {
+        val (manager, service) = setup { emptyList() }
+        try {
+            val kernel = service.getCurrentServiceKernel() as LanClientKernel
+            listOf(InnerConnectionStatus.CONNECTING, InnerConnectionStatus.WAITING_CONNECT).forEach { stale ->
+                forceKernelStatus(kernel, stale)
+                assertTrue(
+                    "Stale $stale on same address must be judged as reconnect-needed",
+                    analyzeAddressChange(manager, "127.0.0.1", 8443, "127.0.0.1", 8443)
+                )
+            }
+        } finally {
+            manager.disconnect()
+            service.release()
+        }
+    }
+
+    /**
+     * SPEC-LAN-RECOVERY-001 §4 (Fix A regression guard). When the link is GENUINELY established
+     * (kernel CONNECTED) a same-address discovery must NOT trigger a reconnect, preventing thrashing a
+     * live connection. Both decision guards (analyzeAddressChange and analyzeConnectionState) must
+     * agree on "no reconnection needed" for a live same-address link.
+     */
+    @Test
+    fun genuinelyConnectedSameAddressDoesNotReconnect() {
+        val (manager, service) = setup { emptyList() }
+        try {
+            val kernel = service.getCurrentServiceKernel() as LanClientKernel
+            forceKernelStatus(kernel, InnerConnectionStatus.CONNECTED)
+            assertFalse(
+                "A genuinely CONNECTED same-address link must not reconnect",
+                analyzeAddressChange(manager, "127.0.0.1", 8443, "127.0.0.1", 8443)
+            )
+            // Second guard must agree once a replacement config for the same address is recorded.
+            val reconnect = ConnectionManager::class.java.getDeclaredField("reconnectManager")
+                .apply { isAccessible = true }.get(manager) as ReconnectManager
+            ReconnectManager::class.java.getDeclaredField("lastConnectionConfig")
+                .apply { isAccessible = true }.set(reconnect, config(8443))
+            val stateMethod = ConnectionManager::class.java.getDeclaredMethod(
+                "analyzeConnectionState", String::class.java, Int::class.javaPrimitiveType
+            ).apply { isAccessible = true }
+            val stateDecision = stateMethod.invoke(manager, "127.0.0.1", 8443)
+            val shouldReconnect = stateDecision.javaClass.getDeclaredField("shouldReconnect")
+                .apply { isAccessible = true }.getBoolean(stateDecision)
+            assertFalse("analyzeConnectionState must also suppress reconnect for a live same-address link", shouldReconnect)
+        } finally {
+            manager.disconnect()
+            service.release()
+        }
+    }
+
     @Test
     fun fastRecoveryWindowSuppressesFalseDisconnectNotification() {
         val (manager, service) = setup { emptyList() }

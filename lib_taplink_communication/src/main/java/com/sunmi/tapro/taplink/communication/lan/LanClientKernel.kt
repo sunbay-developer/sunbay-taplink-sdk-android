@@ -680,10 +680,36 @@ class LanClientKernel(
                             throw Exception("No valid services found after ${SERVICE_DISCOVERY_MAX_RETRIES + 1} attempts")
                         }
                     } else {
-                        // No accepted handoff means nobody owns a replacement connection.
-                        // Complete this attempt instead of leaving it CONNECTING forever.
+                        // Every discovered target was declined by the upper layer this round.
+                        // "Upper layer declined a single service" is NOT the same as "the recovery
+                        // handoff failed": per SPEC-LAN-RECOVERY-001 R3 we must converge within the
+                        // existing bounded discovery budget and only report a single terminal error
+                        // once that budget is exhausted — never a one-shot non-retryable abort (which
+                        // a message containing "invalid" would trigger via
+                        // isRetryableServiceDiscoveryError), and never a bare return that would leave
+                        // the attempt silently stuck in CONNECTING (SPEC §4).
                         if (connectionOptions.deferHandshakeFailureCallbacks) {
-                            throw IllegalStateException("Service discovery target rejected; invalid recovery handoff")
+                            if (retryCount < SERVICE_DISCOVERY_MAX_RETRIES) {
+                                LogUtil.d(
+                                    TAG,
+                                    "All discovered targets declined by upper layer; retrying within recovery budget (attempt ${retryCount + 1}/${SERVICE_DISCOVERY_MAX_RETRIES + 1}) ($operationId)"
+                                )
+                                lastException =
+                                    Exception("Recovery handoff declined by upper layer (attempt ${retryCount + 1})")
+                                retryCount++
+                                continue
+                            }
+                            // Budget exhausted: report one terminal failure. The message deliberately
+                            // omits "invalid"/"cancelled" and the "service discovery" substring so it is
+                            // neither classified as a non-retryable abort nor as a mid-budget retryable
+                            // error; at exhausted budget the catch block throws it as the final outcome.
+                            LogUtil.e(
+                                TAG,
+                                "Recovery handoff exhausted: no accepted target after ${SERVICE_DISCOVERY_MAX_RETRIES + 1} attempts ($operationId)"
+                            )
+                            throw Exception(
+                                "Recovery handoff exhausted: no accepted target after ${SERVICE_DISCOVERY_MAX_RETRIES + 1} attempts"
+                            )
                         }
                         // Fast transaction recovery retains its immediate error callback path.
                         return
