@@ -112,7 +112,7 @@ com.sunmi.tapro.taplink.communication.*   ❌ lib_taplink_communication 全部�
 
 ### ⚠️ 人工发布节点（AI 必须暂停等待）
 
-**第 ④ 步的 AAR 打包和 Maven 发布一律由维护者手动完成，AI agent 严禁自行执行发布相关 Gradle task**（如 publish/assembleRelease 等发布任务）。AI 的正确行为：
+**第 ③ 步的 AAR 打包和 Maven 发布一律由维护者手动完成，AI agent 严禁自行执行发布相关 Gradle task**（如 publish/assembleRelease 等发布任务）。AI 的正确行为：
 
 1. 完成内部版本号、RELEASE-NOTES、提交及可选的候选标签后**停下**，明确告知维护者"请手动执行 AAR 打包与 Maven 发布"。公开 `vX.Y.Z` 标签不能指向 `dev_pro`。
 2. **等待维护者操作完成并提供实际发布的版本号**。
@@ -122,9 +122,11 @@ com.sunmi.tapro.taplink.communication.*   ❌ lib_taplink_communication 全部�
 
 ### 8.1 发版必须同步更新 sunbay-open-docs（强制，不可省略）
 
-只要本次发布涉及**对外 API/行为变化**（新增/修改公开类型、连接模式、交易语义、错误码等），就必须在同一发布流程中更新 `~/StudioProjects/sunbay-open-docs` 仓库：
+Tapro 当前通过 `lib_taplink_service/build.gradle.kts` 的 `api(libs.taplink.sdk)` 消费 SDK，升级位置是 `tapro/gradle/libs.versions.toml` 的 `taplinkSdk`；不要修改遗留 `tapro/lib_taplink_sdk/build.gradle` 或直接替换其 AAR。先由维护者确认实际 Maven 版本，再升级并验证消费者。文档可先准备待发布草稿，但未确认发布前不修改 Current/当前版本和推荐依赖为候选版本。
 
-- `src/content/en/sdk/client-side/android.mdx` **和** `src/content/zh/sdk/client-side/android.mdx`（两者都要改，禁止只改一侧）：
+每次 SDK 版本发布均须同步依赖版本、Version History 与 changelog；涉及**对外 API/行为变化**（新增/修改公开类型、连接模式、交易语义、错误码等）时，还须同步相关契约、示例与迁移说明。在同一发布流程中更新 `~/StudioProjects/sunbay-open-docs` 仓库：
+
+- `src/content/en/sdk/client-side/android/index.mdx` **和** `src/content/zh/sdk/client-side/android/index.mdx`（两者都要改，禁止只改一侧）；受影响的 `android/android-saf.mdx` 与 `_meta.ts` 同步核对：
   - 更新 `implementation("com.sunmi:sunbay-taplink-sdk-android:X.Y.Z")` 版本号
   - 在 "Version History"/"版本历史" 顶部新增 `### vX.Y.Z (Current)` 条目，移除上一版本的 `(Current)` 标记
   - 内容需与本仓库 `RELEASE-NOTES.md` 对应版本语义一致，但只暴露对外契约行为，不泄漏内部实现细节
@@ -156,7 +158,7 @@ com.sunmi.tapro.taplink.communication.*   ❌ lib_taplink_communication 全部�
 - [ ] 内部候选/正式标签均指向对应 `dev_pro` 提交，公开 `vX.Y.Z` 仅指向 `main` 的单个公开提交，且没有混推到错误 remote
 - [ ] 公开提交只包含 SDK 源码、必要构建配置和面向集成商的公开文档；已排除内部发布脚本、签名材料、内部文档及凭证
 - [ ] **AAR 打包与 Maven 发布已由维护者手动完成，且后续步骤使用的是维护者确认的版本号**
-- [ ] **`sunbay-open-docs` 中 en + zh 的 `sdk/client-side/android.mdx` 已同步更新**（版本号、Version History、迁移指南、错误码参考、changelog）
+- [ ] **`sunbay-open-docs` 中 en + zh 的 `sdk/client-side/android/index.mdx` 已同步更新**（版本号、Version History、迁移指南、错误码参考、changelog）
 - [ ] Git 提交信息为英文，符合 Conventional Commits
 - [ ] 未在公开 API 中意外暴露 `impl/manager/protocol/persistence` 或 `lib_taplink_communication` 中的类型
 
@@ -174,7 +176,7 @@ com.sunmi.tapro.taplink.communication.*   ❌ lib_taplink_communication 全部�
 
 - **SDD 是行为变更前置要求**：新功能、公开 API/协议语义、错误码、连接/交易行为变化，先检查 `docs/spec/` 的 active spec；缺失时按 `docs/spec/SPEC_GUIDE.md` 与 `.agents/skills/spec-authoring/SKILL.md` 的五步流水线建立规格。每条规则带来源分类、原始文档版本/章节/原文、AC 与测试映射；独立复核和人工批准后才可作为实现依据。历史资料按领域逐步迁移，不将未经审查的旧文档自动视为 active。
 - **SCR 是已批准 spec 实质变更的强制记录**：L2/L3 必须有 `docs/spec/changes/{change_id}.yaml`，区分来源遗漏与新增设计决策，记录 before/after、影响和审批；金额、交易结果、306 超时、请求 ID、连接协议、公开 API breaking change 等按 L3 专项批准。运行 `./config/speccheck/spec-check.sh`；通过仅证明机械结构，不代替语义审查。
-- **TDD 流程**：当前任务经用户明确要求或同意后，按 `.agents/skills/tdd/SKILL.md` 执行需求方向与用例清单两道闸门、红绿重构、集成/设备验证、回归、评审和 spec 回写；bug 走 B1–B5。启动授权与 Tapro `AGENTS.md §13.2.0` 对齐，用户在当前任务已明确授权的无需再问。用例必须引用 active spec 的 `spec_id §AC`；若发现规则缺口先走 SCR 裁决。
+- **TDD 流程**：当前任务经用户明确要求或同意后，按 `.agents/skills/tdd/SKILL.md` 执行需求方向与用例清单两道闸门、红绿重构、集成/设备验证、回归、评审和 spec 回写；bug 走 B1–B5。执行授权与 Tapro `AGENTS.md §13.2.0` 风险分级对齐：相关本地纯逻辑测试、按批准 AC 新增回归测试和静态检查自动执行；完整 TDD 默认授权包包含这些步骤及 AI Review，用户可明确排除；独立 Review 按任务授权一次，不重复询问。需求/用例/Spec/SCR 批准、设备/真实后端测试与发布仍保留人工闸门。用例必须引用 active spec 的 `spec_id §AC`；若发现规则缺口先走 SCR 裁决。
 - **发布边界保持不变**：本流程不授权 AI 执行 AAR 打包/Maven 发布；继续遵守 §8 的维护者人工节点和确认版本后的下游/双语文档同步。
 
 ## 12. 规则文件索引

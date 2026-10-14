@@ -1,11 +1,19 @@
 ---
 name: tdd
-description: TapLink SDK 的新功能和行为缺陷开发流程，按 Spec 的 AC 先确认用例，再执行红绿重构、集成验证、评审和文档回写。
+description: 用户当前任务明确要求启动 TDD 或同意使用时执行的 TapLink SDK 开发流程；按 Spec AC 确认用例，再执行获准的红绿重构、集成验证、评审和文档回写。普通开发请求不自动触发。
 ---
 
 # TapLink SDK TDD 流程
 
 先读根目录 `AGENT.md`、`docs/spec/SPEC_GUIDE.md` 和相关 `.cursor/rules/taplink-*.mdc`。沿用 Tapro 的两道人为闸门：Step 0 确认需求方向和影响范围，Step 3 确认用例与期望；已在当前任务明确确认的结论可直接复用。此流程只在用户明确要求 TDD 或同意使用时启动，普通改动按仓库规范做必要验证。
+
+## 执行授权与验证入口
+
+- 按 `AGENT.md §11.1` 和 Tapro `AGENTS.md §13.2.0` 分级执行：常规本地纯逻辑测试和静态检查自动进行；完整 TDD 按任务授权一次，默认包含相关测试、静态预评估和 Step 8 AI Review，用户可明确排除。已包含步骤不重复询问；设备/真实后端测试及发布另行确认。
+- 需求方向、用例和 Spec/SCR 批准是业务闸门，与执行授权分开。未启动 TDD 仍须在行为变更前核对批准规格。
+- 从 SDK 仓库根执行：必要编译使用 `./gradlew :lib_taplink_sdk:compileDebugKotlin`、`./gradlew :lib_taplink_communication:compileDebugKotlin`（按影响模块选择）；SDK 不使用 Tapro 的 flavor 任务名。
+- 相关本地纯逻辑测试自动使用 `./gradlew :lib_taplink_sdk:testDebugUnitTest` 或 `./gradlew :lib_taplink_communication:testDebugUnitTest`。静态检查使用 `git diff --check`，规格记录用 `./config/speccheck/spec-check.sh`；无对象跳过不等于规格已验证。
+- 不运行 AAR 打包或 Maven 发布任务，继续遵守维护者人工发布节点。验证结果区分通过、失败、未授权、环境受阻、不适用。
 
 ## 新功能 Step 0–10
 

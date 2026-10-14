@@ -73,6 +73,17 @@ class MyApplication : Application() {
 }
 ```
 
+Field setters update their receiver and return it, so both separate calls and chains work:
+
+```kotlin
+config.setTimeout(30)
+config.setLogEnabled(false).setLogLevel(LogLevel.INFO)
+TaplinkSDK.init(context, config)
+```
+
+Finish configuration before initialization. Later setters do not update an initialized SDK.
+Use `copy()` for independent top-level values; see [field setter ownership](API-REFERENCE.md#field-setter-ownership-pending-release).
+
 #### Step 2: Connect to Payment Terminal
 
 ```kotlin
