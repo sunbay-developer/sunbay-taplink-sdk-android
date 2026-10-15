@@ -1,0 +1,206 @@
+# SCR-LAN-TRACEID-REBIND-001 —— Spec Change Request
+#
+# Records the substantive change to the already-approved active spec SPEC-LAN-RECOVERY-001
+# driven by the Host-side "traceId-anchored unified LAN rebind" plan (tapro/biz_taplink +
+# lib_taplink_service). The Host replaces its IP-anchored in-flight rebind with a traceId
+# anchor plus an appId identity guard. This SCR captures why/what/basis/approval/impact and
+# extends SPEC-LAN-RECOVERY-001's source mapping + ACs. Scope is LAN only; Cable is out of scope.
+#
+# On-disk: taplinksdk/docs/spec/changes/SCR-LAN-TRACEID-REBIND-001.yaml (controlled, versioned).
+# Governs: SPEC_GUIDE §4 (SCR), spec-authoring SKILL step 5.
+
+change_id: SCR-LAN-TRACEID-REBIND-001
+spec_id: SPEC-LAN-RECOVERY-001
+rule_id: [R6, R7, R8, R9, R10]          # R6 clarified; R7-R10 added by this SCR
+
+change_type: ADD_RULE                    # ADD_RULE (R7-R10) + CLARIFY_RULE (R6 boundary note)
+level: L3                                # appId authorization boundary is a payment-security L3 item
+# Rationale for L3: the change removes the LAN connection-acceptance IP guard and introduces a new
+# appId-based authorization boundary that decides whether an in-flight transaction's response
+# channel (containing masked PAN, amount, authCode, transactionId) may be re-pointed to a newly
+# connected client. This changes a security/authorization boundary on the payment response path,
+# so it is L3 regardless of code size.
+
+# ── Change origin (SPEC_GUIDE §4; must distinguish A vs B) ───────────────────────────
+change_origin: DESIGN_DECISION           # Type B: not specified by SPEC-LAN-RECOVERY-001's sources;
+                                         # a new, maintainer-pinned design (the user-approved 5-point plan).
+reported_by: Maintainer (traceId-anchor unified rebind plan)
+initiator_role: product_owner
+reason: >
+  The user approved a Host-side plan that re-anchors LAN in-flight response delivery on the
+  transaction traceId instead of the client IP: drop the "different-IP reject" acceptance guard,
+  stop invalidating in-flight bindings on drop, and on any new connection re-point all in-flight
+  bindings to the new sender -- gated by an appId identity check so one merchant's in-flight
+  result is never pushed to another connecting client. SPEC-LAN-RECOVERY-001 R6/AC6 currently
+  asserts "no change to the existing fast-recovery path" and the payment_checklist notes
+  "preserve existing established-link and transaction behavior"; this plan touches the
+  established-link in-flight response-routing and acceptance behavior, so the active spec must be
+  extended via SCR before implementation.
+
+# ── Basis (ties to §1.3 source traceability) ────────────────────────────────────────
+source:
+  type: EXPLICIT                         # verbatim user instructions + feasibility report with code evidence
+  references:
+    - document_id: USER-REQUEST-TRACEID-REBIND
+      version: "2026-10-10"
+      section: "verbatim messages 1-6"
+      quote: >
+        "以交易(traceId)为锚点,新连接建立即把在途交易回推通道指向它" /
+        ":拿掉「不同 IP 拒绝」，你可以加上appid的限制" /
+        "不需要appid兜底sdk侧的traceid是唯一的" /
+        "可以先做LAN，scr流程放一个工作流" / "开始 实现"
+    - document_id: FEASIBILITY-TRACEID-ANCHOR
+      version: "v1.0"
+      document_path: ../tapro/.agents/tasks/traceid-anchor-unified-rebind-feasibility.md
+      section: "§3 (security), §5 (SDK callbacks), §7.2/§7.3 (SDK change points + SCR necessity), §8 (alignment risk)"
+  evidence: >
+    Feasibility report §5.2 proves the SDK OPT-R1 fast-recovery path already does NOT clear
+    callbacks or the terminal-dedup set during an in-transaction passive drop + auto-reconnect
+    (ConnectionManager.setupKernelStatusListener guards connectionDisconnectedListener with
+    isSelfHealing = isReconnecting || isFastRecovering). §5.3/§8 identify the single alignment
+    risk: FAST_RECOVERY_BUDGET_MS=5s vs the Host "retain binding" window; §5.2 confirms a recovered
+    fast-recovery keeps in-flight callbacks alive under the 180s transaction callback timeout.
+
+# ── What changed (before / after) ───────────────────────────────────────────────────
+before:
+  status: active (v1.0)
+  summary: >
+    SPEC-LAN-RECOVERY-001 covers pre-connection LAN handshake recovery callback ordering only.
+    R6/AC6 explicitly preserve "existing in-flight fast recovery budgets, transaction callbacks and
+    query-first rules" and assert "no change to the existing fast-recovery path". The spec's §7 and
+    boundaries scope out established-link in-flight response routing and connection-acceptance identity.
+after:
+  status: Approved                       # L3 rule owner approved on 2026-10-10 (human gate)
+  summary: >
+    Extend SPEC-LAN-RECOVERY-001 so the SDK side explicitly:
+    (R7) keeps the in-transaction OPT-R1 fast-recovery self-heal path and the 180s callback timeout
+         as the authoritative in-flight callback lifetime, UNCHANGED by this plan;
+    (R8) confirms the SDK requires NO code change for LAN under this plan -- the isLanMode fast-recovery
+         gate stays as-is (Cable widening is explicitly out of scope);
+    (R9) documents the Host<->SDK window alignment: the Host retains in-flight bindings and MUST align
+         to the SDK 180s transaction callback timeout, NOT the 5s fast-recovery budget; once the SDK
+         exhausts the 5s budget it fails in-flight callbacks with E306 and reports E213, which the Host
+         must treat as the practical in-flight ceiling for a non-recovered drop;
+    (R10) the appId identity guard is a Host-side authorization boundary; the SDK adds no public API,
+         no new error code, and no new transaction-identity anchor (traceId remains globally unique).
+  proposed_rules:
+    - id: R7
+      statement: >
+        In-transaction OPT-R1 fast recovery (LAN, autoReconnect, hasInFlight, non-manual) continues to
+        suppress the paired disconnect cleanup via isFastRecovering, so transaction callbacks and the
+        terminal-dedup set are NOT cleared during a recoverable in-flight drop; recovered connections
+        keep in-flight callbacks under the existing 180s callback timeout. Unchanged by this plan.
+      criticality: high
+      status: Approved
+    - id: R8
+      statement: >
+        This plan requires NO SDK code change for LAN. The canFastRecover isLanMode gate is retained
+        as-is; widening it to Cable is explicitly out of scope (deferred to a separate change).
+      criticality: medium
+      status: Approved
+    - id: R9
+      statement: >
+        Host-retained in-flight bindings must align to the SDK 180s transaction callback timeout, not
+        the 5s FAST_RECOVERY_BUDGET_MS. When fast recovery is not achieved within 5s the SDK fails
+        in-flight callbacks with E306 and reports E213; the Host must not expect the SDK to keep the
+        in-flight callback alive beyond the 180s callback timeout, and must not retry 306 directly.
+      criticality: high
+      status: Approved
+    - id: R10
+      statement: >
+        The appId / merchant identity guard replacing the LAN different-IP reject is a Host-side
+        authorization boundary. The SDK adds no public API, no new error code, and no new identity
+        anchor; traceId remains the globally unique transaction identity.
+      criticality: high
+      status: Approved
+
+# ── Impact analysis ──────────────────────────────────────────────────────────────────
+impact:
+  acceptance_criteria: [AC6, AC7, AC8, AC9, AC10]
+  test_cases:
+    # R7 is already covered by the existing fast-recovery regression TCs; R8-R10 are no-code-change
+    # assertions verified by preserving the existing path (no new SDK tests required by this plan).
+    - TC-LAN-RECOVERY-006    # existing: fast-recovery window suppresses false disconnect; genuine drop still notifies
+  public_api_change: false
+  new_error_code: false
+  sdk_code_change_required: false        # LAN: no SDK code change under this plan
+  downstream:
+    host_tapro: "Host (lib_taplink_service) implements the rebind + appId guard; see Host active spec SPEC-HOST-LAN-TRACEID-REBIND-001."
+    taplinkdemo: "No change (Demo already validated the recovered-callback behavior on real device)."
+    sunbay_open_docs: "No public-contract change -> no en/zh doc update required for this plan; revisit only if Cable widening or a public API change is later approved."
+  regression_required: true              # re-run existing fast-recovery regression suite to prove the path is untouched
+
+# ── Approval (SPEC_GUIDE §4) ───────────────────────────────────────────────────────────
+approval:
+  status: APPROVED                       # L3 human gate cleared on 2026-10-10
+  reviewers: [SDK_CONNECTION_RULE_OWNER]
+  approver_role: SDK_CONNECTION_RULE_OWNER   # L3: connection-protocol + authorization-boundary owner
+  approved_by: Maintainer (human approval gate, workflow wf_0631387f2f0ba031)
+  decision_note: >
+    Approved with the two Host-side high-risk questions resolved "safety-first":
+    (Q-1) when either appId is empty (new-connection sign-in appId or in-flight transaction appId),
+    DO NOT rebind -- no "bypass identity check without appId" backdoor; the "reconnect before
+    sign-in cannot resume" cost is accepted. (Q-2) the rebind trigger point is the sign-in success
+    callback, NOT onOpen -- onOpen only accepts any new connection (no different-IP reject) and does
+    no rebind (appId is unknown there); rebindAllInFlightTo runs in the sign-in success callback,
+    gated by the appId equality check. "Accepting a connection != re-pointing the response channel."
+    R7-R10 require no SDK code change for LAN; verification must confirm the SDK auto re-signs-in
+    after fast-recovery/reconnect, otherwise the Host appId guard never obtains the new-connection
+    appId and resume never fires (flag in verification if not).
+
+# ── Q-2 reversal (2026-10-11): Host trigger point moved from sign-in callback to onOpen ──
+# Recorded here because the SCR's approval decision_note pinned the Host trigger to the
+# "sign-in success callback" and required verification to confirm the SDK auto re-signs-in after
+# fast recovery. Implementation-phase verification DISPROVED that premise. The SDK side (R7-R10)
+# is UNCHANGED by this reversal: still NO SDK code change for LAN. The reversal is a Host-side
+# trigger/authorization change, mirrored in Host SPEC-HOST-LAN-TRACEID-REBIND-001 v1.2.
+q2_reversal:
+  decided_at: 2026-10-11
+  decided_by: Maintainer (human decision, workflow wf_0631387f2f0ba031)
+  trigger: >
+    Verification confirmed taplinksdk OPT-R1 fast recovery (ConnectionManager.tryFastRecovery ->
+    connectInternal) only re-establishes the original-IP WebSocket and does NOT re-sign-in; the
+    Host preserves sign-in state across an in-flight passive drop (R3 does not reach DISCONNECTED,
+    so clearSignInState is not called). Therefore needsSignIn(appId)=false on reconnect and the
+    v1.1 "sign-in success callback" rebind trigger never fires on the fast-recovery main path.
+    Evidence: tapro/.agents/tasks/tapro-feat-traceid-anchor-rebind-2026-10-10/verification.md §3.
+  before:
+    host_trigger_point: "sign-in success callback (MessageManager.updateTaplinkSignInState)"
+    host_identity_guard: "rebind only if new-connection appId == in-flight transaction appId (both non-empty)"
+    premise: "SDK auto re-signs-in after fast-recovery/reconnect"
+  after:
+    host_trigger_point: "LAN onOpen accept-new-connection point (covers the fast-recovery main path, which always re-opens)"
+    host_identity_guard: "rebind only if the in-flight transaction's OWN appId is non-empty; the new-connection identity check is REMOVED"
+    premise: "SDK does NOT re-sign-in on fast recovery (disproven premise); onOpen is the only reliable trigger"
+  impact:
+    sdk_code_change_required: false        # UNCHANGED: SDK still needs no LAN code change
+    sdk_rules_affected: []                 # R7-R10 unchanged; reversal is Host-side only
+    public_api_change: false
+    new_error_code: false
+    security_downgrade: >
+      Removing the new-connection identity check means the LAN connection layer no longer enforces
+      identity isolation: onOpen accepts any new client and re-points A's in-flight bindings to it.
+      Accepted by the maintainer ONLY under the single-client model + physically trusted LAN +
+      globally unique traceId. Widening to multiple concurrent clients is a risk point requiring a
+      separate change (cross-merchant leakage). Minimum guard retained: rebind only when the
+      in-flight transaction's own appId is non-empty (blocks identity-less bare rebind; not isolation).
+    downstream:
+      host_tapro: "Host SPEC-HOST-LAN-TRACEID-REBIND-001 bumped v1.1 -> v1.2 (pending re-approval); R2/R6/R8/R11 rewritten."
+      taplinkdemo: "No change."
+      sunbay_open_docs: "No public-contract change -> no en/zh doc update required."
+  approval:
+    status: APPROVED                       # Host v1.2 cleared the human gate on 2026-10-11
+    approved_by: Maintainer (human approval gate, workflow wf_0631387f2f0ba031)
+    approved_at: 2026-10-11
+    note: "SDK-side scope of this SCR (R7-R10, no-code-change) remains APPROVED and unaffected by the reversal."
+
+# ── Version & time ───────────────────────────────────────────────────────────────────
+target_spec_version: "v1.1"
+created_at: 2026-10-10
+resolved_at: 2026-10-10
+amended_at: 2026-10-11                     # Q-2 reversal recorded (Host-side; SDK scope unchanged)
+
+# After approval: flip after.status/R7-R10 PROPOSED -> Approved in coverage + spec §2/§8, add the
+# §0 Changelog row (linking this change_id), bump SPEC-LAN-RECOVERY-001 to v1.1, and run
+# ./config/speccheck/spec-check.sh. No AAR/Maven publish and no downstream version bump result from
+# this SCR (no public contract change).

@@ -1,0 +1,11 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "severity": "non-blocking",
+      "label": "SRC-4 source_quote intentionally unverified",
+      "detail": "SRC-4's source_quote is the risk assessment's Chinese §4 conclusion and is verbatim-present in the cited file, satisfying SPEC_GUIDE §1.3; verified:false is correctly set pending human semantic confirmation at the L3 gate. No action required for the DRAFT; flagged only so the human reviewer knows the quote is intentionally unverified, not accidentally so."
+    }
+  ],
+  "reviewDoc": "/Users/sm4306/StudioProjects/taplinksdk/docs/spec/changes/fastrecovery-allmodes-scr-2026/scr-review.md"
+}

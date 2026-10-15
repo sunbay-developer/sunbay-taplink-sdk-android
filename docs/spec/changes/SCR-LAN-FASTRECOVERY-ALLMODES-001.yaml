@@ -1,0 +1,222 @@
+# SCR-LAN-FASTRECOVERY-ALLMODES-001 —— Spec Change Request
+#
+# ░░░ DRAFT — PENDING MAINTAINER HUMAN APPROVAL ░░░
+# This SCR is a DRAFT produced by the SDD spec-revision workflow. Nothing in this file is
+# APPROVED. The approval block status is PENDING. A human maintainer (the SDK connection /
+# authorization-boundary rule owner) must review and approve this SCR before any status here,
+# in the spec, or in the coverage is flipped to APPROVED. Do not treat this as an approval of
+# record. "approval.status: PENDING" is intentional and must stay PENDING until the human gate.
+#
+# Records the substantive change to the already-approved active spec SPEC-LAN-RECOVERY-001
+# (v1.1) driven by a maintainer-pinned DESIGN_DECISION: the uncommitted ConnectionManager.kt
+# change removed the OPT-R1 fast-recovery `isLanMode` gate and extracted a pure internal
+# function `computeCanFastRecover(...)`, widening in-flight fast-recovery entry judgment from
+# LAN-only to ALL connection modes. The maintainer has decided to KEEP this code. This SCR
+# rewrites R8/AC8 so the spec matches the widened code, and records why/what/basis/impact so
+# the already-approved spec is not silently overwritten.
+#
+# On-disk: taplinksdk/docs/spec/changes/SCR-LAN-FASTRECOVERY-ALLMODES-001.yaml (controlled, versioned).
+# Governs: SPEC_GUIDE §4 (SCR), spec-authoring SKILL step 5.
+
+change_id: SCR-LAN-FASTRECOVERY-ALLMODES-001
+spec_id: SPEC-LAN-RECOVERY-001
+rule_id: [R8]                            # R8 rewritten; AC8 rewritten. R6/R7/R9/R10 unchanged (see impact).
+
+change_type: MODIFY_RULE                 # R8/AC8 substantive wording change to match widened code
+level: L3
+# Rationale for L3 (SPEC_GUIDE §4): the change alters the TRIGGER SCOPE of in-flight (in-transaction)
+# disconnect fast recovery — a connection-protocol / payment-response-path behavior. It affects the
+# conditions under which an in-flight payment transaction's response channel is kept alive across a
+# passive drop across MULTIPLE connection modes (LAN / Cable / App-to-App / Cloud), rather than LAN
+# only. Even though the Step-1 static analysis concludes the widening is a runtime no-op for non-LAN
+# modes (see impact.harmless_widening), the rule being rewritten governs in-flight transaction
+# callback lifetime on the payment response path, so it is L3 regardless of the small code size.
+# NOTE: status stays DRAFT / approval.status PENDING pending the human L3 gate.
+
+# ── Change origin (SPEC_GUIDE §4; must distinguish A vs B) ───────────────────────────
+change_origin: DESIGN_DECISION           # Type B: NOT specified by SPEC-LAN-RECOVERY-001's sources.
+                                         # The prior spec (R8, SRC-3) explicitly asserted "no SDK code
+                                         # change for LAN; isLanMode gate retained; Cable out of scope".
+                                         # Widening the gate to all modes is a NEW maintainer-pinned
+                                         # product decision, not an omission of an existing source.
+reported_by: Maintainer (keep the all-modes fast-recovery widening in ConnectionManager.kt)
+initiator_role: product_owner
+reason: >
+  The working tree removed the `canFastRecover` `isLanMode` gate and extracted the pure internal
+  function `computeCanFastRecover(autoReconnectEnabled, isManual, hasInFlight, isFastRecovering,
+  isReconnecting, hasConnectionConfig)`. The OPT-R1 in-flight fast-recovery ENTRY decision no longer
+  depends on the connection mode; it is governed purely by runtime conditions. The maintainer has
+  decided to KEEP this code. SPEC-LAN-RECOVERY-001 R8/AC8 (added by the APPROVED SCR-LAN-TRACEID-
+  REBIND-001) currently assert the opposite — "NO SDK code change for LAN; isLanMode gate retained;
+  Cable widening is out of scope". Because the code now contradicts the approved R8/AC8, the active
+  spec must be revised via this SCR before the change can be considered consistent. This SCR is a
+  DRAFT pending the human L3 approval gate; it changes only R8/AC8 and leaves R1–R7, R9, R10
+  untouched.
+
+# ── Basis (ties to SPEC_GUIDE §1.3 source traceability) ──────────────────────────────
+source:
+  type: EXPLICIT                         # repo-internal Step-1 static risk assessment with file:line code evidence
+  references:
+    - document_id: FASTRECOVERY-ALLMODES-RISK-ASSESSMENT
+      document_version: "STEP 1 (read-only static risk assessment)"
+      document_path: docs/spec/changes/fastrecovery-allmodes-scr-2026/fastrecovery-allmodes-risk-assessment.md
+      section: "## 4. 总体结论（供 R8 重写用）"
+      source_quote: >
+        移除 `isLanMode` 门控把快恢**判定层**放开到所有模式，但**运行层**由 `onDisconnected` 的
+        `isConnectionError` 分类天然约束：只有上报 WebSocket 正常/异常关闭码（`1000/1001/1006`）的断开
+        才会进入 normalDisconnect 分支并触达 `computeCanFastRecover`，而这类码**只有 LAN（WebSocket）
+        传输会产生**。
+    - document_id: CODE-CONNECTIONMANAGER-WIDENING
+      document_version: "working tree (uncommitted), branch dev_pro"
+      document_path: lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/ConnectionManager.kt
+      section: "computeCanFastRecover + onDisconnected normalDisconnect branch"
+      source_quote: >
+        internal fun computeCanFastRecover(
+      note: >
+        Working-tree code evidence. computeCanFastRecover (around :538-567) contains no connection-mode
+        parameter; the onDisconnected normalDisconnect branch (around :486-507) collects runtime
+        conditions and calls it; the former `val isLanMode = currentConnectionMode == ConnectionMode.LAN.name`
+        gate was deleted. Verified by `git diff` on the working tree (recorded in impact.verification).
+  evidence: >
+    Step-1 risk assessment (read-only, no code modified) walks every connection mode and concludes
+    harmless-widening: only disconnects reporting WebSocket close codes 1000/1001/1006 enter the
+    onDisconnected normalDisconnect branch and reach computeCanFastRecover, and those codes are
+    produced only by the LAN (WebSocket) transport. Cable (E212/E232/E251..), App-to-App (E213) and
+    Cloud (no SDK connection entity) are classified by isConnectionError into the connection-error
+    branch (or never produce an onDisconnected), so they never reach the widened entry judgment and
+    the widening is a runtime no-op for them. The per-mode conclusions are reproduced in impact below.
+
+# ── What changed (before / after) ────────────────────────────────────────────────────
+before:
+  status: active (v1.1)
+  summary: >
+    SPEC-LAN-RECOVERY-001 R8 (SRC-3, Approved via SCR-LAN-TRACEID-REBIND-001): "This plan requires NO
+    SDK code change for LAN. The `canFastRecover` `isLanMode` gate is retained as-is; widening it to
+    Cable is out of scope and deferred to a separate change." AC8: "canFastRecover still gates on
+    isLanMode with no code change and no Cable widening; the existing fast-recovery regression suite
+    stays green with no SDK diff." This no-longer matches the working-tree code, which removed the
+    isLanMode gate.
+after:
+  status: PROPOSED                       # Type B DESIGN_DECISION; MUST stay PROPOSED until the human L3 gate.
+  summary: >
+    Rewrite R8/AC8 so the spec matches the widened code. The OPT-R1 in-flight fast-recovery ENTRY
+    judgment no longer gates on the connection mode. It is extracted into the pure internal function
+    `computeCanFastRecover(autoReconnectEnabled, isManual, hasInFlight, isFastRecovering, isReconnecting,
+    hasConnectionConfig)` and returns true only when ALL runtime conditions hold: autoReconnect enabled,
+    non-manual disconnect, has in-flight transaction, not already fast-recovering, not already
+    reconnecting, has a reusable connection config. Connection mode is no longer a parameter. The
+    judgment layer is therefore widened to all modes (LAN / Cable USB_VSP·RS232·USB_AOA / App-to-App /
+    Cloud); the RUNTIME layer remains bounded by the onDisconnected `isConnectionError` disconnect-code
+    classification, so only LAN (WebSocket 1000/1001/1006) disconnects actually reach the judgment —
+    non-LAN modes are classified into the connection-error branch (or produce no SDK onDisconnected)
+    and the widening is a runtime no-op for them. `computeCanFastRecover` is INTERNAL (not public API).
+  proposed_rules:
+    - id: R8
+      statement: >
+        OPT-R1 in-flight fast-recovery ENTRY is mode-agnostic: `computeCanFastRecover` does NOT gate on
+        the connection mode. Entry is decided purely by runtime conditions — autoReconnect enabled AND
+        non-manual disconnect AND has in-flight transaction AND not already fast-recovering AND not
+        already reconnecting AND has a reusable connection config. The judgment layer is widened to all
+        connection modes (LAN / Cable / App-to-App / Cloud); the runtime layer stays bounded by the
+        onDisconnected `isConnectionError` disconnect-code classification, so in practice only LAN
+        (WebSocket close codes 1000/1001/1006) disconnects reach the judgment and non-LAN modes are a
+        runtime no-op (harmless widening). `computeCanFastRecover` is an internal pure function (not
+        public API); no new public API, no new error code, no new transaction-identity anchor are added.
+      criticality: high
+      status: PROPOSED                   # pending human L3 approval; NEVER set APPROVED in this draft
+
+# ── Impact analysis ──────────────────────────────────────────────────────────────────
+impact:
+  acceptance_criteria: [AC8]             # AC8 rewritten; AC8b added (non-LAN no-op). AC6/AC7/AC9/AC10 unchanged.
+  harmless_widening:
+    conclusion: >
+      Harmless-widening. Removing the isLanMode gate widens the JUDGMENT layer to all modes, but the
+      RUNTIME layer is naturally bounded by onDisconnected `isConnectionError`: only disconnects
+      reporting WebSocket close codes 1000/1001/1006 enter the normalDisconnect branch and reach
+      computeCanFastRecover, and only the LAN (WebSocket) transport produces those codes.
+    per_mode:
+      LAN: "Reaches computeCanFastRecover (close codes 1000/1001/1006 -> normalDisconnect branch). Fast recovery works as originally designed; R7/R9 behavior unchanged."
+      Cable_VSP_RS232_AOA: "Passive disconnect reports E212/E232/E251.. (connectionErrorCodes) -> isConnectionError=true -> connection-error branch, which has no fast-recovery call. Never reaches computeCanFastRecover. Runtime no-op."
+      AppToApp: "Process-crash disconnect reports E213 (connectionErrorCodes) -> connection-error branch. (in-flight + passive-drop) combination unreachable. Runtime no-op."
+      Cloud: "SDK never builds/drives a Cloud connection (ProtocolConfigResolver has no Cloud branch; ServiceType is SERIAL/VSP/LOCAL/LAN only), so no onDisconnected event exists. Runtime no-op."
+  relationship_to_other_rules:
+    R6: "Unchanged. R6 scopes pre-connection LAN handshake recovery; the widening is on the established-link in-flight fast-recovery entry, already carved out of R6 and covered by R7/R8."
+    R7: "Unchanged. R7 (isFastRecovering suppresses paired disconnect cleanup; 180s callback timeout is the authoritative in-flight callback lifetime) is NOT affected by the entry-scope widening — the suppression/timeout mechanics are identical; only which modes can ENTER the path changed, and non-LAN modes do not reach it at runtime."
+    R9: "Unchanged. R9's FAST_RECOVERY_BUDGET_MS=5s window and the 180s callback timeout are untouched (ConnectionManager FAST_RECOVERY_BUDGET_MS and tryFastRecovery/fastRecoveryFallback unchanged). The 5s budget vs 180s timeout boundary and E306->E213 fallback are not re-timed by this change. Because only LAN reaches the path at runtime, the 180s/5s boundaries continue to apply exactly as before."
+    R10: "Unchanged. R10's identity boundary (traceId globally unique; no new public API / error code / identity anchor) is preserved: computeCanFastRecover is internal, adds no public surface, and does not introduce any per-mode identity anchor. The appId guard remains a Host-side authorization boundary; this SDK change neither extends nor relaxes that boundary for non-LAN modes."
+  new_acs_assessment: >
+    One new AC is added (AC8b) to assert the Step-1 conclusion explicitly: non-LAN modes
+    (Cable / App-to-App / Cloud) are NOT dragged into fast recovery at runtime because their passive
+    disconnects are classified as connection errors (or produce no SDK onDisconnected), so the widened
+    entry judgment is a no-op for them. No separate "Cable passive-disconnect fast recovery" positive
+    AC is added, because the Step-1 analysis proves that path is currently unreachable; adding a
+    positive Cable AC would assert behavior the code does not actually exhibit. AC8 is rewritten to
+    assert the mode-agnostic entry judgment via the pure function.
+  public_api_change: false               # computeCanFastRecover is internal
+  new_error_code: false
+  new_identity_anchor: false
+  sdk_code_change_required: true         # already present in working tree (uncommitted); maintainer keeps it
+  internal_function_only: true           # computeCanFastRecover kept internal; not exposed to public API
+  downstream:
+    host_tapro: "No new Host obligation from the SDK side. Host SPEC-HOST-LAN-TRACEID-REBIND-001 is unaffected; the widening does not change the LAN behavior the Host relies on."
+    taplinkdemo: "No change."
+    sunbay_open_docs: "No public-contract change (no public API / error code / identity anchor) -> no en/zh doc update required for this change. Revisit only if a future change makes a non-LAN mode actually reach fast recovery or exposes public surface."
+  regression_required: true
+  regression_evidence_requirements: >
+    (1) The new JVM unit test FastRecoveryModeAgnosticTest must assert: all runtime conditions satisfied
+    -> true regardless of mode; any single condition unsatisfied -> false; the original LAN scenario
+    still -> true (regression). (2) The existing fast-recovery regression suite (TC-LAN-RECOVERY-006
+    group) must stay green, proving R6/R7/R9 behavior is unchanged. (3) `git diff` on
+    ConnectionManager.kt must show ONLY the gate removal + pure-function extraction, with
+    FAST_RECOVERY_BUDGET_MS, tryFastRecovery, fastRecoveryFallback, isSelfHealing and isConnectionError
+    unchanged.
+  verification:
+    performed_by: "SDD spec-revision workflow (STEP 4), results recorded here for the reviewer"
+    git_diff: >
+      git diff lib_taplink_sdk/.../ConnectionManager.kt confirms: removed `val isLanMode = ...`;
+      replaced the inline `isLanMode && autoReconnectEnabled && ...` expression with a call to the new
+      internal `computeCanFastRecover(...)`; added the internal function. FAST_RECOVERY_BUDGET_MS
+      (=5_000L), tryFastRecovery, fastRecoveryFallback, isSelfHealing (isReconnecting || isFastRecovering)
+      and isConnectionError are unchanged.
+    commands_run:
+      - "./config/speccheck/spec-check.sh"
+      - "./gradlew :lib_taplink_sdk:compileDebugKotlin --console=plain"
+      - "./gradlew :lib_taplink_sdk:testDebugUnitTest --tests \"com.sunmi.tapro.taplink.sdk.manager.FastRecoveryModeAgnosticTest\" --console=plain"
+      - "./gradlew :lib_taplink_sdk:testDebugUnitTest --console=plain  (full SDK suite, regression)"
+    results: >
+      spec-check: PASS (0 red/blocking; 1 yellow = "SRC-4 原文待人工核对", i.e. SRC-4 verified=false
+      pending human review — intentional, not a defect). compileDebugKotlin: BUILD SUCCESSFUL.
+      FastRecoveryModeAgnosticTest: tests=3 failures=0 errors=0 skipped=0 — covering (a) all runtime
+      conditions satisfied returns true regardless of mode, (b) each single unsatisfied precondition
+      returns false, (c) the original LAN scenario still returns true (new regression test). Full SDK
+      testDebugUnitTest suite: total=34 failures=0 errors=0 skipped=0 (up from the v1.1 baseline of 29;
+      no regression). git diff on ConnectionManager.kt confirms only the isLanMode gate removal + pure
+      function extraction; FAST_RECOVERY_BUDGET_MS=5_000L, tryFastRecovery, fastRecoveryFallback,
+      isSelfHealing and isConnectionError are unchanged. NOTE: spec-check passing only proves mechanical
+      structure, not semantic correctness or human approval; this SCR remains PENDING.
+
+# ── Approval (SPEC_GUIDE §4) — HUMAN GATE, NOT YET PERFORMED ──────────────────────────
+approval:
+  status: PENDING                        # ░░░ PENDING MAINTAINER HUMAN APPROVAL — NEVER set APPROVED in this draft ░░░
+  reviewers: [SDK_CONNECTION_RULE_OWNER]
+  approver_role: SDK_CONNECTION_RULE_OWNER   # L3: connection-protocol + payment-response-path owner
+  approved_by: null                      # must be filled by the human maintainer at the approval gate
+  pending_note: >
+    This SCR is a DRAFT. The all-modes widening is a maintainer-pinned DESIGN_DECISION whose spec
+    wording (R8/AC8) is PROPOSED, not approved. A human L3 reviewer must confirm: (a) the harmless-
+    widening conclusion holds (non-LAN modes do not reach fast recovery at runtime); (b) R7/R9/R10
+    are genuinely unaffected; (c) keeping computeCanFastRecover internal is acceptable. Only after
+    human approval may status/after.status/R8 flip to APPROVED and the coverage flip back to
+    approved:true/active. Until then everything here stays DRAFT/PROPOSED/PENDING.
+
+# ── Version & time ────────────────────────────────────────────────────────────────────
+target_spec_version: "v1.2"              # proposed; applies only after human approval
+created_at: 2026-10-15
+resolved_at: null                        # set only at the human approval gate
+
+# After human approval (NOT done here): flip after.status/R8 PROPOSED -> APPROVED and approval.status
+# PENDING -> APPROVED in this SCR; flip R8/AC8 status in coverage + spec §2.1/§8 to APPROVED; set the
+# coverage back to approved:true/status:active; add the §0 Changelog row linking this change_id; bump
+# SPEC-LAN-RECOVERY-001 to v1.2; and re-run ./config/speccheck/spec-check.sh. No AAR/Maven publish and
+# no downstream version bump result from this SCR (no public contract change). spec-check passing only
+# proves mechanical structure, not semantic correctness or approval.

@@ -1,9 +1,38 @@
 {
   "spec_id": "SPEC-LAN-RECOVERY-001",
   "spec_file": "docs/spec/TAPLINK_LAN_RECOVERY_SPEC.md",
-  "version": "v1.0",
-  "status": "active",
-  "approved": true,
+  "version": "v1.2",
+  "status": "draft",
+  "approved": false,
+  "draft_note": "DRAFT / PENDING MAINTAINER HUMAN APPROVAL. This coverage is temporarily status=draft/approved=false ONLY because SCR-LAN-FASTRECOVERY-ALLMODES-001 (DRAFT, L3) rewrites R8/AC8 and adds AC8b for the all-modes fast-recovery widening, and those three items are not yet approved. R1-R7, R9 and R10 remain at their previously approved v1.1 state (their status stays APPROVED below and must not be re-reviewed). After the human L3 gate approves the SCR, set approved=true/status=active, flip R8 status to APPROVED, bump nothing further, and re-run spec-check. R8 machine status is REVIEW_REQUIRED, which here means DRAFT/PENDING_APPROVAL (the spec-check vocabulary has no literal DRAFT token; REVIEW_REQUIRED is the not-yet-approved value).",
+  "pending_change": {
+    "change_id": "SCR-LAN-FASTRECOVERY-ALLMODES-001",
+    "status": "DRAFT",
+    "level": "L3",
+    "change_origin": "DESIGN_DECISION",
+    "created_at": "2026-10-15",
+    "target_spec_version": "v1.2",
+    "modified_rules": ["R8"],
+    "modified_acs": ["AC8"],
+    "added_acs": ["AC8b"],
+    "added_sources": ["SRC-4"],
+    "approval": "PENDING_HUMAN_APPROVAL",
+    "note": "DRAFT revision widening OPT-R1 in-flight fast-recovery entry from LAN-only to all modes via the pure internal computeCanFastRecover. Harmless-widening per Step-1 static risk assessment: only LAN reaches fast recovery at runtime (onDisconnected isConnectionError bounds the runtime layer). No public API / error code / identity anchor added; R7/R9/R10 unaffected. NOT APPROVED until the human L3 gate."
+  },
+  "applied_change": {
+    "change_id": "SCR-LAN-TRACEID-REBIND-001",
+    "status": "APPROVED",
+    "level": "L3",
+    "approved_at": "2026-10-10",
+    "added_rules": ["R7", "R8", "R9", "R10"],
+    "clarified_rules": ["R6"],
+    "added_sources": ["SRC-3"],
+    "host_decisions": {
+      "Q-1": "empty appId does not rebind (safety-first)",
+      "Q-2": "rebind trigger is the sign-in success callback, not onOpen"
+    },
+    "note": "R7-R10 approved at the L3 human gate on 2026-10-10 and added here; v1.0->v1.1; SCR resolved. The approved core (R1-R6) is unchanged. (R8's v1.1 'no SDK code change / isLanMode retained' wording is being superseded by the DRAFT SCR-LAN-FASTRECOVERY-ALLMODES-001 above, pending human approval.) The two Host-side decisions (Q-1/Q-2) are Host-side."
+  },
   "sources": [
     {
       "source_id": "SRC-1",
@@ -25,6 +54,28 @@
       "source_quote": "开始实现",
       "verified": true,
       "content": "Maintainer approves the presented R1–R6 and AC1–AC6 scope in response to the preceding approval request."
+    },
+    {
+      "source_id": "SRC-3",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-LAN-TRACEID-REBIND-SDK-ROLE",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_LAN_TRACEID_REBIND_SDK_ROLE.md",
+      "section": "S2. No SDK code change for LAN",
+      "source_quote": "The Host plan requires no SDK code change for LAN. The `canFastRecover` `isLanMode` gate is retained as-is; widening it to Cable is out of scope and deferred to a separate change.",
+      "verified": true,
+      "content": "Repo-internal SDK-role evidence for the Host traceId-rebind plan: SDK role (R7-R10) is preserved-as-is under SCR-LAN-TRACEID-REBIND-001; the two Host-side high-risk questions Q-1/Q-2 are resolved safety-first at the approval gate."
+    },
+    {
+      "source_id": "SRC-4",
+      "classification": "EXPLICIT",
+      "document_id": "FASTRECOVERY-ALLMODES-RISK-ASSESSMENT",
+      "document_version": "STEP 1 (read-only static risk assessment)",
+      "document_path": "docs/spec/changes/fastrecovery-allmodes-scr-2026/fastrecovery-allmodes-risk-assessment.md",
+      "section": "## 4. 总体结论（供 R8 重写用）",
+      "source_quote": "移除 `isLanMode` 门控把快恢**判定层**放开到所有模式，但**运行层**由 `onDisconnected` 的 `isConnectionError` 分类天然约束：只有上报 WebSocket 正常/异常关闭码（`1000/1001/1006`）的断开才会进入 normalDisconnect 分支并触达 `computeCanFastRecover`，而这类码**只有 LAN（WebSocket）传输会产生**。",
+      "verified": false,
+      "content": "DRAFT source for the rewritten R8/AC8/AC8b under SCR-LAN-FASTRECOVERY-ALLMODES-001. Repo-internal Step-1 static risk assessment (file:line code evidence) concluding harmless-widening: removing the isLanMode gate widens the fast-recovery JUDGMENT layer to all modes, but the RUNTIME layer is bounded by onDisconnected isConnectionError so only LAN (WebSocket 1000/1001/1006) disconnects reach computeCanFastRecover. verified=false: pending human semantic review at the L3 approval gate (per SPEC_GUIDE §1.3, verified may only be set true after a human confirms the quote supports the rule)."
     }
   ],
   "dimensions": {
@@ -173,6 +224,112 @@
           "test_cases": [
             "TC-LAN-RECOVERY-006"
           ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R7",
+      "source_id": "SRC-3",
+      "source_type": "EXPLICIT",
+      "dimension": "state_and_rules",
+      "criticality": "high",
+      "statement": "In-transaction OPT-R1 fast recovery (LAN + autoReconnect + hasInFlight + non-manual) keeps suppressing the paired disconnect cleanup via isFastRecovering, so transaction callbacks and the terminal-dedup set are NOT cleared during a recoverable in-flight drop; a recovered connection keeps in-flight callbacks under the existing 180s callback timeout. Unchanged by this plan.",
+      "status": "APPROVED",
+      "scr": "SCR-LAN-TRACEID-REBIND-001",
+      "acceptance": [
+        {
+          "ac_id": "AC7",
+          "given": "a LAN connection with autoReconnect=true and an in-flight transaction",
+          "when": "a passive drop (e.g. 1006) occurs and OPT-R1 fast recovery is eligible",
+          "then": "isFastRecovering suppresses the paired disconnect invoke; transaction callbacks and the terminal-dedup set are not cleared; a recovered connection keeps delivering the in-flight traceId events under the 180s callback timeout; no SDK code change is introduced",
+          "verification_method": "existing_fast_recovery_regression",
+          "test_cases": [
+            "TC-LAN-RECOVERY-006"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R8",
+      "source_id": "SRC-4",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "high",
+      "statement": "OPT-R1 in-flight fast-recovery ENTRY is mode-agnostic: computeCanFastRecover does NOT gate on the connection mode. Entry is decided purely by runtime conditions (autoReconnect enabled AND non-manual disconnect AND has in-flight transaction AND not already fast-recovering AND not already reconnecting AND has a reusable connection config). The judgment layer is widened to all modes (LAN / Cable USB_VSP·RS232·USB_AOA / App-to-App / Cloud); the runtime layer stays bounded by the onDisconnected isConnectionError disconnect-code classification, so in practice only LAN (WebSocket close codes 1000/1001/1006) disconnects reach the judgment and non-LAN modes are a runtime no-op (harmless widening). computeCanFastRecover is an internal pure function (not public API); no new public API, error code or identity anchor is added.",
+      "status": "REVIEW_REQUIRED",
+      "draft_status": "DRAFT / PENDING_APPROVAL",
+      "scr": "SCR-LAN-FASTRECOVERY-ALLMODES-001",
+      "supersedes_scr": "SCR-LAN-TRACEID-REBIND-001 (R8 v1.1 wording, superseded once approved)",
+      "pending_note": "DRAFT rewrite of R8 for the all-modes widening. status=REVIEW_REQUIRED means DRAFT/PENDING_APPROVAL (NOT approved). A human L3 reviewer must approve SCR-LAN-FASTRECOVERY-ALLMODES-001 before this flips to APPROVED.",
+      "code_evidence": {
+        "function": "computeCanFastRecover(autoReconnectEnabled, isManual, hasInFlight, isFastRecovering, isReconnecting, hasConnectionConfig): internal pure function",
+        "file": "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/ConnectionManager.kt",
+        "note": "Working-tree (uncommitted) code: former `val isLanMode = currentConnectionMode == ConnectionMode.LAN.name` gate removed; onDisconnected normalDisconnect branch now calls computeCanFastRecover with no mode argument. FAST_RECOVERY_BUDGET_MS (=5_000L), tryFastRecovery, fastRecoveryFallback, isSelfHealing and isConnectionError are unchanged."
+      },
+      "acceptance": [
+        {
+          "ac_id": "AC8",
+          "given": "the OPT-R1 in-flight fast-recovery entry judgment extracted as the pure internal computeCanFastRecover(autoReconnectEnabled, isManual, hasInFlight, isFastRecovering, isReconnecting, hasConnectionConfig)",
+          "when": "all runtime conditions hold (autoReconnect enabled, non-manual, has in-flight transaction, not fast-recovering, not reconnecting, has connection config)",
+          "then": "it returns true with NO connection-mode parameter (mode-agnostic); when any single condition is unsatisfied it returns false; and the original LAN scenario still returns true (regression); computeCanFastRecover stays internal with no public API added",
+          "verification_method": "jvm_unit_test",
+          "status": "DRAFT",
+          "test_cases": [
+            "TC-FASTRECOVERY-ALLMODES-001"
+          ]
+        },
+        {
+          "ac_id": "AC8b",
+          "given": "the judgment layer is widened to all connection modes while the runtime layer is bounded by onDisconnected isConnectionError",
+          "when": "a non-LAN mode (Cable VSP/RS232/AOA, App-to-App, or Cloud) experiences a passive disconnect or has no SDK connection entity",
+          "then": "that disconnect is classified as a connection error (E212/E232/E251.. for Cable, E213 for App-to-App) and routed to the connection-error branch which has no fast-recovery call, or produces no SDK onDisconnected at all (Cloud); so computeCanFastRecover is never reached for non-LAN modes and the widening is a runtime no-op; only LAN (WebSocket 1000/1001/1006) reaches fast recovery, so R7's 180s callback timeout and R9's 5s FAST_RECOVERY_BUDGET_MS boundaries continue to apply exactly as before",
+          "verification_method": "static_risk_assessment_preservation",
+          "status": "DRAFT",
+          "test_cases": [
+            "TC-FASTRECOVERY-ALLMODES-001"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R9",
+      "source_id": "SRC-3",
+      "source_type": "EXPLICIT",
+      "dimension": "exception_and_risk",
+      "criticality": "high",
+      "statement": "Host-retained in-flight bindings must align to the SDK 180s transaction callback timeout, not the 5s FAST_RECOVERY_BUDGET_MS. When fast recovery is not achieved within 5s the SDK fails in-flight callbacks with E306 and reports E213; the Host must not expect the SDK to keep an in-flight callback alive beyond the 180s callback timeout, and 306 must not be retried directly.",
+      "status": "APPROVED",
+      "scr": "SCR-LAN-TRACEID-REBIND-001",
+      "acceptance": [
+        {
+          "ac_id": "AC9",
+          "given": "an in-flight transaction and a passive drop",
+          "when": "fast recovery is not achieved within FAST_RECOVERY_BUDGET_MS (5s)",
+          "then": "the SDK fails in-flight callbacks with E306 and reports E213; the in-flight callback is not kept alive beyond the 180s callback timeout; the Host binding-retention window aligns to 180s not 5s; 306 is handled query-first, never retried directly",
+          "verification_method": "existing_fast_recovery_regression",
+          "test_cases": [
+            "TC-LAN-RECOVERY-006"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R10",
+      "source_id": "SRC-3",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "high",
+      "statement": "The appId / merchant identity guard replacing the LAN different-IP reject is a Host-side authorization boundary. The SDK adds no public API, no new error code and no new identity anchor; traceId remains the globally unique transaction identity.",
+      "status": "APPROVED",
+      "scr": "SCR-LAN-TRACEID-REBIND-001",
+      "acceptance": [
+        {
+          "ac_id": "AC10",
+          "given": "the appId identity guard replaces the LAN different-IP reject on the Host",
+          "when": "the SDK public surface is inspected",
+          "then": "no new SDK public API, error code or identity anchor is added, and traceId remains the globally unique transaction identity",
+          "verification_method": "preservation_review",
+          "test_cases": []
         }
       ]
     }
@@ -329,6 +486,11 @@
       "LanHandshakeCallbackOrderTest.deferredHandshakePolicyDoesNotHideEstablishedErrorsOrPeerInvalidation",
       "LanRecoveryIntegrationTest.fastRecoveryWindowSuppressesFalseDisconnectNotification",
       "LanRecoveryIntegrationTest.genuineDropOutsideFastRecoveryStillNotifiesDisconnect"
+    ],
+    "TC-FASTRECOVERY-ALLMODES-001": [
+      "FastRecoveryModeAgnosticTest.all required conditions met enters fast recovery regardless of connection mode",
+      "FastRecoveryModeAgnosticTest.each missing precondition blocks fast recovery",
+      "FastRecoveryModeAgnosticTest.the original LAN scenario still enters fast recovery (regression)"
     ]
   }
 }

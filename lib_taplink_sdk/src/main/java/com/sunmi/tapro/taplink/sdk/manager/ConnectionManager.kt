@@ -469,29 +469,34 @@ class ConnectionManager(
                         currentAppToAppMode = null
                         currentConnectionConfig = null
                     } else {
-                        // OPT-R1: 交易进行中、LAN 模式下发生被动断开时，先尝试一次「原 IP 快速
-                        // 重连」，不走 mDNS 发现、预算 5s。触发条件：
-                        //   1) 当前为 LAN 模式（跨终端 CROSS_DEVICE+LAN 与经典 LAN 均规范化为此）；
-                        //   2) autoReconnect 已开启（按产品要求，仅在开启时做交易中快速恢复）；
-                        //   3) 确有在途交易；
-                        //   4) 非用户主动断开；
-                        //   5) 未在快速恢复 / 常规重连中。
+                        // OPT-R1: 交易进行中发生被动断开时，先尝试一次「原连接配置快速重连」，
+                        // 不走 mDNS 发现、预算 5s。适用于所有连接模式（LAN / Cable 三子协议 /
+                        // App-to-App / Cloud），不再以连接模式门控——Cable 拔线/VSP 自愈同样需要
+                        // 走快恢路径，才能让 isSelfHealing 守卫生效（快恢期间不清交易回调、不清终态
+                        // 去重集），使 Host 侧 traceId 锚点重指的续推事件能被 SDK 回调命中。触发条件：
+                        //   1) autoReconnect 已开启（按产品要求，仅在开启时做交易中快速恢复）；
+                        //   2) 确有在途交易；
+                        //   3) 非用户主动断开；
+                        //   4) 未在快速恢复 / 常规重连中；
+                        //   5) 有可复用的连接配置。
                         // 本分支（normalDisconnect）本身即「已建立连接后的被动/正常断开」，涵盖
                         // 1006 等真实掉线码。成功则维持连接、不进入 ReconnectManager；失败则直接
                         // 向用户报「连接断开」(E213)，不再把底层 1006 透传给客户。
-                        val isLanMode = currentConnectionMode == ConnectionMode.LAN.name
                         val autoReconnectEnabled = currentConnectionConfig?.autoReconnect == true
                         val isManual = reconnectManager?.isManualDisconnect() == true
                         val hasInFlight = paymentManager?.hasInFlightTransactions() == true
-                        val canFastRecover = isLanMode && autoReconnectEnabled && !isManual &&
-                            hasInFlight &&
-                            !isFastRecovering &&
-                            reconnectManager?.isReconnecting() != true &&
-                            currentConnectionConfig != null
+                        val canFastRecover = computeCanFastRecover(
+                            autoReconnectEnabled = autoReconnectEnabled,
+                            isManual = isManual,
+                            hasInFlight = hasInFlight,
+                            isFastRecovering = isFastRecovering,
+                            isReconnecting = reconnectManager?.isReconnecting() == true,
+                            hasConnectionConfig = currentConnectionConfig != null
+                        )
                         if (canFastRecover) {
                             LogUtil.w(
                                 TAG,
-                                "OPT-R1: in-flight transaction + passive LAN drop (code=$code); attempting single fast recovery"
+                                "OPT-R1: in-flight transaction + passive drop (code=$code); attempting single fast recovery"
                             )
                             tryFastRecovery(listener)
                             // 快速恢复在其协程内自行收口（成功维持连接 / 失败报 E213 回落），
@@ -530,6 +535,32 @@ class ConnectionManager(
                     syncStatusFromKernel()
                 }
             })
+    }
+
+    /**
+     * OPT-R1 单次快速恢复的进入条件判定（模式无关）。
+     *
+     * 抽成纯函数以便单测直接断言：原先条件写死 `isLanMode`，只有 LAN 能进快恢；现放开为所有连接
+     * 模式（LAN / Cable 的 USB_VSP·RS232·USB_AOA / App-to-App / Cloud）均可进，由在途交易 + 被动
+     * 断开 + autoReconnect 等运行态条件共同约束，连接模式不再参与判定。
+     *
+     * @return 仅当「autoReconnect 开启 且 非主动断开 且 有在途交易 且 未在快恢中 且 未在常规重连中
+     *         且 有可复用连接配置」全部满足时为 true。
+     */
+    internal fun computeCanFastRecover(
+        autoReconnectEnabled: Boolean,
+        isManual: Boolean,
+        hasInFlight: Boolean,
+        isFastRecovering: Boolean,
+        isReconnecting: Boolean,
+        hasConnectionConfig: Boolean
+    ): Boolean {
+        return autoReconnectEnabled &&
+            !isManual &&
+            hasInFlight &&
+            !isFastRecovering &&
+            !isReconnecting &&
+            hasConnectionConfig
     }
 
     /** Final failure for one LAN recovery attempt, including callers queued during reconnect. */
