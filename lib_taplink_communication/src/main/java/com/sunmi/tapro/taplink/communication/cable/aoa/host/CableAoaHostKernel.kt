@@ -1451,4 +1451,52 @@ class CableAoaHostKernel(
 
         LogUtil.i(TAG, "SimplifiedAoaHostKernel initialized")
     }
+
+    // SPEC-ESTABLISHED-RECOVERY-001 R8/R14 — AOA Host recovery identity + non-interactive prerequisite.
+
+    private fun readAoaSerialIfPermitted(device: UsbDevice): String? {
+        return try {
+            if (!usbManager.hasPermission(device)) null else device.serialNumber
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Unable to read AOA serial: ${e.message}")
+            null
+        }
+    }
+
+    /** The bound AOA device serial is the reliable terminal anchor; null => fail closed (R8). */
+    override fun captureTerminalIdentity():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity? {
+        val device = currentDevice ?: return null
+        val serial = readAoaSerialIfPermitted(device)
+        return if (serial.isNullOrBlank()) null
+        else com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity(serial)
+    }
+
+    override suspend fun validateRecoveredIdentity(
+        expected: com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity
+    ): Boolean {
+        if (!expected.isReliable) return false
+        val device = currentDevice ?: return false
+        val current = readAoaSerialIfPermitted(device)
+        return !current.isNullOrBlank() && current == expected.anchor
+    }
+
+    /**
+     * Non-interactive prerequisite (R14): recovery proceeds only with EXISTING USB permission; a
+     * missing permission is Denied so switch/re-enumerate/device-open never triggers authorization UI.
+     */
+    override fun evaluateRecoveryPrerequisite():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult {
+        val device = currentDevice
+            ?: return com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Denied(
+                "No bound AOA device for recovery"
+            )
+        return if (usbManager.hasPermission(device)) {
+            com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Available
+        } else {
+            com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Denied(
+                "USB permission required (authorization-required); recovery must not prompt"
+            )
+        }
+    }
 }

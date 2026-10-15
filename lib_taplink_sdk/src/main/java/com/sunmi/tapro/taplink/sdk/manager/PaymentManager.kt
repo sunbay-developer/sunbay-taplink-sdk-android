@@ -81,6 +81,19 @@ class PaymentManager(
      */
     private var pendingTransaction: Pair<PaymentRequest, PaymentCallback>? = null
 
+    /**
+     * SPEC-ESTABLISHED-RECOVERY-001 R11: set by the recovery coordinator while an established-fault
+     * recovery episode is active. New requests submitted during recovery are rejected with E213
+     * BEFORE serialization/send; they are not queued or replayed.
+     */
+    @Volatile
+    private var establishedRecoveryActive = false
+
+    /** Called by the recovery coordinator (via ConnectionManager) to toggle the recovery gate. */
+    internal fun setEstablishedRecoveryActive(active: Boolean) {
+        establishedRecoveryActive = active
+    }
+
     init {
         LogUtil.d(TAG, "PaymentManager initialized")
 
@@ -117,6 +130,13 @@ class PaymentManager(
      * Handle transport disconnect. Clear pending auto-connect state.
      */
     private fun onPhysicalDisconnected() {
+        // SPEC-ESTABLISHED-RECOVERY-001 R10/R15 backstop: during an established-fault recovery the
+        // terminal-dedup set MUST be preserved so continued payloads are not re-delivered as new
+        // events. Even if some path reaches this listener mid-recovery, skip the dedup-set clear.
+        if (connectionManager.isEstablishedRecoveryActive()) {
+            LogUtil.d(TAG, "Skipping physical-disconnect cleanup during established recovery")
+            return
+        }
         if (hasPendingAutoConnectTransaction) {
             LogUtil.w(TAG, "Connection disconnected, clearing auto-connect flag")
             hasPendingAutoConnectTransaction = false
@@ -134,6 +154,19 @@ class PaymentManager(
 
     private fun executeSnapshot(request: PaymentRequest, callback: PaymentCallback) {
         LogUtil.d(TAG, "Executing payment request: action=${request.action}, referenceOrderId=${request.referenceOrderId}")
+
+        // SPEC-ESTABLISHED-RECOVERY-001 R11: reject new requests submitted while an established-fault
+        // recovery is in progress — before serialization/send, with existing E213, never queued or
+        // replayed. Existing in-flight requests keep their own timeout and are untouched here.
+        if (establishedRecoveryActive) {
+            LogUtil.w(TAG, "Rejecting new request during established recovery (E213)")
+            callback.onFailure(
+                errorCode = InnerErrorCode.E213,
+                errorMessage = "${InnerErrorCode.E213.description}(recovery in progress)",
+                transactionRequestId = request.transactionRequestId
+            )
+            return
+        }
 
         // Check connection status
         if (connectionManager.isConnected()) {

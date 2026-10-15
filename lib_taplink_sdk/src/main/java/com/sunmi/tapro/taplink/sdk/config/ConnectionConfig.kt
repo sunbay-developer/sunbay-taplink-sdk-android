@@ -85,6 +85,12 @@ class ConnectionConfig {
      * When the connection is interrupted unexpectedly, the SDK will automatically attempt to
      * reconnect. For a direct LAN connection, disabling this also disables automatic mDNS
      * fallback after the direct handshake fails and disables background LAN monitoring.
+     *
+     * Note: This flag does NOT disable the SDK's mandatory one-shot recovery for a connection that
+     * was already established. Regardless of [autoReconnect], an established connection that drops
+     * abnormally always gets exactly one silent internal recovery attempt (same protocol, same
+     * terminal) before a final disconnect is reported. [autoReconnect] still governs first-connect
+     * discovery/retry behavior and background monitoring.
      */
     var autoReconnect: Boolean = false
         private set

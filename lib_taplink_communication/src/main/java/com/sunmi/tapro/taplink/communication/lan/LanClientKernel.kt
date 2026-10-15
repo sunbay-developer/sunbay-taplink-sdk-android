@@ -247,6 +247,34 @@ class LanClientKernel(
      */
     fun getTargetServiceSerial(): String? = targetServiceSerial
 
+    // SPEC-ESTABLISHED-RECOVERY-001 R8/R14 — LAN recovery identity + non-interactive prerequisite.
+
+    /** The mDNS-bound serial is the reliable LAN terminal identity anchor (R8). */
+    override fun captureTerminalIdentity():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity? {
+        val serial = targetServiceSerial
+        return if (serial.isNullOrBlank()) null
+        else com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity(serial)
+    }
+
+    /**
+     * Recovery succeeds only when the rebuilt link is bound to the SAME mDNS serial. A missing/absent
+     * serial means we cannot confirm the original terminal, so recovery fails closed rather than
+     * attaching to a different device (R8).
+     */
+    override suspend fun validateRecoveredIdentity(
+        expected: com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity
+    ): Boolean {
+        if (!expected.isReliable) return false
+        val current = targetServiceSerial
+        return !current.isNullOrBlank() && current == expected.anchor
+    }
+
+    /** LAN needs no USB permission; existing authority is always usable for a silent rebuild (R14). */
+    override fun evaluateRecoveryPrerequisite():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult =
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Available
+
     private fun serviceSerial(serviceName: String): String? = parseServiceSerial(serviceName)
 
     private fun isTargetService(service: ServiceInfo): Boolean {

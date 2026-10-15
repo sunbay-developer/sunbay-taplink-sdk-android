@@ -30,7 +30,16 @@ interface ConnectionListener {
     fun onConnected(deviceId: String, taproVersion: String)
     
     /**
-     * Connection disconnected
+     * Connection disconnected.
+     *
+     * When a connection that was ALREADY established drops abnormally, the SDK first runs exactly
+     * one silent internal recovery attempt (same protocol, same terminal). No progress, error or
+     * transient disconnect callback is delivered during that attempt. Only if recovery ultimately
+     * fails is a single final [onDisconnected] delivered, with error code 213. If recovery succeeds,
+     * [onConnected] is delivered instead and this method is not called for that fault. The SDK does
+     * not remove a registered listener during recovery.
+     *
+     * Callbacks may run on a background thread; dispatch UI updates to the main thread.
      *
      * @param reason Disconnection reason
      */
@@ -39,10 +48,14 @@ interface ConnectionListener {
     /**
      * Connection error.
      *
-     * During LAN handshake recovery with automatic reconnect enabled, a failed endpoint
-     * is reported only if recovery ultimately fails. A recovered connection calls
-     * [onConnected] without an intermediate error or disconnect notification.
-     * Established-link errors and transaction fast recovery keep their existing behavior.
+     * [onError] is scoped to an explicit [connect] attempt only. A fault on a connection that was
+     * already established is NEVER reported via [onError]; the SDK absorbs it, runs one silent
+     * recovery, and reports the outcome through [onConnected] (success) or a single
+     * [onDisconnected] with code 213 (failure).
+     *
+     * During LAN handshake recovery with automatic reconnect enabled, a failed endpoint is reported
+     * only if recovery ultimately fails. A recovered connection calls [onConnected] without an
+     * intermediate error or disconnect notification.
      * Callbacks may run on a background thread; dispatch UI updates to the main thread.
      *
      * @param error Error information

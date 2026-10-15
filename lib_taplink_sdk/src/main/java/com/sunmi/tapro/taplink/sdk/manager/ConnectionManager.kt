@@ -43,7 +43,7 @@ import kotlin.coroutines.resume
 class ConnectionManager(
     private val config: TaplinkConfig,
     private val context: Context
-) {
+) : RecoveryHost {
     private val TAG = "ConnectionManager"
 
     /**
@@ -163,6 +163,35 @@ class ConnectionManager(
      */
     private val sdkScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    /**
+     * SPEC-ESTABLISHED-RECOVERY-001 R3 hard gate: whether this logical session has ever reached
+     * CONNECTED. Only an established session can be recovered; a never-established fault keeps the
+     * existing first-connect strategy. Reset to false on explicit disconnect() / new-config connect().
+     */
+    @Volatile
+    private var hasEverEstablishedThisSession = false
+
+    /** Monotonic logical-session id, bumped when a fresh session begins (new-config connect/disconnect). */
+    private val sessionIdCounter = java.util.concurrent.atomic.AtomicLong(0)
+
+    @Volatile
+    private var currentSessionId: Long = 0
+
+    /**
+     * SPEC-ESTABLISHED-RECOVERY-001 R8: trusted identity anchor captured when the connection first
+     * reached CONNECTED, used to validate that a recovery rebuild reconnected to the SAME terminal.
+     */
+    @Volatile
+    private var establishedTerminalIdentity:
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity? = null
+
+    /**
+     * The single owner of established-connection fault recovery (SPEC-ESTABLISHED-RECOVERY-001).
+     * Lazily held so tests and the kernel wiring can observe recovery state.
+     */
+    private val establishedRecoveryCoordinator: EstablishedRecoveryCoordinator =
+        EstablishedRecoveryCoordinator(this, SystemRecoveryClock(), sdkScope)
+
     init {
         LogUtil.d(TAG, "ConnectionManager initialized")
 
@@ -186,6 +215,24 @@ class ConnectionManager(
         // If still no config, create default based on TaplinkConfig connection mode
         if (actualConfig == null) {
             actualConfig = createDefaultConnectionConfig()
+        }
+
+        // SPEC-ESTABLISHED-RECOVERY-001 R9: a connect() issued while an established-fault recovery is
+        // active and asking for the SAME config joins the current episode's single terminal outcome
+        // rather than opening a second transport. A DIFFERENT config supersedes recovery (fence it)
+        // and starts a fresh session below.
+        if (establishedRecoveryCoordinator.isRecovering()) {
+            val sameConfig = currentConnectionConfig?.isEquivalentTo(actualConfig) == true
+            if (sameConfig) {
+                if (establishedRecoveryCoordinator.joinIfRecovering(listener)) {
+                    return
+                }
+            } else {
+                establishedRecoveryCoordinator.onExplicitDetachOrDisconnect()
+                hasEverEstablishedThisSession = false
+                establishedTerminalIdentity = null
+                currentSessionId = sessionIdCounter.incrementAndGet()
+            }
         }
 
         // Self-heal a STALE CONNECTING/WAIT_CONNECTING state before deciding how to connect.
@@ -428,6 +475,25 @@ class ConnectionManager(
                 override fun onDisconnected(code: String, msg: String) {
                     val reason = "Code: $code, Message: $msg"
 
+                    // SPEC-ESTABLISHED-RECOVERY-001 R5/R6: an established-connection fault is owned by
+                    // the recovery coordinator. Claiming the epoch is synchronous and happens BEFORE
+                    // any classification, public callback, payment cleanup or ReconnectManager entry.
+                    // On an established fault we early-return: no onError, no transient onDisconnected,
+                    // no failAllPendingTransactions, no fast-recovery, no updateConnectionStatus here.
+                    if (establishedRecoveryCoordinator.interceptIfEstablishedFault(
+                            TransportFaultEvent(
+                                sessionId = currentSessionId,
+                                epoch = establishedRecoveryCoordinator.currentEpoch(),
+                                code = code,
+                                msg = msg,
+                                established = hasEverEstablishedThisSession
+                            )
+                        )
+                    ) {
+                        syncStatusFromKernel()
+                        return
+                    }
+
                     // Determine if this is a connection error or normal disconnect
                     val isConnectionError = isConnectionError(code, msg)
 
@@ -485,14 +551,19 @@ class ConnectionManager(
                         val autoReconnectEnabled = currentConnectionConfig?.autoReconnect == true
                         val isManual = reconnectManager?.isManualDisconnect() == true
                         val hasInFlight = paymentManager?.hasInFlightTransactions() == true
-                        val canFastRecover = computeCanFastRecover(
-                            autoReconnectEnabled = autoReconnectEnabled,
-                            isManual = isManual,
-                            hasInFlight = hasInFlight,
-                            isFastRecovering = isFastRecovering,
-                            isReconnecting = reconnectManager?.isReconnecting() == true,
-                            hasConnectionConfig = currentConnectionConfig != null
-                        )
+                        // SPEC-ESTABLISHED-RECOVERY-001 R4/AC4: when the coordinator owns an episode,
+                        // never spawn the legacy fast-recovery coroutine — it would stack a second
+                        // 5000ms budget and fail in-flight tx with an early E306. The coordinator does
+                        // the single bounded rebuild and clears tx once as E213 on failure.
+                        val canFastRecover = !establishedRecoveryCoordinator.isRecovering() &&
+                            computeCanFastRecover(
+                                autoReconnectEnabled = autoReconnectEnabled,
+                                isManual = isManual,
+                                hasInFlight = hasInFlight,
+                                isFastRecovering = isFastRecovering,
+                                isReconnecting = reconnectManager?.isReconnecting() == true,
+                                hasConnectionConfig = currentConnectionConfig != null
+                            )
                         if (canFastRecover) {
                             LogUtil.w(
                                 TAG,
@@ -669,6 +740,13 @@ class ConnectionManager(
     fun disconnect() {
         LogUtil.d(TAG, "Manual disconnect")
 
+        // R9: an explicit disconnect fences any active recovery episode (no later old success/error),
+        // and starts a fresh logical session so a subsequent connect is treated as a first-connect.
+        establishedRecoveryCoordinator.onExplicitDetachOrDisconnect()
+        hasEverEstablishedThisSession = false
+        establishedTerminalIdentity = null
+        currentSessionId = sessionIdCounter.incrementAndGet()
+
         // Cancel any in-progress discovery or scan-and-connect
         discoveryJob?.cancel()
         discoveryJob = null
@@ -711,6 +789,12 @@ class ConnectionManager(
      * Note: This method performs automatic status synchronization if inconsistency is detected
      */
     fun isConnected(): Boolean {
+        // SPEC-ESTABLISHED-RECOVERY-001 R5/AC5: during recovery the logical projection is
+        // "connecting", so isConnected()==false without rewriting connectionStatus or syncing from
+        // the (ERROR/DISCONNECTED jittering) kernel.
+        if (establishedRecoveryCoordinator.isRecovering()) {
+            return false
+        }
         // First check kernel actual status
         val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
         val kernelStatus = kernel?.getConnectionStatus()
@@ -806,6 +890,10 @@ class ConnectionManager(
      * Check if connection is in progress (connecting or reconnecting)
      */
     fun isConnecting(): Boolean {
+        // SPEC-ESTABLISHED-RECOVERY-001 R5/AC5: recovery is a non-terminal "connecting" phase.
+        if (establishedRecoveryCoordinator.isRecovering()) {
+            return true
+        }
         return connectionStatus == ConnectionStatus.CONNECTING ||
                 connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
                 (reconnectManager?.isReconnecting() == true)
@@ -814,7 +902,7 @@ class ConnectionManager(
     /**
      * Get connected device ID
      */
-    fun getConnectedDeviceId(): String? {
+    override fun getConnectedDeviceId(): String? {
         return connectedDeviceId
     }
 
@@ -852,7 +940,7 @@ class ConnectionManager(
     /**
      * Get Tapro version
      */
-    fun getTaproVersion(): String? {
+    override fun getTaproVersion(): String? {
         return connectedTaproVersion
     }
 
@@ -869,7 +957,107 @@ class ConnectionManager(
      */
     fun removeConnectionListener() {
         LogUtil.d(TAG, "Removing connection listener")
+        // R9: the only caller-initiated detach also fences any active recovery episode so no later
+        // old success/error reaches a listener after it is explicitly removed. The coordinator never
+        // removes a listener itself.
+        establishedRecoveryCoordinator.onExplicitDetachOrDisconnect()
         this.connectionListener = null
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // SPEC-ESTABLISHED-RECOVERY-001 — internal hooks consumed by EstablishedRecoveryCoordinator.
+    // These are internal to the SDK (manager package) and never exported to the public API.
+    // ---------------------------------------------------------------------------------------------
+
+    /** @return `true` while an established-fault recovery episode is active. */
+    internal fun isEstablishedRecoveryActive(): Boolean = establishedRecoveryCoordinator.isRecovering()
+
+    /** Set the PaymentManager-visible gate so new requests are rejected before send during recovery. */
+    override fun setEstablishedRecoveryActive(active: Boolean) {
+        paymentManager?.setEstablishedRecoveryActive(active)
+    }
+
+    /** The original connection config to reuse for the single same-protocol rebuild (read-only). */
+    override fun currentConnectionConfigForRecovery(): ConnectionConfig? = currentConnectionConfig
+
+    /** Observers that must receive the single terminal recovery outcome (the global listener). */
+    override fun recoveryObservers(): List<ConnectionListener> =
+        listOfNotNull(connectionListener, reconnectManager?.getLastConnectionListener())
+
+    /** Capture the current terminal identity anchor for later same-terminal validation (R8). */
+    override fun captureCurrentTerminalIdentity():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity? {
+        establishedTerminalIdentity?.let { return it }
+        return TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.captureTerminalIdentity()
+    }
+
+    /** Read-only, non-interactive recovery prerequisite evaluation delegated to the active kernel (R14). */
+    override fun evaluateRecoveryPrerequisite():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult {
+        return TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.evaluateRecoveryPrerequisite()
+            ?: com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Unsupported
+    }
+
+    /**
+     * Retire the pre-fault resources before opening a successor (R7). Drives the current kernel's
+     * disconnect so stale read/write/status/close callbacks cannot pollute the rebuilt link.
+     */
+    override fun retireForRecovery() {
+        LogUtil.d(TAG, "Recovery: retiring old transport before rebuild")
+        TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
+    }
+
+    /** Open EXACTLY ONE same-protocol rebuild using the original config with an internal listener (R4). */
+    override fun openRecoveryRebuild(originalConfig: ConnectionConfig?) {
+        LogUtil.d(TAG, "Recovery: opening single same-protocol rebuild")
+        connectInternal(originalConfig, internalReconnectListener)
+    }
+
+    /** @return `true` when the rebuilt transport reports CONNECTED at the kernel level. */
+    override fun isRecoveryTransportReady(): Boolean {
+        val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel() ?: return false
+        return kernel.getConnectionStatus() == InnerConnectionStatus.CONNECTED
+    }
+
+    /** Validate the rebuilt link points at the original terminal (R8); SUB_SCREEN needs screen init. */
+    override suspend fun validateRecoveredIdentity(
+        expected: com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity
+    ): Boolean {
+        val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel() ?: return false
+        return kernel.validateRecoveredIdentity(expected)
+    }
+
+    /**
+     * Successful recovery (R10/R15): re-attach the rebuilt kernel's receive route to the SAME
+     * callback/traceId mapping and restore CONNECTED projection WITHOUT replaying or swapping
+     * callbacks. The traceId->callback mapping lives in LocalCallbackManager and is not cleared, so
+     * only the data receiver needs re-wiring to the new kernel.
+     */
+    override fun onRecoverySuccess() {
+        registerDataReceiver()
+        setupKernelStatusListener()
+        connectionStatus = ConnectionStatus.CONNECTED
+        syncStatusFromKernel()
+    }
+
+    /**
+     * Failed recovery (R10/Q4): on the single terminal disconnect, clear/fail in-flight transaction
+     * callbacks via the existing failAllPendingTransactions path exactly once, alongside the one
+     * onDisconnected(E213) the coordinator emits. No synthetic early E306.
+     */
+    override fun onRecoveryFailureCleanup(reason: String) {
+        paymentManager?.failAllPendingTransactions(
+            InnerErrorCode.E213.code,
+            InnerErrorCode.E213.description
+        )
+        connectionStatus = ConnectionStatus.DISCONNECTED
+        connectedDeviceId = null
+        connectedTaproVersion = null
+        currentConnectionMode = null
+        currentAppToAppMode = null
+        currentConnectionConfig = null
+        establishedTerminalIdentity = null
+        TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.disconnect()
     }
 
     /**
@@ -919,6 +1107,18 @@ class ConnectionManager(
         reason: String? = null,
         listener: ConnectionListener? = null
     ) {
+        // SPEC-ESTABLISHED-RECOVERY-001 R5/R6: while a recovery episode is active the rebuild's own
+        // status transitions must neither flip the public projection to a terminal state nor surface
+        // callbacks to public observers — the coordinator owns the single terminal outcome and the
+        // final projection (via onRecoverySuccess/onRecoveryFailureCleanup). Record established state
+        // only; do not mutate connectionStatus or notify here.
+        if (establishedRecoveryCoordinator.isRecovering()) {
+            if (newStatus == ConnectionStatus.CONNECTED) {
+                hasEverEstablishedThisSession = true
+            }
+            return
+        }
+
         if (connectionStatus != newStatus) {
             val oldStatus = connectionStatus
             connectionStatus = newStatus
@@ -928,6 +1128,12 @@ class ConnectionManager(
 
         when (connectionStatus) {
             ConnectionStatus.CONNECTED -> {
+                // R3: this logical session has now been established; established faults become
+                // eligible for the one-shot recovery. R8: capture the terminal identity anchor.
+                hasEverEstablishedThisSession = true
+                establishedTerminalIdentity =
+                    TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()?.captureTerminalIdentity()
+
                 // Notify connection status listener (for PaymentManager to process pending transaction)
                 connectionStatusListener?.invoke()
 
@@ -1629,6 +1835,36 @@ class ConnectionManager(
                 return@setStatusChangeListener
             }
             val newStatus = convertToConnectionStatus(kernelStatus)
+
+            // SPEC-ESTABLISHED-RECOVERY-001 R5/R6: an established link dropping to DISCONNECTED/ERROR
+            // via the kernel status listener is an established fault — claim the recovery epoch
+            // synchronously BEFORE any field mutation or public notification. On an established fault
+            // the claim returns true; the coordinator then owns the single terminal outcome and this
+            // listener invocation must do nothing further (status projection stays non-terminal).
+            val kernelDroppedToInactive = newStatus == ConnectionStatus.DISCONNECTED ||
+                newStatus == ConnectionStatus.ERROR
+            val sdkWasActive = connectionStatus == ConnectionStatus.CONNECTED ||
+                connectionStatus == ConnectionStatus.CONNECTING ||
+                connectionStatus == ConnectionStatus.WAIT_CONNECTING
+            if (kernelDroppedToInactive && sdkWasActive &&
+                !establishedRecoveryCoordinator.isRecovering() &&
+                reconnectManager?.isReconnecting() != true &&
+                !isFastRecovering
+            ) {
+                if (establishedRecoveryCoordinator.interceptIfEstablishedFault(
+                        TransportFaultEvent(
+                            sessionId = currentSessionId,
+                            epoch = establishedRecoveryCoordinator.currentEpoch(),
+                            code = "1006",
+                            msg = "Kernel status changed to $kernelStatus",
+                            established = hasEverEstablishedThisSession
+                        )
+                    )
+                ) {
+                    return@setStatusChangeListener
+                }
+            }
+
             if (connectionStatus != newStatus) {
                 val previousStatus = connectionStatus
                 LogUtil.d(
@@ -1641,8 +1877,15 @@ class ConnectionManager(
                 // connected/connecting — otherwise that drop is only reflected in the internal
                 // status field and the integrator (e.g. Demo ConnectionManager) stays stuck in
                 // CONNECTING until the next connect()'s validateStatusConsistency reconciles it.
-                synchronized(this) {
-                    connectionStatus = newStatus
+                // SPEC-ESTABLISHED-RECOVERY-001 R5/AC5: during recovery keep the logical projection
+                // non-terminal (isConnecting=true/isConnected=false). The self-healing guard below
+                // only controls whether we SURFACE onDisconnected; it does not protect the status
+                // FIELD. So we must not overwrite connectionStatus to DISCONNECTED/ERROR mid-recovery
+                // — kernel ERROR->DISCONNECTED jitter must not flip the projection.
+                if (!establishedRecoveryCoordinator.isRecovering()) {
+                    synchronized(this) {
+                        connectionStatus = newStatus
+                    }
                 }
 
                 val droppedToInactive = newStatus == ConnectionStatus.DISCONNECTED ||
@@ -1656,7 +1899,13 @@ class ConnectionManager(
                 // OPT-R1: the single in-transaction fast-recovery window (isFastRecovering) is
                 // also self-healing — its mid-recovery kernel DISCONNECTED is transient and must
                 // not surface a false onDisconnected nor clear the processed-terminal-event set.
-                val isSelfHealing = reconnectManager?.isReconnecting() == true || isFastRecovering
+                // SPEC-ESTABLISHED-RECOVERY-001 R5/R6: an active established-recovery episode is also
+                // self-healing — its mid-recovery kernel DISCONNECTED/ERROR must not surface a false
+                // onDisconnected nor invoke connectionDisconnectedListener (which would clear the
+                // processed-terminal-event dedup set).
+                val isSelfHealing = reconnectManager?.isReconnecting() == true ||
+                    isFastRecovering ||
+                    establishedRecoveryCoordinator.isRecovering()
 
                 // A recovering LAN handshake has one terminal owner: ConnectionCallback.
                 // Kernel ERROR is also set by the final failure path; do not synthesize a

@@ -114,6 +114,18 @@ class VSPClientKernel(
     private var targetDeviceName: String? = null
 
     /**
+     * SPEC-ESTABLISHED-RECOVERY-001 R8: the USB device the live session is bound to, and its serial
+     * number if readable with existing permission. VID/PID/bus path alone are insufficient; the
+     * serial is the reliable per-terminal anchor. Null serial => no trusted anchor => recovery fails
+     * closed rather than attaching to a different terminal.
+     */
+    @Volatile
+    private var connectedUsbDevice: UsbDevice? = null
+
+    @Volatile
+    private var connectedUsbSerial: String? = null
+
+    /**
      * Receive data buffer: temporarily stores incomplete JSON when USB CDC-ACM receives fragmented packets.
      * Complete JSON objects are extracted by [extractNextJsonObject] based on brace depth before passing to [dataReceiver].
      * It is only accessed within the dataReceiveJob coroutine, with no concurrent contention.
@@ -574,6 +586,11 @@ class VSPClientKernel(
 
             usbSerialPort = port
             usbSerialDriver = targetDriver
+
+            // SPEC-ESTABLISHED-RECOVERY-001 R8: capture the bound device + its serial (best-effort,
+            // only readable with existing permission) as the trusted recovery identity anchor.
+            connectedUsbDevice = usbDevice
+            connectedUsbSerial = readUsbSerialIfPermitted(usbDevice)
 
             // Discard bytes the peer left in the link FIFO during its previous session (typically
             // ##TAPLINK_HSK_REQ## re-sent every second by Tapro and never read). Handshake markers
@@ -1082,6 +1099,59 @@ class VSPClientKernel(
      */
     fun hasPermissionForDevice(device: UsbDevice): Boolean {
         return usbManager.hasPermission(device)
+    }
+
+    // SPEC-ESTABLISHED-RECOVERY-001 R8/R14 — VSP recovery identity + non-interactive prerequisite.
+
+    /** Read the USB serial number only when permission already exists; never prompts. */
+    private fun readUsbSerialIfPermitted(device: UsbDevice): String? {
+        return try {
+            if (!usbManager.hasPermission(device)) null else device.serialNumber
+        } catch (e: Exception) {
+            LogUtil.w(TAG, "Unable to read USB serial: ${e.message}")
+            null
+        }
+    }
+
+    /** The captured USB serial is the reliable VSP terminal anchor; null => no trusted anchor (R8). */
+    override fun captureTerminalIdentity():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity? {
+        val serial = connectedUsbSerial
+        return if (serial.isNullOrBlank()) null
+        else com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity(serial)
+    }
+
+    /**
+     * Recovery succeeds only when the rebuilt link's device exposes the SAME serial. VID/PID/bus path
+     * alone are insufficient and a missing serial fails closed (R8).
+     */
+    override suspend fun validateRecoveredIdentity(
+        expected: com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity
+    ): Boolean {
+        if (!expected.isReliable) return false
+        val device = connectedUsbDevice ?: return false
+        val current = readUsbSerialIfPermitted(device)
+        return !current.isNullOrBlank() && current == expected.anchor
+    }
+
+    /**
+     * Non-interactive prerequisite (R14): recovery may proceed only with EXISTING USB permission. A
+     * missing permission is reported as Denied — the coordinator ends with one terminal disconnect
+     * and the requestPermission branch is never reached.
+     */
+    override fun evaluateRecoveryPrerequisite():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult {
+        val device = connectedUsbDevice
+            ?: return com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Denied(
+                "No bound USB device for recovery"
+            )
+        return if (usbManager.hasPermission(device)) {
+            com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Available
+        } else {
+            com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Denied(
+                "USB permission required (authorization-required); recovery must not prompt"
+            )
+        }
     }
 
     /**

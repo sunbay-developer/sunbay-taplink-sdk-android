@@ -80,4 +80,42 @@ interface IServiceKernel {
      * @param listener Status change listener
      */
     fun setStatusChangeListener(listener: (InnerConnectionStatus) -> Unit)
+
+    /**
+     * Recovery-only: whether the link just rebuilt by SDK-internal recovery points at the validated
+     * ORIGINAL terminal.
+     *
+     * Called after a recovery rebuild appears physically connected. VID/PID or USB bus path alone are
+     * NOT sufficient; the kernel must compare a reliable per-terminal anchor (e.g. mDNS serial, USB
+     * serialNumber). When no reliable anchor is available the default is `false` so recovery fails
+     * closed and never silently attaches to a different terminal.
+     *
+     * SPEC-ESTABLISHED-RECOVERY-001 R8. Internal API; default keeps all kernels compiling unchanged.
+     *
+     * @param expected the original terminal identity captured when the connection first succeeded.
+     * @return `true` only when the rebuilt link is confirmed to be the same terminal.
+     */
+    suspend fun validateRecoveredIdentity(
+        expected: com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity
+    ): Boolean = false
+
+    /**
+     * Recovery-only, read-only prerequisite evaluation for a non-interactive recovery rebuild.
+     *
+     * MUST NOT trigger any authorization interaction (USB requestPermission, privileged grant,
+     * pairing/authorization UI). It only reports whether existing effective authority and the target
+     * are usable. The default is [RecoveryPrereqResult.Unsupported].
+     *
+     * SPEC-ESTABLISHED-RECOVERY-001 R14. Internal API; default keeps all kernels compiling unchanged.
+     */
+    fun evaluateRecoveryPrerequisite(): com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult =
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Unsupported
+
+    /**
+     * Recovery-only: capture the trusted identity anchor of the currently connected terminal, if the
+     * kernel can obtain one with existing authority. Returns `null` when no reliable anchor exists.
+     *
+     * SPEC-ESTABLISHED-RECOVERY-001 R8. Internal API; default returns `null`.
+     */
+    fun captureTerminalIdentity(): com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity? = null
 }

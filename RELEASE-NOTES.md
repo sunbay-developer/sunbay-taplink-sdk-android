@@ -98,6 +98,31 @@ timeout behavior more predictable. No new dependency or error code is introduced
 - Semi-integrated card-reading timeout is returned as a terminal `FAILED` transaction result with
   the message `read card timeout`, not as a communication-level callback failure.
 
+### 💥 Changed — SDK-managed one-shot recovery for established connections
+
+- A connection that was already established and then drops abnormally now always gets exactly ONE
+  silent, SDK-internal recovery attempt (same protocol, same terminal) before any final result is
+  reported. This applies to every connection mode (LAN, Cable VSP/RS232/AOA host, local AIDL, and
+  SUB_SCREEN) and happens regardless of `autoReconnect` — including when it is disabled. First-connect
+  (never-established) failures keep their existing behavior.
+- During the attempt the SDK is fully silent to callers: no `onReconnecting`, no `onError`, and no
+  transient `onDisconnected`. The registered `ConnectionListener` is not removed by the SDK.
+- `onError` is now scoped to an explicit `connect()` call only. A fault on an already-established
+  connection is never surfaced via `onError`.
+- Each observer receives exactly one terminal callback: `onConnected` on successful recovery, or a
+  single `onDisconnected` with error code `213` on failure. On failure, in-flight transaction
+  callbacks are cleared once via the existing physical-disconnect cleanup, alongside that single
+  `onDisconnected(213)`; there is no early synthetic `306`.
+- Recovery never resubmits or replays a payment. On success the original `PaymentCallback` and its
+  `traceId`/`transactionRequestId` correlation are retained and the rebuilt receive route is
+  reattached to the same mapping. A request submitted while recovery is in progress is rejected with
+  error code `213` before send (not queued, not replayed); existing requests keep their own timeout.
+- The single attempt is bounded by a 5000 ms budget and validates the original terminal identity;
+  if the terminal identity cannot be reliably confirmed, the attempt ends in disconnect rather than
+  attaching to a different terminal. Recovery is non-interactive: it never triggers a USB permission
+  request, privileged grant, or pairing/authorization UI. Error codes `307`/`308`, the `306`
+  query-first guidance, and all transaction result semantics are unchanged.
+
 ### 🧭 Migration from v1.0.10
 
 - Set `PaymentRequest.requestTimeout` in **milliseconds** (for example, `30_000L` for 30 seconds).

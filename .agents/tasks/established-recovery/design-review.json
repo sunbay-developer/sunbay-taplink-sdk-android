@@ -1,0 +1,20 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "NIT",
+      "location": "design.md §3.6 / §5 step 3",
+      "problem": "恢复复用的内部监听器被称为 internalRecoveryListener，而现有代码里是 internalReconnectListener（ConnectionManager.kt:65）。命名差异可能让实现者误以为需要新建一个类，而非复用既有 no-op 监听器模式。",
+      "fix": "在 §5 step 3 注明复用既有 internalReconnectListener（或为恢复语义新建等价内部监听器），与现有标识符对齐。"
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "location": "design.md §7.1 第 3 点",
+      "problem": "成功终局投递 onConnected(deviceId, taproVersion) 未写明恢复场景下这两个值的来源。恢复成功不重跑 INIT，deviceId/taproVersion 应取自恢复前已缓存值（updateDeviceInfo 填充），否则实现者可能误新取或误清。",
+      "fix": "在 §7.1 注明 onConnected 使用恢复前已缓存的 connectedDeviceId/connectedTaproVersion（恢复不重跑 INIT、不改写设备信息），与 R10 不重置/不重放一致。"
+    }
+  ],
+  "reviewDoc": "/Users/sm4306/StudioProjects/taplinksdk/.worktrees/established-recovery/.agents/tasks/established-recovery/design-review.md"
+}

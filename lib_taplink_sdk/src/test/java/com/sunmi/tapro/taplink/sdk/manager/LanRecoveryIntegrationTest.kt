@@ -78,6 +78,22 @@ class LanRecoveryIntegrationTest {
 
     private fun unusedPort(): Int = ServerSocket(0).use { it.localPort }
 
+    /**
+     * Replace the recovery coordinator's Main-confined scope with an Unconfined one and shorten its
+     * budget so the real recovery episode settles within a JVM test.
+     */
+    private fun installRecoveryTestScope(manager: ConnectionManager) {
+        val coordinator = ConnectionManager::class.java
+            .getDeclaredField("establishedRecoveryCoordinator").apply { isAccessible = true }.get(manager)
+        coordinator.javaClass.getDeclaredField("scope").apply { isAccessible = true }
+            .set(coordinator, CoroutineScope(Dispatchers.Unconfined))
+        val start = System.currentTimeMillis()
+        val fast = object : RecoveryClock {
+            override fun elapsedRealtimeMs(): Long = (System.currentTimeMillis() - start) * 6
+        }
+        coordinator.javaClass.getDeclaredField("clock").apply { isAccessible = true }.set(coordinator, fast)
+    }
+
     private fun setup(discover: suspend ((ServiceInfo) -> Boolean) -> List<ServiceInfo>): Pair<ConnectionManager, TaplinkServiceKernel> {
         val context = TestContext()
         val service = TaplinkServiceKernel.getInstance(context)
@@ -241,6 +257,13 @@ class LanRecoveryIntegrationTest {
         }
     }
 
+    /**
+     * SPEC-ESTABLISHED-RECOVERY-001 R6: after this change an established link drop runs one silent
+     * internal recovery before the single terminal callback. The observer is STILL notified — now
+     * exactly once, and never via onError. (The coordinator episode runs on the Main-confined
+     * sdkScope, which does not dispatch in a plain JVM test, so an Unconfined scope + fast clock are
+     * injected to let the real episode settle.)
+     */
     @Test
     fun establishedLinkDropStillNotifiesTheObserver() = runBlocking {
         val (manager, service) = setup { emptyList() }
@@ -248,15 +271,19 @@ class LanRecoveryIntegrationTest {
         val server = Server()
         server.start()
         manager.setConnectionListener(events)
+        installRecoveryTestScope(manager)
         try {
             withTimeout(5000) { server.ready.await() }
             manager.connect(config(server.port), events)
             withTimeout(5000) { events.completion.await() }
             server.connections.toList().forEach { it.closeConnection(1006, "test peer drop") }
-            withTimeout(5000) {
-                while (events.disconnected.isEmpty()) delay(10)
+            withTimeout(8000) {
+                while (events.disconnected.isEmpty() && events.connected.size < 2) delay(10)
             }
-            assertFalse(manager.isConnected())
+            // The observer is notified exactly once by the recovery outcome; never via onError.
+            assertTrue(events.errors.isEmpty())
+            val terminalCount = events.disconnected.size + (events.connected.size - 1)
+            assertEquals(1, terminalCount)
         } finally {
             manager.disconnect()
             service.release()

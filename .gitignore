@@ -18,6 +18,9 @@ local.properties
 /lib_taplink_sdk/src/test/**
 !/lib_taplink_sdk/src/test/**/
 !/lib_taplink_sdk/src/test/java/com/sunmi/tapro/taplink/sdk/manager/LanRecoveryIntegrationTest.kt
+!/lib_taplink_sdk/src/test/java/com/sunmi/tapro/taplink/sdk/manager/EstablishedRecoveryControllerTest.kt
+!/lib_taplink_sdk/src/test/java/com/sunmi/tapro/taplink/sdk/manager/EstablishedRecoveryBudgetTest.kt
+!/lib_taplink_sdk/src/test/java/com/sunmi/tapro/taplink/sdk/manager/EstablishedRecoveryWiringTest.kt
 /docs/
 !/docs/
 /docs/*

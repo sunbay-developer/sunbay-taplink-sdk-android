@@ -1,0 +1,124 @@
+{
+  "change_id": "SCR-ESTABLISHED-RECOVERY-001",
+  "spec_id": "SPEC-LAN-RECOVERY-001",
+  "rule_id": [
+    "R6",
+    "R7",
+    "R8",
+    "R9"
+  ],
+  "change_type": "MODIFY_RULE",
+  "level": "L3",
+  "change_origin": "DESIGN_DECISION",
+  "reported_by": "Maintainer in current chat",
+  "initiator_role": "maintainer",
+  "reason": "All SDK-established protocols must attempt one mandatory recovery before final disconnect, including autoReconnect=false; the previous non-LAN runtime no-op and in-flight-only gates do not satisfy the explicit request.",
+  "source": {
+    "type": "EXPLICIT",
+    "references": [
+      {
+        "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+        "version": "1.0",
+        "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+        "section": "S1-S3"
+      },
+      {
+        "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+        "version": "1.0",
+        "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+        "section": "S6. Non-interactive recovery constraint (verbatim)"
+      },
+      {
+        "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+        "version": "1.0",
+        "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+        "section": "S7-S9 callback preservation and successful continuation"
+      }
+    ],
+    "evidence": "Verbatim request and configuration/phase decisions are captured in the source. Detailed Q1-Q4 proposals are not approved."
+  },
+  "before": {
+    "status": "Approved v1.1 boundaries plus draft v1.2 pending SCR",
+    "rule": "LAN R6/R7/R9 preserve the existing in-flight autoReconnect-gated 5s recovery and 180s callback limit. Pending R8/AC8b claims non-LAN runtime no-op. Initial LAN R1-R5 preserve separate discovery recovery."
+  },
+  "after": {
+    "status": "APPROVED",
+    "rule": "Apply SPEC-ESTABLISHED-RECOVERY-001 to established sessions for all actual SDK adapters, idle/in-flight and autoReconnect=false included; one bounded common recovery owner (5,000ms single attempt), recovery fully silent to callers (no onReconnecting/transient onError/transient onDisconnected) with one terminal onConnected or onDisconnected(E213), one final disconnect clearing in-flight transaction callbacks on failure, no payment replay, successful recovery continues original callbacks/traceId. Keep initial LAN R1-R5 unchanged.",
+    "target_new_spec": "SPEC-ESTABLISHED-RECOVERY-001",
+    "pending_decisions": [],
+    "resolved_decisions": {
+      "Q1": "APPROVED 2026-10-15 ('只恢复一次'): one 5,000ms single attempt, no appended retries.",
+      "Q2": "APPROVED 2026-10-15 ('恢复期间不发进度回调，仅终局一次结果回调，onError 的回调也不给调用端'): fully silent recovery, one terminal callback only, no onError to the caller.",
+      "Q3": "APPROVED 2026-10-15 ('身份无法可靠确认时，不自动接入其他终端'): same-terminal validation, never auto-select another terminal, pre-INIT idle limitation accepted.",
+      "Q4": "APPROVED 2026-10-15 ('恢复失败后的交易 callback 都被清除了呀'): recovery failure clears in-flight transaction callbacks via existing cleanup once with onDisconnected(E213); new requests rejected with E213; no early E306."
+    },
+    "old_spec_migration": "After approval amend R6/R7/R8/R9 and matching AC/coverage/Changelog with the precise new established-link scope; do not silently mutate the prior approval.",
+    "related_pending_scr": "SCR-LAN-FASTRECOVERY-ALLMODES-001",
+    "related_pending_scr_resolution": "Propose superseding its non-LAN-no-op intent upon approval; do not mark it approved or rejected now.",
+    "non_interactive_recovery": "Human follow-up S6 forbids new authorization flows during internal recovery. Missing authority fails recovery; do not bypass security checks or change explicit first-connect permission policy.",
+    "successful_recovery_priority": "Apply R15: same original PaymentCallback and traceId/transactionRequestId resume progress and final result via existing continuation after successful recovery; no new transaction or replacement callback."
+  },
+  "impact": {
+    "acceptance_criteria": [
+      "AC1",
+      "AC2",
+      "AC3",
+      "AC4",
+      "AC5",
+      "AC6",
+      "AC7",
+      "AC8",
+      "AC9",
+      "AC10",
+      "AC11",
+      "AC12",
+      "AC13",
+      "AC14",
+      "AC15"
+    ],
+    "test_cases": [
+      "TC-ER-001",
+      "TC-ER-002",
+      "TC-ER-003",
+      "TC-ER-004",
+      "TC-ER-005",
+      "TC-ER-006",
+      "TC-ER-007",
+      "TC-ER-008",
+      "TC-ER-009",
+      "TC-ER-010",
+      "TC-ER-011",
+      "TC-ER-012",
+      "TC-ER-013",
+      "TC-ER-014",
+      "TC-ER-015"
+    ],
+    "implementation_review_required": true,
+    "regression_required": true,
+    "public_api_signatures": "No new public API proposed; observable callback, config and failure semantics change.",
+    "compatibility": "Mandatory recovery overrides established-link autoReconnect=false; one-attempt proposal replaces stacked maxRetryCount/fast-recovery behavior; version/migration classification requires human review.",
+    "payment": "Human-confirmed priority: successful recovery must retain original callbacks/trace mappings and attach receive routing to existing in-flight continuation; no resend/dedup reset. Final recovery-failure callback policy remains pending Q4; do not treat earlier E306 proposal as approved.",
+    "downstream": {
+      "tapro": "Current active Host LAN continuation is v1.2 onOpen rebind, not older sign-in callback. Preserve it; audit non-LAN binding survival and sender reattachment before claiming end-to-end continuation; any Host behavior change needs its own approved spec/SCR. No dependency upgrade before confirmed publication.",
+      "taplinkdemo": "Public API examples and callback/config regression need eventual synchronization.",
+      "sunbay_open_docs": "Eventual en+zh recovery/config/migration/E213-E306/release documentation mandatory; do not update Current/version before release confirmation."
+    },
+    "validation": "Deterministic controller and adapter wiring tests; LAN initial recovery and config/payment regression; hardware/backend validation requires separate human authorization.",
+    "existing_documents_untouched": true,
+    "permission_scope": "Automatic permission-grant feasibility exploration deferred by maintainer. Current recovery proposal remains non-interactive, existing authority only; no automatic grant implementation authorized."
+  },
+  "approval": {
+    "status": "APPROVED",
+    "reviewers": [
+      "Independent Completeness Reviewer (source/semantic review only; not human L3 approval)"
+    ],
+    "approver_role": "SDK_CONNECTION_AND_PAYMENT_RESPONSE_RULE_OWNER",
+    "approved_by": "Maintainer (SDK connection and payment-response-path rule owner) in chat 2026-10-15",
+    "approved_at": "2026-10-15",
+    "decision_note": "S2/S3 scope decisions and Q1-Q4 are all human-confirmed by the maintainer on 2026-10-15. SPEC-ESTABLISHED-RECOVERY-001 is active v1.1; implementation authorized. Non-LAN Host end-to-end continuation still needs per-adapter evidence at implementation time."
+  },
+  "target_spec_version": "v1.3",
+  "new_spec_version": "v1.1",
+  "created_at": "2026-10-15",
+  "resolved_at": "2026-10-15"
+}

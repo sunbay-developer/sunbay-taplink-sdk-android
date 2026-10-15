@@ -1,0 +1,740 @@
+{
+  "spec_id": "SPEC-ESTABLISHED-RECOVERY-001",
+  "spec_file": "docs/spec/TAPLINK_ESTABLISHED_RECOVERY_SPEC.md",
+  "version": "v1.2",
+  "status": "active",
+  "approved": true,
+  "approved_by": "Maintainer (SDK connection and payment-response-path rule owner) in chat 2026-10-15",
+  "approved_at": "2026-10-15",
+  "sources": [
+    {
+      "source_id": "SRC-1",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S1. Maintainer request (verbatim)",
+      "source_quote": "所有的协议底层都需要在连接异常的时候先去尝试一次重连再报错disconnect，这样才是sdk应该做的，请开启sdd流程进行sdk该逻辑更新",
+      "content": "所有的协议底层都需要在连接异常的时候先去尝试一次重连再报错disconnect，这样才是sdk应该做的，请开启sdd流程进行sdk该逻辑更新",
+      "verified": true,
+      "resolution": "Human scope decision recorded; complete specification approval pending.",
+      "verification_note": "Independent Completeness Reviewer checked verbatim quote and rule support on 2026-10-15; not human specification approval."
+    },
+    {
+      "source_id": "SRC-2",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S2. Mandatory recovery configuration decision (verbatim)",
+      "source_quote": "始终恢复一次，包括 autoReconnect=false；作为新的 SDK 内部自恢复契约",
+      "content": "始终恢复一次，包括 autoReconnect=false；作为新的 SDK 内部自恢复契约",
+      "verified": true,
+      "resolution": "Human scope decision recorded; complete specification approval pending.",
+      "verification_note": "Independent Completeness Reviewer checked verbatim quote and rule support on 2026-10-15; not human specification approval."
+    },
+    {
+      "source_id": "SRC-3",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S3. Established connection scope decision (verbatim)",
+      "source_quote": "仅覆盖曾连接成功后的异常断开，首次失败沿用现有策略",
+      "content": "仅覆盖曾连接成功后的异常断开，首次失败沿用现有策略",
+      "verified": true,
+      "resolution": "Human scope decision recorded; complete specification approval pending.",
+      "verification_note": "Independent Completeness Reviewer checked verbatim quote and rule support on 2026-10-15; not human specification approval."
+    },
+    {
+      "source_id": "SRC-4",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S10. Q1 budget / single-attempt decision (verbatim)",
+      "source_quote": "只恢复一次",
+      "content": "Single 5,000ms budget, exactly one attempt, no stacked retries, phase/epoch ownership, cancellation and prerequisite-failure policy; Q1.",
+      "verified": true,
+      "resolution": "Q1 APPROVED by maintainer 2026-10-15 ('只恢复一次'): one 5,000ms attempt, no appended retries."
+    },
+    {
+      "source_id": "SRC-5",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S11. Q2 callback-silence decision (verbatim)",
+      "source_quote": "恢复期间不发进度回调，仅终局一次结果回调，onError的回调也不给调用端",
+      "content": "Recovery fully silent to callers (no onReconnecting, no transient onError, no transient onDisconnected); onError is scoped to connect() only and an established fault is never reported via onError; the SDK does not remove the registered ConnectionListener during recovery; exactly one terminal onConnected on success or one E213 onDisconnected on failure, deduplicated observers; Q2.",
+      "verified": true,
+      "resolution": "Q2 APPROVED by maintainer 2026-10-15 ('恢复期间不发进度回调，仅终局一次结果回调，onError的回调也不给调用端'), refined by S14 follow-up ('onError只在调用connect()时有对应回调，连接建立过后的onError不需要返回给他，我们sdk内部做恢复重试，并保证连接监听不被移除'): no progress or transient error callbacks; onError only for connect(); established faults never surface via onError; listener never removed by the SDK during recovery; a single terminal result only.",
+      "related_sections": [
+        "S14. Q2 follow-up: onError scope and listener retention (verbatim)"
+      ]
+    },
+    {
+      "source_id": "SRC-6",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S12. Q3 identity-validation decision (verbatim)",
+      "source_quote": "身份无法可靠确认时，不自动接入其他终端",
+      "content": "Original-peer identity and full SUB_SCREEN readiness validation, refusal when ambiguous; Q3.",
+      "verified": true,
+      "resolution": "Q3 APPROVED by maintainer 2026-10-15 ('身份无法可靠确认时，不自动接入其他终端'): never auto-select another terminal; pre-INIT idle limitation accepted."
+    },
+    {
+      "source_id": "SRC-7",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S13. Q4 recovery-failure callback decision (verbatim)",
+      "source_quote": "恢复失败后的交易callback都被清除了呀",
+      "content": "No-replay/deadline/dedup mechanics; successful recovery continuation confirmed in SRC-11; recovery FAILURE clears in-flight callbacks via existing physical-disconnect cleanup; new requests during recovery rejected with E213; no synthetic early E306.",
+      "verified": true,
+      "resolution": "Q4 APPROVED by maintainer 2026-10-15 ('恢复失败后的交易callback都被清除了呀'): on terminal recovery failure clear the in-flight transaction callbacks via the existing cleanup path, once, with the single onDisconnected(E213); early E306 remains prohibited."
+    },
+    {
+      "source_id": "SRC-8",
+      "classification": "DERIVED",
+      "content": "Public callback/configuration behavior changes require compatibility and eventual release documentation.",
+      "derivation": {
+        "derived_from": [
+          "SRC-1",
+          "SRC-2",
+          "SRC-3"
+        ],
+        "rationale": "Mandatory recovery even when disabled changes public observable behavior; AGENT.md sections 8/8.1 require maintainer publication and downstream bilingual synchronization."
+      },
+      "verified": false
+    },
+    {
+      "source_id": "SRC-9",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S6. Non-interactive recovery constraint (verbatim)",
+      "source_quote": "还有这种重连会需要设备端授权吗，我不希望sdk内部重连还触发授权逻辑",
+      "content": "Recovery must not initiate a new authorization flow.",
+      "verified": true,
+      "verification_note": "Independent Completeness Reviewer checked S6 verbatim quote and R14 semantic support on 2026-10-15; see review.md section 9. Not human specification approval."
+    },
+    {
+      "source_id": "SRC-10",
+      "classification": "DERIVED",
+      "content": "No authorization UI does not permit bypassing permission/identity checks; fail silent recovery if existing authority is unavailable.",
+      "derivation": {
+        "derived_from": [
+          "SRC-9"
+        ],
+        "rationale": "A non-interactive attempt can use existing effective authority; it cannot legitimately create permission without authorization. Explicit first-connect policy is outside established-only scope SRC-3."
+      },
+      "verified": false
+    },
+    {
+      "source_id": "SRC-11",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ESTABLISHED-RECOVERY-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ESTABLISHED_RECOVERY_REQUEST.md",
+      "section": "S8. Successful recovery continuation clarification (verbatim)",
+      "source_quote": "我的意思是重连成功了如果有正在交易的交易回调需要恢复callback走到我之前的重连交易续推逻辑",
+      "content": "Successful reconnect must resume the original in-flight transaction callback and existing continuation path.",
+      "verified": true,
+      "verification_note": "Independent Completeness Reviewer verified source S8 and R15 semantic support on 2026-10-15; review.md section 10. Not human L3 approval."
+    }
+  ],
+  "dimensions": {
+    "business_flow": {
+      "covered": "yes",
+      "note": "Draft rule and acceptance coverage; proposed details still await human approval."
+    },
+    "state_and_rules": {
+      "covered": "yes",
+      "note": "Draft rule and acceptance coverage; proposed details still await human approval."
+    },
+    "interface_boundary": {
+      "covered": "yes",
+      "note": "Draft rule and acceptance coverage; proposed details still await human approval."
+    },
+    "exception_and_risk": {
+      "covered": "yes",
+      "note": "Draft rule and acceptance coverage; proposed details still await human approval."
+    },
+    "acceptance_coverage": {
+      "covered": "yes",
+      "note": "Draft rule and acceptance coverage; proposed details still await human approval."
+    }
+  },
+  "payment_checklist": {
+    "transaction_lifecycle": {
+      "applicable": "yes",
+      "rules": [
+        "R10",
+        "R11",
+        "R15"
+      ],
+      "note": "In-flight safety, pending-send processing and deadline races."
+    },
+    "amount_and_txn_type": {
+      "applicable": "na",
+      "reason": "No changes to amounts/tips, Refund/Abort eligibility or transaction types; regression preserves them."
+    },
+    "connection_modes": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R3",
+        "R8"
+      ],
+      "note": "LAN, VSP, RS232, AOA, local AIDL and SUB_SCREEN; Cloud has no SDK entity."
+    },
+    "callback_semantics": {
+      "applicable": "yes",
+      "rules": [
+        "R5",
+        "R6",
+        "R9",
+        "R10",
+        "R13"
+      ]
+    },
+    "idempotency_and_query": {
+      "applicable": "yes",
+      "rules": [
+        "R10",
+        "R11"
+      ],
+      "note": "No payment replay, 306 query-first, 307/308 and globally unique request IDs unchanged."
+    },
+    "api_compatibility": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R3",
+        "R6",
+        "R11",
+        "R13"
+      ]
+    },
+    "security_compliance": {
+      "applicable": "yes",
+      "rules": [
+        "R8",
+        "R13",
+        "R14"
+      ],
+      "note": "Original peer guard, no credential or production-log changes."
+    },
+    "perf_and_recovery": {
+      "applicable": "yes",
+      "rules": [
+        "R4",
+        "R7",
+        "R9",
+        "R12"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "rule_id": "R1",
+      "source_id": "SRC-1",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "critical",
+      "statement": "An established SDK-managed connection faults -> SDK owns a recovery attempt before final disconnect; every concrete adapter follows the same policy.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC1",
+          "given": "Established LAN/VSP/RS232/AOA/local/SUB_SCREEN, idle and in-flight variants",
+          "when": "Fault event arrives",
+          "then": "The common recovery owner is entered for each actual client adapter before terminal notification; Cloud is explicitly N/A.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-001"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R2",
+      "source_id": "SRC-2",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "critical",
+      "statement": "autoReconnect is omitted (default false), explicitly false or true -> the mandatory established recovery still has one attempt. Retry-count interaction is proposed separately in R4.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC2",
+          "given": "autoReconnect omitted/false/true",
+          "when": "Established connection fails",
+          "then": "One mandatory recovery is eligible in every configuration; no boolean default bypass.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-002"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R3",
+      "source_id": "SRC-3",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "critical",
+      "statement": "No connection has succeeded in this logical session -> keep existing first-connect behavior; recovery-attempt failure cannot recursively become a new first-connect recovery.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC3",
+          "given": "Initial connect never succeeded, plus failure during an already-running recovery",
+          "when": "Connect/handshake fails",
+          "then": "Initial policy remains unchanged; the recovery child does not start recursive recovery.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-003"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R4",
+      "source_id": "SRC-4",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "critical",
+      "statement": "One established fault episode -> one serialized same-protocol transport rebuild, no additional ReconnectManager/fast-recovery/mDNS/adaptor retry chain. Proposed budget: 5,000ms monotonic wall time including cleanup, device wait, handshake, readiness and cancellation; no retry delay. maxRetryCount=0 or positive does not change this one-attempt limit. Failure/exhaustion ends this episode without background retries.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC4",
+          "given": "An established fault episode, maxRetryCount=0/3, duplicate fault events and slow adapter",
+          "when": "Failures race or deadline reaches 5,000ms",
+          "then": "Exactly one rebuild attempt at most; failed prerequisites do not spin; no stacked mDNS/fast/regular loops, and an expired attempt cannot later succeed. A genuinely restored connection may start a new episode on a new fault.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-004"
+          ]
+        }
+      ],
+      "approved_by": "Q1 (maintainer 2026-10-15)"
+    },
+    {
+      "rule_id": "R5",
+      "source_id": "SRC-4",
+      "source_type": "EXPLICIT",
+      "dimension": "state_and_rules",
+      "criticality": "critical",
+      "statement": "A fault is observed -> synchronously claim a recovery epoch before any public callback or PaymentManager physical-disconnect cleanup. Keep logical recovery nonterminal; isConnected=false and isConnecting=true. Transport ERROR/DISCONNECTED are diagnostics, not final public outcomes.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC5",
+          "given": "Read/write/probe plus status/close events in every ordering",
+          "when": "First fault is detected",
+          "then": "Ownership is claimed first; isConnected=false/isConnecting=true; no public transient error/disconnect and no physical-disconnect payment cleanup.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-005"
+          ]
+        }
+      ],
+      "approved_by": "Q1 (maintainer 2026-10-15)"
+    },
+    {
+      "rule_id": "R6",
+      "source_id": "SRC-5",
+      "source_type": "EXPLICIT",
+      "dimension": "state_and_rules",
+      "criticality": "critical",
+      "statement": "onError is scoped to the explicit connect() action only; a fault on an already-established connection is NOT an onError case and is never reported to callers via onError. The SDK absorbs the established fault and runs the one recovery. During recovery emit NO onReconnecting progress, NO onError and NO transient onDisconnected, including autoReconnect=false; transport ERROR/DISCONNECTED mid-attempt are diagnostics only. The registered ConnectionListener MUST NOT be removed by the SDK during recovery (success or failure); only the caller's explicit removeConnectionListener()/disconnect() removes it (R9), so the terminal callback still reaches it. Exactly one terminal callback per distinct observer: recovery succeeds -> one onConnected with no paired onError/onDisconnected for the recovered fault; recovery fails -> one onDisconnected with existing E213 and diagnostic cause and NO onError in any case. Queued callers joining the episode receive only that single terminal outcome once and are released.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC6",
+          "given": "Shared connect/global listener, distinct listeners and queued connect callers",
+          "when": "Recovery succeeds or fails",
+          "then": "onError is never invoked for an established-connection fault (onError stays scoped to connect() failures). No onReconnecting and no transient onDisconnected reach any observer during the attempt, including autoReconnect=false. The registered ConnectionListener stays attached throughout recovery (the SDK does not remove it); only an explicit caller removeConnectionListener()/disconnect() detaches it. Each distinct observer gets exactly one terminal callback: one onConnected on success or one E213-reason onDisconnected on failure, with no onError either way; queued callers receive that single terminal outcome once and all pending callers are released.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-006"
+          ]
+        }
+      ],
+      "approved_by": "Q2 (maintainer 2026-10-15)"
+    },
+    {
+      "rule_id": "R7",
+      "source_id": "SRC-4",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "critical",
+      "statement": "Recovery starts -> retire the old epoch, cancel its tasks and await safe resource release before opening a successor. Old read/write/status/close/permission/handshake callbacks cannot mutate the successor, close its resources or emit outcomes. A deadline expiry fences a stuck cleanup and terminates recovery without opening overlapping resources.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC7",
+          "given": "Blocking old read, late status/permission/handshake and delayed cleanup",
+          "when": "Recovery starts/expires",
+          "then": "No successor opens before old release; no stale callback mutates or closes a successor; stuck cleanup is fenced and budget ends once.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-007"
+          ]
+        }
+      ],
+      "approved_by": "Q1 (maintainer 2026-10-15)"
+    },
+    {
+      "rule_id": "R8",
+      "source_id": "SRC-6",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "critical",
+      "statement": "Recovery selects peer -> retain the original protocol/configuration and validate the original terminal identity; VID/PID or USB bus path alone are insufficient. Missing reliable identity or rejected peer ends the single attempt with disconnect; never silently select another terminal. SUB_SCREEN success requires transport plus screen initialization.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC8",
+          "given": "Same terminal, different terminal with identical VID/PID, missing identity, SUB_SCREEN activation failure",
+          "when": "Rebuild appears physically connected",
+          "then": "Only validated original target with full readiness succeeds; no protocol switch, ambiguous target acceptance or transport-only SUB_SCREEN success.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-008"
+          ]
+        }
+      ],
+      "approved_by": "Q3 (maintainer 2026-10-15)"
+    },
+    {
+      "rule_id": "R9",
+      "source_id": "SRC-4",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "critical",
+      "statement": "User disconnect, SDK cleanup or superseding connect -> cancel/fence recovery; no later old success, error or new connection. Manual disconnect emits once. New config starts a fresh logical session; same-config connect joins the current attempt rather than reopening a second transport. Throwing listeners cannot prevent cleanup or delivery to other distinct listeners.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC9",
+          "given": "Recovery running, listener throws, connect requests race",
+          "when": "Manual disconnect / cleanup / superseding config / same config",
+          "then": "Cancel and fence old epoch; same config joins; new config starts fresh; manual disconnect and other observers receive one appropriate outcome.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-009"
+          ]
+        }
+      ],
+      "approved_by": "Q1 (maintainer 2026-10-15)"
+    },
+    {
+      "rule_id": "R10",
+      "source_id": "SRC-7",
+      "source_type": "EXPLICIT",
+      "dimension": "exception_and_risk",
+      "criticality": "critical",
+      "statement": "In-flight request exists -> preserve its callbacks/dedup during recovery without extending the original request deadline; never resend a possibly submitted payment, even through processPendingTransaction on recovery success. Successful recovery must reconnect the original receive-routing chain so original traceId responses continue into the original PaymentCallback (R15); do not clear/fail/re-register it or reset its deadline to make recovery appear successful. Recovery FAILURE (Q4 approved) -> on the single final disconnect, clear/fail the in-flight transaction callbacks through the existing physical-disconnect/failAllPendingTransactions cleanup, released once alongside the one terminal onDisconnected(E213); this cleanup must not run before or during the attempt (no synthetic early E306). Normal final-response versus original request-timeout races must complete once.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC10",
+          "given": "Submitted payment, active dedup and deadline; final response races timeout",
+          "when": "Recover succeeds/fails",
+          "then": "On successful recovery no payment replay including processPendingTransaction; retain original callback mapping, deadline and terminal dedup. Original final response or original request timeout completes once; recovery success cannot be preceded by synthetic connection-error/E306 cleanup. On recovery FAILURE the in-flight transaction callbacks are cleared/failed via the existing physical-disconnect cleanup exactly once together with the single terminal onDisconnected(E213), never earlier and never as a synthetic E306.",
+          "verification_method": "planned_controller_and_real_receive_routing_integration",
+          "test_cases": [
+            "TC-ER-010"
+          ]
+        }
+      ],
+      "approved_by": "Q4 (maintainer 2026-10-15)",
+      "related_sources": [
+        "SRC-11"
+      ]
+    },
+    {
+      "rule_id": "R11",
+      "source_id": "SRC-7",
+      "source_type": "EXPLICIT",
+      "dimension": "exception_and_risk",
+      "criticality": "critical",
+      "statement": "A request is submitted while recovery is active -> reject it before serialization/send with existing E213, do not queue or replay it. Existing request timeout continues; its expiry does not create another recovery episode. Error 307/308 and all business-result semantics remain unchanged.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC11",
+          "given": "Recovery running and a new payment request",
+          "when": "Caller submits",
+          "then": "Return existing E213 before send with no hidden queue; existing timeout/307/308/result tri-state behavior preserved.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-011"
+          ]
+        }
+      ],
+      "approved_by": "Q4 (maintainer 2026-10-15)"
+    },
+    {
+      "rule_id": "R12",
+      "source_id": "SRC-4",
+      "source_type": "EXPLICIT",
+      "dimension": "exception_and_risk",
+      "criticality": "critical",
+      "statement": "USB temporarily absent during mandatory recovery -> await one eligible re-enumeration/attach within the remaining common budget, then open at most once; do not fail immediately or restart the budget. Missing/denied USB permission or missing AIDL target -> fail the prerequisite evaluation without automatic permission prompts or loops. A prerequisite refusal counts as a failed attempt, not permission to switch protocol/target.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC12",
+          "given": "Permission denied, USB absent or AIDL target unavailable",
+          "when": "Mandatory attempt evaluates prerequisites",
+          "then": "A transiently absent USB peer appearing within the remaining budget can open once and recover; absence through deadline disconnects once. Denied permission/missing AIDL target fails prerequisite evaluation without prompts/loops; later explicit connect remains possible.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-012"
+          ]
+        }
+      ],
+      "approved_by": "Q1 (maintainer 2026-10-15)"
+    },
+    {
+      "rule_id": "R13",
+      "source_id": "SRC-8",
+      "source_type": "DERIVED",
+      "dimension": "acceptance_coverage",
+      "criticality": "high",
+      "statement": "Release of this behavior -> retain public signatures and background-callback allowance; update config KDoc, SDK public docs/release notes and consumer guidance. No SDK/AAR publishing or downstream dependency upgrade until maintainer-confirmed Maven version. All R/AC/TC mappings and per-adapter evidence must be present.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC13",
+          "given": "Final reviewed change and release preparation",
+          "when": "Verify compatibility/documentation",
+          "then": "Public signatures/threads unchanged, changed semantics documented, bilingual release updates planned, no publish/dependency upgrade before maintainer confirmation.",
+          "verification_method": "planned_compatibility_review",
+          "test_cases": [
+            "TC-ER-013"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R14",
+      "source_id": "SRC-9",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "critical",
+      "statement": "SDK-internal recovery -> do not invoke USB requestPermission, privilege-based permission grants, pairing/authorization UI or any new user authorization flow on either endpoint. Use existing effective permissions; if permission is missing or reauthorization is required, finish with the single final disconnect and retain the authorization-required diagnostic. Normal explicit connect keeps its current authorization policy.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC14",
+          "given": "Recovery on each actual adapter; missing/granted/revoked permission and stale explicit-connect permission responses",
+          "when": "Connection is rebuilt or AOA switches/re-enumerates",
+          "then": "No requestPermission/privileged grant/pairing UI or authorization request on either endpoint; granted permission allows silent handshake, missing permission gives one final disconnect, stale responses are ignored, and explicit first-connect permission behavior is unchanged.",
+          "verification_method": "planned_unit_and_adapter_regression",
+          "test_cases": [
+            "TC-ER-014"
+          ]
+        }
+      ],
+      "related_sources": [
+        "SRC-10",
+        "SRC-3"
+      ],
+      "source_note": "No new authorization flow is explicit SRC-9; failing without existing authority while preserving checks is derived SRC-10; first-connect scope is explicit SRC-3."
+    },
+    {
+      "rule_id": "R15",
+      "source_id": "SRC-11",
+      "source_type": "EXPLICIT",
+      "dimension": "transaction_lifecycle",
+      "criticality": "critical",
+      "statement": "Reconnect succeeds while an original transaction is in flight -> keep the original callback and traceId/transactionRequestId correlation, attach the rebuilt receive path to that same mapping, and deliver continued progress/final responses through the original PaymentCallback using the existing continuation mechanism. Do not start or resend a transaction, silently replace its callback, or lose terminal dedup state.",
+      "status": "APPROVED",
+      "acceptance": [
+        {
+          "ac_id": "AC15",
+          "given": "Original callback C registered for trace T and request ID U; payment is in progress",
+          "when": "Transport fails and recovery succeeds, Host continues progress then terminal response with T",
+          "then": "The same original C receives continuation and exactly one final result; no business resend/new trace/new callback; receive routing is attached before earliest continued payload; duplicates are suppressed. LAN uses existing Host v1.2 onOpen rebind without a forced sign-in; other adapters require demonstrated Host support before end-to-end claims.",
+          "verification_method": "planned_controller_and_real_receive_routing_integration",
+          "test_cases": [
+            "TC-ER-015"
+          ]
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q1",
+      "risk": "critical",
+      "about": "Approve 5s total one-attempt budget, no appended retries, logical state/epoch/cancellation and prerequisite refusal policy.",
+      "source_ref": "SRC-4",
+      "blocks": [
+        "R4",
+        "R5",
+        "R7",
+        "R9",
+        "R12"
+      ],
+      "status": "resolved",
+      "decided_by": "Maintainer in chat 2026-10-15",
+      "decision": "APPROVED one 5,000ms single-attempt budget, no appended ReconnectManager/fast-recovery/mDNS retries, logical CONNECTING, cancellation/prerequisite-failure per R4/R5/R7/R9/R12. Verbatim: '只恢复一次'."
+    },
+    {
+      "id": "Q2",
+      "risk": "critical",
+      "about": "Approve the caller-visible callback policy during and after recovery.",
+      "source_ref": "SRC-5",
+      "blocks": [
+        "R6"
+      ],
+      "status": "resolved",
+      "decided_by": "Maintainer in chat 2026-10-15",
+      "decision": "APPROVED fully silent recovery: onError is scoped to connect() only and never fires for an established-connection fault; no onReconnecting and no transient onDisconnected during the attempt; the SDK never removes the registered ConnectionListener during recovery (only the caller's explicit removeConnectionListener()/disconnect() does); exactly one terminal callback (onConnected on success / onDisconnected(E213) on failure) with no onError. Verbatim: '恢复期间不发进度回调，仅终局一次结果回调，onError 的回调也不给调用端' + follow-up 'onError只在调用connect()时有对应回调，连接建立过后的onError不需要返回给他，我们sdk内部做恢复重试，并保证连接监听不被移除'."
+    },
+    {
+      "id": "Q3",
+      "risk": "critical",
+      "about": "Approve adapter-specific same-terminal validation and the pre-INIT idle limitation: unknown deviceId and missing USB serial may prevent automatic reopen; SUB_SCREEN needs full readiness.",
+      "source_ref": "SRC-6",
+      "blocks": [
+        "R8"
+      ],
+      "status": "resolved",
+      "decided_by": "Maintainer in chat 2026-10-15",
+      "decision": "APPROVED same-terminal validation; missing/ambiguous identity ends the attempt with disconnect and never auto-selects another terminal; pre-INIT idle limitation accepted. Verbatim: '身份无法可靠确认时，不自动接入其他终端'."
+    },
+    {
+      "id": "Q4",
+      "risk": "critical",
+      "about": "Successful recovery retains original callbacks and continuation per explicit R15. Decide callback lifetime/outcome after final recovery failure and new submissions during recovery; early E306 is not approved.",
+      "source_ref": "SRC-7",
+      "blocks": [
+        "R10",
+        "R11"
+      ],
+      "status": "resolved",
+      "decided_by": "Maintainer in chat 2026-10-15",
+      "decision": "APPROVED: recovery FAILURE clears/fails the in-flight transaction callbacks via the existing physical-disconnect cleanup, once, with the single onDisconnected(E213); new submissions during recovery rejected with E213; no synthetic early E306. Verbatim: '恢复失败后的交易 callback 都被清除了呀'."
+    }
+  ],
+  "gates": {
+    "source_traceability": {
+      "target": "100%",
+      "actual": "100%",
+      "pass": true
+    },
+    "explicit_quote_verified": {
+      "target": "100%",
+      "actual": "100%",
+      "pass": true
+    },
+    "critical_rule_coverage": {
+      "target": "100%",
+      "actual": "100%",
+      "note": "Independent source completeness review complete for fifteen rules; Q1-Q4 approved by maintainer 2026-10-15. Non-LAN end-to-end Host continuation feasibility still requires per-adapter evidence during implementation (R15 / continuation matrix).",
+      "pass": true
+    },
+    "critical_acceptance_coverage": {
+      "target": "100%",
+      "actual": "100%",
+      "pass": true
+    },
+    "unresolved_high_risk": {
+      "target": 0,
+      "actual": 0,
+      "note": "Q1-Q4 resolved by maintainer 2026-10-15.",
+      "pass": true
+    },
+    "id_reference_integrity": {
+      "target": "100%",
+      "actual": "100%",
+      "pass": true
+    },
+    "unresolved_conflicts": {
+      "target": 0,
+      "actual": 0,
+      "note": "Q1-Q4 approved; SCR-ESTABLISHED-RECOVERY-001 moved to APPROVED and records the LAN R6/R7/R8/R9 migration and the superseding of the non-LAN-no-op intent in SCR-LAN-FASTRECOVERY-ALLMODES-001.",
+      "pass": true
+    }
+  },
+  "test_inventory": {
+    "TC-ER-001": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC1"
+    },
+    "TC-ER-002": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC2"
+    },
+    "TC-ER-003": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC3"
+    },
+    "TC-ER-004": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC4"
+    },
+    "TC-ER-005": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC5"
+    },
+    "TC-ER-006": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC6"
+    },
+    "TC-ER-007": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC7"
+    },
+    "TC-ER-008": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC8"
+    },
+    "TC-ER-009": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC9"
+    },
+    "TC-ER-010": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC10"
+    },
+    "TC-ER-011": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC11"
+    },
+    "TC-ER-012": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC12"
+    },
+    "TC-ER-013": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC13"
+    },
+    "TC-ER-014": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC14"
+    },
+    "TC-ER-015": {
+      "status": "PLANNED_NOT_IMPLEMENTED",
+      "ac": "AC15"
+    }
+  },
+  "verification": {
+    "implementation_changed": false,
+    "tests_executed": false,
+    "independent_review": "/private/tmp/taplink-recovery-sdd-20261015/review.md",
+    "independent_review_status": "All fifteen rules independently reviewed; source/callback continuation consistency verified, peer-validation-before-delivery clarification added. Q1-Q4 and non-LAN Host support remain pending."
+  }
+}

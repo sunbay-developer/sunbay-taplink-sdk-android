@@ -72,6 +72,14 @@ class LocalServiceKernel constructor(
      */
     private var iTransaction: ITransaction? = null
 
+    /**
+     * SPEC-ESTABLISHED-RECOVERY-001 R8: the bound package name is the local-AIDL terminal anchor.
+     * Recovery only rebinds the SAME package/component; process death restores the response channel
+     * only (never "resumable execution").
+     */
+    @Volatile
+    private var boundPackageName: String? = null
+
     // ==================== AsyncServiceKernel Abstract Method Implementation ====================
 
     override fun getServiceType(): String = "Local Service"
@@ -139,6 +147,8 @@ class LocalServiceKernel constructor(
 
             // Save current Intent
             currentIntent = intent
+            // R8: record the bound package as the recovery identity anchor.
+            boundPackageName = packageName
 
             // Create service connection
             serviceConnection = createServiceConnection(connectionCallback)
@@ -316,6 +326,49 @@ class LocalServiceKernel constructor(
         } catch (_: IllegalArgumentException) {
             // already unbound / not registered
         } catch (_: Exception) {
+        }
+    }
+
+    // SPEC-ESTABLISHED-RECOVERY-001 R8/R14 — Local AIDL recovery identity + non-interactive prerequisite.
+
+    /** The bound package name is the local-AIDL terminal anchor; null => fail closed (R8). */
+    override fun captureTerminalIdentity():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity? {
+        val pkg = boundPackageName
+        return if (pkg.isNullOrBlank()) null
+        else com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity(pkg)
+    }
+
+    /** Recovery only rebinds the SAME package/component; a different/absent target fails closed (R8). */
+    override suspend fun validateRecoveredIdentity(
+        expected: com.sunmi.tapro.taplink.communication.interfaces.recovery.TerminalIdentity
+    ): Boolean {
+        if (!expected.isReliable) return false
+        val current = boundPackageName
+        return !current.isNullOrBlank() && current == expected.anchor
+    }
+
+    /**
+     * Non-interactive prerequisite (R14): local AIDL needs no USB permission. Recovery is possible
+     * only if a bound package/target is still available; otherwise the prerequisite is Denied.
+     */
+    override fun evaluateRecoveryPrerequisite():
+        com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult {
+        val pkg = boundPackageName
+            ?: return com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Denied(
+                "No bound AIDL target for recovery"
+            )
+        val context = TaplinkServiceKernel.getInstance()?.getContext()
+            ?: return com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Denied(
+                "No application context for recovery"
+            )
+        return try {
+            context.packageManager.getPackageInfo(pkg, 0)
+            com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Available
+        } catch (e: Exception) {
+            com.sunmi.tapro.taplink.communication.interfaces.recovery.RecoveryPrereqResult.Denied(
+                "AIDL target not available: ${e.message}"
+            )
         }
     }
 }
