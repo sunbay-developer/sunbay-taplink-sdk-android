@@ -671,70 +671,75 @@
   },
   "test_inventory": {
     "TC-ER-001": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC1"
     },
     "TC-ER-002": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC2"
     },
     "TC-ER-003": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC3"
     },
     "TC-ER-004": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC4"
     },
     "TC-ER-005": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC5"
     },
     "TC-ER-006": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC6"
     },
     "TC-ER-007": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC7"
     },
     "TC-ER-008": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC8"
     },
     "TC-ER-009": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC9"
     },
     "TC-ER-010": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
-      "ac": "AC10"
+      "status": "IMPLEMENTED_PASSED_JVM_ONLY",
+      "ac": "AC10",
+      "note": "JVM controller/wiring coverage passes (no replay, callback/trace retention, failure cleanup once via E213, no early E306). The Host end-to-end continuation of a real in-flight payment across a transport rebuild is a B-series hardware/Host blocker (B1/B2) and is UNVERIFIED in this environment."
     },
     "TC-ER-011": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC11"
     },
     "TC-ER-012": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
-      "ac": "AC12"
+      "status": "IMPLEMENTED_PASSED_JVM_ONLY",
+      "ac": "AC12",
+      "note": "JVM prerequisite-evaluation coverage passes. Real USB re-enumeration/attach timing within the budget is a hardware blocker (B3) and is UNVERIFIED in this environment."
     },
     "TC-ER-013": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
-      "ac": "AC13"
+      "status": "DOC_VERIFIED_RELEASE_PENDING",
+      "ac": "AC13",
+      "note": "Public signatures unchanged, changed semantics documented (KDoc + RELEASE-NOTES, no version bump), bilingual release/downstream sync deferred to maintainer-confirmed Maven version per AGENTS.md 8/8.1. No publish performed."
     },
     "TC-ER-014": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
+      "status": "IMPLEMENTED_PASSED",
       "ac": "AC14"
     },
     "TC-ER-015": {
-      "status": "PLANNED_NOT_IMPLEMENTED",
-      "ac": "AC15"
+      "status": "IMPLEMENTED_PASSED_JVM_ONLY",
+      "ac": "AC15",
+      "note": "JVM coverage passes for original-callback/traceId retention and receive-route reattach without resend. End-to-end Host continuation per adapter (LAN v1.2 onOpen rebind present; non-LAN Host support not established) is a B-series blocker (B1/B2/B4/B5) and is UNVERIFIED in this environment."
     }
   },
   "verification": {
-    "implementation_changed": false,
-    "tests_executed": false,
+    "implementation_changed": true,
+    "tests_executed": true,
+    "tests_executed_note": "Implemented in commit fc741dd on dev_pro. :lib_taplink_sdk 44 tests and :lib_taplink_communication 42 tests pass (new TC-ER controller/budget/wiring/adapter tests plus preserved LAN first-connect-recovery / config-setter / payment-result regressions). spec-check has no blocking item; git diff --check clean. Hardware/Host items B1-B5 remain UNVERIFIED and require separately authorized device/backend validation.",
     "independent_review": "/private/tmp/taplink-recovery-sdd-20261015/review.md",
-    "independent_review_status": "All fifteen rules independently reviewed; source/callback continuation consistency verified, peer-validation-before-delivery clarification added. Q1-Q4 and non-LAN Host support remain pending."
+    "independent_review_status": "All fifteen rules independently reviewed at authoring time; Q1-Q4 later approved by the maintainer 2026-10-15. Implementation independently reviewed (semantic reviewer) APPROVED against commit fc741dd. Non-LAN Host end-to-end continuation still requires per-adapter evidence (B1-B5)."
   }
 }
