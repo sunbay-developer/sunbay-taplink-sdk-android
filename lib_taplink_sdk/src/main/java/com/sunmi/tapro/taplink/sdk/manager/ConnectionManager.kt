@@ -586,9 +586,16 @@ class ConnectionManager(
                         val reconnected = reconnectManager?.onDisconnected(listener) ?: false
 
                         if (!reconnected) {
-                            // Not reconnecting, notify application layer and clean up resources
-                            listener.onDisconnected(reason)
-                            connectionListener?.onDisconnected(reason)
+                            // The primary/global listeners were notified by updateConnectionStatus.
+                            // Only a terminal drop releases queued callers; an active retry owns them.
+                            val pendingListeners = takePendingConnectionListeners()
+                            notifyDistinctConnectionDisconnects(
+                                pendingListeners,
+                                reason,
+                                alreadyNotified = listOfNotNull(listener, connectionListener)
+                            ) { exception ->
+                                LogUtil.e(TAG, "Error notifying pending disconnect listener: ${exception.message}")
+                            }
 
                             // Clean up resources (only when not reconnecting)
                             connectedDeviceId = null
@@ -980,9 +987,15 @@ class ConnectionManager(
     /** The original connection config to reuse for the single same-protocol rebuild (read-only). */
     override fun currentConnectionConfigForRecovery(): ConnectionConfig? = currentConnectionConfig
 
-    /** Observers that must receive the single terminal recovery outcome (the global listener). */
+    /** Transfer queued callers to the recovery episode that now owns their terminal outcome. */
     override fun recoveryObservers(): List<ConnectionListener> =
-        listOfNotNull(connectionListener, reconnectManager?.getLastConnectionListener())
+        listOfNotNull(connectionListener, reconnectManager?.getLastConnectionListener()) +
+            takePendingConnectionListeners()
+
+    private fun takePendingConnectionListeners(): List<ConnectionListener> =
+        synchronized(pendingConnectionListeners) {
+            pendingConnectionListeners.toList().also { pendingConnectionListeners.clear() }
+        }
 
     /** Capture the current terminal identity anchor for later same-terminal validation (R8). */
     override fun captureCurrentTerminalIdentity():
@@ -1189,8 +1202,11 @@ class ConnectionManager(
                 // skipped the listener, leaving INIT flags stale after link drop / mode switch.
                 connectionDisconnectedListener?.invoke()
                 val disconnectionReason = reason ?: "Disconnected"
-                listener?.onDisconnected(disconnectionReason)
-                connectionListener?.onDisconnected(disconnectionReason)
+                notifyDistinctConnectionDisconnects(
+                    listOfNotNull(listener, connectionListener), disconnectionReason
+                ) { exception ->
+                    LogUtil.e(TAG, "Error notifying disconnect listener: ${exception.message}")
+                }
             }
 
             else -> {

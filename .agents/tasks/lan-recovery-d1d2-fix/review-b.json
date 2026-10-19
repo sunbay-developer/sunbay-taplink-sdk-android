@@ -1,0 +1,19 @@
+{
+  "approved": false,
+  "findings": [
+    {
+      "label": "不同配置重入被旧 cleanup 反向拆除",
+      "confidence": "confirmed",
+      "blocking": true,
+      "detail": "ConnectionManager.onRecoveryFailureCleanup() 在清状态和断开旧 kernel 之前同步执行 failAllPendingTransactions()；LocalCallbackManager 会在当前线程调用应用 InnerCallback.onError。若该回调重入 connect(newConfig)，connect() 会通过 onExplicitDetachOrDisconnect() 提前清 currentControl/episodeObservers、释放 gate 并启动 fresh session，但旧 cleanup 返回后仍继续清共享连接字段并 disconnect 当前 kernel，可能拆掉 fresh 连接，同时旧 finalize 因 control 已非 current 而不投原 observer 的 E213。",
+      "action": "让不同配置 connect 识别并等待/延迟 settling 阶段，或确保旧状态与旧 kernel 在任何应用回调前完成 teardown；新增 ConnectionManager 级回归，在 failAllPendingTransactions 的同步 callback 内调用不同配置 connect，验证 fresh session 不被旧 cleanup 破坏、旧终态符合契约且无跨代重复回调。",
+      "evidence": [
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/ConnectionManager.kt:224-234",
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/ConnectionManager.kt:1061-1074",
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/EstablishedRecoveryCoordinator.kt:516-533",
+        "lib_taplink_communication/src/main/java/com/sunmi/tapro/taplink/communication/util/LocalCallbackManager.kt:229-240"
+      ]
+    }
+  ],
+  "reviewDoc": "/Users/sm4306/StudioProjects/taplinksdk/.agents/tasks/lan-recovery-d1d2-fix/review-b.md"
+}

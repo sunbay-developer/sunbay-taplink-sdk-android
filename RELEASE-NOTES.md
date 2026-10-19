@@ -152,6 +152,34 @@ before mutation (Java). Kotlin reflection consumers must account for `isData = f
 
 ---
 
+## Unreleased
+
+### Fixed — Connection callback completion
+
+- Queued connection callers now receive the terminal disconnect when no reconnect remains.
+  Callers waiting when established-link recovery takes ownership are transferred to that
+  recovery's final outcome instead of remaining pending. Active retries retain their waiters.
+- Disconnect delivery deduplicates shared listener instances and isolates listener exceptions
+  so one failing listener cannot prevent delivery to other observers.
+- Established-link recovery now always delivers its final disconnect once its recovery window
+  elapses, even when the callback thread is busy or blocked. Previously a heavily loaded callback
+  thread could leave recovery without ever reporting the final `onDisconnected(213)`.
+- If a recovery attempt is cancelled for any reason other than your own explicit `disconnect()` /
+  `removeConnectionListener()`, the SDK now still delivers exactly one final `onDisconnected(213)`
+  instead of ending silently. An explicit caller-initiated detach continues to deliver no callback,
+  as before.
+- Back-to-back connection drops are now isolated from one another: a late outcome from an earlier
+  recovery can no longer suppress or duplicate the callback for a newer connection attempt, so each
+  attempt always reports its own single terminal result.
+- A same-configuration `connect()` issued at the exact moment a recovery is concluding now joins
+  that recovery and receives its single terminal result, and the originally connected listener still
+  receives its own terminal callback. Previously, calling `connect()` with the same configuration in
+  this brief window could cancel the concluding recovery and leave the original listener without any
+  `onConnected` / `onDisconnected(213)` at all.
+- New transaction requests continue to be rejected until a concluding recovery has fully finished
+  releasing the previous connection, so a request can no longer be briefly admitted onto a link that
+  is about to be torn down — even if the SDK's internal teardown step raises an error.
+
 ## v1.0.10
 
 **Released 2026-09-15**

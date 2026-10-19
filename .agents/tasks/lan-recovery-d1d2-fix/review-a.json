@@ -1,0 +1,18 @@
+{
+  "approved": true,
+  "findings": [
+    {
+      "label": "Off-Main 收尾并发 / 潜在内核泄漏",
+      "confidence": "possible",
+      "blocking": false,
+      "detail": "看门狗命中 deadline 时 settleFailure -> onRecoveryFailureCleanup 运行在 Dispatchers.Default，而 ConnectionManager 的 onRecoveryFailureCleanup/onRecoverySuccess/retireForRecovery/openRecoveryRebuild 对共享连接字段与内核操作均未加 synchronized(this)（该类的 synchronized 仅在状态投影路径 ~1902/2040/2114）。协程取消是协作式的：真正的 Main 饿死场景里 episode body 挂起在 delay(50) 是 inert 的、安全；但若 Main 正同步执行某 host 调用（kernel.disconnect / connectInternal）时看门狗开火，收尾会与 Main 上仍在跑的 body 并发触碰同一内核/字段，最坏导致一个无人跟踪的活连接（泄漏/状态不一致）。对外『恰好一次 E213』契约不受影响，故非阻塞。建议核实 connectInternal/kernel.disconnect 是否在协作取消点前完成，或给恢复钩子补 synchronized(this)。plan §7『修复3』曾称这些字段已有 synchronized 保护，但 settle 路径上的 onRecoverySuccess/onRecoveryFailureCleanup 实际没有，该 gap 未关闭。"
+    },
+    {
+      "label": "终态回调线程亲和性变化（已确认、符合契约）",
+      "confidence": "confirmed",
+      "blocking": false,
+      "detail": "失败终态 onDisconnected(E213) 经看门狗投递时运行在后台线程而非 Main。符合 ConnectionListener KDoc『回调可能在后台线程、集成方自行切主线程』契约，Tapro 侧 observer 已切主线程，无需改码。仅作信息记录。"
+    }
+  ],
+  "reviewDoc": "/Users/sm4306/StudioProjects/taplinksdk/.agents/tasks/lan-recovery-d1d2-fix/review-a.md"
+}

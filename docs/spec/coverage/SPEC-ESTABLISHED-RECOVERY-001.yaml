@@ -684,7 +684,13 @@
     },
     "TC-ER-004": {
       "status": "IMPLEMENTED_PASSED",
-      "ac": "AC4"
+      "ac": "AC4",
+      "additional_tests": [
+        "EstablishedRecoveryBudgetTest.watchdogSettlesFailureWhenEpisodeScopeIsStarved",
+        "EstablishedRecoveryBudgetTest.liveWatchdogIsCancelledAndSwallowedByNormalSuccessSettle",
+        "EstablishedRecoveryBudgetTest.staleEpisodeResumingAfterWatchdogSettleDoesNotPoisonNextEpisode",
+        "EstablishedRecoveryBudgetTest.successSettleKeepsRecoveryGateClosedUntilHostReattachCompletes"
+      ]
     },
     "TC-ER-005": {
       "status": "IMPLEMENTED_PASSED",
@@ -692,7 +698,21 @@
     },
     "TC-ER-006": {
       "status": "IMPLEMENTED_PASSED",
-      "ac": "AC6"
+      "ac": "AC6",
+      "additional_tests": [
+        "LanRecoveryIntegrationTest.recoveryTakesOwnershipOfPreviouslyQueuedCallers",
+        "LanRecoveryIntegrationTest.recoveryFailureDeliversOneOutcomeToTransferredQueuedCaller",
+        "LanRecoveryIntegrationTest.formalParameterOnlyListenerGetsOneDisconnectOnTimeout",
+        "EstablishedRecoveryBudgetTest.watchdogSettlesFailureWhenEpisodeScopeIsStarved",
+        "EstablishedRecoveryBudgetTest.nonExplicitCancellationBackStopsSingleFailure",
+        "EstablishedRecoveryBudgetTest.liveWatchdogIsCancelledAndSwallowedByNormalSuccessSettle",
+        "EstablishedRecoveryBudgetTest.staleEpisodeResumingAfterWatchdogSettleDoesNotPoisonNextEpisode",
+        "EstablishedRecoveryBudgetTest.staleExplicitDetachCancellationDoesNotPoisonNextEpisode",
+        "EstablishedRecoveryBudgetTest.failureSettleKeepsRecoveryGateClosedUntilHostCleanupCompletes",
+        "EstablishedRecoveryBudgetTest.successSettleKeepsRecoveryGateClosedUntilHostReattachCompletes",
+        "EstablishedRecoveryBudgetTest.settlingWindowJoinIsAdmittedAndReceivesTheSingleTerminalOutcome",
+        "LanRecoveryIntegrationTest.sameConfigConnectDuringSettlingWindowDoesNotStrandTheTerminalCallback"
+      ]
     },
     "TC-ER-007": {
       "status": "IMPLEMENTED_PASSED",
@@ -704,7 +724,10 @@
     },
     "TC-ER-009": {
       "status": "IMPLEMENTED_PASSED",
-      "ac": "AC9"
+      "ac": "AC9",
+      "additional_tests": [
+        "LanRecoveryIntegrationTest.throwingDisconnectListenerDoesNotBlockOtherObservers"
+      ]
     },
     "TC-ER-010": {
       "status": "IMPLEMENTED_PASSED_JVM_ONLY",
@@ -740,6 +763,23 @@
     "tests_executed": true,
     "tests_executed_note": "Implemented in commit fc741dd on dev_pro. :lib_taplink_sdk 44 tests and :lib_taplink_communication 42 tests pass (new TC-ER controller/budget/wiring/adapter tests plus preserved LAN first-connect-recovery / config-setter / payment-result regressions). spec-check has no blocking item; git diff --check clean. Hardware/Host items B1-B5 remain UNVERIFIED and require separately authorized device/backend validation.",
     "independent_review": "/private/tmp/taplink-recovery-sdd-20261015/review.md",
-    "independent_review_status": "All fifteen rules independently reviewed at authoring time; Q1-Q4 later approved by the maintainer 2026-10-15. Implementation independently reviewed (semantic reviewer) APPROVED against commit fc741dd. Non-LAN Host end-to-end continuation still requires per-adapter evidence (B1-B5)."
+    "independent_review_status": "All fifteen rules independently reviewed at authoring time; Q1-Q4 later approved by the maintainer 2026-10-15. Implementation independently reviewed (semantic reviewer) APPROVED against commit fc741dd. Non-LAN Host end-to-end continuation still requires per-adapter evidence (B1-B5).",
+    "queued_callback_bugfix": {
+      "date": "2026-10-19",
+      "scope": "Implementation correction against approved R6/R9 and SPEC-LAN-RECOVERY-001 section 3; no rule or approval changes.",
+      "red": "Three new regressions failed before the fix: queued terminal disconnect, recovery observer ownership, and throwing listener isolation.",
+      "green": "Five new regressions pass, including final recovery failure and retention during an active retry. SDK: 154 tests; communication: 42 tests; zero failures/errors/skips.",
+      "command": "./gradlew :lib_taplink_sdk:testDebugUnitTest :lib_taplink_communication:testDebugUnitTest --console=plain",
+      "limitations": "Local JVM tests with fake Android storage/discovery and loopback sockets; the 2026-10-16 POS incident is not reproduced on hardware. No AAR or Maven publication."
+    },
+    "d1d2_conformance_fix": {
+      "change_id": "CR-ER-D1D2-20261019",
+      "date": "2026-10-19",
+      "scope": "Conformance fix for approved AC4/AC6/R9: D1 independent budget watchdog (scheduling-independent timeout settle), D2 non-explicit-cancel back-stop, cross-epoch per-generation EpisodeControl, two-phase claim/finalize settle, and the settling-window same-config join fix. No rule/AC/approval/budget/attempt/callback-semantics change. See docs/spec/changes/CR-ER-D1D2-20261019.yaml.",
+      "red": "watchdogSettlesFailureWhenEpisodeScopeIsStarved, nonExplicitCancellationBackStopsSingleFailure, the two cross-epoch regressions, the two gate-ordering regressions, settlingWindowJoinIsAdmittedAndReceivesTheSingleTerminalOutcome and sameConfigConnectDuringSettlingWindowDoesNotStrandTheTerminalCallback were each proven RED against the corresponding pre-fix code path (silent timeout, silent non-explicit cancel, cross-epoch gate poisoning, gate dropped before Host teardown, and the stranded terminal callback when a settling-window same-config connect fell into disconnect()).",
+      "green": "lib_taplink_sdk: 62 tests; lib_taplink_communication: 42 tests; zero failures/errors/skips.",
+      "command": "./gradlew :lib_taplink_sdk:testDebugUnitTest :lib_taplink_communication:testDebugUnitTest --console=plain",
+      "limitations": "Local JVM tests with fake Android storage/discovery and loopback sockets; the 2026-10-16 POS incident is not reproduced on hardware. No AAR or Maven publication."
+    }
   }
 }

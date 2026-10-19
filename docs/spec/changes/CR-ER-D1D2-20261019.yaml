@@ -1,0 +1,102 @@
+{
+  "change_id": "CR-ER-D1D2-20261019",
+  "spec_id": "SPEC-ESTABLISHED-RECOVERY-001",
+  "rule_id": [
+    "R4",
+    "R6",
+    "R9"
+  ],
+  "change_type": "CONFORMANCE_FIX",
+  "level": "L2",
+  "change_origin": "IMPLEMENTATION_DEFECT",
+  "reported_by": "Maintainer in current chat (2026-10-16 POS incident: LAN 1006 then no callback)",
+  "initiator_role": "maintainer",
+  "reason": "The implementation did not actually satisfy the already-approved AC4 (the single 5000ms budget must settle at the deadline) and AC6 (each distinct observer gets exactly one terminal callback) under two conditions found by source review: (D1) the budget deadline was only discovered by a delay(50) poll running on the Main-confined episode scope, so Main starvation/ANR left settleFailure never called and onDisconnected(E213) silent; (D2) runEpisode's CancellationException branch delegated settling to the canceller, but only the explicit detach/disconnect path cancels (and it intentionally delivers no callback), so any OTHER cancellation ended the episode with neither settleSuccess nor settleFailure. This is a conformance fix to the already-approved behavior, not a behavior change. No rule, AC, callback semantics, budget value, or attempt count is changed.",
+  "source": {
+    "type": "EXPLICIT",
+    "references": [
+      {
+        "document_id": "INV-LAN-RECOVERY-TERMINAL-CALLBACK",
+        "version": "1.0",
+        "document_path": ".agents/tasks/lan-recovery-failure-terminal-callback.md",
+        "section": "§1 (no independent watchdog), §2 (D1 Main starvation), §3.3 (D2 CancellationException vacuum), §6 (tests never drove real timeout under Main)"
+      },
+      {
+        "document_id": "INV-LAN-CONNECT-LISTENER-BINDING",
+        "version": "1.0",
+        "document_path": ".agents/tasks/lan-connect-listener-recovery-binding.md",
+        "section": "§4/§5 observer set is non-empty under normal LAN connect; §6.2 missing formal-parameter-only regression"
+      }
+    ],
+    "evidence": "Both read-only investigations cite file:line evidence in EstablishedRecoveryCoordinator.kt and ConnectionManager.kt. The observer-binding investigation confirms the observer set is correctly populated under normal LAN connect, so the defect is that the terminal settle may never be called (D1/D2), not that observers are missing."
+  },
+  "before": {
+    "status": "SPEC-ESTABLISHED-RECOVERY-001 active v1.1; R4/AC4 single 5000ms budget + R6/AC6 terminal-once already approved.",
+    "implementation": "Budget enforcement depended on pollUntilReadyOrDeadline() re-reading the clock from delay(50) continuations on the Main-confined episode scope (EstablishedRecoveryCoordinator.kt pollUntilReadyOrDeadline). There was no deadline-reached timer independent of that scheduling. runEpisode's catch (CancellationException) branch rethrew without settling, delegating the terminal outcome to onExplicitDetachOrDisconnect(), which is the only canceller and delivers no callback by design."
+  },
+  "after": {
+    "status": "CONFORMANCE_FIX_APPLIED",
+    "implementation": "D1: an independent budget watchdog coroutine is started per episode on a separate scope (watchdogScope) backed by an injectable watchdogDispatcher that defaults to Dispatchers.Default, so the 'deadline reached => settleFailure' guarantee is driven off a dispatcher that is NOT the Main-confined episode scope and survives Main starvation/ANR. The watchdog re-reads the same injected monotonic clock against episode.deadlineElapsedMs; on reaching the deadline it calls settleFailure for its episode control. D2: a per-episode cancelledByExplicitDetach flag, set only by onExplicitDetachOrDisconnect() on the current generation's control, lets runEpisode's CancellationException branch back-stop a single settleFailure when the cancellation is NOT an explicit detach and the episode is still unsettled, then still rethrow the CancellationException to honor structured-concurrency propagation. Explicit detach keeps delivering no callback, unchanged. Cross-epoch hardening (follow-up review): all mutable settle/cancel state (the one-shot settled gate, the explicit-detach flag, and the episode/watchdog Jobs) is bundled into an immutable-per-generation EpisodeControl bound to one RecoveryEpisode; the coordinator keeps a single currentControl. The terminal settle is centralized in a single @Synchronized claimTerminalSettle(control) that, inside one lock, (1) returns unless control is still currentControl, (2) wins control's OWN settled CAS. This removes the previous CAS-before-epoch check-then-act window: a stale/late episode settling against its own no-longer-current control can never flip a successor episode's gate, so a new episode cannot be left silent by an old one. The explicit-detach path mirrors the same locked teardown. Watchdog lifecycle stays episode-bound (cancelled on settle/detach). Second follow-up review (review-B) hardening: (1) the terminal settle is split into two synchronized phases — claimTerminalSettle wins the one-shot gate and cancels THIS generation's jobs but deliberately KEEPS the PaymentManager recovery gate (setEstablishedRecoveryActive), currentControl and the recovering flag HELD; the Host-side teardown (onRecoverySuccess re-attach / onRecoveryFailureCleanup fail+clear) then runs while the gate is still closed and the generation still owned; only afterwards does finalizeTerminalSettle drop the gate, clear currentControl/recovering, and snapshot+clear the observers under the same lock. This closes the window where the gate was dropped before Host teardown finished, during which a new request could be sent on a dying link and then killed by this episode's own cleanup, or a new fault could claim a successor episode that the old episode's teardown would poison. (2) joinIfRecovering is @Synchronized on the coordinator monitor (same lock as claim/finalize/detach). (3) startWatchdog guards the synchronous-settle-before-watchdog-start ordering: if the episode already settled (e.g. prerequisite denial / already-past deadline on an eager/Unconfined dispatcher) before the watchdog Job existed, the watchdog is not launched (and is cancelled if it settles in the launch gap), so no stale ~5s Job accumulates on fast consecutive failures. Third follow-up review (review iteration) blocking fix — settling-window join + finalize guard + teardown try/finally: the previous review-B hardening made joinIfRecovering reject a same-config join as soon as control.settled became true (i.e. during the phase1(won)->Host-teardown->finalize settling window). That was wrong: the real ConnectionManager.connect() does NOT return on a false join — it falls through, and because connectionStatus is still CONNECTED while isConnected()==false during recovery, it calls disconnect() -> onExplicitDetachOrDisconnect(), which clears the live episodeObservers the winning settle still had to notify, STRANDING the original observer's terminal onDisconnected(E213) and violating AC6 and the core goal of this fix. Because the observer snapshot is deliberately deferred to finalizeTerminalSettle, the observer set is still live and not yet cleared throughout the settling window, so admitting a same-config joiner there is safe and correct: joinIfRecovering now admits any same-config joiner for as long as THIS generation is still current (i.e. until finalizeTerminalSettle flips recovering=false / drops currentControl under the same lock), so both the original observer and the settling-window caller receive the SAME single terminal outcome from finalize's one snapshot; once finalize has run, recovering is false and the caller instead starts a fresh connection. finalizeTerminalSettle now also CARRIES and re-checks its EpisodeControl (currentControl === control) before releasing the gate / clearing observers, so a stale finalize can never unconditionally wipe a changed coordinator state. Finally, both settleSuccess and settleFailure now wrap the Host teardown (onRecoverySuccess / onRecoveryFailureCleanup) in try/catch so a throwing teardown can no longer strand the PaymentManager gate / recovering flag: finalizeTerminalSettle is guaranteed to run and release the gate even if teardown throws (addresses the review-A 'host-teardown throw strands the gate' observation).",
+    "semantics_unchanged": "The single 5000ms budget (RECOVERY_BUDGET_MS) and single-attempt (one rebuild) semantics are UNCHANGED. The watchdog is NOT a second attempt: it only moves 'deadline reached => settle' from poll-continuation-dependent to scheduling-independent. The terminal callback remains exactly one onDisconnected with error code 213 on failure (never onError) and one onConnected on success. No public API, no error code, no onError/onDisconnected contract changes.",
+    "injectability_rationale": "The watchdog delay cannot hardcode Dispatchers.Default or a bare delay(RECOVERY_BUDGET_MS), because existing tests reflectively swap the coordinator scope to Dispatchers.Unconfined and inject a fast StepClock; a real-time 5000ms delay would turn deterministic millisecond tests into real multi-second waits. The watchdog therefore (a) judges the deadline via the SAME injected clock (clock.elapsedRealtimeMs() vs episode.deadlineElapsedMs) and (b) runs on an injectable watchdogDispatcher/watchdogScope (default Dispatchers.Default; tests pin it to Unconfined). This both fixes the production Main-starvation defect and keeps the existing/new tests deterministic."
+  },
+  "impact": {
+    "acceptance_criteria": [
+      "AC4",
+      "AC6"
+    ],
+    "test_to_ac_mapping": {
+      "EstablishedRecoveryBudgetTest.watchdogSettlesFailureWhenEpisodeScopeIsStarved": [
+        "AC4",
+        "AC6"
+      ],
+      "EstablishedRecoveryBudgetTest.nonExplicitCancellationBackStopsSingleFailure": [
+        "AC6"
+      ],
+      "EstablishedRecoveryBudgetTest.liveWatchdogIsCancelledAndSwallowedByNormalSuccessSettle": [
+        "AC4",
+        "AC6"
+      ],
+      "EstablishedRecoveryBudgetTest.staleEpisodeResumingAfterWatchdogSettleDoesNotPoisonNextEpisode": [
+        "AC4",
+        "AC6"
+      ],
+      "EstablishedRecoveryBudgetTest.staleExplicitDetachCancellationDoesNotPoisonNextEpisode": [
+        "AC6"
+      ],
+      "LanRecoveryIntegrationTest.formalParameterOnlyListenerGetsOneDisconnectOnTimeout": [
+        "AC6"
+      ],
+      "EstablishedRecoveryBudgetTest.failureSettleKeepsRecoveryGateClosedUntilHostCleanupCompletes": [
+        "AC6"
+      ],
+      "EstablishedRecoveryBudgetTest.successSettleKeepsRecoveryGateClosedUntilHostReattachCompletes": [
+        "AC6"
+      ],
+      "EstablishedRecoveryBudgetTest.settlingWindowJoinIsAdmittedAndReceivesTheSingleTerminalOutcome": [
+        "AC6"
+      ],
+      "LanRecoveryIntegrationTest.sameConfigConnectDuringSettlingWindowDoesNotStrandTheTerminalCallback": [
+        "AC6"
+      ]
+    },
+    "red_green": "watchdogSettlesFailureWhenEpisodeScopeIsStarved and nonExplicitCancellationBackStopsSingleFailure were proven RED before the fix (both time out with no terminal callback when the watchdog start and the D2 back-stop are disabled) and GREEN after. The two cross-epoch two-generation regressions (staleEpisodeResumingAfterWatchdogSettleDoesNotPoisonNextEpisode, staleExplicitDetachCancellationDoesNotPoisonNextEpisode) were proven RED by temporarily reintroducing the pre-fix coordinator-global settle/explicit-detach gate (both time out: episode B is left with no terminal callback because stale episode A burned B's shared gate) and GREEN with the per-episode EpisodeControl. liveWatchdogIsCancelledAndSwallowedByNormalSuccessSettle (a genuinely live, looping watchdog cancelled by the winning success settle under the lock, replacing the earlier eager-dispatch variant that never actually entered the watchdog's settleFailure) and the formal-parameter-only listener regression pass after the fix. Second follow-up review (review-B) regressions: failureSettleKeepsRecoveryGateClosedUntilHostCleanupCompletes and successSettleKeepsRecoveryGateClosedUntilHostReattachCompletes were proven RED against the pre-review-B single-phase settle (gate dropped before Host teardown) — the two gate tests fail their 'gate must stay closed throughout host teardown' assertion — and GREEN after the two-phase claim/finalize settle. The formal-parameter-only listener regression (formalParameterOnlyListenerGetsOneDisconnectOnTimeout) drives the listener through the real public connect(endpoint, listener) binding chain (establish, then force a 1006 + budget-exhausting timeout) instead of reflectively seeding the private pending queue; it is a preservation/integration coverage of the binding contract (under Unconfined + fast clock the normal poll also completes) rather than a D1 pre-fix RED, and passes after the fix. Third follow-up review (review iteration) blocking regressions: settlingWindowJoinIsAdmittedAndReceivesTheSingleTerminalOutcome (coordinator level) and sameConfigConnectDuringSettlingWindowDoesNotStrandTheTerminalCallback (ConnectionManager level, exercising the real connect()->join/disconnect wiring) were both proven RED against the review-B settled-rejecting joinIfRecovering: the coordinator-level test fails its assertion (the rejected late joiner receives zero callbacks instead of one E213), and the ConnectionManager-level test TIMES OUT because the same-config connect() fell into disconnect()/onExplicitDetachOrDisconnect() and cleared the original observer's episodeObservers, stranding its terminal E213. Both are GREEN after the settling-window join fix (join admitted while the generation is still current, so the original observer and the late caller each receive exactly one E213 from the deferred snapshot). The prior join test (which asserted rejection) is removed/replaced because it locked in the defective behavior.",
+    "implementation_review_required": true,
+    "regression_required": true,
+    "public_api_signatures": "No public API change. The new constructor parameter watchdogDispatcher is on the internal EstablishedRecoveryCoordinator (manager package, never exported) and has a default value, so the production ConnectionManager construction call is unchanged. The cross-epoch hardening (EpisodeControl, claimTerminalSettle) is entirely internal to the same manager class; no type is exposed.",
+    "compatibility": "No observable contract change. Same E213 onDisconnected on failure, same onConnected on success, same single 5000ms budget, same single attempt.",
+    "payment": "No change to payment callback / traceId / in-flight cleanup semantics; failure still runs the existing onRecoveryFailureCleanup once together with the single onDisconnected(E213).",
+    "existing_documents_untouched": true
+  },
+  "approval": {
+    "status": "APPROVED",
+    "classification": "CONFORMANCE_FIX",
+    "approver_role": "SDK_CONNECTION_AND_PAYMENT_RESPONSE_RULE_OWNER",
+    "approved_by": "Maintainer (SDK connection and payment-response-path rule owner) in chat 2026-10-16 ('那你帮我修复这个bug' / '同意')",
+    "note": "Bringing the implementation into conformance with the already-approved AC4/AC6 of SPEC-ESTABLISHED-RECOVERY-001. No rule/AC text, approval, budget value, attempt count, or callback semantics changed; therefore no new L3 behavior-change approval is required. Independent implementation/semantic review recommended per AGENTS.md §11.1 for a critical payment-connection path."
+  },
+  "target_spec_version": "v1.1",
+  "new_spec_version": "v1.1",
+  "created_at": "2026-10-19",
+  "resolved_at": "2026-10-19"
+}

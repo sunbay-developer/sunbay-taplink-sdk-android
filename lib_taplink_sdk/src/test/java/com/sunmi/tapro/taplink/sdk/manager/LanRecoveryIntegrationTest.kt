@@ -27,6 +27,176 @@ import java.util.concurrent.CopyOnWriteArrayList
  * SPEC-LAN-RECOVERY-001 §AC1/AC2/AC3/AC4/AC5/AC6.
  */
 class LanRecoveryIntegrationTest {
+    /** SPEC-LAN-RECOVERY-001 §3/AC3: terminal failure must release queued callers. */
+    @Test
+    fun terminalCloseReleasesQueuedCallersWithoutDuplicateDisconnects() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val (manager, service) = setup { entered.complete(Unit); awaitCancellation() }
+        val primary = Events()
+        val queued = Events()
+        manager.setConnectionListener(primary)
+        try {
+            val endpoint = config(unusedPort()).setMaxRetryCount(0)
+            manager.connect(endpoint, primary)
+            withTimeout(5000) { entered.await() }
+            manager.connect(endpoint, primary)
+            manager.connect(endpoint, queued)
+            val kernel = service.getCurrentServiceKernel()!!
+            val callback = com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel::class.java
+                .getDeclaredField("currentConnectionCallback").apply { isAccessible = true }
+                .get(kernel) as com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
+
+            callback.onDisconnected("1006", "peer closed before connection notification")
+
+            assertEquals("Queued connect must receive the terminal disconnect", 1, queued.disconnected.size)
+            assertEquals("Shared primary/global/queued listener must be notified once", 1, primary.disconnected.size)
+            assertTrue(queued.errors.isEmpty())
+            assertFalse(manager.isConnecting())
+            val pending = ConnectionManager::class.java.getDeclaredField("pendingConnectionListeners")
+                .apply { isAccessible = true }.get(manager) as List<*>
+            assertTrue("Terminal outcome must release the queue", pending.isEmpty())
+        } finally {
+            manager.disconnect()
+            service.release()
+        }
+    }
+
+    /** SPEC-ESTABLISHED-RECOVERY-001 §AC6: recovery owns all previously queued callers. */
+    @Test
+    fun recoveryTakesOwnershipOfPreviouslyQueuedCallers() {
+        val (manager, service) = setup { emptyList() }
+        val queued = Events()
+        try {
+            @Suppress("UNCHECKED_CAST")
+            val pending = ConnectionManager::class.java.getDeclaredField("pendingConnectionListeners")
+                .apply { isAccessible = true }.get(manager) as MutableList<ConnectionListener>
+            pending.add(queued)
+            assertTrue("Recovery must retain the queued caller", manager.recoveryObservers().any { it === queued })
+            assertTrue("Ownership transfer must drain the old queue", pending.isEmpty())
+            assertFalse("The same queued caller must not be transferred again", manager.recoveryObservers().any { it === queued })
+        } finally {
+            manager.disconnect()
+            service.release()
+        }
+    }
+
+    /** SPEC-ESTABLISHED-RECOVERY-001 §AC6/AC9: transferred callers get the real final outcome once. */
+    @Test
+    fun recoveryFailureDeliversOneOutcomeToTransferredQueuedCaller() = runBlocking {
+        val (manager, service) = setup { emptyList() }
+        val queued = Events()
+        manager.setConnectionListener(queued)
+        installRecoveryTestScope(manager)
+        try {
+            @Suppress("UNCHECKED_CAST")
+            val pending = ConnectionManager::class.java.getDeclaredField("pendingConnectionListeners")
+                .apply { isAccessible = true }.get(manager) as MutableList<ConnectionListener>
+            pending.add(queued)
+            pending.add(queued)
+            val coordinator = ConnectionManager::class.java.getDeclaredField("establishedRecoveryCoordinator")
+                .apply { isAccessible = true }.get(manager) as EstablishedRecoveryCoordinator
+            // The unconnected kernel has no recoverable session/identity: drive real failure settlement.
+            coordinator.interceptIfEstablishedFault(TransportFaultEvent(0, 0, "1006", "test drop", true))
+            withTimeout(5000) { while (queued.disconnected.isEmpty()) delay(10) }
+            assertEquals(1, queued.disconnected.size)
+            assertTrue(queued.disconnected.single().contains("213"))
+            assertTrue(queued.errors.isEmpty())
+            assertTrue(pending.isEmpty())
+        } finally {
+            manager.disconnect()
+            service.release()
+        }
+    }
+
+    /**
+     * TC-仅形参listener-超时失败 (SPEC-ESTABLISHED-RECOVERY-001 §AC6): a caller that only ever passed
+     * a listener via connect(endpoint, listener) and NEVER called setConnectionListener must still
+     * receive exactly one onDisconnected(E213) when recovery times out. The formal-parameter listener
+     * reaches the episode observers via the connect-in-progress pending queue
+     * (takePendingConnectionListeners()), with no global connectionListener set.
+     */
+    @Test
+    fun formalParameterOnlyListenerGetsOneDisconnectOnTimeout() = runBlocking {
+        val (manager, service) = setup { emptyList() }
+        val formalOnly = Events()
+        val server = Server()
+        server.start()
+        // Deliberately do NOT call manager.setConnectionListener(...) — this isolates the
+        // "formal-parameter listener only" path: the listener must reach the recovery episode's
+        // observers purely through the public connect(endpoint, listener) binding chain
+        // (ReconnectManager.getLastConnectionListener()), never via a globally-set listener.
+        installRecoveryTestScope(manager)
+        try {
+            withTimeout(5000) { server.ready.await() }
+            // Real public connect with the listener passed ONLY as the formal parameter; this is what
+            // records the listener as the recovery observer source.
+            manager.connect(config(server.port), formalOnly)
+            withTimeout(5000) { formalOnly.completion.await() }
+            assertEquals("Precondition: the formal-parameter connect must establish", 1, formalOnly.connected.size)
+            // Make the recovery rebuild impossible to satisfy: stop the server and drop the socket so
+            // the real established-fault (1006) recovery exhausts its budget and must settle failure.
+            server.stop(1000)
+            server.connections.toList().forEach { it.closeConnection(1006, "test peer drop") }
+            withTimeout(8000) { while (formalOnly.disconnected.isEmpty()) delay(10) }
+            assertEquals(1, formalOnly.disconnected.size)
+            assertTrue(formalOnly.disconnected.single().contains("213"))
+            assertTrue(formalOnly.errors.isEmpty())
+            // Exactly one successful connect (the precondition) and no second onConnected from recovery.
+            assertEquals(1, formalOnly.connected.size)
+        } finally {
+            manager.disconnect()
+            service.release()
+            runCatching { server.stop(1000) }
+        }
+    }
+
+    /** SPEC-LAN-RECOVERY-001 §AC2/AC3: an intermediate retry must retain queued callers. */
+    @Test
+    fun retryingCloseKeepsQueuedCallersUntilTerminalOutcome() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val (manager, service) = setup { entered.complete(Unit); awaitCancellation() }
+        val primary = Events()
+        val queued = Events()
+        try {
+            val endpoint = config(unusedPort()).setMaxRetryCount(1)
+            manager.connect(endpoint, primary)
+            withTimeout(5000) { entered.await() }
+            manager.connect(endpoint, queued)
+            val callback = com.sunmi.tapro.taplink.communication.interfaces.AsyncServiceKernel::class.java
+                .getDeclaredField("currentConnectionCallback").apply { isAccessible = true }
+                .get(service.getCurrentServiceKernel()) as com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
+            callback.onDisconnected("1006", "retryable drop")
+            assertTrue(queued.disconnected.isEmpty())
+            assertTrue(queued.errors.isEmpty())
+            val pending = ConnectionManager::class.java.getDeclaredField("pendingConnectionListeners")
+                .apply { isAccessible = true }.get(manager) as List<*>
+            assertTrue(pending.any { it === queued })
+        } finally {
+            manager.disconnect()
+            service.release()
+        }
+    }
+
+    /** SPEC-ESTABLISHED-RECOVERY-001 §AC9: one throwing observer cannot block another. */
+    @Test
+    fun throwingDisconnectListenerDoesNotBlockOtherObservers() {
+        val (manager, service) = setup { emptyList() }
+        val observer = Events()
+        val throwing = object : ConnectionListener {
+            override fun onConnected(deviceId: String, taproVersion: String) = Unit
+            override fun onError(error: ConnectionError) = Unit
+            override fun onDisconnected(reason: String) { throw IllegalStateException("test listener failure") }
+        }
+        manager.setConnectionListener(observer)
+        try {
+            manager.updateConnectionStatus(ConnectionStatus.DISCONNECTED, reason = "terminal failure", listener = throwing)
+            assertEquals(listOf("terminal failure"), observer.disconnected)
+        } finally {
+            manager.disconnect()
+            service.release()
+        }
+    }
+
     private class TestContext : ContextWrapper(null) {
         override fun getApplicationContext(): Context = this
         override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
@@ -92,6 +262,11 @@ class LanRecoveryIntegrationTest {
             override fun elapsedRealtimeMs(): Long = (System.currentTimeMillis() - start) * 6
         }
         coordinator.javaClass.getDeclaredField("clock").apply { isAccessible = true }.set(coordinator, fast)
+        // The budget watchdog (D1) defaults to Dispatchers.Default with real-time ticks. Pin it to an
+        // Unconfined scope here so, together with the fast clock, it settles in milliseconds rather
+        // than real wall-clock seconds and stays deterministic under the injected test clock.
+        coordinator.javaClass.getDeclaredField("watchdogScope").apply { isAccessible = true }
+            .set(coordinator, CoroutineScope(Dispatchers.Unconfined))
     }
 
     private fun setup(discover: suspend ((ServiceInfo) -> Boolean) -> List<ServiceInfo>): Pair<ConnectionManager, TaplinkServiceKernel> {
@@ -493,6 +668,93 @@ class LanRecoveryIntegrationTest {
             )
         } finally {
             service.release()
+        }
+    }
+
+    /**
+     * Review iteration blocking regression (ConnectionManager level): a same-config connect() issued
+     * during the recovery SETTLING WINDOW must NOT strand the original observer's terminal callback.
+     *
+     * This drives the REAL ConnectionManager.connect() decision chain that the coordinator-level test
+     * cannot reach: while the terminal settle has won its CAS but the Host teardown is still parked,
+     * connectionStatus is still CONNECTED and isConnected() returns false (recovery active), so a
+     * same-config connect() previously fell through to disconnect() ->
+     * onExplicitDetachOrDisconnect(), clearing the very observer set the winning settle still had to
+     * notify. After the fix, connect() joins the still-live episode and BOTH the original observer and
+     * the late caller receive exactly one onDisconnected(E213).
+     *
+     * The settling window is held open by wrapping the coordinator's RecoveryHost with a delegate that
+     * blocks inside onRecoveryFailureCleanup until the test has issued the same-config connect(); the
+     * real ConnectionManager.connect()/joinIfRecovering/disconnect wiring is otherwise untouched.
+     *
+     * RED on the previous implementation: the late connect() routed into disconnect(), the original
+     * observer's episodeObservers were cleared, and neither listener received the E213.
+     *
+     * SPEC-ESTABLISHED-RECOVERY-001 §AC6/R9.
+     */
+    @Test
+    fun sameConfigConnectDuringSettlingWindowDoesNotStrandTheTerminalCallback() = runBlocking {
+        val server = Server()
+        server.start()
+        val (manager, service) = setup { emptyList() }
+        val original = Events()
+        val lateCaller = Events()
+        val inCleanup = CompletableDeferred<Unit>()
+        val releaseCleanup = CompletableDeferred<Unit>()
+
+        // Pin the coordinator scope/clock/watchdog for a deterministic JVM-speed episode, then wrap
+        // its RecoveryHost (the real ConnectionManager) so onRecoveryFailureCleanup parks inside the
+        // settling window. Everything else delegates straight through to the real manager.
+        installRecoveryTestScope(manager)
+        val coordinatorField = ConnectionManager::class.java
+            .getDeclaredField("establishedRecoveryCoordinator").apply { isAccessible = true }
+        val coordinator = coordinatorField.get(manager)
+        val hostField = coordinator.javaClass.getDeclaredField("connectionManager").apply { isAccessible = true }
+        val realHost = hostField.get(coordinator) as RecoveryHost
+        val blockingHost = object : RecoveryHost by realHost {
+            override fun onRecoveryFailureCleanup(reason: String) {
+                // Park in the phase1(won)->finalize window: settle has won, observers NOT yet cleared.
+                inCleanup.complete(Unit)
+                runBlocking { withTimeout(10_000) { releaseCleanup.await() } }
+                realHost.onRecoveryFailureCleanup(reason)
+            }
+        }
+        hostField.set(coordinator, blockingHost)
+
+        try {
+            withTimeout(5000) { server.ready.await() }
+            val endpoint = config(server.port)
+            manager.setConnectionListener(original)
+            manager.connect(endpoint, original)
+            withTimeout(5000) { original.completion.await() }
+            assertEquals("Precondition: original connect establishes", 1, original.connected.size)
+
+            // Drop the live link (1006) to start the single silent recovery episode, which will fail
+            // (server dropped) and park in the blocking cleanup = the settling window.
+            server.connections.toList().forEach { it.closeConnection(1006, "test peer drop") }
+            withTimeout(8000) { inCleanup.await() }
+
+            // Same-config connect() in the settling window: real connect() wiring must NOT clear the
+            // original observer's pending terminal. The late caller joins the one outcome.
+            manager.connect(endpoint, lateCaller)
+
+            // Release the parked cleanup so finalize runs and delivers the single terminal snapshot.
+            releaseCleanup.complete(Unit)
+            withTimeout(8000) {
+                while (original.disconnected.isEmpty() || lateCaller.disconnected.isEmpty()) delay(10)
+            }
+
+            assertEquals("Original observer must still get exactly one terminal E213", 1, original.disconnected.size)
+            assertTrue(original.disconnected.single().contains("213"))
+            assertEquals("Settling-window caller must get exactly one terminal E213", 1, lateCaller.disconnected.size)
+            assertTrue(lateCaller.disconnected.single().contains("213"))
+            assertTrue(original.errors.isEmpty())
+            assertTrue(lateCaller.errors.isEmpty())
+        } finally {
+            releaseCleanup.complete(Unit)
+            manager.disconnect()
+            service.release()
+            runCatching { server.stop(1000) }
         }
     }
 

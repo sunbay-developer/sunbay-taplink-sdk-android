@@ -12,10 +12,10 @@
     "change_origin": "DESIGN_DECISION",
     "created_at": "2026-10-15",
     "target_spec_version": "v1.2",
-    "modified_rules": ["R8"],
-    "modified_acs": ["AC8"],
-    "added_acs": ["AC8b"],
-    "added_sources": ["SRC-4"],
+  "modified_rules": ["R8"],
+  "modified_acs": ["AC8"],
+  "added_acs": ["AC8b"],
+  "added_sources": ["SRC-4"],
     "approval": "PENDING_HUMAN_APPROVAL",
     "note": "DRAFT revision widening OPT-R1 in-flight fast-recovery entry from LAN-only to all modes via the pure internal computeCanFastRecover. Harmless-widening per Step-1 static risk assessment: only LAN reaches fast recovery at runtime (onDisconnected isConnectionError bounds the runtime layer). No public API / error code / identity anchor added; R7/R9/R10 unaffected. NOT APPROVED until the human L3 gate."
   },
@@ -24,9 +24,9 @@
     "status": "APPROVED",
     "level": "L3",
     "approved_at": "2026-10-10",
-    "added_rules": ["R7", "R8", "R9", "R10"],
-    "clarified_rules": ["R6"],
-    "added_sources": ["SRC-3"],
+  "added_rules": ["R7", "R8", "R9", "R10"],
+  "clarified_rules": ["R6"],
+  "added_sources": ["SRC-3"],
     "host_decisions": {
       "Q-1": "empty appId does not rebind (safety-first)",
       "Q-2": "rebind trigger is the sign-in success callback, not onOpen"
@@ -463,14 +463,16 @@
     ],
     "TC-LAN-RECOVERY-002": [
       "LanRecoveryCallbackTest.handshakeFailureRemainsConnectingWhileDiscoveryIsPending",
-      "LanHandshakeCallbackOrderTest.bothHandshakeErrorCloseOrdersAreDeferred"
+      "LanHandshakeCallbackOrderTest.bothHandshakeErrorCloseOrdersAreDeferred",
+      "LanRecoveryIntegrationTest.retryingCloseKeepsQueuedCallersUntilTerminalOutcome"
     ],
     "TC-LAN-RECOVERY-003": [
       "LanRecoveryCallbackTest.finalDiscoveryFailureReportsOnlyOneTerminalError",
       "LanRecoveryCallbackTest.rejectedOrUnownedDiscoveryTargetTerminatesTheAttempt",
       "LanRecoveryCallbackTest.noDiscoveryTargetExhaustsExistingBoundedRetriesAndReportsFinalFailure",
       "LanRecoveryIntegrationTest.discoveryFailureDeduplicatesSharedObserverAndQueuedCallersAndAllowsFreshConnect",
-      "LanRecoveryIntegrationTest.replacementFailureReleasesReconnectQueueWithOneErrorPerObserver"
+      "LanRecoveryIntegrationTest.replacementFailureReleasesReconnectQueueWithOneErrorPerObserver",
+      "LanRecoveryIntegrationTest.terminalCloseReleasesQueuedCallersWithoutDuplicateDisconnects"
     ],
     "TC-LAN-RECOVERY-004": [
       "LanRecoveryIntegrationTest.disabledAutoReconnectDoesNotDiscover"

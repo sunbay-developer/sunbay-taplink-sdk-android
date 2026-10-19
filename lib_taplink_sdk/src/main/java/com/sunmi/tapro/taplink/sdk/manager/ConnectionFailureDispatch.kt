@@ -22,3 +22,23 @@ internal fun notifyDistinctConnectionErrors(
         }
     }
 }
+
+/** Final disconnect delivery must survive a throwing observer and duplicate registrations. */
+internal fun notifyDistinctConnectionDisconnects(
+    listeners: List<ConnectionListener>,
+    reason: String,
+    alreadyNotified: List<ConnectionListener> = emptyList(),
+    onListenerException: (Exception) -> Unit
+) {
+    val notified = Collections.newSetFromMap(IdentityHashMap<ConnectionListener, Boolean>())
+    notified.addAll(alreadyNotified)
+    listeners.forEach { listener ->
+        if (notified.add(listener)) {
+            try {
+                listener.onDisconnected(reason)
+            } catch (exception: Exception) {
+                onListenerException(exception)
+            }
+        }
+    }
+}

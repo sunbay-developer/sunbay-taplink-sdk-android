@@ -1,0 +1,46 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "label": "不同配置重入被旧 cleanup 反向拆除",
+      "sources": ["review-b"],
+      "confidence": "confirmed",
+      "blocking": true,
+      "detail": "ConnectionManager.onRecoveryFailureCleanup() 在清状态和断开旧 kernel 之前同步执行 failAllPendingTransactions()；LocalCallbackManager.failAllCallbacks() 会在当前线程同步调用应用 InnerCallback.onError。若该回调重入 connect(newConfig)，connect() 会通过 onExplicitDetachOrDisconnect() 提前 fence 旧 control——清 currentControl/episodeObservers、释放 gate 并启动 fresh session；但旧 cleanup 返回后仍继续清共享连接字段并对 getCurrentServiceKernel() 执行 disconnect()，可能拆掉刚启动的 fresh 连接，同时旧 finalizeTerminalSettle 因 control 已非 current 而返回空快照、不投原 observer 的终态 E213。该跨代竞态违反已批准的 R9/AC9（new config starts fresh；obsolete cleanup/callback 不得改动或关闭 successor）。失败批量回调本身即同步重入点、SDK 入口允许任意线程调用，故此路径可确定到达；现有 settling 测试仅覆盖同配置 join，未覆盖不同配置重入。",
+      "action": "让不同配置 connect 识别并延迟/等待 settling 阶段（例如把 coordinator 状态扩展为 ACTIVE/SETTLING/IDLE，在 SETTLING 阶段把 superseding connect 推迟到 finalize 之后），或调整失败清理顺序/分发，确保旧状态与旧 kernel 在任何应用回调前完成 teardown；新增 ConnectionManager 级回归：在 failAllPendingTransactions 的同步 callback 内调用不同配置 connect，验证 fresh session 不被旧 cleanup 清字段或断开、旧 observer 终态符合契约且无跨代重复回调。",
+      "evidence": [
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/ConnectionManager.kt:224-234",
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/ConnectionManager.kt:1061-1074",
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/EstablishedRecoveryCoordinator.kt:516-533",
+        "lib_taplink_communication/src/main/java/com/sunmi/tapro/taplink/communication/util/LocalCallbackManager.kt:229-240"
+      ]
+    },
+    {
+      "label": "Off-Main 收尾并发 / 潜在内核泄漏",
+      "sources": ["review-a"],
+      "confidence": "possible",
+      "blocking": false,
+      "detail": "看门狗命中 deadline 时 settleFailure -> onRecoveryFailureCleanup 运行在 Dispatchers.Default，而 ConnectionManager 的 onRecoveryFailureCleanup/onRecoverySuccess/retireForRecovery/openRecoveryRebuild 对共享连接字段（connectionStatus/connectedDeviceId/currentConnectionConfig/establishedTerminalIdentity）与内核操作（kernel.disconnect/connectInternal）均未加 synchronized(this)（该类的 synchronized 仅出现在状态投影路径 ~1902/2040/2114）。协程取消是协作式的：真正的 Main 饿死场景里 episode body 挂起在 delay(50) 是 inert 的、安全；但若 Main 正同步执行某 host 调用（retireForRecovery 的 kernel.disconnect / openRecoveryRebuild 的 connectInternal）时看门狗开火，收尾会与 Main 上仍在跑的 body 并发触碰同一内核/字段，最坏导致一个无人跟踪的活连接（泄漏/状态不一致）。对外『恰好一次 E213』契约不受影响，故非阻塞。plan §7『修复3』曾称这些字段已有 synchronized(this) 保护，但 settle 路径上的 onRecoverySuccess/onRecoveryFailureCleanup 实际没有，该 gap 未关闭。",
+      "action": "核实 connectInternal/kernel.disconnect 是否会在协作取消点之前真正完成，或给恢复钩子（onRecoverySuccess/onRecoveryFailureCleanup/retireForRecovery/openRecoveryRebuild）补 synchronized(this) 以与状态投影路径互斥。",
+      "evidence": [
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/EstablishedRecoveryCoordinator.kt",
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/ConnectionManager.kt:1060-1074"
+      ]
+    },
+    {
+      "label": "终态回调线程亲和性变化（符合契约，仅信息记录）",
+      "sources": ["review-a"],
+      "confidence": "confirmed",
+      "blocking": false,
+      "detail": "失败终态 onDisconnected(E213) 经看门狗投递时运行在后台线程而非 Main。符合 ConnectionListener KDoc『回调可能在后台线程、集成方自行切主线程』契约，Tapro 侧 observer 已切主线程，无需改码。仅作信息记录。",
+      "action": "无需改动；保持 ConnectionListener 回调可能在后台线程的文档契约即可。",
+      "evidence": [
+        "lib_taplink_sdk/src/main/java/com/sunmi/tapro/taplink/sdk/manager/EstablishedRecoveryCoordinator.kt"
+      ]
+    }
+  ],
+  "reviewDoc": [
+    "/Users/sm4306/StudioProjects/taplinksdk/.agents/tasks/lan-recovery-d1d2-fix/review-a.md",
+    "/Users/sm4306/StudioProjects/taplinksdk/.agents/tasks/lan-recovery-d1d2-fix/review-b.md"
+  ]
+}
