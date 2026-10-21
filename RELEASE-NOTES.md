@@ -10,7 +10,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
-- [v1.1.0](#v110) — Timeout configuration, GET_TERMINAL_INFO error passthrough, and LAN reconnect fixes (release pending)
+- [v1.1.0](#v110) — Timeout configuration, GET_TERMINAL_INFO error passthrough, and LAN reconnect fixes
 - [v1.0.10](#v1010) — Explicit connection selection, dependency-free JSON, and reconnect hardening
 - [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
@@ -28,7 +28,7 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## v1.1.0
 
-**Release pending — documentation prepared for the planned 1.1.0 version.**
+**Released 2026-10-20**
 
 This release adds same-instance fluent field setters and makes LAN recovery and transaction
 timeout behavior more predictable. No new dependency or error code is introduced.
