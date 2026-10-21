@@ -40,14 +40,15 @@ static def getSnapshotRepositoryUrl() {
 
 }
 
-static def getRepositoryUsername() {
-//    return "Sunmi"
-    return "PDUNa6"
+// 凭证一律从未提交的 Gradle 属性或环境变量注入，禁止硬编码到被 Git 追踪的文件中。
+// 优先级：Gradle 属性 sunbayMavenUsername/sunbayMavenPassword > 环境变量 SUNBAY_MAVEN_USERNAME/SUNBAY_MAVEN_PASSWORD。
+// 两者都缺失时返回空字符串；是否必须由实际发布 task 决定（见下方 doFirst 校验）。
+def getRepositoryUsername = {
+    return project.findProperty('sunbayMavenUsername') ?: System.getenv('SUNBAY_MAVEN_USERNAME') ?: ''
 }
 
-static def getRepositoryPassword() {
-//    return "OJ7R0CZC0ev\$X\$He"
-    return "ikAlguiWOhfrTQM6nkE9MzHeGFsV89pGC"
+def getRepositoryPassword = {
+    return project.findProperty('sunbayMavenPassword') ?: System.getenv('SUNBAY_MAVEN_PASSWORD') ?: ''
 }
 
 task sourcesJar(type: Jar) {
@@ -187,19 +188,19 @@ afterEvaluate {
         } else if (task.publication.name == 'release') {
             task.dependsOn('copyReleaseAar')
         }
-        task.doLast {
-            def username = getRepositoryUsername()
-            def password = getRepositoryPassword()
-            def url = new URL('https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/com.sunmi')
-            def connection = (HttpURLConnection) url.openConnection()
-            connection.requestMethod = 'POST'
-            connection.setRequestProperty('Content-Type', 'application/json')
-            connection.setRequestProperty('Authorization', 'Basic ' + "$username:$password".bytes.encodeBase64().toString())
-
-            def responseCode = connection.responseCode
-            println "--->HTTP Response Code: $responseCode<---"
-            connection.disconnect()
+        // 凭证缺失时立即失败，避免匿名/空凭证请求走到远端才报错。
+        task.doFirst {
+            if (!getRepositoryUsername() || !getRepositoryPassword()) {
+                throw new GradleException(
+                    '缺少 Maven 发布凭证。请通过 Gradle 属性 sunbayMavenUsername/sunbayMavenPassword ' +
+                    '或环境变量 SUNBAY_MAVEN_USERNAME/SUNBAY_MAVEN_PASSWORD 注入后重试。'
+                )
+            }
         }
+        // 说明：原先此处有一个 doLast，会在每个 publish task 之后隐式向 Central
+        // manual upload 端点发起 HTTP POST，且仅 println 状态码、不判失败。
+        // 该网络副作用已移除，改由发布脚本（ci/release/publish_sdk.sh）在推送后
+        // 显式触发 manual upload 并校验 HTTP 返回码。
     }
 }
 

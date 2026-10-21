@@ -30,6 +30,17 @@ Spec 写可断言的对外或内部行为契约，设计文档写方案和取舍
 
 五维检查：业务流程；状态与规则；接口与系统边界；异常与风险；验收与验证。SDK 还须逐项审查连接模式、交易生命周期、回调三态与线程、金额与小费、请求 ID 与 306/307/308、Refund/Abort、生命周期清理、安全日志、公开 API 与兼容性。无关项标 N/A 并说明。
 
+### 2.1 Superpowers 与五步流水线
+
+先读取项目规范，再读取当前环境可用的对应上游技能（<https://github.com/obra/superpowers>）；项目适配详见工作区 `SUPERPOWERS_WORKFLOW.md`，核心约束如下，独立检出也须遵守：
+
+- `brainstorming` 辅助 Source Analyzer 澄清来源和未决规则；讨论产物不自动成为 EXPLICIT 或批准规格。
+- `requesting-code-review` / `receiving-code-review` 辅助 Completeness Reviewer 与 Gap Analysis；仍须独立上下文先盲查原始材料，再核对草案。缺独立审查时记待完成，不能用作者自查冒充完成。
+- Human Review 保持负责人批准；上游设计、计划或 AI review 通过不替代 Spec/SCR 审批。技能未安装不阻断现有本地流程，但不得伪称已调用。
+- 批准后用 `writing-plans` 拆实施任务，每项关联 Spec 版本、RULE/AC、文件、测试及验证命令；计划和审查笔记放仓库外会话目录，正式 Spec/coverage/SCR 仍按本指南落盘。计划不新增行为规则。
+- 用例确认后由本地 `tdd` 驱动 RED→GREEN→REFACTOR；发现行为缺口先 SCR。`verification-before-completion` 仅用于核对真实证据，spec-check 通过不证明测试已执行。
+- worktree 按需，代理使用遵守任务授权及宿主规则；不得从上游默认步骤推导 commit/merge/发布授权或删除用户改动。SDK 人工 AAR/Maven 节点保持不变。
+
 ## 3. 质量门禁与 TDD 衔接
 
 - 来源追溯率、关键源要求覆盖率、关键规则 AC 覆盖率、ID 引用完整性目标均为 100%；未解决的高风险问题和关键冲突为 0。`spec-check` 只能机械核对已有矩阵，**关键源要求是否遗漏**必须由独立审查确认。

@@ -1,0 +1,83 @@
+{
+  "change_id": "SCR-ONERROR-CALLBACK-LIFECYCLE-001",
+  "spec_id": "SPEC-ESTABLISHED-RECOVERY-001",
+  "rule_id": [
+    "R6",
+    "R10",
+    "R11",
+    "R15"
+  ],
+  "change_type": "CLARIFY_RULE",
+  "level": "L3",
+  "change_origin": "DESIGN_DECISION",
+  "reported_by": "Maintainer in current chat 2026-10-19",
+  "initiator_role": "maintainer",
+  "reason": "按维护者澄清，将 transport/InnerCallback onError 纳入先等既有恢复结果的入口规则；同时调研最终断开后 Host 关闭并允许下一笔。现有 SDK R10 已有保留/失败清理承诺，不能以本申请改变原 deadline、次数、监听政策。Host、手动断开、adapter 分类未决，不假定已获批准。",
+  "source": {
+    "type": "EXPLICIT",
+    "references": [
+      {
+        "document_id": "REQ-ONERROR-CALLBACK-LIFECYCLE-001",
+        "version": "1.0",
+        "document_path": "docs/spec/sources/TAPLINK_ONERROR_CALLBACK_LIFECYCLE_REQUEST.md",
+        "section": "S1/S2/S3"
+      },
+      {
+        "document_id": "SPEC-ESTABLISHED-RECOVERY-001",
+        "version": "v1.2",
+        "document_path": "docs/spec/TAPLINK_ESTABLISHED_RECOVERY_SPEC.md",
+        "section": "R6/R10/R11/R15"
+      }
+    ],
+    "evidence": "S2 原文明确 onError 重试结果取得后再决定移除；S1 是关闭/下一笔调研方向。原方案把到达直接 finish 的建议已撤回，不认定为 approved 需求。"
+  },
+  "before": {
+    "status": "APPROVED_BASELINE_UNCHANGED",
+    "rule": "已批准 R6/R10/R11/R15：恢复期间静默保留，成功续推原交易，最终失败清理，原 deadline 不延长，新请求 E213；未逐条规定所有 transport 直接 onError 的分类，也未定义 Host 安全关闭/准入。"
+  },
+  "after": {
+    "status": "PROPOSED",
+    "rule": "拟澄清通信 onError 入口先交既有恢复判定；成功保留原回调，最终失败按既有路径清理，不提前 finish；原 deadline 继续。新增 Host 关闭与下一笔、手动通知和 adapter 分类待 Q-1–Q-4，未定规则不能实施。"
+  },
+  "impact": {
+    "acceptance_criteria": [
+      "AC6",
+      "AC10",
+      "AC11",
+      "AC15"
+    ],
+    "test_cases": [
+      "TC-RCL-001",
+      "TC-RCL-002",
+      "TC-RCL-003",
+      "TC-RCL-004",
+      "TC-RCL-005"
+    ],
+    "implementation_review_required": true,
+    "regression_required": true,
+    "related_draft": "SPEC-REQUEST-CALLBACK-LIFECYCLE-001",
+    "related_questions": [
+      "Q-1",
+      "Q-2",
+      "Q-3",
+      "Q-4"
+    ],
+    "external_spec": "SPEC-HOST-LAN-TRACEID-REBIND-001 v1.2 R3/R7/R9；修改前须 Host 另建 L3 SCR，当前保持 active 不动",
+    "consumers": [
+      "Tapro",
+      "taplinkdemo",
+      "sunbay-open-docs en/zh"
+    ],
+    "compatibility": "callback 签名不变；通知时序/Host 保留窗是否 breaking 待专项审批；当前不发版"
+  },
+  "approval": {
+    "status": "PENDING",
+    "reviewers": [],
+    "approver_role": "SDK_CONNECTION_AND_PAYMENT_RULE_OWNER_WITH_HOST_RULE_OWNER",
+    "approved_by": null,
+    "decision_note": "S2 方向原话已确认，不再重复询问；不将此扩为对完整实现策略/Host 安全边界的批准。"
+  },
+  "target_spec_version": "v1.3",
+  "created_at": "2026-10-19",
+  "resolved_at": null
+}

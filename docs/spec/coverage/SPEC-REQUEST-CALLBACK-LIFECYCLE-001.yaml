@@ -1,0 +1,670 @@
+{
+  "spec_id": "SPEC-REQUEST-CALLBACK-LIFECYCLE-001",
+  "spec_file": "docs/spec/TAPLINK_REQUEST_CALLBACK_LIFECYCLE_SPEC.md",
+  "version": "v1.0",
+  "status": "draft",
+  "approved": false,
+  "approved_by": null,
+  "approved_at": null,
+  "sources": [
+    {
+      "source_id": "SRC-1",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ONERROR-CALLBACK-LIFECYCLE-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ONERROR_CALLBACK_LIFECYCLE_REQUEST.md",
+      "section": "S1. 评审与新增调研要求（原文）",
+      "source_quote": "检查并评审taplinkonerror逻辑方案，并且需要调研增加交易中onerror失败导致ondisconnect或直接是交易中disconnect时关闭交易允许下一笔新的交易进入",
+      "content": "调研最终断开后结束交易并接受下一笔；触发时机与安全关闭细则尚未给出。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-2",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ONERROR-CALLBACK-LIFECYCLE-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ONERROR_CALLBACK_LIFECYCLE_REQUEST.md",
+      "section": "S2. onError 处理顺序澄清（原文）",
+      "source_quote": "`onError`本来就不需要被移除，需要`onError`的重试结果拿到后再决定是否移除",
+      "content": "收到通信 onError 不立即移除回调；先拿恢复重试结果。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-3",
+      "classification": "EXPLICIT",
+      "document_id": "SPEC-ESTABLISHED-RECOVERY-001",
+      "document_version": "v1.2",
+      "document_path": "docs/spec/TAPLINK_ESTABLISHED_RECOVERY_SPEC.md",
+      "section": "2.4 Transactions, errors and compatibility",
+      "source_quote": "In-flight request exists -> preserve its callbacks/dedup during recovery without extending the original request deadline; never resend a possibly submitted payment, even through processPendingTransaction on recovery success. Successful recovery must reconnect the original receive-routing chain so original traceId responses continue into the original PaymentCallback (R15); do not clear/fail/re-register it or reset its deadline to make recovery appear successful. Recovery FAILURE (Q4, maintainer 2026-10-15: \"恢复失败后的交易 callback 都被清除了\") -> on the single final disconnect, clear/fail the in-flight transaction callbacks through the existing physical-disconnect/failAllPendingTransactions cleanup path, released exactly once alongside the one terminal onDisconnected(E213); this cleanup must not run before or during the attempt (no synthetic early E306), only at the terminal failure. Normal final-response versus original request-timeout races must complete once.",
+      "content": "已批准 R10/R15：成功续推、原 deadline、无支付重发。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-4",
+      "classification": "EXPLICIT",
+      "document_id": "SPEC-ESTABLISHED-RECOVERY-001",
+      "document_version": "v1.2",
+      "document_path": "docs/spec/TAPLINK_ESTABLISHED_RECOVERY_SPEC.md",
+      "section": "2.2 State and callback ownership",
+      "source_quote": "The registered ConnectionListener MUST NOT be removed by the SDK during recovery (success or failure)",
+      "content": "已批准 R6：全局连接监听保留；恢复终局与单笔请求回调分开。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-5",
+      "classification": "EXPLICIT",
+      "document_id": "SPEC-ESTABLISHED-RECOVERY-001",
+      "document_version": "v1.2",
+      "document_path": "docs/spec/TAPLINK_ESTABLISHED_RECOVERY_SPEC.md",
+      "section": "2.4 Transactions, errors and compatibility",
+      "source_quote": "on the single final disconnect, clear/fail the in-flight transaction callbacks through the existing physical-disconnect/failAllPendingTransactions cleanup path, released exactly once alongside the one terminal onDisconnected(E213)",
+      "content": "已批准 R10：只在恢复最终失败清理一次，并发原超时/结果一次终局。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-6",
+      "classification": "EXPLICIT",
+      "document_id": "SPEC-ESTABLISHED-RECOVERY-001",
+      "document_version": "v1.2",
+      "document_path": "docs/spec/TAPLINK_ESTABLISHED_RECOVERY_SPEC.md",
+      "section": "2.4 Transactions, errors and compatibility",
+      "source_quote": "reject it before serialization/send with existing E213, do not queue or replay it",
+      "content": "已批准 R11：恢复期间不接纳新请求。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-7",
+      "classification": "EXPLICIT",
+      "document_id": "AGENT-TAPLINKSDK",
+      "document_version": "2026-10-19 工作区快照",
+      "document_path": "AGENT.md",
+      "section": "4. 交易语义铁律（Critical Semantics — 不可违反）",
+      "source_quote": "1. **`onSuccess` ≠ 交易已批准**：调用方必须检查 `PaymentResult.isSuccess()` / `isProcessing()` / `isFailed()`，SDK 内部实现和示例代码也必须体现这一语义，不能简化。\n2. **`onFailure` 只代表通信/系统级错误**，绝不能在文档或示例中把卡片拒绝、用户取消等业务结果映射到 `onFailure`。\n3. **金额单位**：`AmountInfo` 一律使用最小货币单位（分）。`orderAmount` 与 `tipAmount`/`tipConfig` **互斥**（不可同时设置 tipAmount 和 tipConfig），且 `orderAmount` 不得混入小费金额。\n4. **`transactionRequestId`**：每次新交易必须全局唯一（UUID/时间戳），API 层应对重复 ID 做防御性校验或至少在文档中强调。\n5. **错误码 306（超时）**：SDK 与文档必须明确指导集成方\"先查询、后决策\"，任何自带的重试逻辑都不能对 306 做自动重试。\n6. **错误码 307/308**：必须使用新的 `transactionRequestId` 重试，不能复用旧 ID。\n7. **INIT 流程对集成方透明**：不提供公开 API 让外部手动触发 INIT；INIT 在首笔交易时自动运行，连接断开重连后状态被清除。\n8. **Refund 两种模式**：`referencedBuilder()`（有原交易 ID，优先使用）与 `nonReferencedBuilder()`（无原交易 ID，需要客户重新刷卡）——两者语义、Builder API 必须保持清晰区分，不可合并成一个易混淆的接口。\n9. **Abort 前置条件**：仅允许在网关授权前调用；已授权交易必须使用 Void/Refund。\n10. **线程安全**：`TaplinkSDK` 的静态方法必须保证线程安全，可从任意线程调用；`PaymentCallback`/`ConnectionListener` 的实现类文档必须明确告知回调可能运行在后台线程，调用方需自行切换主线程。\n11. **生命周期清理**：文档与示例代码必须展示 `disconnect()` + `removeConnectionListener()` 成对出现，缺一不可。",
+      "content": "306 query-first、三态、金额、ID、Abort 资格等保留；逐条核对 AGENT §4，不据通信错误推断资金失败。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-8",
+      "classification": "EXPLICIT",
+      "document_id": "SPEC-ESTABLISHED-RECOVERY-001",
+      "document_version": "v1.2",
+      "document_path": "docs/spec/TAPLINK_ESTABLISHED_RECOVERY_SPEC.md",
+      "section": "2.3 Interface and system boundaries",
+      "source_quote": "Old read/write/status/close/permission/handshake callbacks cannot mutate the successor, close its resources or emit outcomes.",
+      "content": "已批准 R7：旧恢复代次不得污染后继资源/结果。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-9",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ONERROR-CALLBACK-LIFECYCLE-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ONERROR_CALLBACK_LIFECYCLE_REQUEST.md",
+      "section": "S3. 内部流程与模板要求（原文）",
+      "source_quote": "你需要走内部sdd流程和内部的方案文档模版而不是你自己瞎编",
+      "content": "按五步流程和内部模板产出，不自创批准规则。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-10",
+      "classification": "UNSPECIFIED",
+      "document_id": null,
+      "document_version": null,
+      "document_path": null,
+      "section": null,
+      "source_quote": null,
+      "content": "Host 收到什么事件、何时结束保留窗、最终断开如何跨端确认，以及不可取消阶段的关闭/放行策略未定义。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-11",
+      "classification": "UNSPECIFIED",
+      "document_id": null,
+      "document_version": null,
+      "document_path": null,
+      "section": null,
+      "source_quote": null,
+      "content": "手动 disconnect 对已发送在途 PaymentCallback 是静默清理还是必须失败通知，原需求未裁决。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-12",
+      "classification": "UNSPECIFIED",
+      "document_id": null,
+      "document_version": null,
+      "document_path": null,
+      "section": null,
+      "source_quote": null,
+      "content": "逐 adapter 的 onError 分类及何时视为明确请求终局，缺事件来源/重试归属矩阵。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-13",
+      "classification": "CONFLICT",
+      "document_id": null,
+      "document_version": null,
+      "document_path": null,
+      "section": null,
+      "source_quote": null,
+      "content": "Host active R3/R9 保留在途绑定与新关闭/下一笔目标尚无时序衔接；旧 Host 5s/E306 表述与当前 SDK R10/E213 漂移。",
+      "derivation": null,
+      "conflict_with": [
+        "SRC-1",
+        "SRC-3",
+        "SRC-5",
+        "SRC-14",
+        "SRC-16"
+      ],
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-14",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ONERROR-CALLBACK-LIFECYCLE-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ONERROR_CALLBACK_LIFECYCLE_REQUEST.md",
+      "section": "S5. Host active 规格摘录快照（非新批准）",
+      "source_quote": "Host「保留在途绑定」的最大保留时长兜底对齐 SDK 180s 交易回调超时",
+      "content": "Host active R9 保留窗摘录；原仓库/版本见源文件，本轮不得改写其批准状态。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-15",
+      "classification": "EXPLICIT",
+      "document_id": "SPEC-ESTABLISHED-RECOVERY-001",
+      "document_version": "v1.2",
+      "document_path": "docs/spec/TAPLINK_ESTABLISHED_RECOVERY_SPEC.md",
+      "section": "2.4.2 In-flight continuation priority",
+      "source_quote": "Reconnect succeeds while an original transaction is in flight -> keep the original callback and traceId/transactionRequestId correlation, attach the rebuilt receive path to that same mapping, and deliver continued progress/final responses through the original PaymentCallback using the existing continuation mechanism. Do not start or resend a transaction, silently replace its callback, or lose terminal dedup state.",
+      "content": "active R15 原 callback/traceId/transactionRequestId 精确关联及续推。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    },
+    {
+      "source_id": "SRC-16",
+      "classification": "EXPLICIT",
+      "document_id": "REQ-ONERROR-CALLBACK-LIFECYCLE-001",
+      "document_version": "1.0",
+      "document_path": "docs/spec/sources/TAPLINK_ONERROR_CALLBACK_LIFECYCLE_REQUEST.md",
+      "section": "S5. Host active 规格摘录快照（非新批准）",
+      "source_quote": "保留绑定：不 invalidate、不暂存 TTL；仅 `currentClient.compareAndSet(conn, null)` + 刷新客户端缓存后返回；掉线期间不发 `onDisconnected`、不置 `WAITING_CONNECT`（与现状分支 2 的「暂存」语义一致，但去掉 TTL 与 IP key）",
+      "content": "Host active R3 被动掉线保留行为；对应当前源码见设计 §2.2。",
+      "derivation": null,
+      "conflict_with": null,
+      "verified": false,
+      "resolution": null
+    }
+  ],
+  "dimensions": {
+    "business_flow": {
+      "covered": "partial",
+      "note": "SDK 恢复顺序已映射，Host 关闭缺决策",
+      "gap_ref": "Q-1"
+    },
+    "state_and_rules": {
+      "covered": "partial",
+      "note": "Host 安全退出及未知结果准入待裁决",
+      "gap_ref": "Q-2"
+    },
+    "interface_boundary": {
+      "covered": "partial",
+      "note": "手动断开与 adapter 分类未明确",
+      "gap_ref": "Q-3"
+    },
+    "exception_and_risk": {
+      "covered": "partial",
+      "note": "跨端保留冲突和逐 adapter 错误归属",
+      "gap_ref": "Q-4"
+    },
+    "acceptance_coverage": {
+      "covered": "partial",
+      "note": "R6-R9 不编造确定验收",
+      "gap_ref": "Q-2"
+    }
+  },
+  "payment_checklist": {
+    "transaction_lifecycle": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R6",
+        "R7",
+        "R9"
+      ]
+    },
+    "amount_and_txn_type": {
+      "applicable": "yes",
+      "rules": [
+        "R11"
+      ],
+      "note": "不改金额/Refund，保留最小单位及两种退款模式"
+    },
+    "connection_modes": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R2",
+        "R3",
+        "R8"
+      ],
+      "note": "APP_TO_APP/LAN/VSP/RS232/AOA/SUB_SCREEN 分开核对，Cloud SDK连接实体 N/A"
+    },
+    "callback_semantics": {
+      "applicable": "yes",
+      "rules": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R7",
+        "R11"
+      ],
+      "note": "三态/后台线程/监听保留，手动通知待决"
+    },
+    "idempotency_and_query": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R4",
+        "R11"
+      ]
+    },
+    "api_compatibility": {
+      "applicable": "yes",
+      "rules": [
+        "R7",
+        "R12"
+      ],
+      "note": "无已批准签名变更；行为变化及发布迁移仍需审查"
+    },
+    "security_compliance": {
+      "applicable": "yes",
+      "rules": [
+        "R10",
+        "R11"
+      ],
+      "note": "不新增凭证，生产日志关闭；只保留脱敏诊断；恢复不发起权限授权"
+    },
+    "perf_and_recovery": {
+      "applicable": "yes",
+      "rules": [
+        "R2",
+        "R3",
+        "R4",
+        "R10"
+      ],
+      "note": "复用一次恢复；不新增线程池/无限重试，timer/缓存有界；Host释放待决"
+    }
+  },
+  "rules": [
+    {
+      "rule_id": "R1",
+      "source_id": "SRC-2",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "critical",
+      "statement": "通信 onError 到达先保留原请求登记，等待既有恢复重试结果，再决定移除；不将 onError 到达本身当成终局。",
+      "status": "REVIEW_REQUIRED",
+      "acceptance": [
+        {
+          "ac_id": "AC1",
+          "given": "已建立连接且原请求仍在途、原 deadline 未到",
+          "when": "内部收到通信 onError，恢复结果尚未确定",
+          "then": "原登记及原回调仍可用，不在此时移除或因该通信故障提前 onFailure；恢复成功/失败分别按 R2/R3 验证",
+          "verification_method": "local_fake_transport_test",
+          "test_cases": [
+            "TC-RCL-001"
+          ]
+        }
+      ],
+      "supporting_source_ids": [
+        "SRC-3"
+      ]
+    },
+    {
+      "rule_id": "R2",
+      "source_id": "SRC-3",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "critical",
+      "statement": "原请求未终局且原终端恢复成功，保留原 callback、traceId、transactionRequestId、去重与原 deadline，重挂原响应路由，不重发支付。",
+      "status": "REVIEW_REQUIRED",
+      "acceptance": [
+        {
+          "ac_id": "AC2",
+          "given": "原请求在恢复中，原 deadline 未到",
+          "when": "恢复成功并收到原 traceId 的进度与真实结果",
+          "then": "原 callback 接收原结果且只发生一次请求终局，没有新支付发送或截止时间延长",
+          "verification_method": "local_fake_transport_test",
+          "test_cases": [
+            "TC-RCL-002"
+          ]
+        }
+      ],
+      "supporting_source_ids": [
+        "SRC-15"
+      ]
+    },
+    {
+      "rule_id": "R3",
+      "source_id": "SRC-5",
+      "source_type": "EXPLICIT",
+      "dimension": "business_flow",
+      "criticality": "critical",
+      "statement": "恢复最终失败时经最终断开路径清理/失败本会话在途请求一次；已完成请求不重复通知，保留 ConnectionListener。",
+      "status": "REVIEW_REQUIRED",
+      "acceptance": [
+        {
+          "ac_id": "AC3",
+          "given": "原请求在途且恢复尚未结束",
+          "when": "单次恢复最终失败，随后重复故障/结果/原 timer 到达",
+          "then": "按既有最终断开契约完成一次请求清理/失败，最终 onDisconnected(E213) 一次；全局 listener 不被摘除",
+          "verification_method": "local_fake_transport_test",
+          "test_cases": [
+            "TC-RCL-003"
+          ]
+        }
+      ],
+      "supporting_source_ids": [
+        "SRC-4"
+      ]
+    },
+    {
+      "rule_id": "R4",
+      "source_id": "SRC-3",
+      "source_type": "EXPLICIT",
+      "dimension": "state_and_rules",
+      "criticality": "critical",
+      "statement": "原请求 deadline 在恢复中继续；原响应、原超时和最终恢复失败竞争必须一次终局，已终局请求不被恢复成功复活。",
+      "status": "REVIEW_REQUIRED",
+      "acceptance": [
+        {
+          "ac_id": "AC4",
+          "given": "原响应、原 deadline 和最终恢复结果可控交错",
+          "when": "任一有效请求终局先发生，再交付其他事件",
+          "then": "只通知一次请求终局；原 deadline 未延长，超时为原 306，恢复不重建旧登记",
+          "verification_method": "local_fake_transport_test",
+          "test_cases": [
+            "TC-RCL-004"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R5",
+      "source_id": "SRC-6",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "high",
+      "statement": "恢复期间新请求在序列化/发送前以既有 E213 拒绝，不排队、不重放。",
+      "status": "REVIEW_REQUIRED",
+      "acceptance": [
+        {
+          "ac_id": "AC5",
+          "given": "恢复仍活跃",
+          "when": "提交一笔新 ID 的请求",
+          "then": "E213 拒绝且没有发送/排队；恢复终局后是否可执行由连接及 Host 真实状态决定",
+          "verification_method": "local_fake_transport_test",
+          "test_cases": [
+            "TC-RCL-005"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R6",
+      "source_id": "SRC-1",
+      "source_type": "EXPLICIT",
+      "dimension": "interface_boundary",
+      "criticality": "critical",
+      "statement": "维护者要求：交易中最终断开后关闭当前交易并允许新的交易进入；事件起算、Host 安全退出及放行条件尚待 Q-1/Q-2，不能写成所有阶段立即清 busy。",
+      "status": "BLOCKED",
+      "acceptance": [],
+      "blocked_by": [
+        "Q-1",
+        "Q-2"
+      ]
+    },
+    {
+      "rule_id": "R7",
+      "source_id": "SRC-11",
+      "source_type": "UNSPECIFIED",
+      "dimension": "interface_boundary",
+      "criticality": "critical",
+      "statement": "待确认：手动 disconnect/cleanup 时已发送请求的通知契约与清理顺序。",
+      "status": "BLOCKED",
+      "acceptance": [],
+      "blocked_by": [
+        "Q-3"
+      ]
+    },
+    {
+      "rule_id": "R8",
+      "source_id": "SRC-12",
+      "source_type": "UNSPECIFIED",
+      "dimension": "exception_and_risk",
+      "criticality": "critical",
+      "statement": "待确认：各 adapter 的 onError 如何归属通信恢复、明确请求终局；不能按方法名或错误字符串直接 finish。",
+      "status": "BLOCKED",
+      "acceptance": [],
+      "blocked_by": [
+        "Q-4"
+      ]
+    },
+    {
+      "rule_id": "R9",
+      "source_id": "SRC-13",
+      "source_type": "CONFLICT",
+      "dimension": "exception_and_risk",
+      "criticality": "critical",
+      "statement": "待裁决：Host active 保留/续推政策与新关闭/放行政策的时序，以及历史 E306/E213 表述漂移。",
+      "status": "BLOCKED",
+      "acceptance": [],
+      "blocked_by": [
+        "Q-1",
+        "Q-2"
+      ],
+      "supporting_source_ids": [
+        "SRC-1",
+        "SRC-3",
+        "SRC-5",
+        "SRC-14",
+        "SRC-16"
+      ]
+    },
+    {
+      "rule_id": "R10",
+      "source_id": "SRC-8",
+      "source_type": "EXPLICIT",
+      "dimension": "state_and_rules",
+      "criticality": "high",
+      "statement": "恢复旧代次的读写/状态/关闭/权限/握手回调不得改变后继资源或发出后继结果。",
+      "status": "REVIEW_REQUIRED",
+      "acceptance": [
+        {
+          "ac_id": "AC10",
+          "given": "旧恢复 episode 已结束并有后继会话",
+          "when": "交付旧 read/write/status/close/permission/handshake 回调",
+          "then": "后继连接及新请求不被旧事件清理、关闭或通知旧结果",
+          "verification_method": "local_fake_transport_test",
+          "test_cases": [
+            "TC-RCL-006"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R11",
+      "source_id": "SRC-7",
+      "source_type": "EXPLICIT",
+      "dimension": "exception_and_risk",
+      "criticality": "critical",
+      "statement": "保留 AGENT §4：onSuccess 按业务三态检查；onFailure 仅通信/系统错误；306 先 query；新交易唯一 ID，307/308 新 ID；不扩大 Abort 资格，不改变金额、退款语义。",
+      "status": "REVIEW_REQUIRED",
+      "acceptance": [
+        {
+          "ac_id": "AC11",
+          "given": "响应包含 approved/processing/declined，或通信 306、307、308；含真实金额/原交易 ID 的既有请求",
+          "when": "处理响应或准备后续操作",
+          "then": "业务结果保留三态，通信失败不替代资金结果；306 query-first，307/308 新 ID，金额仍为最小单位，授权后不使用 Abort",
+          "verification_method": "local_fake_transport_test",
+          "test_cases": [
+            "TC-RCL-007"
+          ]
+        }
+      ]
+    },
+    {
+      "rule_id": "R12",
+      "source_id": "SRC-9",
+      "source_type": "EXPLICIT",
+      "dimension": "acceptance_coverage",
+      "criticality": "medium",
+      "statement": "方案采用内部指定骨架，规格/coverage/SCR/独立审查各用仓库模板；未决规则及未执行验证如实标注，不标 active/approved。",
+      "status": "REVIEW_REQUIRED",
+      "acceptance": [
+        {
+          "ac_id": "AC12",
+          "given": "本需求进入内部 SDD",
+          "when": "提交本轮文档产物",
+          "then": "源→R→AC→TC 可核对；缺口无伪造 AC，模板一致；人工批准前保持 draft/approved=false",
+          "verification_method": "static_document_review",
+          "test_cases": [
+            "TC-RCL-008"
+          ]
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-1",
+      "risk": "critical",
+      "about": "Host 如何识别与当前交易相关的最终断开？保留窗口起算点/时长、SDK 5s 与 Host 180s 续推策略如何衔接？跨端消息是否必要？不能先定为5s。",
+      "source_ref": "SRC-13",
+      "blocks": [
+        "R6",
+        "R9"
+      ],
+      "status": "open",
+      "decision": null
+    },
+    {
+      "id": "Q-2",
+      "risk": "critical",
+      "about": "可取消/不可取消阶段分别如何关闭，什么退出/资源释放证据允许下一笔，资金未知时独立新订单准入如何处理？不假定所有阶段可强制取消。",
+      "source_ref": "SRC-10",
+      "blocks": [
+        "R6",
+        "R9"
+      ],
+      "status": "open",
+      "decision": null
+    },
+    {
+      "id": "Q-3",
+      "risk": "high",
+      "about": "手动 disconnect 是否将现有已发送请求的静默清理改为 PaymentCallback.onFailure？需要明确通知及回调重入边界。",
+      "source_ref": "SRC-11",
+      "blocks": [
+        "R7"
+      ],
+      "status": "open",
+      "decision": null
+    },
+    {
+      "id": "Q-4",
+      "risk": "high",
+      "about": "已查 adapter 错误入口见方案 §2.2；技术可核实项继续源码接线审查。需裁决的是明确非恢复请求终局的政策/例外及分类契约，不将所有技术调查交给人工决定。",
+      "source_ref": "SRC-12",
+      "blocks": [
+        "R8"
+      ],
+      "status": "open",
+      "decision": null
+    }
+  ],
+  "gates": {
+    "source_traceability": {
+      "target": "100%",
+      "actual": "12/12",
+      "pass": true
+    },
+    "explicit_quote_verified": {
+      "target": "100%",
+      "actual": null,
+      "pass": null
+    },
+    "critical_rule_coverage": {
+      "target": "100%",
+      "actual": null,
+      "pass": null
+    },
+    "critical_acceptance_coverage": {
+      "target": "100%",
+      "actual": "5/9",
+      "pass": false
+    },
+    "unresolved_high_risk": {
+      "target": 0,
+      "actual": 4,
+      "pass": false
+    },
+    "id_reference_integrity": {
+      "target": "100%",
+      "actual": null,
+      "pass": null
+    },
+    "unresolved_conflicts": {
+      "target": 0,
+      "actual": 1,
+      "pass": false
+    }
+  }
+}

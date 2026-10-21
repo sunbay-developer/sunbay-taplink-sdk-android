@@ -22,7 +22,7 @@ Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS appl
   - Comprehensive transaction query functionality
 
 - **Sub_Screen (USB Customer-Facing Screen)** *(since v1.0.9)*
-  - `ConnectionConfig.createSubScreenMode()` — dedicated mode that connects over USB VSP to a **remote** Tapro terminal and automatically launches ("拉起") Tapro's screen player as part of `connect()` (failure = connection error, code `351`)
+  - `ConnectionConfig.createSubScreenMode()` — dedicated mode that connects over USB VSP to a **remote** Tapro terminal and automatically launches Tapro's screen player as part of `connect()` (failure = connection error, code `351`)
   - For an optional screen outside Sub-Screen mode, call `TaplinkSDK.openUsbScreenPlayer()` explicitly after connecting
   - Drive ad carousel, order list, and tip selection on external display
   - See [SUB_SCREEN_INTEGRATION.md](./SUB_SCREEN_INTEGRATION.md) — connecting from a primary-screen terminal to Tapro on a secondary-screen terminal with `createSubScreenMode()`

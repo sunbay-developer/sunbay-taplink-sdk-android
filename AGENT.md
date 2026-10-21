@@ -179,6 +179,12 @@ Tapro 当前通过 `lib_taplink_service/build.gradle.kts` 的 `api(libs.taplink.
 - **TDD 流程**：当前任务经用户明确要求或同意后，按 `.agents/skills/tdd/SKILL.md` 执行需求方向与用例清单两道闸门、红绿重构、集成/设备验证、回归、评审和 spec 回写；bug 走 B1–B5。执行授权与 Tapro `AGENTS.md §13.2.0` 风险分级对齐：相关本地纯逻辑测试、按批准 AC 新增回归测试和静态检查自动执行；完整 TDD 默认授权包包含这些步骤及 AI Review，用户可明确排除；独立 Review 按任务授权一次，不重复询问。需求/用例/Spec/SCR 批准、设备/真实后端测试与发布仍保留人工闸门。用例必须引用 active spec 的 `spec_id §AC`；若发现规则缺口先走 SCR 裁决。
 - **发布边界保持不变**：本流程不授权 AI 执行 AAR 打包/Maven 发布；继续遵守 §8 的维护者人工节点和确认版本后的下游/双语文档同步。
 
+### 11.2 Superpowers 执行方法
+
+按工作区 [`SUPERPOWERS_WORKFLOW.md`](../SUPERPOWERS_WORKFLOW.md) 接入 <https://github.com/obra/superpowers>：SDD 澄清/复核分别使用 brainstorming / review 方法；批准规格后拆实施计划；TDD 仍由本地 `tdd` 主导，Bug 使用 systematic-debugging，完成前使用 verification-before-completion。具体路由写入本地 Spec Guide、spec-authoring 与 tdd；独立检出缺共享文件时以这些本地边界执行。
+
+先读项目规范再读取可用技能；技能未安装则说明并沿用本地流程，不声称已调用，也不自动安装或更新。第三方默认不替代来源证据、Spec/SCR 与用例批准；计划/评审笔记放仓库外会话目录，不能清除用户已有代码、擅自提交/合并或发布。worktree 按需，代理使用按任务授权及宿主规则；审查包含未提交修改，无独立上下文时记待完成。§11.1 的 TDD 触发、一次授权和 §8 的人工发布边界保持不变。
+
 ## 12. 规则文件索引
 
 | 文件 | 说明 |
@@ -201,4 +207,4 @@ Tapro 当前通过 `lib_taplink_service/build.gradle.kts` 的 `api(libs.taplink.
 | `.agents/skills/tdd/SKILL.md` | SDK 新功能 TDD 与 bug 修复流程 |
 
 ---
-**文档版本**: v1.1　**最后更新**: 2026-10-10　**适用范围**: taplinksdk 仓库全部 AI 编码代理
+**文档版本**: v1.2　**最后更新**: 2026-10-20　**适用范围**: taplinksdk 仓库全部 AI 编码代理

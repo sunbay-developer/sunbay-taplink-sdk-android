@@ -7,6 +7,21 @@ description: 用户当前任务明确要求启动 TDD 或同意使用时执行�
 
 先读根目录 `AGENT.md`、`docs/spec/SPEC_GUIDE.md` 和相关 `.cursor/rules/taplink-*.mdc`。沿用 Tapro 的两道人为闸门：Step 0 确认需求方向和影响范围，Step 3 确认用例与期望；已在当前任务明确确认的结论可直接复用。此流程只在用户明确要求 TDD 或同意使用时启动，普通改动按仓库规范做必要验证。
 
+## Superpowers 辅助路由
+
+先读本地规范，再按阶段读取可用上游技能：<https://github.com/obra/superpowers>。工作区 `SUPERPOWERS_WORKFLOW.md` 给出完整适配；独立检出时本节同样生效，技能未安装时说明并沿用本地流程，不伪称调用。
+
+| 本地步骤 | Superpowers 方法与交付 |
+|---|---|
+| Step 0–1 | `brainstorming` 澄清，按本地 spec-authoring 完成来源→RULE→AC 和人工批准 |
+| Spec 批准后、Step 3 前 | `writing-plans` 列仓库/文件、Spec 版本/RULE/AC、测试、验证命令和下游依赖；用例仍另经 Step 3 确认 |
+| Step 4–7 | `test-driven-development` + `executing-plans`，逐例失败断言→最小实现→重构，再接线回归 |
+| B1–B5 | `systematic-debugging` 复现、根因、按批准 AC 补失败回归、最小修复与验证；规则缺口先 SCR |
+| Step 8 | `requesting-code-review` / `receiving-code-review`，先规格符合性后代码质量，包含未提交 diff；测试期望变更回 Step 3，行为变化先 SCR |
+| Step 10 | `verification-before-completion` 核对真实编译/测试/规格结果、未验证范围和发布交接 |
+
+本地流程主导：上游设计/计划确认不替代 Spec/SCR 和两道人工闸门；既有确认不重复询问。计划、执行日志和审查笔记放仓库外会话目录；禁止依上游要求删除已有代码或用户改动来重做 TDD，不从 commit/merge/cleanup 步骤推导操作授权。worktree 按需、代理按任务授权及宿主规则；无独立上下文时记独立审查待完成，不以作者自查替代。纯逻辑与连接/硬件分层验证、完整 TDD 一次授权、人工 AAR/Maven 发布均保持原规则；本次流程接入不授权后续任务的完整 TDD。
+
 ## 执行授权与验证入口
 
 - 按 `AGENT.md §11.1` 和 Tapro `AGENTS.md §13.2.0` 分级执行：常规本地纯逻辑测试和静态检查自动进行；完整 TDD 按任务授权一次，默认包含相关测试、静态预评估和 Step 8 AI Review，用户可明确排除。已包含步骤不重复询问；设备/真实后端测试及发布另行确认。
