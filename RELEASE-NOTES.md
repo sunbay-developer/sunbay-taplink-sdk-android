@@ -10,8 +10,9 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ## Contents
 
-- [v1.0.10](#v1010) — Explicit connection selection, Android 7 compatibility, and reconnect reliability
-- [v1.0.9](#v109) — Integration modes, Sub-Screen mode, and terminal information query
+- [v1.1.0](#v110) — Timeout configuration, GET_TERMINAL_INFO error passthrough, and LAN reconnect fixes
+- [v1.0.10](#v1010) — Explicit connection selection, dependency-free JSON, and reconnect hardening
+- [v1.0.9](#v109) — CROSS_DEVICE / ON_DEVICE integration modes, `CrossDeviceStrategy`, Sub_Screen mode, `getTerminalInfo()`, LAN & cable stability fixes
 - [v1.0.8](#v108) — LAN discovery & QR scan, signature/tip config source, Jackson migration
 - [v1.0.7](#v107) — Unified callback model, transitive dependencies, merchant-less config
 - [v1.0.6](#v106) — Tip config moves to the transaction request
@@ -25,46 +26,155 @@ Releases are listed newest first. Each entry highlights what changed for integra
 
 ---
 
+## v1.1.0
+
+**Released 2026-10-20**
+
+This release adds a Java-friendly default timeout setter and makes LAN recovery and transaction
+timeout behavior more predictable. No new dependency or error code is introduced.
+
+### 🚀 New — Java-friendly TaplinkConfig timeout setter
+
+- Added `TaplinkConfig.setTimeout(int)` so Java integrations can set the default transaction timeout
+  in seconds without calling the full constructor. Like the other configuration setters, it returns
+  a new `TaplinkConfig`; pass that returned instance to `TaplinkSDK.init()`.
+
+### 🐛 Fixed — GET_TERMINAL_INFO error passthrough
+
+- Removed Tapro-version-based conversion to synthetic error `352`. Tapro app versions are not SDK
+  versions, and the former `1.0.9` threshold was not a verified minimum Tapro version. The SDK now
+  preserves the actual error code and message returned by Tapro.
+
+### 🐛 Fixed — LAN reconnect completion after endpoint changes
+
+- LAN service discovery no longer exits silently when a stale `CONNECTING` status remains after a
+  direct WebSocket timeout; exhausted discovery now reaches the connection error callback.
+- Address-change reconnects wait briefly for the cancelled connection operation to release its
+  lock, clear reconnect state when the replacement attempt fails, and notify listeners that were
+  queued during the attempt instead of leaving them pending indefinitely.
+- Duplicate `onReconnecting` callbacks are suppressed when the explicit listener and the retained
+  reconnect listener refer to the same object.
+
+### 🔧 Improved — Explicit LAN reconnect policy and request timeouts
+
+- `ConnectionConfig.autoReconnect = false` now keeps a failed direct LAN connection from falling
+  back to mDNS discovery, and does not start LAN monitoring or reconnect after passive disconnects,
+  peer restarts, or mDNS address changes. Explicit `discoverLanServices()` and
+  `autoDiscoverAndConnect()` behavior is unchanged.
+- With automatic reconnect enabled, a failed direct LAN endpoint can now follow the same host to a
+  newly advertised port. The previous endpoint is preserved for address-change comparison, so the
+  discovered service triggers reconnection instead of being rejected or treated as unchanged.
+  Discovery also completes as soon as the matching resolved service appears instead of always
+  waiting for the full 30-second discovery window. All automatic and explicit mDNS discovery is
+  limited to non-connected states; a successful LAN connection stops discovery immediately.
+- `PaymentRequest.requestTimeout` uses milliseconds for compatibility with existing SDK releases.
+  It takes precedence over `TaplinkConfig.timeout`, which remains in seconds and defaults to 180.
+  When the request value is absent, the SDK converts the global value to milliseconds; the same
+  effective millisecond value is used in signed `bizData` and the local callback timer.
+- APP-to-APP requests ignore callback timeout and do not return `306`; their callback remains active
+  for the normal response. LAN/Cable callbacks receive `306` once at timeout. Tapro cancels and
+  exits only cancellable LAN/Cable transactions; non-cancellable flows finish locally without
+  sending a late callback result. Integrations must query before deciding whether to retry.
+- Semi-integrated card-reading timeout is returned as a terminal `FAILED` transaction result with
+  the message `read card timeout`, not as a communication-level callback failure.
+
+### 🧭 Migration from v1.0.10
+
+- Set `PaymentRequest.requestTimeout` in **milliseconds** (for example, `30_000L` for 30 seconds).
+  `TaplinkConfig.timeout` remains in **seconds**; the default is 180 seconds. A positive request
+  value takes precedence over the global value.
+- Java callers can set the global timeout without using the full `TaplinkConfig` constructor.
+  `setTimeout(int)` returns a new config, so retain its return value before initialization:
+
+  ```java
+  TaplinkConfig config = TaplinkConfig.create(appId, secretKey).setTimeout(180);
+  TaplinkSDK.initSDK(context, config);
+  ```
+
+- If the app handles `getTerminalInfo()` errors, inspect the actual code and message returned by
+  Tapro. Do not rely on the SDK to translate an unsupported-action response into `352`.
+- For a LAN connection that must not recover automatically, use
+  `ConnectionConfig.setAutoReconnect(false)`. Explicit discovery APIs remain available.
+- After LAN/Cable callback error `306`, query the original transaction ID before deciding on a
+  retry. Treat a card-reading `FAILED` result as a transaction outcome, not `onFailure`.
+
+**Compatibility:** Existing v1.0.10 public request signatures remain available. Review timeout
+values and error handling when upgrading; no source migration is otherwise required.
+
+---
+
 ## v1.0.10
 
 **Released 2026-09-15**
 
-This release makes connection selection deterministic, removes the SDK's runtime Jackson
-dependency, and improves connection recovery.
+This release makes connection selection deterministic, removes the SDK's runtime JSON-library
+dependency, and hardens connection recovery across LAN, Cable, and repeated SDK initialization.
 
 ### 💥 Breaking Changes
 
-- Removed `CrossDeviceStrategy.AUTO`, `CableProtocol.AUTO`,
-  `ConnectionConfig.setAutoPriority(...)`, and the `autoPriority` argument of
-  `createCrossDeviceMode(...)`.
-- `createCrossDeviceMode(...)` now requires `CrossDeviceStrategy.LAN` or
-  `CrossDeviceStrategy.CABLE`. Cable connections also require `CableProtocol.USB_VSP`,
-  `CableProtocol.RS232`, or `CableProtocol.USB_AOA`.
+- **Automatic transport selection has been removed.** `CrossDeviceStrategy.AUTO`,
+  `CableProtocol.AUTO`, `ConnectionConfig.setAutoPriority(...)`, and the `autoPriority` argument of
+  `createCrossDeviceMode(...)` are no longer available.
+- `ConnectionConfig.createCrossDeviceMode(...)` now requires an explicit `LAN` or `CABLE`
+  strategy. A `CABLE` strategy also requires one concrete protocol: `USB_VSP`, `RS232`, or
+  `USB_AOA`.
+- Calling `setConnectionMode(ConnectionMode.CROSS_DEVICE)` without first calling
+  `setCrossDeviceStrategy(...)` now throws `IllegalArgumentException` instead of silently choosing
+  a transport.
 
-### 🔧 Improvements and Fixes
+### 🔧 Improved
 
-- Fixed SDK initialization on Android API 24 and 25 by removing the runtime Jackson dependency.
-- Existing connection data and supported TapLink response formats remain compatible after the
-  dependency change.
-- Improved LAN recovery when the connected Tapro terminal changes its advertised address.
-- Improved Cable reconnect behavior after USB unplug/replug.
-- Repeated SDK initialization now cleans up the previous connection and callbacks first.
-- `getTerminalInfo()` preserves genuine errors from supported Tapro versions and reports error
-  `352` only for a confirmed unsupported version.
+- Re-initializing the SDK now tears down the previous connection, listeners, and pending payment
+  callbacks before creating new managers, preventing stale connections and duplicate callbacks.
+- A stale `CONNECTING` / `WAIT_CONNECTING` state is reset when the underlying transport is no
+  longer active, so a subsequent `connect()` can start normally instead of waiting forever.
+- `getTerminalInfo()` could infer unsupported-action errors from a Tapro-version threshold and
+  rewrite them as synthetic error `352`. This inference is removed in v1.1.0 because the threshold
+  was not verified and could misclassify real errors.
+- Device identity is now attributed from the active transport, avoiding stale or cross-transport
+  device IDs after reconnects.
+
+### 🐛 Fixed
+
+- Fixed `NoClassDefFoundError: java.lang.BootstrapMethodError` during `TaplinkSDK.init()` on
+  Android API 24 and 25.
+- Existing Jackson-era connection caches remain readable, and response parsing accepts both the
+  legacy object-valued `bizData` representation and the newer string-valued representation.
+- LAN recovery now follows the WebSocket's actual endpoint when the same Tapro terminal
+  re-advertises on a different host or port. A failed immediate reconnect can fall back to the
+  configured delayed retry policy instead of remaining stuck.
+- Same-endpoint mDNS replacement after a service-loss event now invalidates a half-open socket,
+  while timestamp-only re-registration of a healthy service leaves the connection intact.
+- Android NSD `FAILURE_ALREADY_ACTIVE` now uses a bounded, backoff resolve retry; pending retries
+  are cancelled when the service is lost or monitoring stops.
+- Disconnect notifications and VSP reconnect-after-unplug handling no longer leave the SDK in an
+  inconsistent connection state.
 
 ### 📦 Dependencies
 
-- Removed `jackson-databind` and `jackson-module-kotlin` from the SDK runtime dependencies.
-- Applications may continue using their own Jackson or Gson version independently.
+- Removed `jackson-databind` and `jackson-module-kotlin` from the SDK and published POM.
+- The protocol implementation now uses Android's built-in `org.json` classes and adds no
+  replacement runtime JSON dependency. Integrator applications may continue using their own
+  Jackson or Gson version independently.
 
 ### 🧭 Migration from v1.0.9
+
+Update the dependency version:
+
+```kotlin
+dependencies {
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.10")
+}
+```
+
+Choose the Cross-Device channel and, for Cable, the protocol explicitly:
 
 ```kotlin
 // v1.0.9 — removed in v1.0.10
 ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.AUTO, host, port)
-ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE)
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.CABLE) // cable AUTO
 
-// v1.0.10 — select the channel and cable protocol explicitly
+// v1.0.10
 ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)
 ConnectionConfig.createCrossDeviceMode(
     CrossDeviceStrategy.CABLE,
@@ -72,8 +182,12 @@ ConnectionConfig.createCrossDeviceMode(
 )
 ```
 
-If runtime LAN/Cable failover is required, implement the selection policy in the application and
-switch only when no transaction is in flight.
+- If an application previously relied on runtime LAN/Cable failover, move that policy to the
+  application layer and switch only when no transaction is in flight.
+- Typed TapLink transaction integrations otherwise require no source changes.
+- `BasicResponseJacksonSerializer` and `BasicResponseJacksonDeserializer` were internal protocol
+  helpers despite their public JVM visibility and have been removed. Integrations must not import
+  SDK implementation helpers.
 
 ---
 
@@ -81,21 +195,162 @@ switch only when no transaction is in flight.
 
 **Released 2026-09-03**
 
+This release reorganizes how a connection is described. Integration is now expressed as a **business form** — where the business app and Tapro physically live relative to each other — instead of as a **transport** (App-to-App / LAN / Cable). The new API supports automatic or explicit Cross-Device channel selection.
+
+### 💥 Connection model: what changed since v1.0.8
+
+**Before (v1.0.8 and earlier)** — you picked the transport directly:
+
+```kotlin
+ConnectionConfig().setConnectionMode(ConnectionMode.APP_TO_APP)          // same device
+ConnectionConfig().setConnectionMode(ConnectionMode.LAN).setHost(...)    // over the network
+ConnectionConfig()
+    .setConnectionMode(ConnectionMode.CABLE)
+    .setCableProtocol(CableProtocol.USB_VSP)                              // over a cable
+```
+
+**Now (v1.0.9)** — you pick the integration form, and the transport is a property of it:
+
+```kotlin
+// Same terminal: business app and Tapro on one device
+ConnectionConfig.createOnDeviceMode()
+
+// Separate terminal (Tapro as a standalone PIN Pad), reached over LAN
+ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host = "192.168.1.20", port = 8443)
+
+// Separate terminal, reached over a cable
+ConnectionConfig.createCrossDeviceMode(
+    CrossDeviceStrategy.CABLE,
+    cableProtocol = CableProtocol.USB_VSP
+)
+```
+
+| | v1.0.8 model | v1.0.9 model |
+|---|---|---|
+| Selection unit | Transport (`ConnectionMode`) | Integration form (`ConnectionMode`) + channel (`CrossDeviceStrategy`) |
+| Same-device | `APP_TO_APP` | `ON_DEVICE` (normalizes onto App-to-App internally) |
+| Separate device | `LAN` **or** `CABLE`, chosen at build time | `CROSS_DEVICE` + `AUTO` / `LAN` / `CABLE` |
+| Cable protocol | `CableProtocol` selection | `AUTO` by default, or explicit `USB_VSP`, `RS232`, or `USB_AOA` |
+| Sub-screen | `SUB_SCREEN` | unchanged |
+
+**Scope of the change**
+
+- **Cross-Device configuration.** `CrossDeviceStrategy.AUTO` selects between LAN and Cable at runtime; `LAN` and `CABLE` select a channel explicitly. Cable uses `CableProtocol.AUTO` by default or accepts a concrete protocol. Automatic selection is removed in v1.0.10; see that release's migration guide.
+- **`CrossDeviceStrategy` has no `CLOUD` value on purpose.** Cloud-dispatched orders are delivered to Tapro by the cloud backend; the SDK never establishes or drives a Cloud connection. A `Cross-Device / Cloud` badge shown on Tapro is a Tapro-side display concern only.
+
 ### 🚀 New Features
 
-- Added `ConnectionMode.ON_DEVICE` and `ConnectionMode.CROSS_DEVICE`, with
-  `ConnectionConfig.createOnDeviceMode()` and `createCrossDeviceMode(...)` factory methods.
-- Added `CrossDeviceStrategy.AUTO`, `LAN`, and `CABLE` for Cross-Device connections. Automatic
-  selection is removed in v1.0.10.
-- Added `SUB_SCREEN` mode, which combines USB VSP connection with customer-display activation.
-  Error `351` indicates that the display could not be activated.
-- Added `getTerminalInfo(TerminalInfoCallback)` for reading merchant and terminal information from
-  the connected Tapro device. Error `352` indicates that Tapro must be upgraded to support it.
+- **Integration modes decoupled from transport.** `ConnectionMode` gains two business-level values:
+  - **`ON_DEVICE`** — the business app and Tapro run on the same terminal (currently implemented via App-to-App). Normalizes internally onto `APP_TO_APP`.
+  - **`CROSS_DEVICE`** — Tapro acts as a standalone PIN Pad reached over a connection channel. The channel is chosen via the new **`CrossDeviceStrategy`** config (`AUTO`, `LAN`, or `CABLE`), not by a separate top-level mode.
 
-### 🔧 Improvements and Fixes
+  ```kotlin
+  // On-device (same terminal)
+  val onDevice = ConnectionConfig.createOnDeviceMode()
 
-- Improved LAN discovery, reconnect behavior, Cable plug-and-play, and dead-link detection.
-- Existing `APP_TO_APP`, `LAN`, and `CABLE` APIs remain available for compatibility.
+  // Cross-Device over LAN
+  val lan = ConnectionConfig.createCrossDeviceMode(CrossDeviceStrategy.LAN, host = "192.168.1.20", port = 8443)
+
+  // Cross-Device over cable; select the concrete transport explicitly.
+  val cable = ConnectionConfig.createCrossDeviceMode(
+      CrossDeviceStrategy.CABLE,
+      cableProtocol = CableProtocol.USB_VSP
+  )
+  ```
+
+- **`CrossDeviceStrategy { AUTO, LAN, CABLE }`** — new config enum selecting the CROSS_DEVICE connection strategy. Set via `ConnectionConfig.setCrossDeviceStrategy(...)`; `AUTO` tries LAN and Cable according to the configured priority.
+- **Cable protocol selection.** `CrossDeviceStrategy.CABLE` uses `CableProtocol.AUTO` by default, or accepts `USB_VSP`, `RS232`, or `USB_AOA` explicitly.
+
+- **`CrossDeviceStrategy` intentionally has no `CLOUD` value.** Cloud-dispatched orders are delivered to Tapro directly by the cloud backend; the SDK never establishes, authenticates, or drives a Cloud connection. Tapro may still display a `Cross-Device / Cloud` badge based on service-plan/sign-in permissions, but that is a Tapro-side display concern only — it is not selectable or resolvable through this SDK.
+
+- **`getTerminalInfo()` — read-only terminal info query.** The `GET_TERMINAL_INFO` control action lets integrators fetch the merchant and terminal information for **the single, currently connected Tapro device** — not a cloud merchant lookup, and not a terminal-list query (no pagination, no `terminals[]`, no `nextToken`).
+
+  ```kotlin
+  TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
+      override fun onSuccess(info: TerminalInfo) {
+          // info.merchantId, info.dbaName, info.midList, info.terminal.sn, info.terminal.model, ...
+      }
+
+      override fun onFailure(error: PaymentError) {
+          // In v1.1.0, the SDK preserves Tapro's actual error code and message.
+      }
+  })
+  ```
+
+  - Public API surface: `TaplinkApi.getTerminalInfo(callback)`, `TaplinkSDK.getTerminalInfo(callback)` (static + instance), `TaplinkClient.getTerminalInfo(callback)`.
+  - New independent callback `TerminalInfoCallback` (`onSuccess(TerminalInfo)` / `onFailure(PaymentError)`) — **not** `PaymentCallback`. `GET_TERMINAL_INFO` is a read-only control action, not a transaction: it does not create a transaction, does not require a `transactionRequestId`, and its result must never be interpreted with payment-progress/success semantics.
+  - New public models: `TerminalInfo`, `MerchantMid`, `Terminal`, `TerminalTid`. Top-level merchant fields (`merchantId`, `dbaName`, `mcc`, `country`, `stateName`, `cityName`, `street`, `detailAddress`, `zipCode`, `midList`) mirror the public "Retrieve merchant" API contract; `terminal` is nested (mirroring a single element of the "List merchant terminals" contract: `sn`, `vendor`, `model`, `tidList`). Merchant branding metadata is intentionally excluded from the SDK response because this read-only query is limited to merchant/terminal identity metadata. Never returns `secretKey`, `appId`, network addresses, card data, or transaction details. Merchant `status` and `createTime` (merchant and terminal level) are intentionally **not** part of the response — Tapro has no real, backend-provisioned source for them today, so they are omitted rather than fabricated or returned as `null` placeholders.
+  - `GET_TERMINAL_INFO` responds even while Tapro is processing a payment transaction, and is not affected by transactional API-permission / service-plan gating — though it still goes through the same request signature verification as every other action.
+  - Historical 1.0.9 behavior converted selected errors to synthetic `352` based on a Tapro-version threshold. This could misclassify genuine errors; v1.1.0 removes the heuristic and preserves the error code/message received from Tapro.
+
+- **`SUB_SCREEN` connection mode (recommended for cross-device secondary display)** — A dedicated connection mode that combines USB Virtual Serial Port (VSP) transport with mandatory sub-screen activation. Use `ConnectionConfig.createSubScreenMode()` or `ConnectionConfig().setConnectionMode(ConnectionMode.SUB_SCREEN)` to connect.
+
+  This mode **treats screen player failure as a connection failure**: `onConnected` is only delivered when both the VSP link AND the USB customer-facing display are confirmed ready. If the screen player cannot be opened, `onError` is delivered with the new error code **351** and the connection is torn down.
+
+  ```kotlin
+  // Recommended: one-step connection for cross-device sub-screen
+  val config = ConnectionConfig.createSubScreenMode()
+
+  TaplinkSDK.connect(config, object : ConnectionListener {
+      override fun onConnected(deviceId: String, taproVersion: String) {
+          // Both VSP transport AND the sub-screen are ready.
+          // Full transaction API is available (sale, refund, void, etc.).
+      }
+
+      override fun onDisconnected(reason: String) { /* ... */ }
+
+      override fun onError(error: ConnectionError) {
+          if (error.code == "351") {
+              // VSP connected, but the sub-screen failed to open.
+              // Check: Tapro v1.0.5+ running? USB display connected?
+          }
+      }
+  })
+  ```
+
+- **Error code 351 — Sub_Screen Open Failed** — Returned in `ConnectionListener.onError` when using `SUB_SCREEN` mode and the remote Tapro fails to open the USB screen player within the timeout window.
+
+  For a complete guide on integrating the secondary display — including display detection, Compose rendering inside `Presentation`, lifecycle management, and common use cases (ad carousel, order list, tip selection) — see **[SUB_SCREEN_INTEGRATION.md](./SUB_SCREEN_INTEGRATION.md)**.
+
+### 🔧 Improved
+
+- **Connection retry behavior.** Requesting a *different* configuration while a previous attempt is still in `CONNECTING` now cancels the stale attempt and starts fresh, instead of silently queueing behind it.
+- **Cable connection reliability.** USB cable kernels (VSP / RS232-Serial / AOA) now fail fast when **no USB device is attached**, avoiding phantom on-board UART polling. AOA control-transfer timeouts were raised (100 ms → 1000 ms) with added diagnostics so the accessory hand-off no longer silently fails.
+- **Fail-fast on an unresponsive cable link.** Before every transaction/query the SDK now runs a lightweight liveness probe on the active transport (for VSP cable, a handshake round-trip). If the peer (Tapro) has stopped responding — e.g. its UART receive loop is stuck with a *"port timeout"* after a prior transaction — the call now returns error **`213` (connection disconnected)** within ~3 s instead of hanging until the full transaction timeout. The dead link is torn down so the next call can reconnect. Integrators should treat `213` like other connection errors (reconnect and retry).
+
+### 🐛 Fixed
+
+- **LAN connection no longer drops (~every 5s) on mDNS re-registration.** Tapro re-advertises its mDNS service with a fresh timestamp in the instance name (`Taplink-Server-<timestamp>-<serial>`) without actually restarting. The client mis-classified the new instance name at the same host:port as a "peer restart" and force-closed the healthy WebSocket (surfacing as a `1000` normal closure loop). Peer-restart detection now compares the parsed **serial**, so a same-serial re-registration (timestamp-only change) keeps the live socket instead of tearing it down.
+- **`CrossDeviceStrategy.LAN` no longer attempts a USB/cable connection.** When a Cross-Device session explicitly selected the LAN strategy but the configuration also carried a `cableProtocol` value (common when callers pass a non-null protocol regardless of the chosen strategy), protocol resolution matched the cable branch before the LAN branch and connected over USB AOA instead of the configured host — triggering a USB permission prompt and failing with error **`212`**, while the configured `host`/`port` were never used. LAN now takes precedence during protocol resolution, `CrossDeviceStrategy.LAN` clears any residual cable protocol, and a LAN session can no longer fall back to the cable try-order.
+- **LAN connection no longer hangs forever after Tapro restarts.** When the Tapro terminal restarted (or its WebSocket server was recreated) without a graceful close, the client socket was left *half-open*: the local endpoint still reported `ESTABLISHED`, so no close callback ever arrived and the SDK kept reporting `CONNECTED` while every request silently disappeared with no error, no timeout and no reconnect. Three defects combined to produce this:
+  - The LAN client did not enable WebSocket protocol-level ping/pong (RFC 6455), so a vanished peer was never detected. Keepalive is now enabled with a 60-second timeout. This is transport-level liveness detection only — no business message is exchanged and Tapro answers pings automatically in the WebSocket layer — so it does not reintroduce an application heartbeat.
+  - Tapro re-registers its mDNS service under a **new instance name at the same `host:port`** when it restarts. That is neither an address change (the endpoint is identical) nor a socket event, so it was ignored entirely. The SDK now recognises this pattern as a peer restart and invalidates the stale link so the existing reconnect path can run.
+  - Every LAN close was reported upward as a generic `E213`, discarding the real WebSocket close code. Close code `1006` (abnormal closure) was consequently classified as a permanent connection error that skipped reconnect, so a routine network drop left the SDK stuck until a manual reconnect. The real close code is now propagated and `1006` is treated as a recoverable disconnect that triggers reconnect.
+- **mDNS discovery no longer floods with `Resolve failed ... error: 3`.** Every Tapro terminal advertising on the subnet was resolved concurrently, but Android's `NsdManager` permits only one in-flight `resolveService()` call and rejects the rest with `FAILURE_ALREADY_ACTIVE` (error 3) — including the resolve for the terminal actually being connected to. Discovery now resolves only the bound terminal and serialises resolve requests, with a watchdog that releases the resolve slot if `NsdManager` never invokes either callback.
+- **`openUsbScreenPlayer()` no longer fails with `T06`.** The internally generated `transactionRequestId` was built from the action name plus a millisecond timestamp (`OPEN_USB_SCREEN_PLAYER_<13 digits>` = 36 characters), exceeding the terminal's 32-character limit. It now uses a short `USP_<timestamp>` prefix (17 characters). Integrators could not work around this because the API takes no request-id parameter.
+- **Cable / `USB_VSP` reconnect no longer times out.** The VSP client waited passively for Tapro to send the application-layer handshake request. Tapro only sends that request during its own connect flow, so when the cable was never physically unplugged — Tapro still reporting the USB link as connected — a reconnect initiated by the POS app alone never received a handshake and `onConnected` was never delivered, leaving the app unable to send further requests. The VSP client now actively sends `##TAPLINK_HSK_REQ##` every second until the peer answers, matching the behaviour already used by the `RS232` and `USB_AOA` transports. No API change is required; `connect()` after a `disconnect()` now succeeds on an already-open cable.
+- **Cable / `USB_VSP` "cannot connect" right after plugging in the cable.** The VSP client looked for the USB CDC-ACM serial device exactly once at `connect()` time and failed immediately if it was not found. When `connect()` was called right after the cable was plugged in — before the CDC-ACM interface finished enumerating — the attempt failed with "No VSP device found" even though the cable was physically connected. The VSP client now waits up to 6 seconds (polling every 500 ms, fully cancellable) for the VSP device to appear before giving up, matching the plug-and-play behaviour of the `RS232` transport. No API change is required.
+
+### 🧭 Migration
+
+Update the dependency version:
+
+```kotlin
+dependencies {
+    implementation("com.sunmi:sunbay-taplink-sdk-android:1.0.9")
+}
+```
+
+The v1.0.9 API allows `AUTO`, `LAN`, or `CABLE`. New code targeting v1.0.10 must select `LAN` or `CABLE` explicitly and provide a concrete Cable protocol; see the v1.0.10 migration guide above.
+
+| v1.0.8 API (still supported) | v1.0.9 API (recommended) |
+|---|---|
+| `ConnectionMode.APP_TO_APP` / `createAppMode()` | `ConnectionMode.ON_DEVICE` / `createOnDeviceMode()` |
+| `ConnectionMode.LAN` / `createLanMode(host, port)` | `createCrossDeviceMode(CrossDeviceStrategy.LAN, host, port)` |
+| `ConnectionMode.CABLE` / `createCableMode(protocol)` | `createCrossDeviceMode(CrossDeviceStrategy.CABLE, cableProtocol = protocol)` |
+| `ConnectionMode.SUB_SCREEN` / `createSubScreenMode()` | *unchanged* |
+
+**Reconnect timing:** wait until `TaplinkSDK.getConnectionStatus()` reports `DISCONNECTED` before calling `connect()` again — `disconnect()` returns before the underlying serial handle is fully released.
 
 ---
 

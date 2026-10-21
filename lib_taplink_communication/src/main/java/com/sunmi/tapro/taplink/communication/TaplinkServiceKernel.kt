@@ -9,6 +9,7 @@ import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback
 import com.sunmi.tapro.taplink.communication.interfaces.IServiceKernel
 import com.sunmi.tapro.taplink.communication.interfaces.InnerCallback
 import com.sunmi.tapro.taplink.communication.lan.LanClientKernel
+import com.sunmi.tapro.taplink.communication.lan.LanConnectionOptions
 import com.sunmi.tapro.taplink.communication.local.kernel.LocalServiceKernel
 import com.sunmi.tapro.taplink.communication.cable.vsp.VSPClientKernel
 import com.sunmi.tapro.taplink.communication.util.ErrorStringHelper
@@ -56,7 +57,14 @@ class TaplinkServiceKernel private constructor(context: Context) {
      * @param taproAppWidthRatio Width ratio for Tapro application (0.0 to 1.0, optional)
      * @param connectionCallback Connection callback
      */
-    fun connect(protocol: String, appid: String, appSecretKey: String, taproAppWidthRatio: Float? = null, connectionCallback: ConnectionCallback) {
+    fun connect(
+        protocol: String,
+        appid: String,
+        appSecretKey: String,
+        taproAppWidthRatio: Float? = null,
+        lanConnectionOptions: LanConnectionOptions? = null,
+        connectionCallback: ConnectionCallback
+    ) {
         if (!isInitialized()) {
             connectionCallback.onDisconnected(
                 InnerErrorCode.E201.code,
@@ -80,6 +88,9 @@ class TaplinkServiceKernel private constructor(context: Context) {
                 "${InnerErrorCode.E214.description}: ${parseResult::class.simpleName}"
             )
             return
+        }
+        if (serviceKernel is LanClientKernel) {
+            serviceKernel.configureConnectionOptions(lanConnectionOptions ?: LanConnectionOptions())
         }
 
         // Check if there is currently a connected service kernel

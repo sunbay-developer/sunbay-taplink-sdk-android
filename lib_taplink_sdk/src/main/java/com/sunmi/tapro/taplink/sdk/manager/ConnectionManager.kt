@@ -22,6 +22,7 @@ import com.sunmi.tapro.taplink.communication.util.LogUtil
 import com.sunmi.tapro.taplink.communication.interfaces.ConnectionCallback as ServiceConnectionCallback
 import com.sunmi.tapro.taplink.communication.enums.InnerErrorCode
 import com.sunmi.tapro.taplink.communication.lan.LanClientKernel
+import com.sunmi.tapro.taplink.communication.lan.LanConnectionOptions
 import com.sunmi.tapro.taplink.communication.lan.discovery.ServiceDiscoveryManager
 import com.sunmi.tapro.taplink.sdk.scanner.QrScanCoordinator
 import kotlinx.coroutines.*
@@ -353,7 +354,15 @@ class ConnectionManager(
             this.config.appId,
             this.config.secretKey,
             this.config.taproAppWidthRatio,
-            object : ServiceConnectionCallback {
+            lanConnectionOptions = if (connectionMode == ConnectionMode.LAN.name) {
+                LanConnectionOptions(
+                    allowServiceDiscoveryFallback = connectionConfig?.autoReconnect != false,
+                    enableServiceMonitoring = connectionConfig?.autoReconnect != false
+                )
+            } else {
+                null
+            },
+            connectionCallback = object : ServiceConnectionCallback {
                 override fun onConnected(extraInfoMap: Map<String, String?>?) {
                     // Sync status after connection success
                     syncStatusFromKernel()
@@ -423,6 +432,14 @@ class ConnectionManager(
 
                         // Create connection error object
                         val connectionError = ConnectionError(code, msg, deviceId = errorDeviceId)
+                        // Address-change and delayed reconnect attempts enter ReconnectManager's
+                        // reconnecting state before the transport is started. A connection-phase
+                        // error reaches this branch instead of the normal disconnect branch, so
+                        // explicitly terminate that state and fail listeners queued during the
+                        // attempt. Otherwise a later connect() with the same config is accepted
+                        // into the pending queue forever.
+                        reconnectManager?.onReconnectFailed(connectionError)
+
                         updateConnectionStatus(
                             ConnectionStatus.ERROR,
                             errorCode = connectionError,
@@ -1309,6 +1326,9 @@ class ConnectionManager(
      * This allows earlier detection of service address changes, even during connection process.
      */
     private fun setupServiceAddressChangeListener() {
+        if (reconnectManager?.getLastConnectionConfig()?.autoReconnect == false) {
+            return
+        }
         try {
             val kernel = TaplinkServiceKernel.getInstance()?.getCurrentServiceKernel()
             if (kernel is LanClientKernel) {
@@ -1365,6 +1385,10 @@ class ConnectionManager(
      * Execute reconnection
      */
     private fun executeReconnection(newHost: String, newPort: Int): Boolean {
+        if (reconnectManager?.getLastConnectionConfig()?.autoReconnect == false) {
+            LogUtil.d(TAG, "Ignoring LAN address change because autoReconnect is disabled")
+            return false
+        }
         return try {
             val newConnectionConfig = reconnectManager?.getLastConnectionConfig()
                 ?.copyWithLanEndpoint(newHost, newPort)
@@ -1660,6 +1684,17 @@ class ConnectionManager(
     fun discoverLanServices(listener: DiscoveryListener) {
         LogUtil.d(TAG, "discoverLanServices called")
 
+        if (connectionStatus == ConnectionStatus.CONNECTING ||
+            connectionStatus == ConnectionStatus.WAIT_CONNECTING ||
+            connectionStatus == ConnectionStatus.CONNECTED
+        ) {
+            LogUtil.w(TAG, "discoverLanServices rejected: status=$connectionStatus")
+            listener.onError(
+                ConnectionError(ERROR_OPERATION_IN_PROGRESS, "Service discovery requires a disconnected state")
+            )
+            return
+        }
+
         discoveryJob = sdkScope.launch {
             try {
                 LogUtil.d(TAG, "Starting mDNS service discovery (discover-only)...")
@@ -1767,7 +1802,10 @@ class ConnectionManager(
                     LogUtil.d(TAG, "Trying service ${index + 1}/${validServices.size}: ${service.host}:${service.port}")
 
                     val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        // Explicit auto-discovery keeps its historical discovery/recovery behavior
+                        // independent of the caller's persisted ConnectionConfig policy.
                         val config = ConnectionConfig.createLanMode(service.host, service.port)
+                            .setAutoReconnect(true)
                         val proxy = object : ConnectionListener {
                             override fun onConnected(deviceId: String, taproVersion: String) {
                                 // Success — forward to original listener

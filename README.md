@@ -1234,7 +1234,6 @@ The SDK uses a segmented error code design for quick problem identification.
 | 241-242 | LAN mode failed | Check network and IP address |
 | 251-255 | Cable mode failed | Check cable connection and USB permissions |
 | 351 | Sub-Screen open failed | Check the USB customer-facing display and reconnect |
-| 352 | `GET_TERMINAL_INFO` unsupported | Upgrade the connected Tapro before retrying |
 
 **Transaction Issues:**
 
@@ -1670,9 +1669,7 @@ TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
     }
 
     override fun onFailure(error: PaymentError) {
-        if (error.code == "352") {
-            // The connected Tapro must be upgraded to support GET_TERMINAL_INFO.
-        }
+        // Handle the actual error code and message returned by Tapro.
     }
 })
 ```
@@ -1683,17 +1680,19 @@ TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
 
 ### Changelog
 
+#### Unreleased
+- **Fixed — terminal info errors**: the SDK no longer infers `GET_TERMINAL_INFO` support from a Tapro version or rewrites Tapro errors as synthetic `352`; the actual error code and message are preserved.
+
 #### v1.0.10
 - **Breaking — explicit connection selection**: removed `CrossDeviceStrategy.AUTO`, `CableProtocol.AUTO`, and `ConnectionConfig.setAutoPriority(...)`. Select `LAN` or `CABLE` explicitly; Cable also requires `USB_VSP`, `RS232`, or `USB_AOA`.
 - **Fixed — Android 7 compatibility**: removed Jackson from the SDK runtime, fixing `BootstrapMethodError` during initialization on API 24/25. Existing caches and legacy/new `bizData` wire representations remain compatible.
 - **Improved — connection recovery**: hardened LAN endpoint-change recovery, bounded mDNS resolve retries, VSP reconnect-after-unplug, stale connection-state recovery, and repeated SDK initialization cleanup.
-- **Improved — terminal info errors**: error `352` is now returned only for a confirmed legacy Tapro version; genuine errors from supported versions pass through unchanged.
 
 #### v1.0.9
 - **New — Integration modes**: `ConnectionMode.ON_DEVICE` for a business app and Tapro on the same terminal, and `ConnectionMode.CROSS_DEVICE` for a separate Tapro PIN Pad. Use `CrossDeviceStrategy.LAN`, `CABLE`, or `AUTO` to choose the Cross-Device channel.
 - **New — Automatic channel failover**: `CrossDeviceStrategy.AUTO` tries LAN and Cable in priority order and re-routes only after the active channel drops. It never tears down a healthy connection or an in-flight transaction.
 - **New — Sub-Screen mode**: `ConnectionConfig.createSubScreenMode()` combines a USB VSP connection with mandatory customer-facing screen activation. Error `351` means the screen player could not be opened.
-- **New — Terminal information query**: `TaplinkSDK.getTerminalInfo(TerminalInfoCallback)` and `TaplinkClient.getTerminalInfo(TerminalInfoCallback)` return the merchant and terminal information for the one Tapro selected by the current connection configuration. Error `352` means that Tapro must be upgraded to support `GET_TERMINAL_INFO`.
+- **New — Terminal information query**: `TaplinkSDK.getTerminalInfo(TerminalInfoCallback)` and `TaplinkClient.getTerminalInfo(TerminalInfoCallback)` return the merchant and terminal information for the one Tapro selected by the current connection configuration.
 - **Improved — LAN and Cable reliability**: faster dead-link detection, cable plug-and-play, mDNS stability, and safer reconnect behavior.
 - **No breaking changes**: the classic `APP_TO_APP`, `LAN`, and `CABLE` APIs remain available for backward compatibility. New integrations should prefer the v1.0.9 integration-mode API.
 

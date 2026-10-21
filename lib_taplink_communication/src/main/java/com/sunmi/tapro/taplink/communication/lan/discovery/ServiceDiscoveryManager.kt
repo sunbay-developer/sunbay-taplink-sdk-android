@@ -29,6 +29,7 @@ class ServiceDiscoveryManager(
     companion object {
         private const val TAG = "ServiceDiscoveryManager"
         private const val DISCOVERY_TIMEOUT_MS = 30_000L
+        private const val DISCOVERY_MATCH_POLL_MS = 100L
 
         /** Upper bound on a single NsdManager resolve before its slot is force-released. */
         private const val RESOLVE_TIMEOUT_MS = 10_000L
@@ -233,7 +234,11 @@ class ServiceDiscoveryManager(
         }
     }
 
-    suspend fun discoverServices(serviceType: String, timeoutMs: Long = DISCOVERY_TIMEOUT_MS): List<ServiceInfo> {
+    suspend fun discoverServices(
+        serviceType: String,
+        timeoutMs: Long = DISCOVERY_TIMEOUT_MS,
+        stopWhen: ((ServiceInfo) -> Boolean)? = null
+    ): List<ServiceInfo> {
         return withContext(Dispatchers.IO) {
             var tempListener: NsdManager.DiscoveryListener? = null
             var discoveryStarted = false
@@ -250,8 +255,19 @@ class ServiceDiscoveryManager(
                 nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, tempListener)
                 discoveryStarted = true
                 
-                // Wait for discovery to complete
-                delay(timeoutMs)
+                if (stopWhen == null) {
+                    delay(timeoutMs)
+                } else {
+                    val deadline = System.currentTimeMillis() + timeoutMs
+                    while (System.currentTimeMillis() < deadline) {
+                        if (discoveredServices.values.any(stopWhen)) {
+                            LogUtil.d(TAG, "Target service resolved; completing discovery early")
+                            break
+                        }
+                        val remaining = deadline - System.currentTimeMillis()
+                        delay(minOf(DISCOVERY_MATCH_POLL_MS, remaining.coerceAtLeast(1L)))
+                    }
+                }
                 
                 val services = discoveredServices.values.toList()
                 LogUtil.d(TAG, "Discovery completed, found ${services.size} services")

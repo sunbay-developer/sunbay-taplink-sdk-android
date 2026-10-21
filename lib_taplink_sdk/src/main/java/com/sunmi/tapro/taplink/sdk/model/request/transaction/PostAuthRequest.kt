@@ -17,7 +17,7 @@ import com.sunmi.tapro.taplink.sdk.model.common.TipConfig
  * @param description Transaction description (optional, maximum 128 characters)
  * @param attach Additional information (optional)
  * @param notifyUrl Notification URL (optional)
- * @param requestTimeout Request timeout duration (optional, unit: seconds)
+ * @param requestTimeout Request timeout duration (optional, unit: milliseconds)
  * @param staffInfo Staff information (optional)
  * @param tipConfig Tip configuration (optional, mutually exclusive with amount.tipAmount)
  *
