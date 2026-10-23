@@ -183,8 +183,6 @@ Tip suggestion configuration for predefined tip options shown to the customer.
 `TaplinkConfig.timeout` is expressed in seconds and defaults to 180. The request-level value takes
 precedence. When it is absent, the SDK converts the global seconds value to milliseconds. The
 effective millisecond value is sent in `bizData.requestTimeout` and used by the local callback timer.
-Java callers can set the default with `TaplinkConfig.setTimeout(int)`; retain the returned
-configuration because the setter does not mutate the original instance.
 
 ```kotlin
 val request = SaleRequest.builder()

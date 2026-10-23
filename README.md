@@ -1680,10 +1680,7 @@ TaplinkSDK.getTerminalInfo(object : TerminalInfoCallback {
 
 ### Changelog
 
-#### v1.1.0 (release pending)
-- **New — Java timeout setter**: `TaplinkConfig.setTimeout(int)` sets the default timeout in seconds and returns an updated configuration.
-- **Improved — request timeout**: request-level timeouts use milliseconds; the default configuration timeout remains in seconds.
-- **Improved — LAN recovery**: reconnect behavior follows `autoReconnect` and handles endpoint changes more reliably.
+#### Unreleased
 - **Fixed — terminal info errors**: the SDK no longer infers `GET_TERMINAL_INFO` support from a Tapro version or rewrites Tapro errors as synthetic `352`; the actual error code and message are preserved.
 
 #### v1.0.10

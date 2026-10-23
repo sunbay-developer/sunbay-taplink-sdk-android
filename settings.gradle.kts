@@ -30,6 +30,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Taplink_SDK"
-include(":app")
 include(":lib_taplink_sdk")
 include(":lib_taplink_communication")
