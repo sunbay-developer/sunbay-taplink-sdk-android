@@ -6,6 +6,8 @@
 
 Taplink SDK is a payment integration SDK provided by SUNBAY for Android POS applications. It enables developers to quickly integrate payment capabilities with support for multiple connection modes and comprehensive transaction APIs.
 
+**Integrating with an AI coding assistant?** Start with the [TapLink Integration Skill](https://github.com/sunbay-developer/sunbay-taplink-integration-skill) or follow the [installation steps below](#ai-assisted-integration).
+
 ## Features
 
 - **Integration Modes** *(v1.0.9+, explicit channel selection in v1.0.10)*
@@ -208,9 +210,28 @@ That's it! You've completed the basic integration in just 3 steps.
 
 ## AI-Assisted Integration
 
-Using Cursor, GitHub Copilot, Windsurf, or any other AI coding tool? Follow these steps to give your AI full SDK context — so it generates production-correct code from your very first prompt.
+### Recommended — TapLink Integration Skill
 
-> **Why this matters:** Without context, AI tools hallucinate API names and miss critical rules (e.g., amount units in cents, error 306 query-first pattern). With context loaded, AI writes working Taplink code directly.
+Use [sunbay-taplink-integration-skill](https://github.com/sunbay-developer/sunbay-taplink-integration-skill) to guide your AI coding assistant through integration in your Android project. It includes Kotlin and Java examples, Gradle setup, connection selection, SALE/query flows, lifecycle cleanup, and recovery guidance. Its verified baseline is **SDK 1.1.0 + Tapro 1.0.5**.
+
+Run this command from your Android project and select your coding assistant when prompted:
+
+```bash
+npx skills add sunbay-developer/sunbay-taplink-integration-skill --skill taplink-integration
+```
+
+Then ask your assistant, for example:
+
+```text
+Use taplink-integration to add a $10 card SALE and original-transaction query.
+Use SDK 1.1.0 and Tapro 1.0.5; the POS app and Tapro run on the same device.
+Reuse this project's language, Gradle setup, order storage, and UI.
+Credentials will be configured locally. Implement the wiring and compile the app.
+```
+
+For installation requirements and manual or offline installation, see the [skill README](https://github.com/sunbay-developer/sunbay-taplink-integration-skill#readme). Keep credentials in local configuration excluded from version control.
+
+The following sections describe manual context setup and integration review.
 
 ---
 
